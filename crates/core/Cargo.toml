@@ -1,0 +1,27 @@
+[package]
+name = "rimstack-core"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+# Read-only XML tree for files written by strangers (MIT/Apache-2.0).
+roxmltree = "0.21"
+# Scan mod folders on all cores (MIT/Apache-2.0).
+rayon = "1"
+# Community rule files are JSON (MIT/Apache-2.0).
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# HTTPS downloads of community data, on request only (MIT/Apache-2.0).
+ureq = "3"
+# Decode PNG textures (MIT/Apache-2.0).
+image = { version = "0.25", default-features = false, features = ["png"] }
+# Encode DDS textures: BC1/BC7 and mipmaps (MIT).
+image_dds = "0.7.2"
+# Read gzip files (already used by the PNG decoder) (MIT/Apache-2.0).
+flate2 = "1"
+libloading = "0.8"
+
+[dev-dependencies]
+tempfile = "3"

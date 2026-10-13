@@ -1,0 +1,105 @@
+// Every problem of the load order in one place, by kind, each with the
+// action that solves it.
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Layouts
+import RimStack.Ui
+
+Column {
+    id: panel
+    width: parent.width
+    visible: Mods.problemsOpen && Mods.comparing === null && !Mods.active.previewing
+    spacing: Theme.gapLarge
+    readonly property var groups: {
+        const found = []
+        for (const trouble of Mods.troubles) {
+            let group = found.find(g => g.name === trouble.group)
+            if (!group)
+                found.push(group = { name: trouble.group, error: trouble.error, lines: [] })
+            group.lines.push(trouble)
+        }
+        return found.sort((a, b) => Number(b.error) - Number(a.error))
+    }
+
+    RowLayout {
+        width: parent.width
+        Column {
+            Layout.fillWidth: true
+            Text { color: Theme.ink; font.pixelSize: Theme.heading; font.weight: Font.DemiBold; text: Theme.say("Problems") }
+            Text { topPadding: Theme.gapHair; color: Theme.ink2; font.pixelSize: Theme.body; text: Mods.troubles.length === 0 ? Theme.say("None") : Theme.fill("{} with errors, {} with warnings", Mods.active.errors, Mods.active.warnings) }
+        }
+        Btn { icon: "x"; tip: Theme.say("Close (Esc)"); onClicked: Mods.problemsOpen = false }
+    }
+    Btn {
+        visible: Mods.fixable > 0
+        primary: true
+        text: Theme.plural(Mods.fixable, "Activate the {} needed mod", "Activate the {} needed mods")
+        tip: Theme.say("Activates every needed mod that is installed, each where its rules put it. One Undo takes them all back.")
+        onClicked: Mods.fixAll()
+    }
+    Btn {
+        visible: !Theme.demo && !Mods.hunting
+        icon: "search"
+        text: Theme.say("Find the broken mod")
+        tip: Theme.say("Switches half of the mods off, you play and say whether it still breaks, until one mod is left. Your list is kept and comes back at the end.")
+        onClicked: Mods.findBrokenRequested()
+    }
+    Repeater {
+        model: panel.groups
+        Card {
+            id: group
+            required property var modelData
+            title: Theme.say(modelData.name)
+            note: modelData.lines.length
+            tone: modelData.error ? Theme.err : Theme.warn
+            key: "problems-" + modelData.name
+            spacing: Theme.gap
+            readonly property int trusted: modelData.lines.filter(line => line.fix === "trust").length
+            Btn {
+                visible: group.trusted > 1
+                text: Theme.fill("Ignore all {} for RimWorld {}", group.trusted, (Mods.overview.gameVersion || ""))
+                tip: Theme.say("No warning about the game version while RimWorld stays on this version.")
+                onClicked: Mods.setVersionAside(Mods.overview.gameVersion || "")
+            }
+            // One sentence for a warning every line shares, then the mods by name.
+            readonly property bool shared: trusted > 1 && trusted === modelData.lines.length
+            Text {
+                visible: group.shared
+                width: group.width
+                wrapMode: Text.WordWrap
+                color: Theme.ink2
+                font.pixelSize: Theme.body
+                lineHeight: 1.25
+                text: Theme.fill("Each lists other game versions than RimWorld {}. Many such mods still work.", (Mods.overview.gameVersion || ""))
+            }
+            Repeater {
+                model: group.shared ? group.modelData.lines : []
+                Item {
+                    id: named
+                    required property var modelData
+                    width: group.width
+                    height: Theme.control
+                    Rectangle { anchors.fill: parent; radius: Theme.corner; color: Theme.hover; opacity: over.hovered ? 0.05 : 0 }
+                    Text { x: 6; width: parent.width - 80; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: named.modelData.name }
+                    HoverHandler { id: over; cursorShape: Qt.PointingHandCursor }
+                    TapHandler { onTapped: Mods.showMod(named.modelData.modId) }
+                    Btn { visible: over.hovered; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: Theme.say("Ignore"); tip: Theme.say("No warning about the game version for this mod"); onClicked: Mods.applyFix(named.modelData.modId, named.modelData.fix) }
+                }
+            }
+            Repeater {
+                model: group.shared ? [] : group.modelData.lines
+                ProblemLine {
+                    required property var modelData
+                    width: group.width
+                    error: modelData.error
+                    name: modelData.name
+                    words: modelData.words
+                    fix: modelData.fix
+                    fixLabel: modelData.fixLabel
+                    modId: modelData.modId
+                }
+            }
+        }
+    }
+    EmptyState { visible: Mods.troubles.length === 0; width: parent.width; title: Theme.say("Nothing stands in the way") }
+}

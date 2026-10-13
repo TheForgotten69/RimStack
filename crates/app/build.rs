@@ -1,0 +1,88 @@
+use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
+
+fn main() {
+    let builder = CxxQtBuilder::new_qml_module(
+        QmlModule::new("RimStack.Ui")
+            .qml_file(QmlFile::from("qml/Theme.qml").singleton(true))
+            .qml_file(QmlFile::from("qml/mods/Mods.qml").singleton(true))
+            .qml_file(QmlFile::from("qml/Notices.qml").singleton(true))
+            .qml_files([
+                "qml/Main.qml",
+                "qml/Appear.qml",
+                "qml/PopIn.qml",
+                "qml/PopOut.qml",
+                "qml/TopBar.qml",
+                "qml/StatusBar.qml",
+                "qml/AppPrefs.qml",
+                "qml/Icon.qml",
+                "qml/Btn.qml",
+                "qml/AskSteam.qml",
+                "qml/FocusRing.qml",
+                "qml/Tip.qml",
+                "qml/Chip.qml",
+                "qml/Card.qml",
+                "qml/Dots.qml",
+                "qml/Slide.qml",
+                "qml/Hint.qml",
+                "qml/KeysSheet.qml",
+                "qml/Toasts.qml",
+                "qml/HistoryMenu.qml",
+                "qml/HuntBar.qml",
+                "qml/mods/ProblemLine.qml",
+                "qml/mods/BulkBar.qml",
+                "qml/mods/ProblemsPanel.qml",
+                "qml/CopyText.qml",
+                "qml/Choice.qml",
+                "qml/Toggle.qml",
+                "qml/LaunchRecord.qml",
+                "qml/RowKeys.qml",
+                "qml/Wheel.qml",
+                "qml/PopMenu.qml",
+                "qml/FilterField.qml",
+                "qml/GroupTitle.qml",
+                "qml/NameList.qml",
+                "qml/mods/ModsScreen.qml",
+                "qml/mods/ModsPrefs.qml",
+                "qml/mods/ModList.qml",
+                "qml/mods/ModRow.qml",
+                "qml/mods/RowMenu.qml",
+                "qml/mods/InactivePane.qml",
+                "qml/mods/ActivePane.qml",
+                "qml/mods/DetailsPane.qml",
+                "qml/mods/CompareSummary.qml",
+                "qml/mods/SelectionSummary.qml",
+                "qml/mods/ModHeader.qml",
+                "qml/mods/AboutTab.qml",
+                "qml/mods/LoadOrderTab.qml",
+                "qml/mods/FilesTab.qml",
+                "qml/mods/ListSummary.qml",
+                "qml/EmptyState.qml",
+                "qml/Prompt.qml",
+                "qml/mods/SortMoves.qml",
+                "qml/checks/ModsChecks.qml",
+                "qml/checks/PointerChecks.qml",
+                "qml/SavesScreen.qml",
+                "qml/LogsScreen.qml",
+                "qml/TexturesScreen.qml",
+                "qml/DownloadsScreen.qml",
+                "qml/SettingsScreen.qml",
+                "qml/ListsMenu.qml",
+                "qml/FirstRun.qml",
+                "qml/Commands.qml",
+                "qml/CompareView.qml",
+            ]),
+    )
+    .qrc_resources(["assets/rimstack.svg"])
+    .qt_module("Quick")
+    .qt_module("QuickControls2")
+    .files(["src/model.rs", "src/backend.rs"]);
+    // SAFETY: one more source for the same compiler, nothing set that the generated code relies on.
+    let builder = unsafe {
+        builder.cc_builder(|cc| {
+            cc.file("src/window_icon.cpp");
+        })
+    };
+    println!("cargo::rerun-if-changed=src/window_icon.cpp");
+    println!("cargo::rerun-if-changed=src/window_icon.h");
+    builder.build();
+}

@@ -1,0 +1,105 @@
+// The selected mod's files: the folders the game loads, textures set aside,
+// and what is in the mod's folder.
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Controls.Basic
+import QtQuick.Layouts
+import RimStack.Ui
+
+Column {
+    id: side
+    width: parent.width
+    visible: Mods.tab === 2
+    GroupTitle { visible: patched.count > 0; text: Theme.say("Patched methods") }
+    Repeater {
+        id: patched
+        model: Mods.info.patches ? Mods.info.patches.split("\n") : []
+        Column {
+            id: aim
+            required property string modelData
+            readonly property var parts: modelData.split("\t")
+            width: side.width
+            bottomPadding: Theme.gapTiny
+            Text { width: parent.width; elide: Text.ElideLeft; color: Theme.ink; font.pixelSize: Theme.body; text: aim.parts[0] }
+            Text { visible: text !== ""; width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink3; font.pixelSize: Theme.small; text: aim.parts[1] || "" }
+        }
+    }
+                                GroupTitle { text: Theme.say("Folder") }
+    Text { width: parent.width; wrapMode: Text.WrapAnywhere; color: Theme.ink; font.pixelSize: Theme.body; text: Mods.info.path || "" }
+    Item { width: 1; height: 8 }
+    Repeater {
+        model: Mods.info.tree ? Mods.info.tree.split("\n") : []
+        RowLayout {
+            id: branch
+            required property string modelData
+            readonly property var parts: modelData.split("\t")
+            width: side.width
+            height: Theme.sized(21)
+            Text { Layout.fillWidth: true; elide: Text.ElideMiddle; color: Theme.ink; font.family: "monospace"; font.pixelSize: Theme.small; text: branch.parts[0] }
+            Text { color: Theme.ink3; font.pixelSize: Theme.small; text: Theme.plural(Number(branch.parts[1]), "{} file", "{} files") }
+        }
+    }
+    GroupTitle { text: Theme.say("Folders the game loads from") }
+    Text {
+        width: parent.width
+        wrapMode: Text.WrapAnywhere
+        color: Theme.ink
+        font.pixelSize: Theme.body
+        lineHeight: 1.3
+        text: Mods.info.loadFolders || Theme.say("None")
+    }
+    Text {
+        width: parent.width
+        topPadding: Theme.gapSmall
+        wrapMode: Text.WordWrap
+        color: Theme.ink2
+        font.pixelSize: Theme.small
+        lineHeight: 1.3
+        text: Theme.fill("For RimWorld {} and the active mods", (Mods.overview.gameVersion || ""))
+    }
+    GroupTitle { visible: hiddenHere.count > 0; text: Theme.say("Textures set aside") }
+    Column {
+        id: hiddenHere
+        // Counted again whenever the details are refreshed.
+        readonly property int count: Mods.info && Mods.selectedId >= 0 && Mods.backend ? Mods.backend.hiddenIn(Mods.selectedId) : 0
+        property string problem
+        visible: count > 0
+        width: parent.width
+        spacing: Theme.gapSmall
+        Text {
+            width: parent.width
+            wrapMode: Text.WordWrap
+            color: Theme.ink
+            font.pixelSize: Theme.body
+            lineHeight: 1.3
+            text: Theme.plural(hiddenHere.count, "{} texture set aside: renamed with .rimstack-hidden, so the game skips them.", "{} textures set aside: renamed with .rimstack-hidden, so the game skips them.")
+        }
+        Btn {
+            icon: "eye-off"
+            text: Theme.say("Bring back all")
+            onClicked: {
+                hiddenHere.problem = Mods.backend.unhideAll(Mods.selectedId)
+                Mods.active.recheck()
+                Mods.refresh()
+            }
+        }
+        Text { visible: hiddenHere.problem !== ""; width: parent.width; wrapMode: Text.WordWrap; color: Theme.err; font.pixelSize: Theme.body; text: hiddenHere.problem }
+    }
+    GroupTitle { text: Theme.say("Contents") }
+    Repeater {
+        model: [
+            [Theme.say("Kinds of content"), Mods.info.contains],
+            [Theme.say("Assemblies"), Mods.info.assemblies],
+            [Theme.say("Textures"), Mods.info.textureCount],
+            [Theme.say("DDS made by RimStack"), Mods.info.ddsMade],
+        ].filter(pair => pair[1])
+        Item {
+            id: content
+            required property var modelData
+            width: side.width
+            implicitHeight: contentValue.implicitHeight + 4
+            Text { width: Theme.sized(150); color: Theme.ink2; font.pixelSize: Theme.body; text: content.modelData[0] }
+            Text { id: contentValue; x: 158; width: parent.width - 158; wrapMode: Text.WrapAnywhere; color: Theme.ink; font.pixelSize: Theme.body; text: content.modelData[1] }
+        }
+    }
+}

@@ -1,0 +1,22 @@
+[package]
+name = "rimstack-app"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "rimstack"
+path = "src/main.rs"
+
+[dependencies]
+rimstack-core = { path = "../core" }
+cxx = "1"
+cxx-qt = "0.10"
+cxx-qt-lib = { version = "0.10", features = ["full"] }
+serde_json = "1"
+rayon = "1"
+trash = "5"
+
+[build-dependencies]
+cxx-qt-build = { version = "0.10", features = ["link_qt_object_files"] }

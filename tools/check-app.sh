@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Drives every action of the Mods screen on your real mods, with no window,
+# and checks what Save writes. The game's settings are COPIED to a temporary
+# folder first; the real ones are only read.
+#
+#   cargo build -p rimstack-app --release && tools/check-app.sh
+set -euo pipefail
+
+real="${RIMSTACK_CONFIG:-$HOME/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios}"
+app="$(dirname "$0")/../target/release/rimstack"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+mkdir -p "$tmp/config/Config" "$tmp/data/RimStack"
+cp "$real/Config/ModsConfig.xml" "$tmp/config/Config/"
+cp "$tmp/config/Config/ModsConfig.xml" "$tmp/original.xml"
+# Sort with the same community rules as the real run, if there are any.
+cp "${XDG_DATA_HOME:-$HOME/.local/share}/RimStack/communityRules.json" "$tmp/data/RimStack/" 2>/dev/null || true
+
+run() {
+    RIMSTACK_CONFIG="$tmp/config" XDG_DATA_HOME="$tmp/data" XDG_CONFIG_HOME="$tmp/settings" \
+        QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 timeout 60 "$app" "$@" 2>&1 | grep -E '^qml: check' | sed 's/^qml: //'
+    return "${PIPESTATUS[0]}"
+}
+fail() { echo "check FAIL $1"; exit 1; }
+saved="$tmp/config/Config/ModsConfig.xml"
+
+run --check
+cmp -s "$saved" "$tmp/original.xml" && fail "the saved file is unchanged"
+others=$(diff "$tmp/original.xml" "$saved" | grep '^[<>]' | grep -vc '<li>' || true)
+[ "$others" = 0 ] || fail "Save changed something besides the list of mods"
+cmp -s "$saved.rimstack-original" "$tmp/original.xml" || fail "no untouched copy of the first file"
+[ -f "$saved.rimstack-backup" ] || fail "no backup of the file before the save"
+[ ! -e "$saved.rimstack-part" ] || fail "a half-written file was left behind"
+echo "check ok    Save changed only the list of mods and kept both copies"
+
+run --check=restore
+cmp -s "$saved" "$tmp/original.xml" || fail "moving the mod back did not give the original file"
+echo "check ok    saving the original order gives the original file, byte for byte"
+
+# What only the mouse shows: dragging, the right button, the wheel. Sent
+# by Qt's test module (QtTest), which only this step needs. Nothing is
+# saved, so the file must still be the original afterwards.
+run --check=pointer || fail "the pointer checks did not pass"
+cmp -s "$saved" "$tmp/original.xml" || fail "the pointer checks changed the file"
+
+cmp -s "$real/Config/ModsConfig.xml" "$tmp/original.xml" || fail "THE REAL FILE CHANGED"
+echo "check ok    the real ModsConfig.xml was not touched"
+
+# Choosing between two mods' versions of a texture renames a file inside a
+# mod, so it is only ever checked on two made-up mods in the temporary folder.
+game="$tmp/game"
+for m in first second; do
+    mkdir -p "$game/Mods/$m/About" "$game/Mods/$m/Textures/Things"
+    printf '<ModMetaData><name>%s</name><packageId>check.%s</packageId><supportedVersions><li>1.6</li></supportedVersions></ModMetaData>' "$m" "$m" > "$game/Mods/$m/About/About.xml"
+    magick -size 8x8 "xc:$([ $m = first ] && echo red || echo blue)" "$game/Mods/$m/Textures/Things/Shared.png"
+done
+echo "1.6.4871 rev598" > "$game/Version.txt"
+mkdir -p "$tmp/empty-workshop" "$tmp/config2/Config"
+printf '<ModsConfigData>\n  <version>1.6.4871 rev598</version>\n  <activeMods>\n    <li>check.first</li>\n    <li>check.second</li>\n  </activeMods>\n</ModsConfigData>\n' > "$tmp/config2/Config/ModsConfig.xml"
+cp -r "$game" "$tmp/game-before"
+
+RIMSTACK_GAME="$game" RIMSTACK_WORKSHOP="$tmp/empty-workshop" RIMSTACK_CONFIG="$tmp/config2" \
+    XDG_DATA_HOME="$tmp/data2" XDG_CONFIG_HOME="$tmp/settings2" \
+    QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 timeout 60 "$app" --check=textures 2>&1 | grep -E '^qml: check' | sed 's/^qml: //'
+[ "${PIPESTATUS[0]}" = 0 ] || fail "the texture choice checks"
+diff -r "$game" "$tmp/game-before" > /dev/null || fail "the two mods are not as they were after unhiding"
+echo "check ok    after unhiding, the two mods are exactly as they were"
+
+# What changes on disk while RimStack is open: the same made-up game, a
+# second Workshop folder to change to, and a mod and a list written from
+# outside once the window says it is ready.
+mkdir -p "$tmp/workshop-b/900001/About" "$tmp/settings3/RimStack" "$tmp/config3/Config"
+printf '<ModMetaData><name>third</name><packageId>check.third</packageId><supportedVersions><li>1.6</li></supportedVersions></ModMetaData>' > "$tmp/workshop-b/900001/About/About.xml"
+cp "$tmp/config2/Config/ModsConfig.xml" "$tmp/config3/Config/"
+printf '{ "workshop": "%s", "setupDone": "yes" }' "$tmp/empty-workshop" > "$tmp/settings3/RimStack/settings.json"
+live="$tmp/live.log"
+RIMSTACK_GAME="$game" RIMSTACK_CONFIG="$tmp/config3" XDG_DATA_HOME="$tmp/data3" XDG_CONFIG_HOME="$tmp/settings3" \
+    QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 timeout 60 "$app" --check=live "--live-folder=$tmp/workshop-b" > "$live" 2>&1 &
+shown=$!
+for _ in $(seq 60); do grep -q 'check live-ready' "$live" && break; sleep 0.5; done
+mkdir -p "$game/Mods/fourth/About"
+printf '<ModMetaData><name>fourth</name><packageId>check.fourth</packageId><supportedVersions><li>1.6</li></supportedVersions></ModMetaData>' > "$game/Mods/fourth/About/About.xml"
+sleep 4
+sed -i '/check.second/d' "$tmp/config3/Config/ModsConfig.xml"
+wait "$shown" && ok=0 || ok=$?
+grep -E '^qml: check (ok|FAIL)' "$live" | sed 's/^qml: //'
+rm -rf "$game/Mods/fourth"
+[ "$ok" = 0 ] || fail "the live changes"

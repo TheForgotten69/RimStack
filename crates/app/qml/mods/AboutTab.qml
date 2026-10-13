@@ -1,0 +1,291 @@
+// About the selected mod, as cards: what stands in the way of playing,
+// its description, conflicts, a replacement, its facts with where it is
+// filed, your tags and note, and its latest changes.
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Controls.Basic
+import QtQuick.Layouts
+import RimStack.Ui
+
+Column {
+    id: side
+    Appear { of: side }
+    width: parent.width
+    visible: Mods.tab === 0
+    topPadding: Theme.gapLarge
+    spacing: Theme.gapCard
+    // "<! for an error>sentence<tab>fix<tab>the fix's button" per problem.
+    readonly property var clashes: (Mods.info.losesTo ? Mods.info.losesTo.split("\n").map(l => "loses\t" + l) : [])
+        .concat(Mods.info.winsOver ? Mods.info.winsOver.split("\n").map(l => "wins\t" + l) : [])
+    readonly property string linkColour: "<style>a { color: " + Theme.focus + "; }</style>"
+    readonly property var problems: Mods.info.problems ? String(Mods.info.problems).split("\n").map(line => {
+        const error = line.charAt(0) === "!"
+        const part = (error ? line.substring(1) : line).split("\t")
+        return { error: error, words: part[0], fix: part[1] || "", fixLabel: part[2] || "" }
+    }) : []
+
+    Card {
+        visible: side.problems.length > 0 || !!Mods.info.unreadable || !!Mods.info.versionOk
+        title: Theme.say("Before you play")
+        tone: side.problems.some(p => p.error) || Mods.info.unreadable ? Theme.err : Theme.warn
+        spacing: Theme.gap
+        Repeater {
+            model: side.problems
+            ProblemLine {
+                required property var modelData
+                width: side.width
+                error: modelData.error
+                words: modelData.words
+                fix: modelData.fix
+                fixLabel: modelData.fixLabel
+                modId: Mods.selectedId
+            }
+        }
+        // The banner's action, for when the banner is not there.
+        Btn {
+            readonly property int alike: Mods.troubles.filter(t => t.fix === "trust").length
+            visible: alike > 1 && side.problems.some(p => p.fix === "trust") && !Mods.active.previewing
+            text: Theme.fill("Ignore all {} for RimWorld {}", alike, (Mods.overview.gameVersion || ""))
+            tip: Theme.say("No warning about the game version while RimWorld stays on this version.")
+            onClicked: Mods.setVersionAside(Mods.overview.gameVersion || "")
+        }
+        Text { visible: !!Mods.info.unreadable; width: parent.width; wrapMode: Text.WordWrap; color: Theme.err; font.pixelSize: Theme.body; text: Theme.fill("Unreadable: {}", (Mods.info.unreadable || "")) }
+        RowLayout {
+            visible: !!Mods.info.versionOk
+            width: parent.width
+            spacing: Theme.gap
+            Icon { name: "eye-off"; size: 14; color: Theme.ink3 }
+            Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.fill("Made for RimWorld {}; the warning is ignored.", (Mods.info.madeFor || "")) }
+            Btn { text: Theme.say("Warn again"); onClicked: Mods.trust(Mods.selectedId, false) }
+        }
+    }
+
+    Card {
+        visible: !!Mods.info.description
+        title: Theme.say("Description")
+        CopyText {
+            width: parent.width
+            textFormat: TextEdit.RichText
+            text: side.linkColour + (Mods.info.descriptionRich || "")
+            onLinkActivated: (link) => Qt.openUrlExternally(link)
+            HoverHandler { enabled: parent.hoveredLink !== ""; cursorShape: Qt.PointingHandCursor }
+        }
+    }
+
+    // The game keeps the texture of the mod that loads last.
+    Card {
+        visible: conflictLines.count > 0
+        title: Theme.say("Texture conflicts")
+        note: conflictLines.count
+        tone: Theme.warn
+        key: "about-conflicts"
+        spacing: Theme.gap
+        Repeater {
+            id: conflictLines
+            // "<loses|wins><tab>name<tab>N textures<tab>id"
+            model: side.clashes
+            Column {
+                id: clash
+                required property string modelData
+                readonly property var parts: modelData.split("\t")
+                readonly property bool loses: parts[0] === "loses"
+                width: side.width
+                spacing: Theme.gapTiny
+                RowLayout {
+                    width: parent.width
+                    spacing: Theme.gapSmall
+                    Chip { tone: clash.loses ? Theme.warn : Theme.ok; icon: clash.loses ? "arrow-down" : "arrow-up"; text: Theme.fill(clash.loses ? "loses {}" : "wins {}", clash.parts[2].split(" ")[0]) }
+                    Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: clash.parts[1] }
+                }
+                Row {
+                    spacing: Theme.gapSmall
+                    Btn { text: Theme.say("Compare"); tip: Theme.say("Both mods' versions of each shared texture, side by side"); onClicked: Mods.compareWith(Number(clash.parts[3])) }
+                    Btn { visible: clash.loses; enabled: !Mods.active.previewing; text: Theme.say("Win all"); tip: Theme.say("Adds an own rule: this mod loads after the other."); onClicked: Mods.winAll(Number(clash.parts[3])) }
+                }
+            }
+        }
+    }
+
+    Card {
+        visible: !!Mods.info.replacedBy
+        title: Theme.say("Use this instead")
+        RowLayout {
+            width: parent.width
+            spacing: Theme.gap
+            Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.ink; font.pixelSize: Theme.body; lineHeight: 1.3; text: Mods.info.replacedByVersions ? Theme.fill("{}, for RimWorld {}", Mods.info.replacedBy || "", Mods.info.replacedByVersions) : Mods.info.replacedBy || "" }
+            Btn { icon: "external-link"; text: Theme.say("Open"); onClicked: Theme.openWorkshop(Mods.info.replacedById) }
+        }
+        Row {
+            spacing: Theme.gapSmall
+            Btn { visible: Mods.selectedActive && !Mods.active.previewing; icon: "minus"; text: Theme.say("Deactivate this one"); onClicked: Mods.toggleSelected() }
+            Btn { visible: Mods.info.source === "Workshop"; danger: true; text: Theme.say("Unsubscribe…"); onClicked: Mods.unsubscribe(Mods.info.name || "", Mods.info.folder, Mods.info.path) }
+        }
+    }
+
+    Card {
+        title: Theme.say("Facts")
+        key: "about-facts"
+        Repeater {
+            model: [
+                [Theme.say("Contains"), [Mods.info.contains, Mods.info.textureCount ? Theme.fill("{} textures", Theme.count(Mods.info.textureCount)) : ""].filter(s => s).join("; ")],
+                [Theme.say("Code"), Mods.info.code],
+                [Theme.say("Load time"), Mods.info.loadTime],
+                [Theme.say("Package id"), Mods.info.packageId],
+                [Theme.say("Folder"), Mods.info.path],
+            ].filter(pair => pair[1])
+            Item {
+                id: fact
+                required property var modelData
+                width: side.width
+                implicitHeight: factValue.implicitHeight
+                Text { width: Theme.sized(92); color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say(fact.modelData[0]) }
+                CopyText { id: factValue; x: 96; width: parent.width - 96; wrapMode: fact.modelData[0] === Theme.say("Folder") ? TextEdit.WrapAnywhere : TextEdit.Wrap; text: fact.modelData[1] }
+            }
+        }
+        RowLayout {
+            width: parent.width
+            spacing: Theme.gap
+            Text { Layout.preferredWidth: Theme.sized(92) - 14 - Theme.gap; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say("Filed under"); Dots { y: parent.height + 1; width: parent.contentWidth; tone: Theme.ink3 } Tip { text: Theme.meaning(Theme.say("Filed under")) } }
+            Icon { name: Theme.categoryIcons[Theme.categoryNames.indexOf(Mods.info.category || "")] || "package"; size: 14; color: Theme.categoryColours[Theme.categoryNames.indexOf(Mods.info.category || "")] || Theme.ink2 }
+            Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: Mods.info.categoryChosen ? Theme.fill("{} (chosen)", Theme.say(Mods.info.category || "")) : Theme.say(Mods.info.category || "") }
+            Btn {
+                id: fileUnder
+                text: Theme.say("Change")
+                tip: Theme.say("RimStack files a mod by where it stands, what its folders hold and what its code is about. A category chosen here stands over that.")
+                onClicked: Mods.menuRequested(fileUnder, 0, fileUnder.height + 2, Mods.categoryChoices(Mods.selectedId))
+            }
+        }
+        RowLayout {
+            width: parent.width
+            spacing: Theme.gap
+            Text { Layout.preferredWidth: Theme.sized(92); color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say("Group"); Dots { y: parent.height + 1; width: parent.contentWidth; tone: Theme.ink3 } Tip { text: Theme.meaning(Theme.say("Group")) } }
+            FilterField {
+                id: subBox
+                Layout.fillWidth: true
+                placeholder: Theme.say("A tag to group under")
+                text: Mods.info.sub || ""
+                onAccepted: Mods.putInSub(Mods.selectedId, subBox.text)
+            }
+        }
+    }
+
+    Card {
+        title: Theme.say("Tags and note")
+        key: "about-notes"
+        FilterField {
+            id: tagBox
+            width: parent.width
+            placeholder: Theme.say("Tags, separated by commas")
+            text: Mods.info.tags || ""
+            onAccepted: Mods.keepNote(tagBox.text, noteBox.text)
+        }
+        // The tags as they stand: the first is the group, and a press on another makes it that.
+        Flow {
+            width: parent.width
+            spacing: Theme.gapSmall
+            Repeater {
+                model: (Mods.info.tags || "").split(",").map(tag => tag.trim()).filter(tag => tag !== "")
+                Chip {
+                    required property string modelData
+                    required property int index
+                    pressable: index > 0
+                    tone: index === 0 ? Theme.moved : Theme.ink2
+                    icon: index === 0 ? "layers" : ""
+                    text: index === 0 ? Theme.fill("{}  group", modelData) : modelData
+                    tip: index === 0 ? Theme.meaning(Theme.say("Group")) : Theme.say("Group under this tag: it becomes the first")
+                    onClicked: Mods.putInSub(Mods.selectedId, modelData)
+                }
+            }
+        }
+        Rectangle {
+            width: parent.width
+            height: Math.max(54, noteBox.implicitHeight + 14)
+            radius: Theme.corner
+            color: Theme.well
+            border.width: 1
+            border.color: noteBox.activeFocus ? Theme.focus : Theme.fieldLine
+            Text { x: 10; y: 7; visible: noteBox.text === ""; color: Theme.ink3; font.pixelSize: Theme.body; text: Theme.say("Note") }
+            TextEdit {
+                id: noteBox
+                Accessible.name: Theme.say("Note")
+                x: 10
+                y: 7
+                width: parent.width - 20
+                wrapMode: TextEdit.Wrap
+                color: Theme.ink
+                selectionColor: Theme.accent
+                font.pixelSize: Theme.body
+                text: Mods.info.note || ""
+            }
+        }
+        Btn {
+            enabled: tagBox.text.trim() !== (Mods.info.tags || "") || noteBox.text.trim() !== (Mods.info.note || "")
+            text: Theme.say("Keep")
+            onClicked: Mods.keepNote(tagBox.text, noteBox.text)
+        }
+    }
+
+    Card {
+        id: latest
+        // What its author wrote about its newest versions: a Workshop
+        // mod's change notes, asked for one mod at a time, or a Git
+        // checkout's commits, read from its folder.
+        readonly property bool workshop: Mods.info.source === "Workshop"
+        readonly property bool git: !workshop && !!Mods.info.repository
+        readonly property var fetched: Mods.backend && Mods.backend.changeNotes ? JSON.parse(Mods.backend.changeNotes) : ({})
+        readonly property var notes: workshop ? (fetched[Mods.info.folder] || []) : git && Mods.backend ? JSON.parse(Mods.backend.gitNotes(Mods.info.path || "")) : []
+        visible: !Theme.demo && (workshop || git)
+        title: Theme.say("Latest changes")
+        key: "about-changes"
+        spacing: Theme.gap
+        actions: [
+            AskSteam {
+                visible: latest.workshop
+                backend: Mods.backend
+                idle: latest.notes.length > 0 ? Theme.say("Fetch again") : Theme.say("Fetch")
+                tip: Theme.say("Reads this mod's change notes from its Workshop page. Only its Workshop id is sent.")
+                onClicked: Mods.backend.fetchChangeNotes(JSON.stringify([[Mods.info.folder, 0]]))
+            },
+            Btn { visible: latest.workshop; icon: "external-link"; spoken: Theme.fill("Change notes of {}", Mods.info.name || ""); tip: Theme.say("The mod's change notes on the Workshop."); onClicked: Theme.openChangeNotes(Mods.info.folder) }
+        ]
+        Text {
+            visible: latest.notes.length === 0
+            width: parent.width
+            wrapMode: Text.WordWrap
+            color: Theme.ink3
+            font.pixelSize: Theme.body
+            text: !latest.workshop ? Theme.say("No commits") : Mods.info.updated ? Theme.fill("Last updated {}; its notes are not fetched", Theme.day(Mods.info.updated)) : Theme.say("Not fetched")
+        }
+        Repeater {
+            model: latest.notes
+            Column {
+                id: note
+                required property var modelData
+                width: latest.width
+                spacing: Theme.gapHair
+                Text { visible: note.modelData.time > 0; color: Theme.ink3; font.pixelSize: Theme.small; text: Theme.moment(note.modelData.time) }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 14
+                    elide: Text.ElideRight
+                    textFormat: Text.PlainText
+                    color: note.modelData.time > 0 ? Theme.ink : Theme.err
+                    font.pixelSize: Theme.body
+                    lineHeight: 1.25
+                    text: note.modelData.text !== "" ? note.modelData.text : Theme.say("No note written")
+                }
+            }
+        }
+    }
+
+    Connections {
+        target: Mods
+        function onEditRequested(what) {
+            Mods.tab = 0
+            if (Theme.folded.indexOf("about-notes") >= 0)
+                Theme.fold("about-notes")
+            Qt.callLater(() => what === "note" ? noteBox.forceActiveFocus() : tagBox.focusInput())
+        }
+    }
+}

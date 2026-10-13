@@ -1,0 +1,414 @@
+// `--check` and `--selftest`: every action of the Mods screen, driven
+// from inside the window and printed, one line per check.
+//
+// Run through tools/check-app.sh, which points RimStack at a copy of the
+// game's settings: the last Mods.step saves. Exits with 1 if any check failed.
+// `--check=restore` only moves the first mod back and saves, so the
+// script can compare files. Loaded only when one of the two is asked for.
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Controls.Basic
+import QtQuick.Layouts
+import RimStack.Ui
+
+Item {
+    id: checks
+    required property ListView view
+
+    Connections {
+        target: Mods
+        function onFirstFrameShown() {
+            if (Theme.selfTest)
+                selfTestTimer.start()
+        }
+    }
+
+        Timer {
+        // Once the lists are filled and the mods' files have been read.
+        interval: 300
+        repeat: true
+        running: Mods.checkMode !== ""
+        onTriggered: {
+            if (Mods.active.count === 0 || !Mods.active.filesRead)
+                return
+            stop()
+            Mods.checkMode === "textures" ? checks.checkTextures() : Mods.checkMode === "live" ? checks.checkLive() : checks.runChecks()
+        }
+    }
+
+    // `--check=live`: what changes on disk shows without being asked.
+    // The script gives it a made-up game, changes the Workshop folder
+    // through `--live-folder=`, and a few seconds in adds a mod folder
+    // and writes ModsConfig.xml with one mod fewer.
+    property int liveStep: 0
+    property int liveWaited: 0
+    property int liveTotal: 0
+    function checkLive() {
+        const folder = (Qt.application.arguments.find(a => a.startsWith("--live-folder=")) || "").substring(14)
+        liveTotal = Mods.active.count + Mods.inactive.count
+        Mods.backend.setSetting("workshop", folder)
+        Mods.active.rereadFolders()
+        liveWatch.start()
+    }
+    Timer {
+        id: liveWatch
+        interval: 500
+        repeat: true
+        onTriggered: {
+            const total = Mods.active.count + Mods.inactive.count
+            const offer = Notices.shown.find(notice => !!notice.run)
+            checks.liveWaited += 1
+            const late = checks.liveWaited > 50
+            if (checks.liveStep === 0 && (late || (!Mods.active.rescanning && total === checks.liveTotal + 1))) {
+                checks.textureCheck("a Workshop folder changed in Settings is read at once", total === checks.liveTotal + 1 && JSON.parse(Mods.backend.settings()).workshop.endsWith("workshop-b"))
+                checks.liveStep = 1
+                console.log("check live-ready")
+            } else if (checks.liveStep === 1 && (late || total === checks.liveTotal + 2)) {
+                checks.textureCheck("a mod folder added outside shows by itself", total === checks.liveTotal + 2)
+                checks.liveStep = 2
+            } else if (checks.liveStep === 2 && (late || offer)) {
+                checks.textureCheck("a ModsConfig.xml written outside is offered, not taken", !!offer && Mods.active.count === 2)
+                if (offer)
+                    offer.run()
+                checks.textureCheck("and used when asked for", Mods.active.count === 1 && !Mods.active.dirty)
+                Qt.exit(checks.textureFailures > 0 ? 1 : 0)
+            }
+        }
+    }
+
+    // `--check=textures`: choosing between two mods' versions of a
+    // texture. The script gives it two made-up mods that share one; it
+    // must never be run on real mods, since it renames a file.
+    property int textureFailures: 0
+    function textureCheck(what, ok) {
+        console.log("check " + (ok ? "ok   " : "FAIL ") + what)
+        if (!ok)
+            textureFailures += 1
+    }
+    function checkTextures() {
+        const a = Mods.nthMod(Mods.active, 0), b = Mods.nthMod(Mods.active, 1)
+        Mods.select(a, true)
+        textureCheck("two mods that share a texture are in conflict", Number((Mods.info.losesTo || "").split("\n")[0].split("\t")[2]) === b)
+        let report = JSON.parse(Mods.backend.compare(a, b))
+        textureCheck("the comparison lists the shared texture, kept by load order", report.textures.length === 1 && !report.textures[0].keepsEarlier && !report.textures[0].yourChoice)
+        const t = report.textures[0]
+        const differing = JSON.parse(Mods.backend.textureDifference(t.earlierShown, t.laterShown))
+        textureCheck("the difference of the two versions is a picture of every pixel", differing.total === 64 && differing.differing === 64 && differing.file.endsWith(".png"))
+        textureCheck("keeping the earlier mod's version works", Mods.backend.keepTexture(t.earlier, t.later, true) === "")
+        report = JSON.parse(Mods.backend.compare(a, b))
+        const now = report.textures[0]
+        textureCheck("the comparison then shows your choice", report.textures.length === 1 && now.keepsEarlier && now.yourChoice && now.laterShown.endsWith(".rimstack-hidden"))
+        const picture = Qt.createQmlObject("import QtQuick; Image { asynchronous: false; cache: false }", checks)
+        picture.source = Theme.fileUrl(now.laterShown)
+        textureCheck("the hidden picture can still be shown", picture.status === Image.Ready && picture.sourceSize.width > 0)
+        picture.destroy()
+        textureCheck("the later mod has one hidden texture", Mods.backend.hiddenIn(b) === 1 && Mods.backend.hiddenIn(a) === 0)
+        Mods.active.recheck()
+        afterRecheck.start()
+    }
+    Timer {
+        id: afterRecheck
+        interval: 1200
+        onTriggered: {
+            const a = Mods.nthMod(Mods.active, 0), b = Mods.nthMod(Mods.active, 1)
+            Mods.select(a, true)
+            checks.textureCheck("the conflict is gone once the later file is hidden", !Mods.info.losesTo)
+            checks.textureCheck("unhide all puts it back", Mods.backend.unhideAll(b) === "" && Mods.backend.hiddenIn(b) === 0)
+            const report = JSON.parse(Mods.backend.compare(a, b))
+            checks.textureCheck("and the load order decides again", report.textures.length === 1 && !report.textures[0].keepsEarlier && !report.textures[0].yourChoice)
+            Qt.exit(checks.textureFailures > 0 ? 1 : 0)
+        }
+    }
+    function runChecks() {
+        let failed = 0
+        const check = (what, ok) => {
+            console.log("check " + (ok ? "ok   " : "FAIL ") + what)
+            if (!ok)
+                failed += 1
+        }
+        const order = () => { const ids = []; for (let i = 0; i < Mods.active.count; i++) ids.push(Mods.nthMod(Mods.active, i)); return ids.join(",") }
+        if (Mods.checkMode === "restore") {
+            Mods.active.moveMod(3, 0)
+            check("moved back and saved", Mods.save() && !Mods.active.dirty)
+            return Qt.exit(failed > 0 ? 1 : 0)
+        }
+        const start = order()
+        const counts = [Mods.active.count, Mods.inactive.count]
+        const shownNames = () => { const names = []; for (let r = 0; r < Mods.inactive.rows() && names.length < 40; r++) if (Mods.idAt(Mods.inactive, r) >= 0) names.push(Mods.inactive.data(Mods.inactive.index(r, 0), 258).toLowerCase()); return names }
+        const byName = () => { const names = shownNames(); return names.every((n, i) => i === 0 || names[i - 1].localeCompare(n) <= 0 || names[i - 1] <= n) }
+        const wasByName = Mods.prefs.inactiveByName, hadHeadings = Mods.prefs.headings
+        Mods.prefs.inactiveByName = true
+        check("the inactive mods are in name order", byName() && Mods.inactive.rows() === Mods.inactive.count)
+        check("lists are filled and clean", Mods.active.count > 4 && Mods.inactive.count > 0 && !Mods.active.dirty && !Mods.active.canUndo)
+
+        // Sort first: it waits for the mods' files to be read, which they
+        // are now and are not for a moment after a mod comes or goes.
+        Mods.previewSort()
+        const moving = Mods.active.previewing
+        check("sort gives a preview or says there is nothing to do", Mods.active.sortNote !== "")
+        if (moving) {
+            Mods.endSort(false)
+            check("discard restores the order", order() === start && !Mods.active.previewing && !Mods.active.dirty)
+            Mods.previewSort()
+            Mods.endSort(true)
+            check("apply keeps the sorted order", order() !== start && Mods.active.dirty && !Mods.active.previewing)
+            Mods.previewSort()
+            check("sorting a sorted list moves nothing", !Mods.active.previewing)
+            Mods.active.sortNote = ""
+            Mods.undo()
+            check("undo takes the sort back", order() === start)
+        }
+
+
+                Mods.active.moveMod(0, 3)
+        check("a move makes the list dirty", Mods.active.dirty && Mods.active.canUndo && order() !== start)
+        Mods.undo()
+        check("undo puts it back", !Mods.active.dirty && order() === start && Mods.active.canRedo)
+        check("and the inactive mods are still in name order", byName() && Mods.inactive.rows() === Mods.inactive.count)
+        Mods.prefs.headings = 0
+        check("one numbered list has no headings", Mods.active.rows() === Mods.active.count)
+        Mods.active.moveMod(0, 3)
+        Mods.undo()
+        check("and stays one list after undo", Mods.active.rows() === Mods.active.count)
+        Mods.prefs.headings = 1
+        check("always under headings has headings", Mods.active.rows() > Mods.active.count)
+        Mods.prefs.headings = hadHeadings
+        Mods.prefs.inactiveByName = false
+        check("by category, the inactive mods sit under headings", Mods.inactive.rows() > Mods.inactive.count)
+        Mods.prefs.inactiveByName = true
+        Mods.redo()
+        check("redo moves it again", Mods.active.dirty && order() !== start)
+        Mods.undo()
+
+        const second = Mods.nthMod(Mods.active, 1)
+        Mods.inactive.takeFrom(Mods.active, 1)
+        check("deactivating moves a mod across", Mods.active.count === counts[0] - 1 && Mods.inactive.count === counts[1] + 1)
+        Mods.active.takeFrom(Mods.inactive, Mods.inactive.indexOf(second))
+        check("activating brings it back", Mods.active.count === counts[0] && Mods.active.indexOf(second) >= 0)
+        while (Mods.active.canUndo)
+            Mods.undo()
+        check("undo all the way is the saved list", !Mods.active.dirty && order() === start)
+
+        Mods.select(Mods.nthMod(Mods.active, 0), true)
+        Mods.selectThrough(Mods.nthMod(Mods.active, 2), true)
+        check("shift selects a run", Mods.selectedCount === 3)
+        Mods.selectAlso(Mods.nthMod(Mods.active, 1), true)
+        check("ctrl takes one out", Mods.selectedCount === 2)
+        Mods.moveSelected()
+        check("the selected mods move together", Mods.active.count === counts[0] - 2 && Mods.selectedCount === 0)
+        Mods.undo()
+        check("and come back with one undo", Mods.active.count === counts[0] && order() === start && !Mods.active.canUndo)
+
+        const warned = [...new Set(Mods.troubles.filter(t => t.fix === "trust").map(t => t.modId))].slice(0, 3)
+        if (warned.length === 3) {
+            Mods.select(warned[0], true)
+            Mods.selectAlso(warned[1], true)
+            Mods.selectAlso(warned[2], true)
+            const offered = Mods.versionWarned.length
+            Mods.trustSelected(true)
+            const left = Mods.troubles.filter(t => t.fix === "trust" && warned.indexOf(t.modId) >= 0).length
+            check("ignoring the game version covers every selected mod", offered === 3 && left === 0 && Mods.selectedCount === 3)
+            Mods.trustSelected(false)
+            check("and warning again brings all three back", Mods.versionWarned.length === 3)
+            Mods.select(-1, false)
+        }
+
+        const a = Mods.nthMod(Mods.active, 0), b = Mods.nthMod(Mods.active, 1)
+        Mods.select(b, true)
+        Mods.picking = "before"
+        Mods.pick(a)
+        check("a rule of your own is added", (Mods.info.yourRules || "").indexOf("before") !== -1 && Mods.picking === "")
+        Mods.active.removeRule(b, a)
+        check("and removed", (Mods.info.yourRules || "") === "")
+        Mods.select(-1, false)
+
+        Mods.step(Mods.active, 1)
+        check("the down key selects the first mod", Mods.selectedId === Mods.nthMod(Mods.active, 0))
+
+        const nameOn = r => Mods.active.data(Mods.active.index(r, 0), 258).toLowerCase()
+        const orderBefore = order()
+        Mods.showBy("name")
+        check("a click on Name shows the load order by name", Mods.active.rows() === Mods.active.count && nameOn(0) <= nameOn(1) && nameOn(1) <= nameOn(2) && order() === orderBefore)
+        Mods.showBy("name")
+        check("a second click turns it round", nameOn(0) >= nameOn(1))
+        Mods.showBy("name")
+        check("and a third shows the load order again", Mods.shownBy === "" && Mods.active.rows() >= Mods.active.count)
+        Mods.toggleColumn("author")
+        check("a column can be hidden", Mods.shownColumns.indexOf("author") === -1)
+        Mods.toggleColumn("author")
+        Mods.moveColumn("author", 0)
+        check("and put back in its place", Mods.shownColumns[0] === "author")
+
+        const subRows = () => { let n = 0; for (let r = 0; r < Mods.active.rows(); r++) if (Mods.active.data(Mods.active.index(r, 0), 273) === true) n += 1; return n }
+        const before = subRows()
+        Mods.putInSub(Mods.selectedId, "check-sub")
+        check("a mod grouped under a new tag sits under its row", subRows() === before + 1 && Mods.info.sub === "check-sub")
+        Mods.putInSub(Mods.selectedId, "")
+        check("and taken out again", subRows() === before && !Mods.info.sub)
+        Mods.putInSub(Mods.selectedId, "check-sub")
+        const subRow = () => { for (let r = 0; r < Mods.active.rows(); r++) if (Mods.active.data(Mods.active.index(r, 0), 273) === true && Mods.active.data(Mods.active.index(r, 0), 258) === "check-sub") return r; return -1 }
+        const rowsOpen = Mods.active.rows()
+        Mods.active.toggleSub(subRow())
+        check("a group folds its mod away and keeps its row", Mods.active.rows() === rowsOpen - 1 && subRow() >= 0)
+        Mods.active.toggleSub(subRow())
+        check("and shows it again", Mods.active.rows() === rowsOpen)
+        Mods.removeSub(Mods.active, subRow())
+        check("a group taken off leaves its mod in the list", subRows() === before && Mods.active.rows() === rowsOpen - 1 && !Mods.info.sub)
+        const tagged = Mods.selectedId
+        Mods.active.setNote(tagged, "check-tag, other", "")
+        Mods.refresh()
+        check("a mod's first tag is the group it sits under", subRows() === before + 1 && Mods.info.sub === "check-tag")
+        Mods.putInSub(tagged, "other")
+        check("grouping under another of its tags moves that tag first", Mods.info.sub === "other" && Mods.info.tags === "other, check-tag")
+        Mods.active.setNote(tagged, "", "")
+        Mods.refresh()
+        check("and without tags it is in no group", subRows() === before && !Mods.info.sub)
+
+        Mods.keepNote("check-tag, second", "a note")
+        check("tags and a note are kept", Mods.info.tags === "check-tag, second" && Mods.info.note === "a note" && Mods.active.data(Mods.active.index(Mods.active.rowOf(0), 0), 269) === "check-tag, second")
+        Mods.active.setFilter("tag:check")
+        // Rows that are mods, not headings: the list may be grouped.
+        const shown = () => { let n = 0; for (let r = 0; r < Mods.active.rows(); r++) if (Mods.idAt(Mods.active, r) >= 0) n += 1; return n }
+        check("tag: narrows the list to the tagged mod", shown() === 1)
+        Mods.active.setFilter("author:zzzz-nobody")
+        check("author: with no match shows nothing", Mods.active.rows() === 0)
+        Mods.active.setFilter("")
+        Mods.keepNote("", "")
+        check("and forgotten", !Mods.info.tags && !Mods.info.note && shown() === counts[0])
+        Mods.select(-1, false)
+
+                Mods.prefs.inactiveByName = wasByName
+        Mods.active.moveMod(0, 3)
+        // What this batch of the interface added, on the same list.
+        const asItWas = order(), every = Mods.active.rows()
+        Mods.active.moveMod(2, 6)
+        const changedOrder = order()
+        check("what changed since the save is put in words", Mods.active.unsaved !== "" && Mods.active.dirty)
+        if (Mods.problemCount > 0) {
+            Mods.showProblem(true)
+            check("a step to a problem says its place among them", Mods.problemPlace >= 1 && Mods.problemPlace <= Mods.problemCount && Mods.selectedId === Mods.problemMod)
+        }
+        check("a kept sentence is put in words", Theme.put([Theme.kept("Saved the load order: {}"), [",", ["{} moved", 2]]]) === Theme.fill("Saved the load order: {}", Theme.fill("{} moved", 2)) && Theme.said("An older record") === "An older record")
+        Mods.active.setFilter("is:changed")
+        check("is:changed shows only what changed", Mods.active.rows() >= 1 && Mods.active.rows() < every)
+        Mods.active.setFilter("")
+        Mods.discardChanges()
+        check("discarding goes back to the saved list, and Undo brings the change back", order() !== changedOrder && Mods.active.canUndo)
+        Mods.undo()
+        check("undo after a discard restores the change", order() === changedOrder)
+        Mods.undo()
+        check("and once more, the list before it", order() === asItWas)
+        let undone = false
+        Notices.offer("Done", "Undo", () => undone = true)
+        Notices.offer("Done again", "Undo", () => undone = true)
+        Notices.say("Said")
+        check("one offer to undo stands at a time, beside what was said", Notices.shown.length === 2 && Notices.shown[0].text === "Done again")
+        Notices.shown[0].run()
+        Notices.dismiss(Notices.shown[0].key)
+        check("an offer runs and goes", undone && Notices.shown.length === 1 && Notices.earlier.length === 3)
+        check("every problem has its words and its fix", Mods.troubles.every(t => t.words !== "" && t.group !== "") && Mods.troubles.length >= Mods.active.errors)
+        Mods.previewSort()
+        const sortLines = String(Mods.active.sortMoves()).split("\n").filter(l => l !== "").map(l => l.split("\t"))
+        check("each move of a sort has a reason", !Mods.active.previewing || sortLines.every(m => m.length === 6 && m[4] !== "" && m[5] !== ""))
+        Mods.endSort(false)
+        Mods.leftOffRestored = true
+        const one = Mods.nthMod(Mods.active, 3), other = Mods.nthMod(Mods.active, 7)
+        Mods.select(one, true)
+        Mods.select(other, true)
+        check("the mod remembered for the next start is the one selected last", Mods.prefs.lastMod !== "" && Mods.prefs.lastMod === String(Mods.active.details(other).packageId).toLowerCase())
+        Mods.select(-1, false)
+        check("and none once nothing is selected", Mods.prefs.lastMod === "")
+        Mods.leftOffRestored = false
+        const columnsBefore = Mods.prefs.columns
+        check("the chosen columns are read from what is kept", Mods.chosenColumns.join(",") === columnsBefore)
+        let search = JSON.parse(Mods.backend.huntStart())
+        check("the search for the broken mod starts with some suspects off", search.active && search.list.length > 0 && search.list.length < search.original.length && search.rounds > 0)
+        let answers = 0
+        while (search.active && !search.found && search.stuck.length === 0 && answers < 40)
+            search = JSON.parse(Mods.backend.huntAnswer(answers++ % 2 === 0))
+        check("answers narrow it to one mod", search.found !== "" || search.stuck.length > 0)
+        check("and its state is kept between rounds", JSON.parse(Mods.backend.huntState()).suspects === search.suspects)
+        Mods.backend.huntStop()
+        check("stopped, nothing is left of it", !JSON.parse(Mods.backend.huntState()).active)
+        Mods.select(Mods.nthMod(Mods.active, 20), true)
+        Mods.selectAlso(Mods.nthMod(Mods.active, 22), true)
+        const pair = Mods.selectedIds.slice(), unmoved = order()
+        Mods.selectedToEdge(true)
+        check("selected mods go to the top of their category in one step", order() !== unmoved || Mods.active.indexOf(pair[0]) === 20)
+        Mods.undo()
+        check("which one Undo takes back", order() === unmoved)
+        Mods.select(-1, false)
+        check("the changed list is saved", Mods.save() && !Mods.active.dirty && Mods.saveProblem === "")
+        Qt.exit(failed > 0 ? 1 : 0)
+    }
+
+    property int frames: 0
+    property int slowFrames: 0
+    property real worstMs: 0
+
+    FrameAnimation {
+        id: meter
+        running: false
+        onTriggered: {
+            const ms = frameTime * 1000
+            checks.frames += 1
+            if (ms > 20)
+                checks.slowFrames += 1
+            if (ms > checks.worstMs)
+                checks.worstMs = ms
+        }
+    }
+
+    NumberAnimation {
+        id: scripted
+        target: view
+        property: "contentY"
+        from: 0
+        to: Math.max(0, view.contentHeight - view.height)
+        duration: 10000
+        onStarted: {
+            checks.frames = 0
+            checks.slowFrames = 0
+            checks.worstMs = 0
+            meter.running = true
+        }
+        onFinished: {
+            meter.running = false
+            console.log("scroll frames=" + checks.frames + " slow=" + checks.slowFrames + " worst_ms=" + checks.worstMs.toFixed(1))
+            if (Theme.selfTest)
+                Qt.quit()
+        }
+    }
+
+    Shortcut { sequence: "F5"; onActivated: scripted.start() }
+
+    // `rimstack --selftest` drives every model operation once, prints the row
+    // counts, runs the scripted scroll and quits.
+    Timer {
+        id: selfTestTimer
+        interval: 300
+        onTriggered: {
+            const rows = () => "active=" + Mods.active.rows() + " inactive=" + Mods.inactive.rows()
+            console.log("selftest start " + rows())
+            Mods.active.toggleCategory(3)
+            console.log("selftest collapsed-content " + rows())
+            Mods.active.toggleCategory(3)
+            console.log("selftest expanded-content " + rows())
+            Mods.filterBy("hygiene")
+            console.log("selftest filtered " + rows())
+            Mods.filterBy("")
+            console.log("selftest cleared " + rows())
+            Mods.active.moveMod(5, 900)
+            console.log("selftest moved " + rows())
+            Mods.active.takeFrom(Mods.inactive, 0)
+            console.log("selftest took-one " + rows())
+            Mods.active.takeFromAt(Mods.inactive, 0, 1000)
+            console.log("selftest took-at " + rows())
+            Mods.inactive.takeFrom(Mods.active, 1000)
+            console.log("selftest gave-back " + rows())
+            Mods.active.takeFrom(Mods.active, 0)
+            console.log("selftest self-take-ignored " + rows())
+            scripted.start()
+        }
+    }
+}

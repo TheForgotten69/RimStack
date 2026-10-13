@@ -1,0 +1,169 @@
+// The strip along the bottom: whether the list is saved, what the
+// pointer is on or the last launch, background work, help and history.
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Controls.Basic
+import QtQuick.Layouts
+import RimStack.Ui
+
+Rectangle {
+    id: strip
+    required property Backend backend
+    // The newest launch on record: { time, errors }.
+    property var lastLaunch: null
+    // What runs in the background now: { text, cancel }.
+    property var tasks: []
+    readonly property alias trayMenu: trayMenu
+    readonly property alias historyMenu: historyMenu
+    signal useList(var ids)
+    signal keys()
+    signal logs()
+
+    implicitHeight: Theme.strip
+    color: Theme.bar
+    Rectangle { width: parent.width; height: 1; color: Theme.edge }
+    Row {
+        x: 14
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Theme.gapWide
+        // Nothing while the list is saved: only what is not gets a word.
+        Text {
+            visible: text !== ""
+            color: Mods.dirty ? Theme.warn : Theme.ink2
+            font.pixelSize: Theme.small
+            text: Theme.demo ? Theme.say("Demo data") : Mods.dirty ? Theme.fill("Not saved: {}", Mods.active.unsaved) : ""
+        }
+        // What the pointer is on, said at once; otherwise the facts.
+        Text {
+            visible: Notices.hint !== "" && Notices.hint !== last.tip
+            width: Math.min(implicitWidth, strip.width - 420)
+            elide: Text.ElideRight
+            color: Theme.ink
+            font.pixelSize: Theme.small
+            text: Notices.hint.split("\n")[0]
+        }
+        // The way into Logs that is always on screen.
+        Item {
+            id: last
+            readonly property var l: strip.lastLaunch
+            readonly property bool counted: !!l && l.errors !== null && l.errors !== undefined
+            // Its own tip does not take its place: it would leave from under the pointer, and come back.
+            readonly property string tip: Theme.say("Opens Logs on this launch")
+            visible: !!l && (Notices.hint === "" || Notices.hint === tip)
+            anchors.verticalCenter: parent.verticalCenter
+            implicitWidth: said.width
+            implicitHeight: Math.max(said.height, Theme.control)
+            width: implicitWidth
+            height: implicitHeight
+            activeFocusOnTab: true
+            Accessible.role: Accessible.Button
+            Accessible.name: started.text + " " + errors.text
+            Accessible.onPressAction: strip.logs()
+            Keys.onReturnPressed: strip.logs()
+            Keys.onSpacePressed: strip.logs()
+            Row {
+            id: said
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.gapSmall
+            Text { id: started; color: lastHover.hovered || last.activeFocus ? Theme.ink : Theme.ink2; font.pixelSize: Theme.small; font.underline: last.activeFocus; text: last.l ? Theme.fill("Last start of the game {}", Theme.moment(last.l.time)) : "" }
+            Text {
+                id: errors
+                visible: last.counted
+                color: last.counted && last.l.errors > 0 ? Theme.err : Theme.ink2
+                font.pixelSize: Theme.small
+                text: !last.counted ? "" : last.l.errors === 0 ? Theme.say("no errors") : Theme.plural(last.l.errors, "{} different error", "{} different errors")
+            }
+            Icon { anchors.verticalCenter: parent.verticalCenter; name: "chevron-right"; size: Theme.sized(11); color: Theme.ink3 }
+            }
+            HoverHandler { id: lastHover; cursorShape: Qt.PointingHandCursor }
+            TapHandler { onTapped: strip.logs() }
+            Tip { text: last.tip; over: lastHover.hovered || last.activeFocus }
+        }
+    }
+    Row {
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.gapMedium
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Theme.gapLarge
+        Text {
+            visible: strip.tasks.length === 0 && strip.backend.texturesProgress !== ""
+            anchors.verticalCenter: parent.verticalCenter
+            color: Theme.ink2
+            font.pixelSize: Theme.small
+            text: strip.backend.texturesProgress
+        }
+        Row {
+            id: tray
+            visible: strip.tasks.length > 0
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.gapSmall
+            Accessible.role: Accessible.Button
+            Accessible.name: Theme.say("Background work")
+            Icon {
+                anchors.verticalCenter: parent.verticalCenter
+                name: "refresh-cw"
+                size: 12
+                color: Theme.moved
+                RotationAnimation on rotation { running: tray.visible && !Theme.stored.reduceMotion; from: 0; to: 360; duration: 1400; loops: Animation.Infinite }
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                color: Theme.ink
+                font.pixelSize: Theme.small
+                text: strip.tasks.length === 1 ? strip.tasks[0].text : Theme.fill("{} tasks running", strip.tasks.length)
+            }
+            HoverHandler { cursorShape: Qt.PointingHandCursor }
+            TapHandler { onTapped: trayMenu.open() }
+            Popup {
+                enter: PopIn {}
+                exit: PopOut {}
+                id: trayMenu
+                x: parent.width - width
+                y: -height - 10
+                width: Theme.sized(380)
+                padding: Theme.gapLarge
+                background: Rectangle { radius: Theme.cornerLarge; color: Theme.bar; border.width: 1; border.color: Theme.line }
+                contentItem: Column {
+                    spacing: Theme.gap
+                    Text { color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("Background work") }
+                    Text { visible: strip.tasks.length === 0; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say("Nothing running") }
+                    Repeater {
+                        model: strip.tasks
+                        RowLayout {
+                            id: task
+                            required property var modelData
+                            width: trayMenu.availableWidth
+                            spacing: Theme.gap
+                            Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.ink; font.pixelSize: Theme.body; text: task.modelData.text }
+                            Btn { visible: !!task.modelData.cancel; text: Theme.say("Cancel"); tip: Theme.say("Stops after the mod it is on; what is done stays done"); onClicked: task.modelData.cancel() }
+                        }
+                    }
+                }
+            }
+        }
+        Btn {
+            anchors.verticalCenter: parent.verticalCenter
+            height: Theme.strip - 2
+            text: "?"
+            spoken: Theme.say("Keyboard shortcuts (F1)")
+            tip: Theme.say("Keyboard shortcuts (F1)")
+            onClicked: strip.keys()
+        }
+        Btn {
+            anchors.verticalCenter: parent.verticalCenter
+            height: Theme.strip - 2
+            visible: !Theme.demo
+            icon: "history"
+            text: Theme.say("History")
+            tip: Theme.say("What RimStack changed, and how to take it back")
+            onClicked: historyMenu.open()
+            HistoryMenu {
+                id: historyMenu
+                x: parent.width - width
+                y: -height - 8
+                backend: strip.backend
+                onUseList: ids => strip.useList(ids)
+            }
+        }
+    }
+}

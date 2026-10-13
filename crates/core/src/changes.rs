@@ -1,0 +1,278 @@
+//! What changed in the installed mods since the game was last started
+//! from RimStack: which Workshop items Steam has replaced, which Git
+//! checkouts moved, and what their authors wrote about it.
+
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::Path;
+
+/// One entry of a mod's change notes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Note {
+    /// Seconds since 1970.
+    pub time: u64,
+    pub text: String,
+}
+
+/// The versions installed when the game was last started: for each
+/// Workshop id, the time of the version on disk.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AtLaunch {
+    pub time: u64,
+    pub workshop: HashMap<String, u64>,
+}
+
+impl AtLaunch {
+    /// No file, or one that cannot be read, is no record.
+    pub fn read(file: &Path) -> Option<Self> {
+        serde_json::from_str(&std::fs::read_to_string(file).ok()?).ok()
+    }
+
+    pub fn write(&self, file: &Path) -> Result<(), String> {
+        let failed = |e: std::io::Error| format!("{}: {e}", file.display());
+        if let Some(dir) = file.parent() {
+            std::fs::create_dir_all(dir).map_err(failed)?;
+        }
+        let text = serde_json::to_string(self).map_err(|e| e.to_string())?;
+        std::fs::write(file, text).map_err(failed)
+    }
+
+    /// The Workshop ids whose version on disk is another one now, each
+    /// with the time of the version it had. A mod installed since is not
+    /// an update.
+    pub fn updated(&self, now: &HashMap<String, u64>) -> Vec<(String, u64)> {
+        let changed = |(id, was): (&String, &u64)| {
+            let newer = now.get(id).is_some_and(|time| time != was);
+            newer.then(|| (id.clone(), *was))
+        };
+        let mut found: Vec<(String, u64)> = self.workshop.iter().filter_map(changed).collect();
+        found.sort();
+        found
+    }
+}
+
+/// Text as a Workshop page writes it, read as plain text: line breaks
+/// for `<br>`, other tags dropped, the few entities it uses resolved.
+fn plain(html: &str) -> String {
+    let broken = html
+        .replace("<br>", "\n")
+        .replace("<br/>", "\n")
+        .replace("<br />", "\n");
+    let mut text = String::new();
+    let mut in_tag = false;
+    for c in broken.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' if in_tag => in_tag = false,
+            _ if !in_tag => text.push(c),
+            _ => {}
+        }
+    }
+    let entities = [
+        ("&lt;", "<"),
+        ("&gt;", ">"),
+        ("&quot;", "\""),
+        ("&#039;", "'"),
+        ("&amp;", "&"),
+    ];
+    let text = entities
+        .iter()
+        .fold(text, |text, (from, to)| text.replace(from, to));
+    text.trim().to_string()
+}
+
+/// Where no versions were recorded at a start, changes are counted from
+/// the game's last start: the newer of the last launch made from here and
+/// the time of the game's own log, which a start from Steam also writes.
+pub fn counted_from(launched: Option<u64>, logged: Option<u64>) -> Option<u64> {
+    launched.max(logged)
+}
+
+/// The entries of a Workshop item's change-notes page, newest first.
+/// Each is a paragraph whose id is the time of the update:
+/// `<p id="1791825433">v3.0.0<br>…</p>`.
+pub fn steam_notes(page: &str) -> Vec<Note> {
+    let mut notes = Vec::new();
+    let mut rest = page;
+    while let Some(at) = rest.find("<p id=\"") {
+        rest = &rest[at + 7..];
+        let Some((id, after)) = rest.split_once("\">") else {
+            break;
+        };
+        let Some((body, _)) = after.split_once("</p>") else {
+            break;
+        };
+        if let Ok(time) = id.parse() {
+            notes.push(Note {
+                time,
+                text: plain(body),
+            });
+        }
+    }
+    notes
+}
+
+/// Why change notes could not be read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NotesProblem {
+    /// Steam's site answered 429; `wait` is its Retry-After, in seconds.
+    Refused {
+        wait: Option<u64>,
+    },
+    Failed(String),
+}
+
+/// How long to hold off after Steam's site refused `refusals` times in a
+/// row, or None once that is enough to stop asking. Steam's own figure
+/// stands when it is the longer; without one the pause doubles from half
+/// a minute (a 429 came after five requests in a few seconds, 2026-10-12,
+/// and a retry twenty seconds later was refused again, 2026-10-13).
+pub fn pause_after_refusal(refusals: u32, asked_by_steam: Option<u64>) -> Option<u64> {
+    const MOST_REFUSALS: u32 = 4;
+    const LONGEST: u64 = 300;
+    if refusals == 0 || refusals > MOST_REFUSALS {
+        return None;
+    }
+    let own = 30 << (refusals - 1);
+    Some(own.max(asked_by_steam.unwrap_or(0)).min(LONGEST))
+}
+
+/// Asks Steam's site for an item's change notes. Only the id is sent.
+pub fn fetch_steam_notes(workshop_id: &str) -> Result<Vec<Note>, NotesProblem> {
+    let url = format!("https://steamcommunity.com/sharedfiles/filedetails/changelog/{workshop_id}");
+    let failed = |e: ureq::Error| NotesProblem::Failed(format!("steamcommunity.com: {e}"));
+    // A refusal is read as an answer, not an error: its Retry-After is wanted.
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(30)))
+        .http_status_as_error(false)
+        .build()
+        .into();
+    let mut answer = agent.get(&url).call().map_err(failed)?;
+    let status = answer.status().as_u16();
+    if status == 429 {
+        let wait = answer
+            .headers()
+            .get("retry-after")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse().ok());
+        return Err(NotesProblem::Refused { wait });
+    }
+    if !(200..300).contains(&status) {
+        return Err(NotesProblem::Failed(format!(
+            "steamcommunity.com: {status}"
+        )));
+    }
+    let page = answer.body_mut().read_to_string().map_err(failed)?;
+    Ok(steam_notes(&page))
+}
+
+/// The commits a Git checkout gained since `since`, newest first, at
+/// most thirty: what `git log` says of each on one line.
+pub fn git_notes(checkout: &Path, since: u64) -> Vec<Note> {
+    let ran = std::process::Command::new("git")
+        .arg("-C")
+        .arg(checkout)
+        .args(["log", "-n", "30", "--pretty=%ct%x09%s"])
+        .arg(format!("--since=@{since}"))
+        .output();
+    let Ok(ran) = ran else {
+        return Vec::new();
+    };
+    let said = String::from_utf8_lossy(&ran.stdout);
+    let note = |line: &str| {
+        let (time, text) = line.split_once('\t')?;
+        Some(Note {
+            time: time.parse().ok()?,
+            text: text.to_string(),
+        })
+    };
+    said.lines().filter_map(note).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_refusal_is_waited_out_longer_each_time_then_given_up() {
+        assert_eq!(pause_after_refusal(1, None), Some(30));
+        assert_eq!(pause_after_refusal(2, None), Some(60));
+        assert_eq!(pause_after_refusal(4, None), Some(240));
+        assert_eq!(pause_after_refusal(5, None), None);
+        assert_eq!(pause_after_refusal(0, None), None);
+    }
+
+    #[test]
+    fn what_steam_asks_for_stands_when_longer_and_never_past_five_minutes() {
+        assert_eq!(pause_after_refusal(1, Some(90)), Some(90));
+        assert_eq!(pause_after_refusal(2, Some(5)), Some(60));
+        assert_eq!(pause_after_refusal(1, Some(86_400)), Some(300));
+    }
+
+    #[test]
+    fn changes_are_counted_from_the_newer_of_a_launch_and_the_log() {
+        assert_eq!(counted_from(Some(10), Some(20)), Some(20));
+        assert_eq!(counted_from(Some(30), Some(20)), Some(30));
+        assert_eq!(counted_from(None, Some(20)), Some(20));
+        assert_eq!(counted_from(None, None), None);
+    }
+
+    const PAGE: &str = r#"<div class="changelog headline">Update: 12 Oct @ 10:17am</div>
+<p id="1791825433">v3.0.0<br><br>Adds RimWorld 1.7 support &amp; <b>more</b>.</p>
+<div class="commentsLink changeLog">Discuss</div>
+<div class="changelog headline">Update: 3 Sep, 2025 @ 8:49am</div>
+<p id="1756914561">v2.4.2 persists the tweak values</p>
+<p id="not-a-time">left out</p>"#;
+
+    #[test]
+    fn a_change_notes_page_gives_its_entries_newest_first_as_plain_text() {
+        let notes = steam_notes(PAGE);
+        assert_eq!(notes.len(), 2);
+        assert_eq!(
+            notes[0],
+            Note {
+                time: 1791825433,
+                text: "v3.0.0\n\nAdds RimWorld 1.7 support & more.".to_string()
+            }
+        );
+        assert_eq!(notes[1].text, "v2.4.2 persists the tweak values");
+        assert!(steam_notes("<html>no notes</html>").is_empty());
+        assert!(steam_notes("<p id=\"12").is_empty());
+    }
+
+    #[test]
+    fn a_mod_is_updated_when_its_version_on_disk_is_another_one() {
+        let times = |pairs: &[(&str, u64)]| {
+            pairs
+                .iter()
+                .map(|(id, t)| (id.to_string(), *t))
+                .collect::<HashMap<_, _>>()
+        };
+        let before = AtLaunch {
+            time: 100,
+            workshop: times(&[("1", 10), ("2", 20), ("3", 30)]),
+        };
+        // 2 was replaced, 3 was removed, 4 is new.
+        let now = times(&[("1", 10), ("2", 25), ("4", 40)]);
+        assert_eq!(before.updated(&now), [("2".to_string(), 20)]);
+    }
+
+    #[test]
+    fn the_record_of_a_launch_is_written_and_read_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("kept/at-launch.json");
+        assert_eq!(AtLaunch::read(&file), None);
+        let record = AtLaunch {
+            time: 7,
+            workshop: [("9".to_string(), 3)].into(),
+        };
+        record.write(&file).unwrap();
+        assert_eq!(AtLaunch::read(&file), Some(record));
+    }
+
+    #[test]
+    fn a_folder_that_is_no_checkout_has_no_commits() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(git_notes(dir.path(), 0).is_empty());
+    }
+}
