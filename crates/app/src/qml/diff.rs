@@ -7,12 +7,19 @@ use std::hash::Hash;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Step {
-    /// Rows `first..=last` go.
-    Remove { first: usize, last: usize },
-    /// New rows come in at `first..=last`.
-    Insert { first: usize, last: usize },
+    Remove {
+        first: usize,
+        last: usize,
+    },
+    Insert {
+        first: usize,
+        last: usize,
+    },
     /// The row at `from` goes to `to`: its place once it has moved.
-    Move { from: usize, to: usize },
+    Move {
+        from: usize,
+        to: usize,
+    },
 }
 
 /// Past this many steps the whole list is shown anew: a view is quicker

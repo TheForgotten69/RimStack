@@ -381,7 +381,6 @@ impl LoadOrder {
         details::own_rules(&yours.rules(&library.abouts(mods)), at, mods)
     }
 
-    /// The mods that provide some of the same textures as this one.
     fn texture_conflicts(&self, app: &App, id: ModId) -> details::Clashes {
         let known = app.conflicts().reading();
         let Some(known) = known.as_ref() else {

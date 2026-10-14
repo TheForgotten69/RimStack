@@ -26,8 +26,8 @@ fmt:
 lint: build
     cargo clippy --all-targets
     tools/lint-qml.sh
-    @# 23 are known (items reached through a Loader, a Repeater or `parent`, and the app's own types, which qmllint cannot see into): a new one is a mistake.
-    @test "$(tools/lint-qml.sh 2>&1 | grep -c '^Warning')" -le 23 || { echo "qmllint: more warnings than the 23 known"; exit 1; }
+    @# 21 are known (items reached through a Loader, a Repeater or `parent`, and the app's own types, which qmllint cannot see into): a new one is a mistake.
+    @test "$(tools/lint-qml.sh 2>&1 | grep -c '^Warning')" -le 21 || { echo "qmllint: more warnings than the 21 known"; exit 1; }
 
 # Both crates' tests; `just test list::` runs those matching a name
 test *filter:

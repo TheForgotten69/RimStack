@@ -201,13 +201,13 @@ Rectangle {
                             x: 16
                             width: parent.width - 34
                             anchors.verticalCenter: parent.verticalCenter
-                            Text { width: parent.width; elide: Text.ElideLeft; color: row.current ? Theme.onSelected : Theme.ink; font.pixelSize: Theme.body; text: row.modelData.name.substring(row.modelData.name.lastIndexOf("/") + 1) }
+                            Text { width: parent.width; elide: Text.ElideLeft; color: row.current ? Theme.onSelected : Theme.ink; font.pixelSize: Theme.body; text: row.modelData.file }
                             Text {
                                 width: parent.width
                                 elide: Text.ElideRight
                                 color: row.current ? Theme.onSelectedDim : Theme.ink3
                                 font.pixelSize: Theme.small
-                                text: row.modelData.yourChoice ? Theme.fill("{}, chosen", row.modelData.keepsEarlier ? view.report.earlier.name : view.report.later.name) : row.modelData.keepsEarlier ? view.report.earlier.name : view.report.later.name
+                                text: row.modelData.used
                             }
                         }
                     }

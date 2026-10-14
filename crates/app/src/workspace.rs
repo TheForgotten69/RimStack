@@ -111,7 +111,6 @@ pub struct App {
 }
 
 impl App {
-    /// With the folders this system and environment give.
     pub fn from_environment() -> Self {
         let env = &paths::from_environment;
         let home = paths::home(env);
@@ -158,7 +157,6 @@ impl App {
         }
     }
 
-    /// Tells every listener what changed.
     pub fn publish(&self, changes: crate::changes::Changes) {
         self.bus.publish(changes);
     }

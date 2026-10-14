@@ -25,7 +25,6 @@ pub struct Stamps {
     /// folder, `About.xml` and Git history.
     pub mods: u64,
     pub saves: u64,
-    /// The game's logs.
     pub log: u64,
     /// `ModsConfig.xml`, and only while it holds another load order than
     /// the one last saved or read here: 0 while it holds that one.

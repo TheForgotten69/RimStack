@@ -96,12 +96,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "fetchNotes"]
         fn fetch_notes(self: Pin<&mut DownloadsData>, mod_id: i32);
-        /// A Git checkout's newest commits.
         #[qinvokable]
         #[cxx_name = "commitsOf"]
         fn commits_of(self: &DownloadsData, mod_id: i32) -> QVariant;
 
-        /// No replacement is suggested for this mod again.
         #[qinvokable]
         #[cxx_name = "ignoreReplacement"]
         fn ignore_replacement(self: &DownloadsData, mod_id: i32);

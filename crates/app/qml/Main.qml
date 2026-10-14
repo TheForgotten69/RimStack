@@ -22,14 +22,13 @@ ApplicationWindow {
     // 4 Logs, 5 Settings.
     // `--section=3` opens on that section; for screenshots and checks.
     property int section: {
-        const given = Qt.application.arguments.find(a => a.startsWith("--section="))
-        return given ? Number(given.substring(10)) : 0
+        return Hub.number("--section", 0)
     }
 
     // The one-page welcome, until Start is pressed once. Not for demo
     // data, and not when taking a picture of a screen.
     // `--first` shows the set-up card whatever the settings say; for screenshots.
-    property bool firstRun: Qt.application.arguments.indexOf("--first") !== -1
+    property bool firstRun: Hub.given("--first")
         || (!Theme.demo && shotPath === "" && Mods.checkMode === "" && !Hub.settings.report.setupDone)
 
     // What a careful player would settle before starting the game.
@@ -76,7 +75,7 @@ ApplicationWindow {
             height = Math.max(minimumHeight, Theme.stored.windowHeight)
         } else {
             // `--size=1000x560` takes the picture at that size.
-            const given = (Qt.application.arguments.find(a => a.startsWith("--size=")) || "").substring(7).split("x")
+            const given = Hub.argument("--size").split("x")
             if (given.length === 2) {
                 width = Number(given[0])
                 height = Number(given[1])
@@ -244,14 +243,12 @@ ApplicationWindow {
     // `--shot=/path/file.png` saves a picture of the window's contents
     // two seconds after start and quits; for checking screens.
     readonly property string shotPath: {
-        const given = Qt.application.arguments.find(a => a.startsWith("--shot="))
-        return given ? given.substring(7) : ""
+        return Hub.argument("--shot")
     }
     Timer {
         // `--shot-delay=6000` waits longer, for screens that fetch something.
         interval: {
-            const given = Qt.application.arguments.find(a => a.startsWith("--shot-delay="))
-            return given ? Number(given.substring(13)) : 2000
+            return Hub.number("--shot-delay", 2000)
         }
         running: window.shotPath !== ""
         // With `--open=`, the picture is of that menu's or dialog's
@@ -433,39 +430,36 @@ ApplicationWindow {
     // problems panel, `--several` a few mods selected. Give `--hunt-works`
     // a copy of the game's settings: it saves.
     Timer {
-        readonly property var given: Qt.application.arguments
         interval: 1200
         running: window.shotPath !== ""
         onTriggered: {
-            if (given.indexOf("--notices") !== -1) {
+            if (Hub.given("--notices")) {
                 Notices.say(Theme.say("Saved"), "ok")
                 Notices.offer(Theme.plural(3, "Deactivated {} mod", "Deactivated {} mods"), Theme.say("Undo"), () => {})
             }
             // `--hints` the first hint, `--hints=3` the third.
-            const hint = given.find(a => a.startsWith("--hints"))
-            if (hint)
-                Mods.hintStep = Number(hint.substring(8)) || 1
-            if (given.indexOf("--problems") !== -1)
+            if (Hub.given("--hints"))
+                Mods.hintStep = Hub.number("--hints", 1)
+            if (Hub.given("--problems"))
                 Mods.problemsOpen = true
             // `--font=Name` changes the font once the window is up.
-            const font = given.find(a => a.startsWith("--font="))
-            if (font)
-                window.useFont(font.substring(7))
+            if (Hub.argument("--font") !== "")
+                window.useFont(Hub.argument("--font"))
             // `--hunt-works`: a round of the search answered "works now"
             // and saved, as it looks afterwards.
-            if (given.indexOf("--hunt-works") !== -1 && Hub.search.active) {
+            if (Hub.given("--hunt-works") && Hub.search.active) {
                 hunt.answer(false)
                 Mods.save()
             }
             // `--open=play`, `history`, `keys`, `search`, `ask`, `lists` or
             // `tray` opens that menu or dialog.
-            const open = (given.find(a => a.startsWith("--open=")) || "").substring(7)
+            const open = Hub.argument("--open")
             window.opened = { play: topBar.beforePlay, history: statusBar.historyMenu, keys: keysSheet, search: commands, lists: topBar.listsMenu, tray: statusBar.trayMenu, ask: question }[open] || null
             if (window.opened && open !== "ask")
                 window.opened.open()
             if (open === "ask")
                 Notices.ask({ title: Theme.say("Set the mods' settings aside"), lines: [Theme.say("Every Mod_*.xml is moved out of"), "/home/example/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios/Config", Theme.say("Mods start from their defaults. Moving the files back restores them.")], label: Theme.say("Set aside"), run: () => {} })
-            if (given.indexOf("--several") !== -1) {
+            if (Hub.given("--several")) {
                 Mods.select(Mods.nthMod(Mods.active, 14), true)
                 for (const at of [15, 16, 19])
                     Mods.selectAlso(Mods.nthMod(Mods.active, at), true)

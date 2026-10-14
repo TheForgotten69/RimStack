@@ -59,7 +59,6 @@ pub mod qobject {
         #[qinvokable]
         fn at(self: &ModRows, row: i32) -> QVariant;
 
-        /// Rows on show.
         #[qinvokable]
         fn rows(self: &ModRows) -> i32;
 

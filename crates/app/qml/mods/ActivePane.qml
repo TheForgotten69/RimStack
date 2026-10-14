@@ -235,14 +235,9 @@ Item {
                     color: Theme.ink
                     font.pixelSize: Theme.body
                     lineHeight: 1.25
-                    // The first sentence is the news; the rest is detail.
-                    text: {
-                        const stop = Hub.mods.sortNote.indexOf(". ")
-                        const head = stop < 0 ? Hub.mods.sortNote : Hub.mods.sortNote.substring(0, stop + 1)
-                        const rest = stop < 0 ? "" : Hub.mods.sortNote.substring(stop + 1)
-                        const plain = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
-                        return "<b>" + plain(head) + "</b>" + (Hub.mods.previewing ? " <font color=\"" + Theme.ink2 + "\">" + Theme.say("Nothing has changed yet.") + "</font>" : "") + plain(rest)
-                    }
+                    text: "<b>" + Theme.plain(Hub.mods.sortNote) + "</b>"
+                        + (Hub.mods.previewing ? " <font color=\"" + Theme.ink2 + "\">" + Theme.say("Nothing has changed yet.") + "</font>" : "")
+                        + (Hub.mods.sortMore !== "" ? " " + Theme.plain(Hub.mods.sortMore) : "")
                 }
                 Btn { visible: Hub.mods.previewing; primary: true; text: Theme.say("Apply"); onClicked: Mods.endSort(true) }
                 Btn { visible: Hub.mods.previewing; text: Theme.say("Discard"); onClicked: Mods.endSort(false) }

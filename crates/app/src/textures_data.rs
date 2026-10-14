@@ -38,7 +38,6 @@ pub mod qobject {
     impl cxx_qt::Threading for TexturesData {}
 
     extern "RustQt" {
-        /// Makes DDS files for these mods.
         #[qinvokable]
         fn convert(self: Pin<&mut TexturesData>, ids: &QVariant);
         /// Deletes the DDS files RimStack made for these mods.
@@ -134,7 +133,6 @@ pub struct TexturesDataRust {
     found: Option<Vec<Refused>>,
     compared: Option<Comparison>,
     stop: Arc<AtomicBool>,
-    /// What was counted no longer holds.
     stale: bool,
 }
 

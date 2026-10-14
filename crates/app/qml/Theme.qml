@@ -41,11 +41,8 @@ QtObject {
     function sized(pixels) {
         return Math.round(pixels * grow)
     }
-    // Corners: a control, a panel or dialog.
     readonly property int corner: 6
     readonly property int cornerLarge: 9
-    // Distances between neighbours, and between the cards of a panel
-    // and of a page.
     readonly property int gapLine: 1
     readonly property int gapHair: 2
     readonly property int gapThin: 3
@@ -220,9 +217,9 @@ QtObject {
     readonly property var categoryNames: ["Loaders", "Game and DLC", "Libraries", "Content", "Patches", "Textures", "Interface", "Performance & tweaks", "Loads last"]
 
     // `--wheel-log` prints what each turn of the mouse wheel sends.
-    readonly property bool wheelLog: Qt.application.arguments.indexOf("--wheel-log") !== -1
-    readonly property bool selfTest: Qt.application.arguments.indexOf("--selftest") !== -1
-    readonly property bool demo: selfTest || Qt.application.arguments.indexOf("--demo") !== -1
+    readonly property bool wheelLog: Hub.given("--wheel-log")
+    readonly property bool selfTest: Hub.given("--selftest")
+    readonly property bool demo: selfTest || Hub.given("--demo")
 
     // Words of the trade, each in a sentence; shown where a heading uses one.
     readonly property var terms: ({

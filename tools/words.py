@@ -55,10 +55,20 @@ words.update(json.loads(f'"{t}"') for t in re.findall(r"(?<![\w.])(?:say|fill)\(
 words.update(json.loads(f'"{t}"') for t in re.findall(r"\"@\w+\": " + literal, theme))
 # The sentences written in Rust: `say!("…")`, `said!("…")` and `named("…")`.
 for path in glob.glob(os.path.join(root, "..", "*", "src", "**", "*.rs"), recursive=True):
-    source = open(path, encoding="utf-8").read().split("#[cfg(test)]")[0]
+    source = re.split(r"#\[cfg\(test\)\]\s*mod \w+\s*\{", open(path, encoding="utf-8").read())[0]
     words.update(json.loads(f'"{t}"') for t in re.findall(r"(?:say!|said!|named)\(\s*" + literal, source))
     for pair in re.findall(r"say_n!\([^\"]*" + literal + r"\s*,\s*" + literal, source):
         words.update(json.loads(f'"{t}"') for t in pair)
+
+# A plural or a sentence with places whose texts start on another line
+# would not be found above, and would stay English: refused here.
+split = []
+for path in sorted(glob.glob(os.path.join(root, "qml", "**", "*.qml"), recursive=True)):
+    for number, line in enumerate(open(path, encoding="utf-8"), 1):
+        if re.search(r"Theme\.(plural|fill)\([^\"]*$", line) and not line.lstrip().startswith("//"):
+            split.append(f"{os.path.relpath(path, root)}:{number}")
+if split:
+    raise SystemExit("texts must start on the line of their call: " + ", ".join(split))
 
 # The counts that take the singular, for a language to set: "0 1" in French.
 words.add("@plural")

@@ -6,7 +6,6 @@ use rimstack_core::kept::launches;
 use rimstack_core::rimworld::{modsconfig, paths::Source};
 use rimstack_core::said;
 
-/// RimWorld's Steam app id.
 const APP_ID: u32 = 294_100;
 
 /// How many copies of the newest save are kept from before a launch.

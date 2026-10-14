@@ -31,7 +31,6 @@ pub struct Installed {
     /// What its code is about and patches; nothing until `read_code`.
     pub code: Code,
     pub preview: Option<PathBuf>,
-    /// The folder is a Git checkout.
     pub git: bool,
 }
 
@@ -296,7 +295,6 @@ impl Library {
         ModId::new(self.reading, index)
     }
 
-    /// Every installed mod with its id.
     pub fn ids(&self) -> impl Iterator<Item = (ModId, &Installed)> {
         let ids = (0..self.installed.len()).map(|index| self.id_at(index));
         ids.zip(&self.installed)

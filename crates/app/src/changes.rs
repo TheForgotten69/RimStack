@@ -28,7 +28,6 @@ impl Changes {
     pub const UPDATES: Self = Self(1 << 9);
     /// Textures hidden, shown again, converted or removed.
     pub const TEXTURES: Self = Self(1 << 10);
-    /// The active mods' files were read.
     pub const FILES_READ: Self = Self(1 << 11);
     pub const LOGS: Self = Self(1 << 12);
     pub const SAVES: Self = Self(1 << 13);

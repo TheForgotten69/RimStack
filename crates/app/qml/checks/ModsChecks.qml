@@ -43,7 +43,7 @@ Item {
     property int liveWaited: 0
     property int liveTotal: 0
     function checkLive() {
-        const folder = (Qt.application.arguments.find(a => a.startsWith("--live-folder=")) || "").substring(14)
+        const folder = Hub.argument("--live-folder")
         liveTotal = Mods.active.count + Mods.inactive.count
         Hub.settings.keep("workshop", folder)
         liveWatch.start()

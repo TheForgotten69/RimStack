@@ -95,7 +95,6 @@ pub struct LogsDataRust {
     app: Option<Arc<App>>,
     report: Option<LogsReport>,
     open_runs: HashSet<usize>,
-    /// What was read no longer holds.
     stale: bool,
     keep: bool,
     /// The launches were told changed by this reading itself.

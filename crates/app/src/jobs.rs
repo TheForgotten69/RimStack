@@ -6,7 +6,6 @@ use cxx_qt::{CxxQtThread, Threading};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-/// Runs `work` on a thread of its own.
 pub(crate) fn spawn(name: &str, work: impl FnOnce() + Send + 'static) {
     let started = std::thread::Builder::new()
         .name(name.to_string())

@@ -45,7 +45,6 @@ pub mod qobject {
         #[cxx_name = "snapshotNamed"]
         fn snapshot_named(self: &ListsData, name: &QString) -> QVariant;
 
-        /// The package ids in a list someone pasted.
         #[qinvokable]
         #[cxx_name = "idsInText"]
         fn ids_in_text(self: &ListsData, text: &QString) -> QVariant;

@@ -128,7 +128,6 @@ impl Session {
         }
     }
 
-    /// The list as it is now has been written to disk.
     pub fn mark_saved(&mut self) {
         self.saved = self.current().to_vec();
     }

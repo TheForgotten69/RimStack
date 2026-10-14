@@ -9,7 +9,6 @@ use rimstack_core::sources::{git, redownload};
 use rimstack_core::{said, say};
 use std::path::PathBuf;
 
-/// How a task ended.
 pub struct Done {
     /// What it did, or why it changed nothing.
     pub note: Result<Sentence>,
@@ -31,7 +30,6 @@ impl Done {
     }
 }
 
-/// What Steam is asked to do with Workshop items.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SteamAsk {
     Subscribe,

@@ -424,7 +424,7 @@ mod tests {
         // Header, then every mipmap of an 8 by 8 picture: 4 + 1 + 1 + 1 blocks of 8 bytes.
         assert_eq!(opaque.len(), 128 + 7 * 8);
         assert_eq!(side(&opaque, 28), 4);
-        // What we write reads back as the picture's size with a standard reader.
+        // What RimStack writes reads back as the picture's size with a standard reader.
         let read = image_dds::ddsfile::Dds::read(&opaque[..]).unwrap();
         assert_eq!((read.get_width(), read.get_height()), (8, 8));
         assert!(image_dds::image_from_dds(&read, 0).is_ok());

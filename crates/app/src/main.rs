@@ -151,3 +151,6 @@ fn main() -> std::process::ExitCode {
     let ended = qt.as_mut().map_or(1, |qt| qt.exec());
     std::process::ExitCode::from(u8::try_from(ended).unwrap_or(1))
 }
+
+#[cfg(test)]
+mod layers;

@@ -49,7 +49,7 @@ pub(crate) fn tokens(text: &str) -> Vec<Token> {
 /// One entry per library, in file order. Text that is not VDF gives none.
 pub fn libraries(text: &str) -> Vec<Library> {
     let mut out: Vec<Library> = Vec::new();
-    // Keys of the blocks we are inside, outermost first.
+    // Keys of the blocks open at this point, outermost first.
     let mut blocks: Vec<String> = Vec::new();
     let mut key: Option<String> = None;
     for token in tokens(text) {

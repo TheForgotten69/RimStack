@@ -50,7 +50,6 @@ thread_local! {
     static ON_SCREEN: RefCell<Rc<Words>> = RefCell::new(Rc::new(Words::default()));
 }
 
-/// From now on, what is shown is put in these words.
 pub fn show_in(words: Words) {
     ON_SCREEN.with(|on_screen| *on_screen.borrow_mut() = Rc::new(words));
 }

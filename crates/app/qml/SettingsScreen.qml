@@ -135,8 +135,7 @@ Item {
     // The sections, chosen on the left.
     // `--part=2` opens on that one; for screenshots.
     property int part: {
-        const given = Qt.application.arguments.find(a => a.startsWith("--part="))
-        return given ? Number(given.substring(7)) : 0
+        return Hub.number("--part", 0)
     }
     readonly property var parts: [Theme.say("Game and folders"), Theme.say("Appearance"), "Sorting", "RimStack"]
 

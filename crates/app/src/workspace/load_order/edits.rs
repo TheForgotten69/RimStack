@@ -152,7 +152,6 @@ impl LoadOrder {
         self.sync(app);
     }
 
-    /// These package ids as the load order.
     pub fn use_list(&mut self, app: &App, ids: Vec<String>) {
         app.session().record(ids);
         self.sync(app);

@@ -47,12 +47,28 @@ pub mod qobject {
     }
 
     impl cxx_qt::Initialize for Hub {}
+
+    extern "RustQt" {
+        /// The command line names this flag, with a value or without.
+        #[qinvokable]
+        fn given(self: &Hub, flag: &QString) -> bool;
+
+        /// The value the command line gives this flag (`--size=1000x560`);
+        /// empty for none.
+        #[qinvokable]
+        fn argument(self: &Hub, flag: &QString) -> QString;
+
+        /// The flag's value as a number, or `otherwise`.
+        #[qinvokable]
+        fn number(self: &Hub, flag: &QString, otherwise: i32) -> i32;
+    }
 }
 
 use crate::App;
 use core::pin::Pin;
 use cxx::UniquePtr;
 use cxx_qt::CxxQtType;
+use cxx_qt_lib::QString;
 use qobject::{
     DownloadsData, GameData, ListsData, LogsData, ModsData, SavesData, SearchData, SettingsData,
     TexturesData,
@@ -117,17 +133,34 @@ pub fn hand_over(app: Arc<App>) {
 }
 
 pub fn use_window_icon() {
-    qobject::set_window_icon(&cxx_qt_lib::QString::from(
-        ":/qt/qml/RimStack/Ui/assets/rimstack.svg",
-    ));
+    qobject::set_window_icon(&QString::from(":/qt/qml/RimStack/Ui/assets/rimstack.svg"));
 }
 
 /// What the command line gives for `flag`: "" for the flag alone.
 fn value(flag: &str) -> Option<String> {
-    std::env::args().find_map(|a| match a.strip_prefix(flag)? {
+    value_among(std::env::args(), flag)
+}
+
+fn value_among(args: impl IntoIterator<Item = String>, flag: &str) -> Option<String> {
+    args.into_iter().find_map(|a| match a.strip_prefix(flag)? {
         "" => Some(String::new()),
         rest => rest.strip_prefix('=').map(String::from),
     })
+}
+
+impl qobject::Hub {
+    fn given(&self, flag: &QString) -> bool {
+        given(&flag.to_string())
+    }
+
+    fn argument(&self, flag: &QString) -> QString {
+        QString::from(&value(&flag.to_string()).unwrap_or_default())
+    }
+
+    fn number(&self, flag: &QString, otherwise: i32) -> i32 {
+        let given = value(&flag.to_string());
+        given.and_then(|n| n.parse().ok()).unwrap_or(otherwise)
+    }
 }
 
 fn given(flag: &str) -> bool {
@@ -224,5 +257,19 @@ impl cxx_qt::Initialize for qobject::Hub {
         hub.owned_textures = textures;
         hub.downloads = address(&mut downloads);
         hub.owned_downloads = downloads;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::value_among;
+
+    #[test]
+    fn a_flag_is_found_with_its_value_and_not_by_a_longer_one() {
+        let args = || ["rimstack", "--check", "--section=3", "--shot-delay=6000"].map(String::from);
+        assert_eq!(value_among(args(), "--check").as_deref(), Some(""));
+        assert_eq!(value_among(args(), "--section").as_deref(), Some("3"));
+        assert_eq!(value_among(args(), "--shot"), None);
+        assert_eq!(value_among(args(), "--first"), None);
     }
 }

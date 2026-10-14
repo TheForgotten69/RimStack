@@ -26,7 +26,9 @@ pub mod qobject {
         #[qproperty(bool, can_undo, cxx_name = "canUndo")]
         #[qproperty(bool, can_redo, cxx_name = "canRedo")]
         #[qproperty(bool, previewing)]
+        /// What the last sort did: its first sentence, then the rest.
         #[qproperty(QString, sort_note, cxx_name = "sortNote")]
+        #[qproperty(QString, sort_more, cxx_name = "sortMore")]
         #[qproperty(i32, sort_pending, cxx_name = "sortPending")]
         #[qproperty(i32, sort_move_count, cxx_name = "sortMoveCount")]
         /// Mods of the load order with an error, with a warning, with either.
@@ -290,6 +292,7 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QVariant};
 use qobject::ModRows;
 use rimstack_core::base::locks::Held;
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::library::ModId;
 use std::sync::{Arc, Mutex};
 
@@ -306,6 +309,7 @@ pub struct ModsDataRust {
     can_redo: bool,
     previewing: bool,
     sort_note: QString,
+    sort_more: QString,
     sort_pending: i32,
     sort_move_count: i32,
     errors: i32,
@@ -351,6 +355,7 @@ impl Default for ModsDataRust {
             can_redo: false,
             previewing: false,
             sort_note: QString::default(),
+            sort_more: QString::default(),
             sort_pending: 0,
             sort_move_count: 0,
             errors: 0,
@@ -579,7 +584,6 @@ impl qobject::ModsData {
         self.show();
     }
 
-    /// Publishes what the lists and the load order are now.
     fn show(mut self: Pin<&mut Self>) {
         let app = self.app();
         for side in [Side::Active, Side::Inactive] {
@@ -608,7 +612,13 @@ impl qobject::ModsData {
         let (errors, warnings) = order.errors_and_warnings();
         let troubled = order.troubles().iter().filter(|t| !t.is_empty()).count();
         let previewing = order.previewing();
-        let note = crate::words::said(&order.sort_note);
+        let (note, more) = match order.sort_note.split_first() {
+            Some((first, rest)) => (
+                crate::words::said(first),
+                crate::words::said(&Sentence::joined(" ", rest.to_vec())),
+            ),
+            None => Default::default(),
+        };
         let moves = order.sort_move_count() as i32;
         let conflicts = order.in_conflict(&app).len() as i32;
         let problem = crate::words::said(&order.problem);
@@ -620,6 +630,7 @@ impl qobject::ModsData {
         self.as_mut().set_troubled(troubled as i32);
         self.as_mut().set_previewing(previewing);
         self.as_mut().set_sort_note(note);
+        self.as_mut().set_sort_more(more);
         self.as_mut().set_sort_move_count(moves);
         self.as_mut().set_conflicts(conflicts);
         self.as_mut().set_problem(problem);
@@ -632,7 +643,6 @@ impl qobject::ModsData {
         self.describe();
     }
 
-    /// `details` for the selected mod as it is now.
     fn describe(mut self: Pin<&mut Self>) {
         let app = self.app();
         let details = match id(self.selected) {

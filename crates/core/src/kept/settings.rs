@@ -91,7 +91,6 @@ impl Settings {
     }
 }
 
-/// What a setting can hold.
 #[derive(Debug, Clone, Copy)]
 enum Holds {
     Text,
@@ -103,7 +102,6 @@ enum Holds {
 
 const SWITCH: Holds = Holds::Choice(&["on", "off"]);
 
-/// Every setting RimStack keeps.
 const KNOWN: [(&str, Holds); 20] = [
     ("game", Holds::Text),
     ("config", Holds::Text),
@@ -127,7 +125,6 @@ const KNOWN: [(&str, Holds); 20] = [
     ("selfCheck", SWITCH),
 ];
 
-/// A setting that is on or off.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Switch {
     /// Sort follows the community's rules.

@@ -214,7 +214,6 @@ pub fn listed<'a>(
         .collect()
 }
 
-/// A line of the log as the screen lists it.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Line<'a> {

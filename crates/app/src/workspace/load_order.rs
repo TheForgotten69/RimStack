@@ -57,7 +57,6 @@ pub struct Preview {
 pub struct LoadOrder {
     active: GroupedList,
     inactive: GroupedList,
-    /// Per mod of the load order: what is wrong with it.
     troubles: Vec<Vec<Trouble>>,
     version_ignored: Vec<bool>,
     /// The load order `troubles` was worked out for.
@@ -77,7 +76,8 @@ pub struct LoadOrder {
     pub status: [Sentence; 2],
     /// Why the mods could not be read; empty when they were.
     pub problem: Sentence,
-    pub sort_note: Sentence,
+    /// What the last sort did, a sentence each: the first is the news.
+    pub sort_note: Vec<Sentence>,
 }
 
 fn side_index(side: Side) -> usize {
@@ -129,7 +129,7 @@ impl LoadOrder {
             detected: rules::Detected::default(),
             status: [Sentence::default(), Sentence::default()],
             problem: Sentence::default(),
-            sort_note: Sentence::default(),
+            sort_note: Vec::new(),
         }
     }
 
@@ -300,7 +300,7 @@ impl LoadOrder {
             return;
         }
         self.preview = None;
-        self.sort_note = Sentence::default();
+        self.sort_note.clear();
         let now = arranged(app, library);
         let (mods, _) = rules::sorted_by_category(app, &mut self.detected, library, now.active);
         self.active.set_grouped(self.headings);
@@ -430,7 +430,6 @@ impl LoadOrder {
         .collect()
     }
 
-    /// The active mods that share a texture with another active mod.
     pub fn in_conflict(&self, app: &App) -> HashSet<ModId> {
         let known = app.conflicts().reading();
         let Some(known) = known.as_ref() else {

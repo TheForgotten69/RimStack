@@ -139,7 +139,6 @@ pub fn steam_notes(page: &str) -> Vec<Note> {
     notes
 }
 
-/// Why change notes could not be read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NotesProblem {
     /// Steam's site answered 429; `wait` is its Retry-After, in seconds.

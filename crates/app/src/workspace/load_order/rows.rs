@@ -114,7 +114,6 @@ fn source_of(library: Option<&Library>, m: &Mod) -> (i32, String, bool) {
 }
 
 impl LoadOrder {
-    /// The rows of a list as the view shows them.
     pub fn rows(&self, app: &App, side: Side) -> Vec<RowView> {
         let loaded = self.installed.then(|| app.library());
         let library = loaded

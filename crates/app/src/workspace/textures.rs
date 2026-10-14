@@ -23,7 +23,6 @@ const PROGRESS_EVERY: usize = 20;
 pub struct RowShown<'a> {
     #[serde(flatten)]
     pub row: &'a textures::Row,
-    /// Its state in words.
     pub said: Sentence,
 }
 
@@ -124,6 +123,8 @@ pub struct Side {
 #[serde(rename_all = "camelCase")]
 pub struct Shared {
     pub name: String,
+    /// The last part of `name`.
+    pub file: String,
     /// Its place among all the textures the two mods share.
     pub at: usize,
     #[serde(skip)]
@@ -138,6 +139,8 @@ pub struct Shared {
     /// The later mod wins unless its file is hidden.
     pub keeps_earlier: bool,
     pub your_choice: bool,
+    /// The mod whose file the game uses, and whether that was your choice.
+    pub used: Sentence,
 }
 
 #[derive(Serialize, Clone)]
@@ -351,6 +354,7 @@ impl App {
         let loaded = self.library();
         let (library, _) = loaded.as_ref().as_ref().ok()?;
         let (one, other) = (library.get(earlier)?, library.get(later)?);
+        let (one_name, other_name) = (one.display_name(), other.display_name());
         let first = conflicts::files_with_hidden(&self.loaded_folders(library, earlier));
         let second = conflicts::files_with_hidden(&self.loaded_folders(library, later));
         let on_disk = |(path, hidden): &(PathBuf, bool)| match hidden {
@@ -362,27 +366,40 @@ impl App {
             .iter()
             .filter_map(|(name, one)| Some((name, one, second.get(name)?)))
             .enumerate()
-            .map(|(at, (name, one, other))| Shared {
-                name: name.clone(),
-                at,
-                earlier: one.0.clone(),
-                later: other.0.clone(),
-                earlier_bytes: size(&on_disk(one)),
-                later_bytes: size(&on_disk(other)),
-                earlier_shown: on_disk(one),
-                later_shown: on_disk(other),
-                keeps_earlier: other.1 && !one.1,
-                your_choice: one.1 || other.1,
+            .map(|(at, (name, one, other))| {
+                let keeps_earlier = other.1 && !one.1;
+                let your_choice = one.1 || other.1;
+                let user = match keeps_earlier {
+                    true => one_name,
+                    false => other_name,
+                };
+                Shared {
+                    file: name.rsplit('/').next().unwrap_or(name).to_string(),
+                    name: name.clone(),
+                    at,
+                    earlier: one.0.clone(),
+                    later: other.0.clone(),
+                    earlier_bytes: size(&on_disk(one)),
+                    later_bytes: size(&on_disk(other)),
+                    earlier_shown: on_disk(one),
+                    later_shown: on_disk(other),
+                    keeps_earlier,
+                    your_choice,
+                    used: match your_choice {
+                        true => said!("{}, chosen", user),
+                        false => Sentence::Plain(user.to_string()),
+                    },
+                }
             })
             .collect();
         Some(Comparison {
             earlier: Side {
                 id: earlier,
-                name: one.display_name().to_string(),
+                name: one_name.to_string(),
             },
             later: Side {
                 id: later,
-                name: other.display_name().to_string(),
+                name: other_name.to_string(),
             },
             later_folder: other.path.clone(),
             total: textures.len(),

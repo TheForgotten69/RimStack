@@ -37,7 +37,6 @@ pub mod qobject {
         #[qinvokable]
         fn reread(self: Pin<&mut SavesData>);
 
-        /// Copies the newest save among the backups.
         #[qinvokable]
         #[cxx_name = "backUp"]
         fn back_up(self: &SavesData);
@@ -75,7 +74,6 @@ pub struct SavesDataRust {
     wanted: bool,
     app: Option<Arc<App>>,
     report: SavesReport,
-    /// What was read no longer holds.
     stale: bool,
     reading: crate::jobs::Lane,
 }

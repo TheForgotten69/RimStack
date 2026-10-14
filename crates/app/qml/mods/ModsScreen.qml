@@ -14,7 +14,7 @@ Item {
 
     // Inactive hidden: a rail at the left edge opens it over the load order.
     // `--drawer` opens it at once; for screenshots.
-    property bool drawerOpen: Qt.application.arguments.indexOf("--drawer") !== -1
+    property bool drawerOpen: Hub.given("--drawer")
     Connections {
         target: Mods.prefs
         function onInactiveHiddenChanged() { screen.drawerOpen = false }
@@ -281,8 +281,8 @@ Rectangle {
 // mods that share a texture, once the mods' files are read; for
 // screenshots.
 Timer {
-    readonly property bool sorting: Qt.application.arguments.indexOf("--sorting") !== -1
-    readonly property bool comparing: Qt.application.arguments.indexOf("--comparing") !== -1
+    readonly property bool sorting: Hub.given("--sorting")
+    readonly property bool comparing: Hub.given("--comparing")
     interval: 400
     repeat: true
     running: sorting || comparing
@@ -304,16 +304,15 @@ Timer {
 // `--pick=40` selects the mod on that row of the load order, `--tab=1`
 // a tab of its details, `--notes` fetches its change notes; for screenshots.
 Timer {
-    readonly property string given: Qt.application.arguments.find(a => a.startsWith("--pick=")) || ""
+    readonly property int picked: Hub.number("--pick", -1)
     interval: 1500
-    running: given !== ""
+    running: picked >= 0
     onTriggered: {
-        const tab = Qt.application.arguments.find(a => a.startsWith("--tab="))
-        Mods.select(Mods.idAt(Mods.active, Number(given.substring(7))), true)
-        Mods.reveal(Mods.active, Number(given.substring(7)), true)
-        Mods.tab = tab ? Number(tab.substring(6)) : 0
+        Mods.select(Mods.idAt(Mods.active, picked), true)
+        Mods.reveal(Mods.active, picked, true)
+        Mods.tab = Hub.number("--tab", 0)
         // `--notes` asks for the picked mod's change notes, as its Fetch button does.
-        if (Qt.application.arguments.indexOf("--notes") !== -1 && Mods.info.source === "Workshop")
+        if (Hub.given("--notes") && Mods.info.source === "Workshop")
             Hub.downloads.fetchNotes(Mods.selectedId)
     }
 }

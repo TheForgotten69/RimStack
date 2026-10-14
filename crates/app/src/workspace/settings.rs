@@ -331,7 +331,6 @@ impl App {
             .collect()
     }
 
-    /// Uses one community database, or stops using it.
     pub fn use_database(&self, id: &str, on: bool) -> Result<(), Error> {
         let off: Vec<&str> = self
             .databases()

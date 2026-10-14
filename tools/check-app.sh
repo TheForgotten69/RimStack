@@ -24,12 +24,23 @@ cp "$tmp/config/Config/ModsConfig.xml" "$tmp/original.xml"
 # Sort with the same community rules as the real run, if there are any.
 cp "${XDG_DATA_HOME:-$HOME/.local/share}/RimStack/communityRules.json" "$tmp/data/RimStack/" 2>/dev/null || true
 
-run() {
-    RIMSTACK_CONFIG="$tmp/config" XDG_DATA_HOME="$tmp/data" XDG_CONFIG_HOME="$tmp/settings" \
-        QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 timeout 60 "$app" "$@" 2>&1 | grep -E '^qml: check' | sed 's/^qml: //'
-    return "${PIPESTATUS[0]}"
-}
 fail() { echo "check FAIL $1"; exit 1; }
+# A QML error does not stop the app, so a check can pass over a broken binding.
+sound() {
+    local errors
+    errors=$(grep -E 'TypeError|ReferenceError|is not a function|is not defined|Cannot read property' "$1" | head -3 || true)
+    [ -z "$errors" ] || fail "QML errors in $2:
+$errors"
+}
+shown() { grep -E '^qml: check' "$1" | sed 's/^qml: //' || true; }
+run() {
+    local log="$tmp/run.log" status=0
+    RIMSTACK_CONFIG="$tmp/config" XDG_DATA_HOME="$tmp/data" XDG_CONFIG_HOME="$tmp/settings" \
+        QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 timeout 60 "$app" "$@" >| "$log" 2>&1 || status=$?
+    shown "$log"
+    sound "$log" "$*"
+    return "$status"
+}
 saved="$tmp/config/Config/ModsConfig.xml"
 
 run --check
@@ -69,8 +80,10 @@ cp -r "$game" "$tmp/game-before"
 
 RIMSTACK_GAME="$game" RIMSTACK_WORKSHOP="$tmp/empty-workshop" RIMSTACK_CONFIG="$tmp/config2" \
     XDG_DATA_HOME="$tmp/data2" XDG_CONFIG_HOME="$tmp/settings2" \
-    QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 timeout 60 "$app" --check=textures 2>&1 | grep -E '^qml: check' | sed 's/^qml: //'
-[ "${PIPESTATUS[0]}" = 0 ] || fail "the texture choice checks"
+    QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 timeout 60 "$app" --check=textures >| "$tmp/textures.log" 2>&1 && ok=0 || ok=$?
+shown "$tmp/textures.log"
+sound "$tmp/textures.log" "--check=textures"
+[ "$ok" = 0 ] || fail "the texture choice checks"
 diff -r "$game" "$tmp/game-before" > /dev/null || fail "the two mods are not as they were after unhiding"
 echo "check ok    after unhiding, the two mods are exactly as they were"
 
@@ -92,6 +105,7 @@ sleep 4
 sed -i '/check.second/d' "$tmp/config3/Config/ModsConfig.xml"
 wait "$shown" && ok=0 || ok=$?
 grep -E '^qml: check (ok|FAIL)' "$live" | sed 's/^qml: //'
+sound "$live" "--check=live"
 [ -f "$game/Mods/900001/About/About.xml" ] || fail "the copied mod is not in the game's own Mods folder"
 rm -rf "$game/Mods/fourth" "$game/Mods/900001"
 [ "$ok" = 0 ] || fail "the live changes"

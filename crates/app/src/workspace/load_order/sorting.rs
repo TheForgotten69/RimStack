@@ -18,7 +18,6 @@ pub struct SortCount {
 }
 
 impl SortCount {
-    /// How many mods Sort would move.
     pub fn moves(mut self, app: &App) -> usize {
         let loaded = app.library();
         let Ok((library, _)) = &*loaded else {
@@ -110,7 +109,7 @@ impl LoadOrder {
         if let Some(preview) = self.preview.take() {
             self.active.set_grouped(preview.grouped_before);
             self.active.set_mods(preview.before);
-            self.sort_note = Sentence::default();
+            self.sort_note.clear();
             self.settle(app);
         }
     }
@@ -118,7 +117,7 @@ impl LoadOrder {
     /// Any edit keeps the order on show and drops its markers.
     pub(super) fn end_preview(&mut self) {
         self.preview = None;
-        self.sort_note = Sentence::default();
+        self.sort_note.clear();
     }
 
     /// What counting the mods Sort would move needs, taken from the list
@@ -190,7 +189,6 @@ impl LoadOrder {
             .unwrap_or(0)
     }
 
-    /// The first row the sort on show moves.
     pub fn first_moved(&self) -> Option<usize> {
         self.active
             .rows()
@@ -200,7 +198,7 @@ impl LoadOrder {
 }
 
 /// What a sort would do, in words.
-fn note(mods: &[Mod], sorted: &rimstack_core::mods::sort::Sorted, moves: usize) -> Sentence {
+fn note(mods: &[Mod], sorted: &rimstack_core::mods::sort::Sorted, moves: usize) -> Vec<Sentence> {
     let mut note = vec![match moves {
         0 => say!("Already in order."),
         n => say_n!(
@@ -234,5 +232,5 @@ fn note(mods: &[Mod], sorted: &rimstack_core::mods::sort::Sorted, moves: usize) 
             Sentence::joined("; ", each).inside()
         ));
     }
-    Sentence::joined(" ", note)
+    note
 }

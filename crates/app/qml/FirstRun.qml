@@ -123,8 +123,7 @@ Rectangle {
     // Five steps: what was found, what to fetch, what Sort follows, how it looks, what happens next.
     // `--step=2` opens on that step; for screenshots.
     property int step: {
-        const given = Qt.application.arguments.find(a => a.startsWith("--step="))
-        return given ? Number(given.substring(7)) : 0
+        return Hub.number("--step", 0)
     }
     readonly property var steps: [Theme.say("Found"), Theme.say("Community data"), Theme.say("Sorting"), Theme.say("Appearance"), Theme.say("Start")]
     readonly property int last: steps.length - 1

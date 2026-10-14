@@ -23,8 +23,7 @@ Item {
     // A recorded launch on show in place of a log: its place in `launches`, or -1.
     // `--recorded=0` opens on the newest; for screenshots.
     property int recorded: {
-        const given = Qt.application.arguments.find(a => a.startsWith("--recorded="))
-        return given ? Number(given.substring(11)) : -1
+        return Hub.number("--recorded", -1)
     }
     readonly property bool filtered: filter.text.trim() !== ""
     readonly property var launches: reader.launches || []
@@ -35,8 +34,7 @@ Item {
     // What the middle shows: 0 the errors, 1 the mods they point at, 2 the log.
     // `--view=2` opens on that one; for screenshots.
     property int view: {
-        const given = Qt.application.arguments.find(a => a.startsWith("--view="))
-        return given ? Number(given.substring(7)) : 0
+        return Hub.number("--view", 0)
     }
     readonly property var culprits: reader.culprits || []
     readonly property var lines: reader.lines || []

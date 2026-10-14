@@ -86,8 +86,6 @@ Item {
     }
 
     signal showLogs()
-    // When the game was last started and how that went, as far as known:
-    // { time, errors }. The same wherever it is said.
     readonly property var overview: Hub.mods.overview || ({})
     // Every problem of every active mod, each with what solves it.
     readonly property var troubles: overview.troubles || []
@@ -102,7 +100,7 @@ Item {
     property bool leftOffRestored: false
     function restoreLeftOff() {
         // Not for a picture of a screen, unless `--resume` asks for it.
-        const picture = Qt.application.arguments.some(a => a.startsWith("--shot=")) && Qt.application.arguments.indexOf("--resume") === -1
+        const picture = Hub.given("--shot") && !Hub.given("--resume")
         if (leftOffRestored || Theme.demo || checkMode !== "" || picture || active.count === 0)
             return
         leftOffRestored = true
@@ -319,12 +317,12 @@ Item {
             prefs.lastMod = modId >= 0 ? String(info.packageId || "").toLowerCase() : ""
     }
 
-    // More mods selected along with `selectedId`, all in the same list:
-    // library id -> true. Ctrl + click adds or removes one; Shift + click
-    // takes every mod from the selected one to the one clicked.
     // Which tab of the details panel shows: 0 About, 1 Load order, 2 Files.
     property int tab: 0
 
+    // More mods selected along with `selectedId`, all in the same list:
+    // library id -> true. Ctrl + click adds or removes one; Shift + click
+    // takes every mod from the selected one to the one clicked.
     property var also: ({})
     readonly property int selectedCount: selectedId < 0 ? 0 : 1 + Object.keys(also).length
 
@@ -436,8 +434,7 @@ Item {
         return row < 0 ? -1 : idAt(model, row)
     }
     readonly property string checkMode: {
-        const given = Qt.application.arguments.find(a => a.startsWith("--check"))
-        return given ? (given.substring(8) || "all") : ""
+        return Hub.given("--check") ? Hub.argument("--check") || "all" : ""
     }
 
     function firstFrame() {
