@@ -9,6 +9,7 @@ default:
 # Build the release app
 build:
     cargo build --release -p rimstack-app
+    tools/qml-import.sh
 
 # Build and open RimStack on the installed mods
 run *args: build
