@@ -454,29 +454,4 @@ mod tests {
         assert_eq!(types[1].methods.len(), 1);
         assert!(!types[1].methods[0].takes_rect);
     }
-
-    #[test]
-    #[ignore = "needs RIMSTACK_DLL: the path of any mod's .dll"]
-    fn a_real_assembly_is_read() {
-        let path = std::env::var("RIMSTACK_DLL").unwrap();
-        let bytes = std::fs::read(path).unwrap();
-        let assembly = Assembly::read(&bytes).unwrap();
-        println!("references: {:?}", assembly.references());
-        let types = assembly.types();
-        println!("{} types", types.len());
-        for t in types.iter().take(40) {
-            let drawing = t.methods.iter().filter(|m| m.takes_rect).count();
-            println!(
-                "  {} : {:?}, {} methods, {drawing} take a Rect",
-                t.name,
-                t.extends,
-                t.methods.len()
-            );
-        }
-        let patches = assembly.patches();
-        println!("{} patches", patches.len());
-        for p in patches.iter().take(60) {
-            println!("  {}.{} {:?}", p.target, p.method, p.does);
-        }
-    }
 }

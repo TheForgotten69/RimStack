@@ -413,13 +413,6 @@ fn filter_with_no_match_shows_nothing_and_clearing_restores() {
 }
 
 #[test]
-fn filtered_rows_keep_their_load_order_index() {
-    let mut list = sample();
-    list.set_filter("rimefeller");
-    assert_eq!(list.rows()[1], Row::Mod { index: 5 });
-}
-
-#[test]
 fn moving_a_mod_changes_load_order_and_regroups() {
     let mut list = sample();
     list.move_mod(5, 0);

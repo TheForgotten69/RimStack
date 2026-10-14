@@ -1,31 +1,50 @@
 //! What is in a mod's folder, for showing.
 
-use std::path::{Path, PathBuf};
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 /// A mod's folders two levels deep, each with how many files it holds
-/// (counting everything below it): `("Textures/Things/", 612)`.
+/// (counting everything below it): `("Textures/Things/", 612)`. A folder
+/// with no folders in it, or more than twelve, is one line. Hidden
+/// folders and loose files are left out.
 pub fn folder_tree(root: &Path) -> Vec<(String, usize)> {
-    fn files_under(dir: &Path) -> usize {
-        crate::base::walk::files(dir).len()
-    }
-    fn folders(dir: &Path) -> Vec<(String, PathBuf)> {
-        let entries = std::fs::read_dir(dir).into_iter().flatten().flatten();
-        let mut found: Vec<(String, PathBuf)> = entries
-            .filter(|e| e.path().is_dir())
-            .map(|e| (e.file_name().to_string_lossy().into_owned(), e.path()))
-            .filter(|(name, _)| !name.starts_with('.'))
+    let shown = |name: &str| !name.starts_with('.');
+    let mut inner: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut files: BTreeMap<(String, Option<String>), usize> = BTreeMap::new();
+    for entry in crate::base::walk::tree(root, usize::MAX) {
+        let parts: Vec<String> = entry
+            .within
+            .iter()
+            .map(|part| part.to_string_lossy().into_owned())
             .collect();
-        found.sort();
-        found
+        match (entry.is_dir, parts.as_slice()) {
+            (true, [top]) if shown(top) => {
+                inner.entry(top.clone()).or_default();
+            }
+            (true, [top, folder]) if shown(top) && shown(folder) => {
+                inner.entry(top.clone()).or_default().insert(folder.clone());
+            }
+            (false, [top, rest @ ..]) if !rest.is_empty() => {
+                *files.entry((top.clone(), None)).or_default() += 1;
+                if rest.len() > 1 {
+                    let key = (top.clone(), Some(rest[0].clone()));
+                    *files.entry(key).or_default() += 1;
+                }
+            }
+            _ => {}
+        }
     }
+    let count = |top: &str, folder: Option<&String>| {
+        let key = (top.to_string(), folder.cloned());
+        files.get(&key).copied().unwrap_or(0)
+    };
     let mut lines = Vec::new();
-    for (name, path) in folders(root) {
-        let inner = folders(&path);
-        if inner.is_empty() || inner.len() > 12 {
-            lines.push((format!("{name}/"), files_under(&path)));
+    for (top, folders) in &inner {
+        if folders.is_empty() || folders.len() > 12 {
+            lines.push((format!("{top}/"), count(top, None)));
         } else {
-            for (inner_name, inner_path) in inner {
-                lines.push((format!("{name}/{inner_name}/"), files_under(&inner_path)));
+            for folder in folders {
+                lines.push((format!("{top}/{folder}/"), count(top, Some(folder))));
             }
         }
     }
@@ -53,8 +72,6 @@ mod tests {
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(path, "").unwrap();
         }
-        // Hidden folders and loose files are left out; a folder with no
-        // folders in it is one line.
         assert_eq!(
             folder_tree(root),
             [
@@ -64,5 +81,16 @@ mod tests {
             ]
         );
         assert!(folder_tree(&root.join("nowhere")).is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_back_is_not_counted_again() {
+        let tmp = tempfile::tempdir().unwrap();
+        let textures = tmp.path().join("Textures");
+        fs::create_dir_all(&textures).unwrap();
+        fs::write(textures.join("one.png"), "").unwrap();
+        std::os::unix::fs::symlink(&textures, textures.join("again")).unwrap();
+        assert_eq!(folder_tree(tmp.path()), [("Textures/".to_string(), 1)]);
     }
 }

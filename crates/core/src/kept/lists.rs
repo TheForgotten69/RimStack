@@ -185,4 +185,15 @@ mod tests {
         std::fs::write(tmp.path().join("x.txt"), "hello").unwrap();
         assert!(all(tmp.path()).is_empty());
     }
+
+    #[test]
+    fn saving_a_list_never_replaces_another_whose_name_is_written_alike() {
+        let tmp = tempfile::tempdir().unwrap();
+        save(tmp.path(), "war_crimes", &ids(&["first.list"])).unwrap();
+        let _ = save(tmp.path(), "war/crimes", &ids(&["second.list"]));
+        assert_eq!(
+            load(tmp.path(), "war_crimes").unwrap(),
+            ids(&["first.list"])
+        );
+    }
 }

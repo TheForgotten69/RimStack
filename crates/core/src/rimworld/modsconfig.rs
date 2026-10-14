@@ -302,4 +302,25 @@ mod tests {
         assert_eq!(short_version("garbage"), None);
         assert_eq!(short_version("1"), None);
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn saving_writes_through_a_linked_file_and_keeps_its_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let real = tmp.path().join("dotfiles/ModsConfig.xml");
+        std::fs::create_dir_all(real.parent().unwrap()).unwrap();
+        std::fs::write(&real, TYPICAL).unwrap();
+        std::fs::set_permissions(&real, std::fs::Permissions::from_mode(0o600)).unwrap();
+        let link = tmp.path().join("ModsConfig.xml");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        write(&link, &ids(&["a.b"])).unwrap();
+        assert!(std::fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        let mode = std::fs::metadata(&link).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        assert_eq!(read(&real).unwrap().active, ["a.b"]);
+    }
 }

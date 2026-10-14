@@ -7,10 +7,10 @@
 use rimstack_core::mods::list::{Category, GroupedList, Mod};
 use rimstack_core::mods::rules::{Kind, Rule};
 use rimstack_core::{
-    base::markup, base::sentence::Language, base::vdf, kept::notes, kept::owntheme,
-    mods::community, mods::ddsaudit, mods::share, mods::sort, rimworld::about, rimworld::dotnet,
-    rimworld::loadfolders, rimworld::logs, rimworld::modsconfig, rimworld::rimsaves,
-    rimworld::steamworks, rimworld::workshop, sources::changes,
+    base::markup, base::vdf, kept::notes, kept::owntheme, mods::community, mods::ddsaudit,
+    mods::share, mods::sort, rimworld::about, rimworld::dotnet, rimworld::loadfolders,
+    rimworld::logs, rimworld::modsconfig, rimworld::rimsaves, rimworld::steamworks,
+    rimworld::workshop, sources::changes,
 };
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::time::{Duration, Instant};
@@ -346,28 +346,4 @@ fn a_contradiction_among_many_rules_still_sorts_in_reasonable_time() {
     );
     assert_eq!(sorted.order.len(), count);
     assert!(took < Duration::from_secs(5), "took {took:?}");
-}
-
-/// Not a defect by itself: what the design is. An error of the core is a
-/// sentence already in the chosen language, so nothing can tell one
-/// error from another but its wording, and the wording follows a global.
-/// It sets that global, which the other probes here share while they
-/// run: none of them reads a sentence, so it is left to run with them.
-#[test]
-fn an_error_is_a_sentence_put_in_whatever_language_shows_it() {
-    struct French;
-    impl Language for French {
-        fn word<'a>(&'a self, english: &'a str) -> &'a str {
-            match english {
-                "not a DDS file" => "pas un fichier DDS",
-                other => other,
-            }
-        }
-        fn plural_rule(&self) -> &str {
-            "0 1"
-        }
-    }
-    let said = ddsaudit::problem(b"PNG....", 7).unwrap();
-    assert_eq!(said.to_string(), "not a DDS file");
-    assert_eq!(said.put(&French), "pas un fichier DDS");
 }

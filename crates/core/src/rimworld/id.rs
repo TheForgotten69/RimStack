@@ -21,18 +21,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fold_trims_and_lowercases() {
-        assert_eq!(fold(" Ludeon.RimWorld "), "ludeon.rimworld");
-    }
-
-    #[test]
-    fn steam_suffix_is_split_off() {
+    fn the_steam_suffix_is_split_off_only_at_the_end() {
         assert_eq!(split_steam("Foo.Bar_steam"), ("foo.bar".into(), true));
         assert_eq!(split_steam("foo.bar"), ("foo.bar".into(), false));
-    }
-
-    #[test]
-    fn steam_inside_an_id_is_left_alone() {
         assert_eq!(split_steam("my_steam.mod"), ("my_steam.mod".into(), false));
     }
 }

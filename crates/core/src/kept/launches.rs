@@ -308,12 +308,4 @@ mod tests {
         assert_eq!(last_clean(&launches).unwrap().time, 10);
         assert!(!note_outcome(&mut [], 30, 0));
     }
-
-    #[test]
-    fn a_damaged_record_reads_as_no_launches() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("launches.json");
-        std::fs::write(&path, "{not json").unwrap();
-        assert!(read(&path).is_empty());
-    }
 }

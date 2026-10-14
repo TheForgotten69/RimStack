@@ -247,4 +247,20 @@ mod tests {
             ["", "Any", "All", "Unknown"]
         );
     }
+
+    #[test]
+    fn a_mod_is_only_read_from_folders_inside_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("mods/evil");
+        fs::create_dir_all(tmp.path().join("mods/victim/Textures")).unwrap();
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            root.join("LoadFolders.xml"),
+            "<loadFolders><v1.6><li>../victim</li></v1.6></loadFolders>",
+        )
+        .unwrap();
+        let root = fs::canonicalize(&root).unwrap();
+        let inside = |folder: &PathBuf| fs::canonicalize(folder).unwrap().starts_with(&root);
+        assert!(folders(&root, "1.6", NONE).iter().all(inside));
+    }
 }

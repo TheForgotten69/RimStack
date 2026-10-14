@@ -474,12 +474,17 @@ mod tests {
     fn saves_are_listed_newest_first_and_other_files_are_skipped() {
         let dir = tempfile::tempdir().unwrap();
         save_in(dir.path(), "notes.txt", "x");
-        save_in(dir.path(), "broken.rws", "x");
-        save_in(dir.path(), "good.rws", START);
+        let at = |secs| UNIX_EPOCH + std::time::Duration::from_secs(secs);
+        for (name, body, written) in [("older.rws", "x", 100), ("newer.rws", START, 200)] {
+            let file = std::fs::File::options()
+                .write(true)
+                .open(save_in(dir.path(), name, body))
+                .unwrap();
+            file.set_modified(at(written)).unwrap();
+        }
         let saves = list(dir.path());
-        let mut names: Vec<&str> = saves.iter().map(|s| s.name.as_str()).collect();
-        names.sort_unstable();
-        assert_eq!(names, ["broken", "good"]);
+        let names: Vec<&str> = saves.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["newer", "older"]);
         assert!(saves.iter().all(|s| s.modified > 0 && s.bytes > 0));
         assert!(saves.iter().any(|s| s.header.is_err()));
         assert!(list(&dir.path().join("nowhere")).is_empty());

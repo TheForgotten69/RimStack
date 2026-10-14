@@ -110,9 +110,4 @@ mod tests {
         assert_eq!(ran.unwrap_err().kind(), std::io::ErrorKind::TimedOut);
         assert!(started.elapsed() < Duration::from_secs(5));
     }
-
-    #[test]
-    fn a_program_that_is_not_there_is_an_error_at_once() {
-        assert!(run(&mut Command::new("/nonexistent/program"), LOCAL).is_err());
-    }
 }

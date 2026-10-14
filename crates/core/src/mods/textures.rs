@@ -638,4 +638,12 @@ mod tests {
         assert!(Manifest::read(&path).is_empty());
         assert!(Manifest::read(&dir.path().join("none.json")).is_empty());
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_back_beside_the_textures_does_not_count_them_twice() {
+        let (_dir, root) = a_mod();
+        std::os::unix::fs::symlink(root.join("Textures"), root.join("Textures/again")).unwrap();
+        assert_eq!(pngs(&root).len(), 3);
+    }
 }

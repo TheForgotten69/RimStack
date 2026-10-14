@@ -13,11 +13,15 @@ use crate::rimworld::paths::APP_ID as GAME;
 /// SteamCMD: the one RimStack installed under `data_dir`, or the one
 /// the system's `PATH` has.
 pub fn steamcmd(data_dir: &Path) -> Option<PathBuf> {
+    steamcmd_among(data_dir, std::env::var_os("PATH"))
+}
+
+fn steamcmd_among(data_dir: &Path, path: Option<std::ffi::OsString>) -> Option<PathBuf> {
     let own = ["steamcmd.sh", "steamcmd.exe"].map(|name| data_dir.join("steamcmd").join(name));
     if let Some(own) = own.into_iter().find(|file| file.is_file()) {
         return Some(own);
     }
-    let path = std::env::var_os("PATH")?;
+    let path = path?;
     let named = |dir: PathBuf| ["steamcmd", "steamcmd.exe"].map(|name| dir.join(name));
     let mut places = std::env::split_paths(&path).flat_map(named);
     places.find(|file| file.is_file())
@@ -378,12 +382,19 @@ mod tests {
     #[test]
     fn rimstack_s_own_steamcmd_is_found_before_the_system_s() {
         let tmp = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(tmp.path().join("steamcmd")).unwrap();
-        std::fs::write(tmp.path().join("steamcmd/steamcmd.sh"), "").unwrap();
+        let (data, system) = (tmp.path().join("data"), tmp.path().join("bin"));
+        std::fs::create_dir_all(&system).unwrap();
+        std::fs::write(system.join("steamcmd"), "").unwrap();
+        let path = Some(std::env::join_paths([tmp.path().join("none"), system.clone()]).unwrap());
         assert_eq!(
-            steamcmd(tmp.path()),
-            Some(tmp.path().join("steamcmd/steamcmd.sh"))
+            steamcmd_among(&data, path.clone()),
+            Some(system.join("steamcmd"))
         );
+        std::fs::create_dir_all(data.join("steamcmd")).unwrap();
+        std::fs::write(data.join("steamcmd/steamcmd.sh"), "").unwrap();
+        let own = Some(data.join("steamcmd/steamcmd.sh"));
+        assert_eq!(steamcmd_among(&data, path), own);
+        assert_eq!(steamcmd_among(&tmp.path().join("empty"), None), None);
     }
 
     /// Installs SteamCMD into RIMSTACK_SCRATCH and downloads one small mod

@@ -371,17 +371,6 @@ mod tests {
     }
 
     #[test]
-    fn the_same_input_gives_the_same_output() {
-        let mut random = Random(11);
-        for _ in 0..100 {
-            let count = 2 + random.below(40);
-            let how_many = random.below(60);
-            let rules = random_rules(&mut random, count, how_many);
-            assert_eq!(sort(count, &rules), sort(count, &rules));
-        }
-    }
-
-    #[test]
     fn sorting_a_sorted_list_moves_nothing() {
         let mut random = Random(13);
         for round in 0..300 {

@@ -292,7 +292,9 @@ Second line.</description>
     #[test]
     fn every_field_is_read() {
         let a = parse(FULL.as_bytes()).unwrap();
+        // The dependency's packageId comes first in the file: it is not the mod's.
         assert_eq!(a.package_id, "Author.Full");
+        assert_eq!(a.dependencies.base, ["Dep.First"]);
         assert_eq!(a.name.as_deref(), Some("Full Mod"));
         assert_eq!(a.authors, ["Ann", "Bob", "Cy"]);
         assert_eq!(a.mod_version.as_deref(), Some("2.3.1"));
@@ -303,13 +305,6 @@ Second line.</description>
         assert_eq!(a.force_load_before, ["A.B"]);
         assert_eq!(a.force_load_after, ["C.D"]);
         assert_eq!(a.incompatible_with.base, ["Bad.Mod"]);
-    }
-
-    #[test]
-    fn own_package_id_wins_over_a_dependency_listed_first() {
-        let a = parse(FULL.as_bytes()).unwrap();
-        assert_eq!(a.package_id, "Author.Full");
-        assert_eq!(a.dependencies.base, ["Dep.First"]);
     }
 
     #[test]
@@ -346,7 +341,6 @@ Second line.</description>
         assert_eq!(why(&[0xFF, 0xFE, b'<', 0]), "not UTF-8");
         let unread = parse(b"").unwrap_err();
         assert_eq!(unread.kind(), crate::base::error::Kind::Format);
-        assert!(parse(b"").is_err());
     }
 
     #[test]

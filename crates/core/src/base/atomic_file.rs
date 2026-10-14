@@ -131,4 +131,23 @@ mod tests {
         );
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
     }
+
+    #[test]
+    fn two_writers_of_one_file_both_succeed_and_one_text_is_kept_whole() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = &tmp.path().join("notes.json");
+        let texts = ["a".repeat(256 * 1024), "b".repeat(64 * 1024)];
+        for _ in 0..200 {
+            let written: Vec<bool> = std::thread::scope(|scope| {
+                let writers: Vec<_> = texts
+                    .iter()
+                    .map(|text| scope.spawn(move || write(file, text).is_ok()))
+                    .collect();
+                writers.into_iter().map(|w| w.join().unwrap()).collect()
+            });
+            assert_eq!(written, [true, true]);
+            let kept = std::fs::read_to_string(file).unwrap();
+            assert!(texts.contains(&kept), "a file of {} bytes", kept.len());
+        }
+    }
 }

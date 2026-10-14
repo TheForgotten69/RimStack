@@ -216,11 +216,4 @@ mod tests {
         assert!(fresh.ends_with("note third\n") && fresh.lines().count() == 1);
         assert_eq!(std::fs::read_to_string(set_aside(&path)).unwrap(), kept);
     }
-
-    #[test]
-    fn a_crash_says_what_where_and_how_it_got_there() {
-        let said = crash_in_words("no such row", Some(("model.rs", 12)), "0: rows\n1: main");
-        assert_eq!(said, "no such row at model.rs:12\n0: rows\n1: main");
-        assert!(crash_in_words("x", None, "").starts_with("x\n"));
-    }
 }

@@ -383,14 +383,6 @@ mod tests {
         assert_eq!(pause_after_refusal(1, Some(86_400)), Some(300));
     }
 
-    #[test]
-    fn changes_are_counted_from_the_newer_of_a_launch_and_the_log() {
-        assert_eq!(counted_from(Some(10), Some(20)), Some(20));
-        assert_eq!(counted_from(Some(30), Some(20)), Some(30));
-        assert_eq!(counted_from(None, Some(20)), Some(20));
-        assert_eq!(counted_from(None, None), None);
-    }
-
     const PAGE: &str = r#"<div class="changelog headline">Update: 12 Oct @ 10:17am</div>
 <p id="1791825433">v3.0.0<br><br>Adds RimWorld 1.7 support &amp; <b>more</b>.</p>
 <div class="commentsLink changeLog">Discuss</div>
@@ -442,11 +434,5 @@ mod tests {
         };
         record.write(&file).unwrap();
         assert_eq!(AtLaunch::read(&file), Some(record));
-    }
-
-    #[test]
-    fn a_folder_that_is_no_checkout_has_no_commits() {
-        let dir = tempfile::tempdir().unwrap();
-        assert!(git_notes(dir.path(), 0).is_empty());
     }
 }

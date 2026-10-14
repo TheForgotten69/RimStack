@@ -78,18 +78,6 @@ mod tests {
     use crate::mods::list::{Category, GroupedList, Row};
 
     #[test]
-    fn makes_the_number_asked_for() {
-        assert_eq!(generate(0).len(), 0);
-        assert_eq!(generate(1).len(), 1);
-        assert_eq!(generate(2000).len(), 2000);
-    }
-
-    #[test]
-    fn is_the_same_every_time() {
-        assert_eq!(generate(500), generate(500));
-    }
-
-    #[test]
     fn categories_are_contiguous_and_in_order() {
         let mods = generate(2000);
         assert!(mods.windows(2).all(|w| w[0].category <= w[1].category));

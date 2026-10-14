@@ -474,6 +474,10 @@ mod tests {
         assert_eq!(kind_of(": none"), (": none", ""));
         let long = format!("{}: tail", "x".repeat(91));
         assert_eq!(kind_of(&long), (long.as_str(), ""));
+    }
+
+    #[test]
+    fn a_trace_may_break_after_its_dots_brackets_and_slashes() {
         assert_eq!(
             breakable(&["a.b(c) ".into(), "d/e".into()]),
             "a.\u{200b}b(\u{200b}c)\nd/\u{200b}e"

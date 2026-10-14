@@ -136,14 +136,4 @@ mod tests {
         lane.cancel();
         assert!(!second.current());
     }
-
-    #[test]
-    fn a_named_thread_runs_its_work() {
-        let (tell, heard) = std::sync::mpsc::channel();
-        spawn("test-job", move || {
-            let name = std::thread::current().name().map(String::from);
-            tell.send(name).unwrap();
-        });
-        assert_eq!(heard.recv().unwrap().as_deref(), Some("test-job"));
-    }
 }

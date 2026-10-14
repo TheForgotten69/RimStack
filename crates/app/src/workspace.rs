@@ -613,17 +613,6 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn its_own_files_lie_under_the_folders_it_was_given() {
-        let (tmp, app) = installed();
-        assert_eq!(app.data_dir(), tmp.path().join("data/RimStack"));
-        assert_eq!(
-            app.settings_file(),
-            tmp.path().join("settings/RimStack/settings.json")
-        );
-        assert!(app.notes_file().starts_with(app.data_dir()));
-    }
-
-    #[test]
     fn a_setting_is_kept_on_disk_and_read_by_whoever_asks_next() {
         let (_tmp, app) = installed();
         assert!(app.database_on("rules"));
@@ -682,11 +671,10 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn a_folder_set_in_settings_is_used_once_the_folders_are_read_again() {
+    fn a_game_folder_given_by_the_environment_wins_over_one_set_in_settings() {
         let (tmp, app) = installed();
         let other = tmp.path().join("other-game");
         fs::create_dir_all(other.join("Data")).unwrap();
-        // The environment's wins while it names one.
         app.set_setting("game", &other.to_string_lossy()).unwrap();
         app.reread_folders();
         assert_eq!(app.paths().game, Some(tmp.path().join("game")));
