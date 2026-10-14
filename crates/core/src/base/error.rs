@@ -52,7 +52,7 @@ impl Error {
         }
     }
 
-    /// `said: cause`, the cause kept as this failure's source.
+    /// `said: cause`; the cause is kept for `cause()`.
     pub fn caused(
         kind: Kind,
         said: Sentence,
@@ -110,6 +110,13 @@ impl Error {
     pub fn sentence(&self) -> &Sentence {
         &self.said
     }
+
+    /// What failed underneath, as the system or a library gave it. Not
+    /// `source()`: the sentence says it already, and a reporter walking
+    /// the chain would say it twice.
+    pub fn cause(&self) -> Option<&(dyn std::error::Error + Send + Sync + 'static)> {
+        self.cause.as_deref()
+    }
 }
 
 /// In English.
@@ -119,12 +126,7 @@ impl Display for Error {
     }
 }
 
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        let cause = self.cause.as_deref()?;
-        Some(cause)
-    }
-}
+impl std::error::Error for Error {}
 
 /// As its sentence.
 impl serde::Serialize for Error {
@@ -171,7 +173,6 @@ mod tests {
 
     #[test]
     fn a_failure_keeps_its_kind_and_its_cause_whatever_is_said_around_it() {
-        use std::error::Error as _;
         let denied = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
         let denied = Error::file(Path::new("/a/notes.json"), denied);
         assert_eq!(denied.to_string(), "/a/notes.json: denied");
@@ -182,7 +183,7 @@ mod tests {
             "the notes were not kept: /a/notes.json: denied"
         );
         let cause = said
-            .source()
+            .cause()
             .and_then(|c| c.downcast_ref::<std::io::Error>());
         assert_eq!(
             cause.map(|c| c.kind()),
@@ -191,6 +192,19 @@ mod tests {
         let missing = std::io::Error::new(std::io::ErrorKind::NotFound, "gone");
         let caused = Error::caused(Kind::File, said!("Not kept"), missing);
         assert_eq!(caused.to_string(), "Not kept: gone");
-        assert!(caused.source().is_some());
+        assert!(caused.cause().is_some());
+    }
+
+    #[test]
+    fn a_reporter_walking_the_chain_names_the_cause_once() {
+        let gone = std::io::Error::new(std::io::ErrorKind::NotFound, "gone");
+        let failed = Error::caused(Kind::File, said!("Not kept"), gone);
+        let mut chain = vec![failed.to_string()];
+        let mut at = std::error::Error::source(&failed);
+        while let Some(cause) = at {
+            chain.push(cause.to_string());
+            at = cause.source();
+        }
+        assert_eq!(chain.join(": "), "Not kept: gone");
     }
 }

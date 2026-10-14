@@ -325,4 +325,42 @@ mod tests {
     fn a_file_that_is_not_the_game_gives_nothing() {
         assert!(Game::read(b"not an assembly").is_none());
     }
+
+    /// 1.7 left Unity, and the game's methods are still dated from
+    /// `Update`, `OnGUI` and `Start`: this checks the installed game keeps
+    /// those names.
+    #[test]
+    #[ignore = "needs RimWorld installed"]
+    fn the_installed_game_s_methods_are_dated_from_its_entry_points() {
+        use crate::rimworld::paths::{detect, Overrides};
+        let home = std::path::PathBuf::from(std::env::var_os("HOME").unwrap());
+        let paths = detect(&home, &Overrides::from_env());
+        let dir = paths.game.expect("the game is installed");
+        println!("game {:?} at {}", paths.game_version, dir.display());
+        let started = std::time::Instant::now();
+        let game = Game::find(&dir).expect("Assembly-CSharp.dll read");
+        println!("read in {:?}", started.elapsed());
+        let probes = [
+            ("Verse.TickManager", "DoSingleTick"),
+            ("Verse.Pawn", "Tick"),
+            ("Verse.Thing", "Tick"),
+            ("Verse.Root", "Update"),
+            ("Verse.Root", "OnGUI"),
+            ("Verse.UIRoot", "UIRootOnGUI"),
+            ("Verse.WindowStack", "WindowStackOnGUI"),
+            ("RimWorld.MainTabWindow_Work", "DoWindowContents"),
+            ("Verse.Game", "LoadGame"),
+        ];
+        let mut dated = 0;
+        for (ty, method) in probes {
+            let runs = game.method(ty, method);
+            println!("{ty}.{method}: {runs:?}");
+            dated += usize::from(runs.is_some_and(|r| r.when.is_some()));
+        }
+        assert!(
+            dated >= probes.len() / 2,
+            "{dated} of {} known game methods have a time",
+            probes.len()
+        );
+    }
 }

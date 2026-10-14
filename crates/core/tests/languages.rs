@@ -132,3 +132,107 @@ fn counts_without_singular(line: &str, nouns: &[&str]) -> bool {
         })
     })
 }
+
+/// `say!`, `said!` and `say_n!` fill `{}` at run time: unlike `format!`,
+/// nothing counts the parts when it compiles, and `Sentence::put` drops
+/// a missing part's text silently.
+#[test]
+fn every_sentence_macro_has_as_many_parts_as_places() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut files = Vec::new();
+    for krate in ["core/src", "app/src"] {
+        collect_rs(&root.join(krate), &mut files);
+    }
+    let mut calls = 0;
+    let mut wrong = Vec::new();
+    for file in &files {
+        let text = std::fs::read_to_string(file).unwrap();
+        for (name, args, line) in macro_calls(&text) {
+            let Some(first) = args.first().filter(|a| a.starts_with('"')) else {
+                continue;
+            };
+            calls += 1;
+            let places = |literal: &str| literal.matches("{}").count();
+            let fits = match name {
+                "say_n!" => {
+                    args.len() >= 3 && {
+                        let parts = args.len() - 3;
+                        places(&args[1]) == parts + 1 && places(&args[2]) == parts + 1
+                    }
+                }
+                _ => places(first) == args.len() - 1,
+            };
+            if !fits {
+                wrong.push(format!(
+                    "{}:{line}: {name}({})",
+                    file.display(),
+                    args.join(", ")
+                ));
+            }
+        }
+    }
+    assert!(calls > 150, "only {calls} calls found: the scan is broken");
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+fn collect_rs(dir: &Path, into: &mut Vec<std::path::PathBuf>) {
+    for entry in std::fs::read_dir(dir).unwrap().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_rs(&path, into);
+        } else if path.extension().is_some_and(|x| x == "rs") {
+            into.push(path);
+        }
+    }
+}
+
+/// Each `say!(`, `said!(` or `say_n!(` call: its name, its arguments split
+/// at top-level commas (strings and brackets respected), and its line.
+fn macro_calls(text: &str) -> Vec<(&'static str, Vec<String>, usize)> {
+    let bytes = text.as_bytes();
+    let mut found = Vec::new();
+    for name in ["say!(", "said!(", "say_n!("] {
+        let mut from = 0;
+        while let Some(at) = text[from..].find(name) {
+            let start = from + at;
+            from = start + name.len();
+            if start > 0 && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_') {
+                continue;
+            }
+            let (mut depth, mut in_text, mut escaped) = (1, false, false);
+            let (mut args, mut current) = (Vec::new(), String::new());
+            for c in text[from..].chars() {
+                if in_text {
+                    current.push(c);
+                    match c {
+                        _ if escaped => escaped = false,
+                        '\\' => escaped = true,
+                        '"' => in_text = false,
+                        _ => {}
+                    }
+                    continue;
+                }
+                match c {
+                    '"' => in_text = true,
+                    '(' | '[' | '{' => depth += 1,
+                    ')' | ']' | '}' => depth -= 1,
+                    ',' if depth == 1 => {
+                        args.push(std::mem::take(&mut current).trim().to_string());
+                        continue;
+                    }
+                    _ => {}
+                }
+                if depth == 0 {
+                    break;
+                }
+                current.push(c);
+            }
+            if !current.trim().is_empty() {
+                args.push(current.trim().to_string());
+            }
+            let line = text[..start].matches('\n').count() + 1;
+            found.push((&name[..name.len() - 1], args, line));
+        }
+    }
+    found
+}
