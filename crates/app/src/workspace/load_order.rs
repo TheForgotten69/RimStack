@@ -10,6 +10,7 @@ use rimstack_core::mods::library::{Library, ModId};
 use rimstack_core::mods::list::{flag, Category, GroupedList, Mod, SortKey};
 use rimstack_core::mods::{demo, sort_reasons};
 use rimstack_core::say;
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
 mod details;
@@ -496,6 +497,36 @@ impl App {
             members,
         });
         self.publish(crate::changes::Changes::FILES_READ);
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FoundMod {
+    pub name: String,
+    pub mod_id: i32,
+    pub active: bool,
+}
+
+impl LoadOrder {
+    /// Installed mods whose name holds `text`, closest first, at most `most`.
+    pub fn found(&self, app: &App, text: &str, most: usize) -> Vec<FoundMod> {
+        let loaded = app.library();
+        let Ok((library, _)) = &*loaded else {
+            return Vec::new();
+        };
+        let active = self.list(Side::Active);
+        library
+            .find(text, most)
+            .into_iter()
+            .filter_map(|id| {
+                Some(FoundMod {
+                    name: library.get(id)?.display_name().to_string(),
+                    mod_id: id.to_qml(),
+                    active: active.position_of(id).is_some(),
+                })
+            })
+            .collect()
     }
 }
 

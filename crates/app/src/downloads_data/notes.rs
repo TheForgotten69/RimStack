@@ -3,24 +3,13 @@
 
 use super::qobject;
 use crate::qml::values::to_qml;
-use crate::workspace::changed::{notes_asked, MOST_ASKED, MOST_NOTES};
+use crate::workspace::changed::{notes_asked, NotesState, MOST_ASKED, MOST_NOTES};
 use crate::workspace::now_secs;
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QVariant;
 use rimstack_core::mods::library::ModId;
 use rimstack_core::sources::changes::{self, Fetching};
-use serde::Serialize;
-
-#[derive(Serialize)]
-struct NotesState {
-    done: usize,
-    asked: usize,
-    /// When asking goes on after Steam asked to wait, in seconds since 1970.
-    resume: u64,
-    /// Refused too often: the rest were not asked.
-    refused: bool,
-}
 
 impl qobject::DownloadsData {
     /// Asks for the notes of these Workshop ids, each with the time of

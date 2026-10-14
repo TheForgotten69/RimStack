@@ -10,7 +10,6 @@ use cxx_qt_lib::{QString, QVariant};
 use rimstack_core::mods::columns;
 use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::list::Row;
-use serde::Serialize;
 
 /// A row, a place or a mod as the window holds it; -1 for none.
 fn held(found: Option<usize>) -> i32 {
@@ -19,14 +18,6 @@ fn held(found: Option<usize>) -> i32 {
 
 fn held_id(found: Option<ModId>) -> i32 {
     found.map_or(-1, ModId::to_qml)
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct FoundMod<'a> {
-    name: &'a str,
-    mod_id: i32,
-    active: bool,
 }
 
 impl qobject::ModsData {
@@ -87,24 +78,8 @@ impl qobject::ModsData {
     }
 
     pub(super) fn find_mods(&self, text: &QString, most: i32) -> QVariant {
-        let app = self.app();
-        let loaded = app.library();
-        let Ok((library, _)) = &*loaded else {
-            return to_qml(&Vec::<i32>::new());
-        };
-        let active = self.order.list(Side::Active);
-        let found: Vec<FoundMod> = library
-            .find(&text.to_string(), usize::try_from(most).unwrap_or(0))
-            .into_iter()
-            .filter_map(|id| {
-                Some(FoundMod {
-                    name: library.get(id)?.display_name(),
-                    mod_id: id.to_qml(),
-                    active: active.position_of(id).is_some(),
-                })
-            })
-            .collect();
-        to_qml(&found)
+        let most = usize::try_from(most).unwrap_or(0);
+        to_qml(&self.order.found(&self.app(), &text.to_string(), most))
     }
 
     pub(super) fn listing(&self) -> QString {

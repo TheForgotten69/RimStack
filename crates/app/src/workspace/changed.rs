@@ -200,6 +200,17 @@ impl App {
     }
 }
 
+/// How far asking Steam's site for change notes has got.
+#[derive(Serialize)]
+pub struct NotesState {
+    pub done: usize,
+    pub asked: usize,
+    /// When asking goes on after Steam asked to wait, in seconds since 1970.
+    pub resume: u64,
+    /// Refused too often: the rest were not asked.
+    pub refused: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

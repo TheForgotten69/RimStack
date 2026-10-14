@@ -1092,6 +1092,7 @@ dependencies = [
  "cxx-qt",
  "cxx-qt-build",
  "cxx-qt-lib",
+ "image 0.25.10",
  "rayon",
  "rimstack-core",
  "serde",

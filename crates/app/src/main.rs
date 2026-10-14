@@ -154,3 +154,7 @@ fn main() -> std::process::ExitCode {
 
 #[cfg(test)]
 mod layers;
+#[cfg(test)]
+mod shapes;
+#[cfg(test)]
+mod shapes_of;

@@ -120,145 +120,21 @@ pub struct Database {
     pub on: bool,
 }
 
-/// The fields an answer has, as QML reads them, sorted.
-#[cfg(test)]
-pub(crate) fn fields<T: Serialize>(value: &T) -> Vec<String> {
-    use serde_json::Value;
-    let kind = |value: &Value| match value {
-        Value::Null => "nothing",
-        Value::Bool(_) => "bool",
-        Value::Number(_) => "number",
-        Value::String(_) => "text",
-        Value::Array(_) => "list",
-        Value::Object(_) => "object",
-    };
-    let said = crate::qml::values::as_shown(&value);
-    let mut keys: Vec<String> = said
-        .as_object()
-        .unwrap()
-        .iter()
-        .map(|(name, value)| format!("{name}: {}", kind(value)))
-        .collect();
-    keys.sort();
-    keys
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn settings_keep_their_fields() {
-        assert_eq!(
-            fields(&SettingsReport::default()),
-            [
-                "backup: nothing",
-                "communityRules: bool",
-                "config: nothing",
-                "dataFolder: text",
-                "diagnosticsFile: text",
-                "fileHints: bool",
-                "font: nothing",
-                "game: nothing",
-                "gameVersion: nothing",
-                "git: nothing",
-                "gitForWorkshop: bool",
-                "interfaceScale: text",
-                "language: nothing",
-                "launchArguments: nothing",
-                "launchDirectly: bool",
-                "logsKept: number",
-                "logsKeptNow: number",
-                "modsConfig: nothing",
-                "replacementsIgnored: list",
-                "rimsortRules: bool",
-                "selfCheck: bool",
-                "setConfig: nothing",
-                "setGame: nothing",
-                "setWorkshop: nothing",
-                "settingsFile: text",
-                "setupDone: bool",
-                "steamcmd: bool",
-                "version: text",
-                "versionAsideFor: nothing",
-                "versionWarnings: bool",
-                "workshop: nothing",
-            ]
-        );
-    }
-
-    #[test]
-    fn the_summary_and_its_last_launch_keep_their_fields() {
-        let summary = Summary {
-            last_launch: Some(LastLaunch::default()),
-            ..Summary::default()
-        };
-        assert_eq!(
-            fields(&summary),
-            [
-                "folders: number",
-                "lastLaunch: object",
-                "replacements: number",
-                "rules: number",
-                "saves: number",
-                "snapshots: number"
-            ]
-        );
-        assert_eq!(
-            fields(&LastLaunch::default()),
-            ["errors: nothing", "mods: number", "time: number"]
-        );
-    }
-
-    #[test]
-    fn a_failure_is_its_problem_and_nothing_else() {
+    fn an_answer_is_its_result_or_its_problem_and_never_both() {
         let failed: Answer<Written> = Err(rimstack_core::base::error::Error::refused("no")).into();
         assert_eq!(
             crate::qml::values::as_shown(&failed),
             serde_json::json!({ "problem": "no" })
         );
         let done: Answer<Written> = Ok(Written { file: "/a".into() }).into();
-        assert_eq!(fields(&done), ["file: text"]);
-    }
-
-    #[test]
-    fn appearance_answers_keep_their_fields() {
         assert_eq!(
-            fields(&ShortContrast::default()),
-            ["found: number", "needed: number", "what: text"]
-        );
-        let newer = ReleaseSaid::Newer {
-            version: "1.1".into(),
-            page: "p".into(),
-        };
-        assert_eq!(fields(&newer), ["page: text", "version: text"]);
-        assert!(fields(&ReleaseSaid::Latest {}).is_empty());
-        let failed = ReleaseSaid::Failed {
-            problem: "x".into(),
-        };
-        assert_eq!(fields(&failed), ["problem: text"]);
-    }
-
-    #[test]
-    fn lists_and_databases_keep_their_fields() {
-        let saved = rimstack_core::kept::lists::Saved {
-            name: String::new(),
-            mods: 0,
-            modified: 0,
-        };
-        assert_eq!(
-            fields(&saved),
-            ["modified: number", "mods: number", "name: text"]
-        );
-        assert_eq!(
-            fields(&Database::default()),
-            [
-                "id: text",
-                "name: text",
-                "on: bool",
-                "updated: number",
-                "use: text"
-            ]
+            crate::qml::values::as_shown(&done),
+            serde_json::json!({ "file": "/a" })
         );
     }
 }

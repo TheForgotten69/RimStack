@@ -199,6 +199,15 @@ enum Cell<'a> {
     Said(&'a Sentence),
 }
 
+/// A row as `at` gives it: each role's name with its cell.
+pub(crate) fn fields_of(row: &RowView) -> serde_json::Map<String, Value> {
+    ROLES
+        .iter()
+        .enumerate()
+        .filter_map(|(at, name)| Some((name.to_string(), cell(row, at)?.value())))
+        .collect()
+}
+
 fn cell(row: &RowView, field: usize) -> Option<Cell<'_>> {
     use Cell::*;
     Some(match field {
@@ -293,12 +302,7 @@ impl qobject::ModRows {
         let Some(row) = self.row(row) else {
             return to_qml(&json!({}));
         };
-        let named: serde_json::Map<String, Value> = ROLES
-            .iter()
-            .enumerate()
-            .filter_map(|(at, name)| Some((name.to_string(), cell(row, at)?.value())))
-            .collect();
-        to_qml(&named)
+        to_qml(&fields_of(row))
     }
 
     fn rows(&self) -> i32 {

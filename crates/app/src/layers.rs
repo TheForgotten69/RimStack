@@ -14,7 +14,7 @@ const REFUSED: [&str; 6] = [
 ];
 
 /// The bridge files, as `build.rs` names them.
-fn bridges() -> Vec<String> {
+pub(crate) fn bridges() -> Vec<String> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let build = std::fs::read_to_string(root.join("build.rs")).unwrap();
     let named: Vec<String> = build

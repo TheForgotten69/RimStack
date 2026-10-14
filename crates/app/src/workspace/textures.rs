@@ -600,23 +600,4 @@ mod tests {
         assert_eq!(app.hidden_in(b), 0);
         assert!(mods.join("b/Textures/Things/rock.png").is_file());
     }
-
-    #[test]
-    fn a_shared_texture_keeps_its_fields() {
-        assert_eq!(
-            crate::reports::fields(&Shared::default()),
-            [
-                "at: number",
-                "earlierBytes: number",
-                "earlierShown: text",
-                "file: text",
-                "keepsEarlier: bool",
-                "laterBytes: number",
-                "laterShown: text",
-                "name: text",
-                "used: text",
-                "yourChoice: bool",
-            ]
-        );
-    }
 }
