@@ -70,14 +70,28 @@ fn the_qml_hands_over_no_json_and_reads_no_command_line() {
 /// How often `word` starts a word in `line`.
 fn words(line: &str, word: &str) -> usize {
     let bytes = line.as_bytes();
-    let starts = |at: usize| at == 0 || !(bytes[at - 1].is_ascii_alphanumeric() || bytes[at - 1] == b'_');
-    line.match_indices(word).filter(|(at, _)| starts(*at)).count()
+    let starts =
+        |at: usize| at == 0 || !(bytes[at - 1].is_ascii_alphanumeric() || bytes[at - 1] == b'_');
+    line.match_indices(word)
+        .filter(|(at, _)| starts(*at))
+        .count()
 }
 
 /// Of each kind of logic in `MOST`, how much `line` holds.
 fn logic_in(line: &str) -> [usize; 7] {
-    let callbacks = ["filter", "map", "some", "every", "reduce", "find", "findIndex", "forEach"];
-    let compared = ["=== \"", "!== \""].iter().flat_map(|op| line.match_indices(op));
+    let callbacks = [
+        "filter",
+        "map",
+        "some",
+        "every",
+        "reduce",
+        "find",
+        "findIndex",
+        "forEach",
+    ];
+    let compared = ["=== \"", "!== \""]
+        .iter()
+        .flat_map(|op| line.match_indices(op));
     let with_text = compared.filter(|(at, op)| !line[at + op.len()..].starts_with('"'));
     [
         words(line, "function "),
