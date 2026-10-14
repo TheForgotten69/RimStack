@@ -34,6 +34,10 @@ lint: build
 test *filter:
     cargo test --workspace {{filter}}
 
+# Known advisories against the crates in Cargo.lock
+audit:
+    cargo audit
+
 # After a text was added or changed: wrap it and write words.json and English.json again
 words:
     python3 tools/words.py
@@ -72,6 +76,6 @@ scroll: build
     {{app}} --selftest 2>&1 | grep -E "scroll frames|_ms="
 
 # Everything before a commit: format, lint, tests, build, the app's checks in English and in French
-ready: fmt lint test words languages
+ready: fmt lint test audit words languages
     just check
     just check Français
