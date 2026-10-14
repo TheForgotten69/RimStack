@@ -47,6 +47,7 @@ fn main() {
                 "qml/mods/ModRow.qml",
                 "qml/mods/RowMenu.qml",
                 "qml/mods/InactivePane.qml",
+                "qml/mods/ModsFilter.qml",
                 "qml/mods/ActivePane.qml",
                 "qml/mods/DetailsPane.qml",
                 "qml/mods/CompareSummary.qml",

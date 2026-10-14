@@ -62,18 +62,13 @@ Rectangle {
             }
         }
         // The filter is the one over the load order; opened over it, this box shows the same text.
-        FilterField {
+        ModsFilter {
             id: mirror
             visible: pane.drawer
             Layout.fillWidth: true
             Layout.leftMargin: Theme.gapLarge
             Layout.rightMargin: Theme.gapLarge
             Layout.bottomMargin: Theme.gap
-            icon: "funnel"
-            keys: Theme.say("Ctrl + F")
-            chips: true
-            placeholder: Theme.say("Filter active and inactive mods")
-            found: Mods.filtered === "" ? "" : Theme.fill("{} active, {} inactive", Theme.count(Mods.active.matching), Theme.count(Mods.inactive.matching))
             Component.onCompleted: text = Mods.filtered
             onTextChanged: if (text !== Mods.filtered) Mods.filterBy(text)
             Connections {
