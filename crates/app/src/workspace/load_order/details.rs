@@ -443,7 +443,7 @@ impl LoadOrder {
                 }
             })
             .collect();
-        let community = app.community().reading();
+        let community = app.community();
         let tally = describe::tally(&self.troubles);
         Overview {
             game_version: library.game_version.clone(),
@@ -464,10 +464,10 @@ impl LoadOrder {
             missing: library.missing,
             unreadable: library.unreadable,
             read_ms: took.as_millis(),
-            works_on: app.works_on().reading().len(),
+            works_on: app.works_on().len(),
             trusted,
-            community_mods: community.as_ref().map(|c| c.len()),
-            community_time: community.as_ref().and_then(|c| c.timestamp),
+            community_mods: (*community).as_ref().map(|c| c.len()),
+            community_time: (*community).as_ref().and_then(|c| c.timestamp),
         }
     }
 }

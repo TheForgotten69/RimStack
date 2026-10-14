@@ -350,16 +350,18 @@ impl App {
         let data = self.data_dir();
         let mut failed: Vec<Error> = Vec::new();
         if self.database_on("rules") {
-            match community::download(&community::file_in(data)) {
-                Ok(fresh) => *self.community().writing() = Some(fresh),
+            let file = community::file_in(data);
+            match community::download(&file) {
+                Ok(fresh) => self.community.put(super::written(file), Some(fresh)),
                 Err(why) => failed.push(why),
             }
         }
         let paths = self.paths();
         let version = paths.game_version.as_deref();
         if let Some(version) = version.filter(|_| self.database_on("worksOn")) {
-            match community::download_works_on(version, &community::works_on_file(data, version)) {
-                Ok(fresh) => *self.works_on().writing() = fresh,
+            let file = community::works_on_file(data, version);
+            match community::download_works_on(version, &file) {
+                Ok(fresh) => self.works_on.put(super::written(file), fresh),
                 Err(why) => failed.push(why),
             }
         }
@@ -367,8 +369,9 @@ impl App {
             failed.extend(replacements::download(&replacements::file_in(data)).err());
         }
         if self.database_on("names") {
-            match workshopdb::download(&workshopdb::file_in(data)) {
-                Ok(fresh) => *self.workshop_names().writing() = fresh,
+            let file = workshopdb::file_in(data);
+            match workshopdb::download(&file) {
+                Ok(fresh) => self.workshop_names.put(super::written(file), fresh),
                 Err(why) => failed.push(why),
             }
         }

@@ -31,6 +31,11 @@ impl<K: PartialEq, T> Derived<K, T> {
         *now = Some((key, value.clone()));
         value
     }
+
+    /// `value` as already worked out for `key`.
+    pub fn put(&self, key: K, value: T) {
+        *self.now.held() = Some((key, Arc::new(value)));
+    }
 }
 
 #[cfg(test)]
@@ -43,5 +48,7 @@ mod tests {
         assert_eq!(*derived.get(1, || "first".into()), "first");
         assert_eq!(*derived.get(1, || unreachable!("made twice")), "first");
         assert_eq!(*derived.get(2, || "second".into()), "second");
+        derived.put(3, "given".into());
+        assert_eq!(*derived.get(3, || unreachable!("made though given")), "given");
     }
 }

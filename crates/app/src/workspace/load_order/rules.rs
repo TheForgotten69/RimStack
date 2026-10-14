@@ -98,11 +98,11 @@ fn with_sources<T>(
     with: impl FnOnce(Sources) -> T,
 ) -> T {
     let yours = app.user_rules().reading();
-    let community = app.community().reading();
+    let community = app.community();
     let settings = app.settings();
     with(Sources {
         yours: &yours,
-        community: community
+        community: (*community)
             .as_ref()
             .filter(|_| settings.switch(Switch::CommunityRules)),
         from_files,
@@ -140,7 +140,7 @@ pub fn troubles(app: &App, library: &Library, mods: &[Mod]) -> (Vec<Vec<Trouble>
         .version_ok()
         .map(String::from)
         .collect();
-    let mut trusted = app.works_on().reading().clone();
+    let mut trusted = (*app.works_on()).clone();
     trusted.extend(excused.iter().cloned());
     let off = {
         let settings = app.settings();
@@ -159,7 +159,7 @@ pub fn troubles(app: &App, library: &Library, mods: &[Mod]) -> (Vec<Vec<Trouble>
         true => describe::Versions::Ignored,
         false => describe::Versions::CheckedBut(&excused),
     };
-    let workshop = app.workshop_names().reading();
+    let workshop = app.workshop_names();
     (
         describe::troubles(library, mods, versions, &workshop),
         describe::version_ignored(library, mods, by_you),
