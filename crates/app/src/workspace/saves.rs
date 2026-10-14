@@ -204,7 +204,7 @@ mod tests {
         let all = crate::qml::values::as_shown(&shown(&report, ""));
         let save = &all["saves"][0];
         assert_eq!(save["name"], "Colony");
-        assert_eq!(save["verdict"], "breaks");
+        assert_eq!(save["verdict"]["breaks"], true);
         assert_eq!(save["said"], "2 mods missing");
         assert_eq!(save["about"], "RimWorld 1.6.4871 rev600   3 mods");
         assert_eq!(save["notInstalled"], 1);

@@ -43,6 +43,9 @@ impl FixSaid {
 pub struct ProblemSaid {
     /// -1 for a mod that is not installed.
     mod_id: i64,
+    /// Solved by trusting the mod with the game version.
+    #[serde(skip)]
+    trust: bool,
     name: String,
     error: bool,
     group: &'static str,
@@ -55,6 +58,7 @@ impl ProblemSaid {
     fn of(m: &Mod, trouble: &Trouble) -> Self {
         Self {
             mod_id: m.installed.map_or(-1, |i| i64::from(i.to_qml())),
+            trust: trouble.fix == rimstack_core::mods::describe::Fix::Trust,
             name: m.name.clone(),
             error: trouble.error,
             group: trouble.fix.group(),
@@ -97,6 +101,7 @@ pub struct Patched {
 pub struct Details {
     name: String,
     source: &'static str,
+    workshop: bool,
     contains: Sentence,
     path: String,
     repository: String,
@@ -161,6 +166,10 @@ pub struct Textures {
 pub struct ProblemGroup {
     name: &'static str,
     error: bool,
+    /// Of its lines, those solved by trusting the mod with the game version.
+    trusted: usize,
+    /// More than one line, all of them solved so: said in one sentence.
+    shared: bool,
     lines: Vec<ProblemSaid>,
 }
 
@@ -209,6 +218,7 @@ impl LoadOrder {
         let steam_record = app.steam_record();
         let (times, sizes) = &*steam_record;
         let mut said = Details {
+            workshop,
             name: m.display_name().to_string(),
             source: m.source_label(),
             contains: m.contains(),
@@ -288,7 +298,7 @@ impl LoadOrder {
             said.category = Some(listed.category.label());
             let own = self.troubles.get(at).map(Vec::as_slice).unwrap_or_default();
             said.problems = own.iter().map(|t| ProblemSaid::of(listed, t)).collect();
-            said.offer_trust = own.iter().any(|t| t.fix == describe::Fix::Trust);
+            said.offer_trust = said.problems.iter().any(|t| t.trust);
             let found = rules::all_rules(app, &mut self.detected, library, self.active.mods());
             let near = details::neighbours(&found, at, self.active.mods());
             // What Requires lists is counted under "Loads after", not listed again.
@@ -430,10 +440,15 @@ impl LoadOrder {
         let mut trouble_groups: Vec<ProblemGroup> =
             rimstack_core::base::grouped::by_key(each.flat_map(said), |t| t.group)
                 .into_iter()
-                .map(|(name, lines)| ProblemGroup {
-                    name,
-                    error: lines.first().is_some_and(|t| t.error),
-                    lines,
+                .map(|(name, lines)| {
+                    let trusted = lines.iter().filter(|t| t.trust).count();
+                    ProblemGroup {
+                        name,
+                        error: lines.first().is_some_and(|t| t.error),
+                        trusted,
+                        shared: trusted > 1 && trusted == lines.len(),
+                        lines,
+                    }
                 })
                 .collect();
         trouble_groups.sort_by_key(|group| !group.error);

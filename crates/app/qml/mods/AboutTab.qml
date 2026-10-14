@@ -37,7 +37,7 @@ Column {
         // The banner's action, for when the banner is not there.
         Btn {
             readonly property int alike: Mods.overview.versionOnly || 0
-            visible: alike > 1 && side.problems.some(p => p.fix.action === "trust") && !Hub.mods.previewing
+            visible: alike > 1 && !!Mods.info.offerTrust && !Hub.mods.previewing
             text: Theme.fill("Ignore all {} for RimWorld {}", alike, (Mods.overview.gameVersion || ""))
             tip: Theme.say("No warning about the game version while RimWorld stays on this version.")
             onClicked: Mods.setVersionAside(Mods.overview.gameVersion || "")
@@ -222,7 +222,7 @@ Column {
         // What its author wrote about its newest versions: a Workshop
         // mod's change notes, asked for one mod at a time, or a Git
         // checkout's commits, read from its folder.
-        readonly property bool workshop: Mods.info.source === "Workshop"
+        readonly property bool workshop: !!Mods.info.workshop
         readonly property bool git: !workshop && !!Mods.info.repository
         readonly property var notes: workshop ? ((Hub.downloads.notes || {})[Mods.info.folder] || []) : git ? Hub.downloads.commitsOf(Mods.selectedId) || [] : []
         visible: !Theme.demo && (workshop || git)

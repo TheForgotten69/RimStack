@@ -258,7 +258,7 @@ Item {
                 Keys.onReturnPressed: if (shown[at]) screen.showMod(shown[at].modId)
                 Keys.onEnterPressed: if (shown[at]) screen.showMod(shown[at].modId)
                 Keys.onPressed: event => {
-                    if (event.key !== Qt.Key_N || !shown[at] || shown[at].kind !== "workshop")
+                    if (event.key !== Qt.Key_N || !shown[at] || shown[at].git)
                         return
                     Theme.openChangeNotes(shown[at].id)
                     event.accepted = true
@@ -288,19 +288,19 @@ Item {
                         RowLayout {
                             width: parent.width
                             spacing: Theme.gap
-                            Icon { name: changed.modelData.kind === "git" ? "git-branch" : "cloud"; size: 14; color: changed.reached ? Theme.focus : Theme.ink3 }
+                            Icon { name: changed.modelData.git ? "git-branch" : "cloud"; size: 14; color: changed.reached ? Theme.focus : Theme.ink3 }
                             Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; font.weight: Font.Medium; font.underline: changed.reached; text: changed.modelData.name; Accessible.role: Accessible.ListItem; Accessible.name: text }
                             Chip { visible: !changed.modelData.active; text: Theme.say("inactive") }
-                            Chip { visible: changed.modelData.kind === "git"; tone: Theme.moved; text: Theme.plural(changed.modelData.notes.length, "{} commit", "{} commits") }
+                            Chip { visible: changed.modelData.git; tone: Theme.moved; text: Theme.plural(changed.modelData.notes.length, "{} commit", "{} commits") }
                             Text {
-                                visible: changed.modelData.kind !== "git"
+                                visible: !changed.modelData.git
                                 color: Theme.ink3
                                 font.pixelSize: Theme.small
                                 text: changed.modelData.sameDay ? Theme.clock(changed.modelData.was) + " → " + Theme.clock(changed.modelData.now)
                                     : screen.day(changed.modelData.was) + " → " + (changed.day === screen.day(Date.now() / 1000) ? Theme.say("today") : changed.day)
                             }
                             Btn { activeFocusOnTab: false; text: Theme.say("Show"); spoken: Theme.fill("Show {}", changed.modelData.name); tip: Theme.say("Enter"); onClicked: screen.showMod(changed.modelData.modId) }
-                            Btn { activeFocusOnTab: false; visible: changed.modelData.kind === "workshop"; icon: "external-link"; spoken: Theme.fill("Change notes of {}", changed.modelData.name); tip: Theme.say("The mod's change notes on the Workshop."); onClicked: Theme.openChangeNotes(changed.modelData.id) }
+                            Btn { activeFocusOnTab: false; visible: !changed.modelData.git; icon: "external-link"; spoken: Theme.fill("Change notes of {}", changed.modelData.name); tip: Theme.say("The mod's change notes on the Workshop."); onClicked: Theme.openChangeNotes(changed.modelData.id) }
                         }
                         Repeater {
                             model: changed.said

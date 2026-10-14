@@ -101,10 +101,11 @@ pub fn neighbours(rules: &[Rule], at: usize, mods: &[Mod]) -> Neighbours {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OwnRule {
-    pub mod_id: ModId,
-    pub name: String,
-    /// "after" or "before": how the mod loads relative to this other one.
-    pub how: &'static str,
+    /// The rule's mods: `first` loads before `then`.
+    pub first: ModId,
+    pub then: ModId,
+    /// How the mod loads relative to the other one, named.
+    pub said: Sentence,
 }
 
 /// Of your own rules, those about the mod at `at`, each naming the other
@@ -113,14 +114,14 @@ pub fn own_rules(yours: &[Rule], at: usize, mods: &[Mod]) -> Vec<OwnRule> {
     let about = yours.iter().filter(|r| r.first == at || r.then == at);
     about
         .filter_map(|rule| {
-            let (other, how) = match rule.then == at {
-                true => (rule.first, "after"),
-                false => (rule.then, "before"),
+            let said = match rule.then == at {
+                true => crate::say!("Loads after {}", mods[rule.first].name),
+                false => crate::say!("Loads before {}", mods[rule.then].name),
             };
             Some(OwnRule {
-                mod_id: mods[other].installed?,
-                name: mods[other].name.clone(),
-                how,
+                first: mods[rule.first].installed?,
+                then: mods[rule.then].installed?,
+                said,
             })
         })
         .collect()
@@ -277,11 +278,11 @@ mod tests {
         ];
         let about_roads = own_rules(&yours, 2, &mods);
         assert_eq!(about_roads.len(), 1);
-        assert_eq!(
-            (about_roads[0].name.as_str(), about_roads[0].how),
-            ("Lib", "after")
-        );
-        assert_eq!(own_rules(&yours, 1, &mods)[0].how, "before");
+        assert_eq!(about_roads[0].said.to_string(), "Loads after Lib");
+        let (lib, roads) = (mods[1].installed.unwrap(), mods[2].installed.unwrap());
+        let about_lib = &own_rules(&yours, 1, &mods)[0];
+        assert_eq!(about_lib.said.to_string(), "Loads before Roads");
+        assert_eq!((about_lib.first, about_lib.then), (lib, roads));
     }
 
     #[test]

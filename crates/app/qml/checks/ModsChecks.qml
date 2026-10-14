@@ -262,7 +262,7 @@ Item {
         Mods.select(b, true)
         Mods.picking = "before"
         Mods.pick(a)
-        check("a rule of your own is added", (Mods.info.yourRules || []).some(rule => rule.how === "before") && Mods.picking === "")
+        check("a rule of your own is added", (Mods.info.yourRules || []).some(rule => rule.first === b && rule.then === a) && Mods.picking === "")
         Hub.mods.removeRule(b, a)
         check("and removed", (Mods.info.yourRules || []).length === 0)
         const worked = Mods.about(b).category

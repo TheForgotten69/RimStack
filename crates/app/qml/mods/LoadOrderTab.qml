@@ -27,11 +27,11 @@ Column {
             width: side.width
             height: Theme.sized(26)
             spacing: Theme.gap
-            Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: Theme.fill("Loads {} {}", own.modelData.how, own.modelData.name) }
+            Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: own.modelData.said }
             Btn {
                 icon: "x"
                 tip: Theme.say("Remove this rule")
-                onClicked: own.modelData.how === "after" ? Hub.mods.removeRule(own.modelData.modId, Mods.selectedId) : Hub.mods.removeRule(Mods.selectedId, own.modelData.modId)
+                onClicked: Hub.mods.removeRule(own.modelData.first, own.modelData.then)
             }
         }
     }

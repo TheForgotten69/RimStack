@@ -10,7 +10,7 @@ QtObject {
             Mods.select(row.modId, inActive)
         const about = Mods.about(row.modId)
         const many = Mods.selectedCount > 1
-        const workshop = about.source === "Workshop"
+        const workshop = !!about.workshop
         const page = about.workshopPage || ""
         const groups = []
         groups.push([
@@ -67,7 +67,7 @@ QtObject {
             last.push({ text: Theme.plural(Mods.selectedCount, "Warn about the game version of {} mod again", "Warn about the game version of {} mods again"), run: () => Mods.trustSelected(false) })
         else if (about.versionOk)
             last.push({ text: Theme.say("Warn about its game version again"), run: () => Mods.trust(row.modId, false) })
-        else if ((about.problems || []).some(p => p.fix.action === "trust"))
+        else if (about.offerTrust)
             last.push({ text: Theme.say("Ignore the game version mismatch"), icon: "check", run: () => Mods.trust(row.modId, true) })
         if (about.canBin)
             last.push({ text: Theme.say("Move to the bin…"), icon: "trash-2", danger: true, run: () => Mods.binRequested(about.name || "", about.path, row.modId) })

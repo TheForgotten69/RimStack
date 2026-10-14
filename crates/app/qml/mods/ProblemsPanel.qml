@@ -45,17 +45,14 @@ Column {
             tone: modelData.error ? Theme.err : Theme.warn
             key: "problems-" + modelData.name
             spacing: Theme.gap
-            readonly property int trusted: modelData.lines.filter(line => line.fix.action === "trust").length
             Btn {
-                visible: group.trusted > 1
-                text: Theme.fill("Ignore all {} for RimWorld {}", group.trusted, (Mods.overview.gameVersion || ""))
+                visible: group.modelData.trusted > 1
+                text: Theme.fill("Ignore all {} for RimWorld {}", group.modelData.trusted, (Mods.overview.gameVersion || ""))
                 tip: Theme.say("No warning about the game version while RimWorld stays on this version.")
                 onClicked: Mods.setVersionAside(Mods.overview.gameVersion || "")
             }
-            // One sentence for a warning every line shares, then the mods by name.
-            readonly property bool shared: trusted > 1 && trusted === modelData.lines.length
             Text {
-                visible: group.shared
+                visible: group.modelData.shared
                 width: group.width
                 wrapMode: Text.WordWrap
                 color: Theme.ink2
@@ -64,7 +61,7 @@ Column {
                 text: Theme.fill("Each lists other game versions than RimWorld {}. Many such mods still work.", (Mods.overview.gameVersion || ""))
             }
             Repeater {
-                model: group.shared ? group.modelData.lines : []
+                model: group.modelData.shared ? group.modelData.lines : []
                 Item {
                     id: named
                     required property var modelData
@@ -78,7 +75,7 @@ Column {
                 }
             }
             Repeater {
-                model: group.shared ? [] : group.modelData.lines
+                model: group.modelData.shared ? [] : group.modelData.lines
                 ProblemLine {
                     required property var modelData
                     width: group.width

@@ -156,14 +156,26 @@ pub fn compare(save_ids: &[String], list_ids: &[String]) -> Difference {
 }
 
 /// What loading a save with the load order would do, worst first.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
     Unreadable,
     /// A mod of the save is not in the list, or the game is another version.
     Breaks,
     Differs,
     Same,
+}
+
+/// As a flag for each, the one it is set: `verdict.breaks`.
+impl serde::Serialize for Verdict {
+    fn serialize<S: serde::Serializer>(&self, to: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut flags = to.serialize_struct("Verdict", 4)?;
+        flags.serialize_field("unreadable", &(*self == Verdict::Unreadable))?;
+        flags.serialize_field("breaks", &(*self == Verdict::Breaks))?;
+        flags.serialize_field("differs", &(*self == Verdict::Differs))?;
+        flags.serialize_field("same", &(*self == Verdict::Same))?;
+        flags.end()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -399,7 +411,7 @@ mod tests {
             None,
         );
         let said = serde_json::to_value(&unreadable).unwrap();
-        assert_eq!(said["verdict"], "unreadable");
+        assert_eq!(said["verdict"]["unreadable"], true);
         assert_eq!(said["problem"], "not UTF-8");
         assert!(said.get("ids").is_none());
 
@@ -408,7 +420,7 @@ mod tests {
         let facts = vec![("Seed", "abc".to_string())];
         let row = Row::of(&save(Ok(read)), facts, None, Some(compared));
         let said = serde_json::to_value(&row).unwrap();
-        assert_eq!(said["verdict"], "same");
+        assert_eq!(said["verdict"]["same"], true);
         assert_eq!(said["megabytes"], 3.0);
         assert_eq!(said["facts"][0][1], "abc");
         assert_eq!(said["gameVersion"], "1.6.1");

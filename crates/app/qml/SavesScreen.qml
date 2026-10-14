@@ -165,8 +165,8 @@ Item {
                             }
                             Row {
                                 spacing: Theme.gapTiny
-                                Chip { visible: row.modelData.verdict === "unreadable"; onAccent: row.current; tone: Theme.err; icon: "circle-alert"; text: Theme.say("cannot be read") }
-                                Chip { visible: row.modelData.verdict === "same"; onAccent: row.current; tone: Theme.ok; icon: "check"; text: Theme.say("same mods as now") }
+                                Chip { visible: row.modelData.verdict.unreadable; onAccent: row.current; tone: Theme.err; icon: "circle-alert"; text: Theme.say("cannot be read") }
+                                Chip { visible: row.modelData.verdict.same; onAccent: row.current; tone: Theme.ok; icon: "check"; text: Theme.say("same mods as now") }
                                 // Red for what has to be downloaded first; amber for what "Use this save's mod list" brings back.
                                 Chip { visible: row.modelData.notInstalled > 0; onAccent: row.current; tone: Theme.err; icon: "circle-alert"; text: Theme.fill("{} not installed", row.modelData.notInstalled); tip: Theme.say("Mods the save was played with that are not installed") }
                                 Chip { visible: row.modelData.notActive > 0; onAccent: row.current; tone: Theme.warn; icon: "minus"; text: Theme.fill("{} not active", row.modelData.notActive); tip: Theme.say("Mods the save was played with that are not active now") }
@@ -244,7 +244,7 @@ Item {
                         spacing: Theme.gapSmall
                         Btn {
                             visible: !!screen.save && screen.save.usable
-                            primary: !!screen.save && screen.save.verdict === "breaks"
+                            primary: !!screen.save && screen.save.verdict.breaks
                             icon: "list"
                             text: Theme.say("Use this save's mod list")
                             onClicked: screen.useList(screen.save.ids)
@@ -295,14 +295,14 @@ Item {
 
                     GroupTitle { visible: !!screen.save && !!screen.save.ids; text: Theme.say("Differences from the current list") }
                     Text {
-                        visible: !!screen.save && !!screen.save.ids && screen.save.missing.length === 0 && screen.save.verdict !== "same"
+                        visible: !!screen.save && !!screen.save.ids && screen.save.missing.length === 0 && !screen.save.verdict.same
                         width: parent.width
                         wrapMode: Text.WordWrap
                         color: Theme.ink2
                         font.pixelSize: Theme.body
                         text: Theme.say("Nothing the save needs is missing.")
                     }
-                    Text { visible: !!screen.save && screen.save.verdict === "same"; width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink; font.pixelSize: Theme.body; lineHeight: 1.3; text: Theme.say("Same mods, same order as the load order") }
+                    Text { visible: !!screen.save && screen.save.verdict.same; width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink; font.pixelSize: Theme.body; lineHeight: 1.3; text: Theme.say("Same mods, same order as the load order") }
 
                     GroupTitle { visible: !!screen.save && !!screen.save.otherGame; text: Theme.say("Other game version") }
                     Text { visible: !!screen.save && !!screen.save.otherGame; width: parent.width; wrapMode: Text.WordWrap; color: Theme.warn; font.pixelSize: Theme.body; lineHeight: 1.3; text: screen.save ? Theme.fill("Saved with RimWorld {}, not the installed version", (screen.save.gameVersion || "")) : "" }

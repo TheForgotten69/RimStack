@@ -56,7 +56,7 @@ Column {
                 width: parent.width
                 topPadding: Theme.gapThin
                 spacing: Theme.gapTiny
-                Chip { visible: !!Mods.info.source; maxWidth: parent.width; icon: Mods.info.source === "Workshop" ? "cloud" : "hard-drive"; text: Theme.say(Mods.info.source || "") }
+                Chip { visible: !!Mods.info.source; maxWidth: parent.width; icon: Mods.info.workshop ? "cloud" : "hard-drive"; text: Theme.say(Mods.info.source || "") }
                 Chip { visible: !!Mods.info.repository && Mods.info.source !== "Workshop"; icon: "git-branch"; text: Theme.say("Git") }
                 Chip { visible: !!Mods.info.version; maxWidth: parent.width; text: Mods.info.version || "" }
                 Chip { visible: !!Mods.info.gameVersions; maxWidth: parent.width; tone: Mods.info.madeFor && !Mods.info.versionOk && Mods.info.source !== "Ludeon" ? Theme.warn : Theme.ink2; text: Theme.fill("RimWorld {}", (Mods.info.gameVersions || "")); tip: Mods.info.versionOk ? Theme.say("Marked as working on this game version") : "" }
@@ -75,14 +75,14 @@ Column {
         Btn { visible: !Hub.mods.previewing; primary: !Mods.selectedActive; icon: Mods.selectedActive ? "minus" : "plus"; text: Mods.selectedActive ? Theme.say("Deactivate") : Theme.say("Activate"); onClicked: Mods.toggleSelected() }
         Btn { compact: acts.narrow; icon: "folder-open"; text: Theme.say("Open folder"); onClicked: Qt.openUrlExternally(Theme.fileUrl(Mods.info.path)) }
         Btn {
-            visible: Mods.info.source === "Workshop"
+            visible: !!Mods.info.workshop
             compact: acts.narrow
             icon: "external-link"
             text: Theme.say("Workshop page")
             onClicked: Theme.openWorkshop(Mods.info.folder)
         }
         Btn {
-            visible: Mods.info.source !== "Workshop" && !!Mods.info.repository
+            visible: !Mods.info.workshop && !!Mods.info.repository
             icon: "git-branch"
             text: Theme.say("Repository page")
             tip: Mods.info.repository || ""

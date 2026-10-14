@@ -1,12 +1,20 @@
 //! What the QML may not do, checked on its files: it hands Rust no JSON
-//! text and reads no command line, and its functions and timers, where
-//! logic hides, only grow fewer.
+//! text and reads no command line, and what logic is written with only
+//! grows less: functions, timers, arrow functions, `if`s, ternaries,
+//! array callbacks, and comparisons with a text Rust should have decided.
 
 use std::path::{Path, PathBuf};
 
 /// The most there may be; lower them as QML loses some, never raise them.
-const MOST_FUNCTIONS: usize = 179;
-const MOST_TIMERS: usize = 11;
+const MOST: [(&str, usize); 7] = [
+    ("functions", 179),
+    ("timers", 11),
+    ("arrow functions", 269),
+    ("ifs", 236),
+    ("ternaries", 755),
+    ("array callbacks", 64),
+    ("comparisons with a text", 45),
+];
 
 fn qml_files(dir: &Path, into: &mut Vec<PathBuf>) {
     for entry in std::fs::read_dir(dir).unwrap().flatten() {
@@ -59,28 +67,55 @@ fn the_qml_hands_over_no_json_and_reads_no_command_line() {
     assert!(found.is_empty(), "{found:?}");
 }
 
+/// How often `word` starts a word in `line`.
+fn words(line: &str, word: &str) -> usize {
+    let bytes = line.as_bytes();
+    let starts = |at: usize| at == 0 || !(bytes[at - 1].is_ascii_alphanumeric() || bytes[at - 1] == b'_');
+    line.match_indices(word).filter(|(at, _)| starts(*at)).count()
+}
+
+/// Of each kind of logic in `MOST`, how much `line` holds.
+fn logic_in(line: &str) -> [usize; 7] {
+    let callbacks = ["filter", "map", "some", "every", "reduce", "find", "findIndex", "forEach"];
+    let compared = ["=== \"", "!== \""].iter().flat_map(|op| line.match_indices(op));
+    let with_text = compared.filter(|(at, op)| !line[at + op.len()..].starts_with('"'));
+    [
+        words(line, "function "),
+        words(line, "Timer {"),
+        line.matches("=>").count(),
+        words(line, "if ("),
+        line.matches(" ? ").count(),
+        callbacks
+            .iter()
+            .map(|name| line.matches(&format!(".{name}(")).count())
+            .sum(),
+        with_text.count(),
+    ]
+}
+
 #[test]
-fn the_qml_s_functions_and_timers_only_grow_fewer() {
+fn the_logic_in_the_qml_only_grows_less() {
     // The checks under `qml/checks` are test code that drives the window.
     let mut shown = every_qml();
     shown.retain(|(path, _)| !path.parent().is_some_and(|dir| dir.ends_with("checks")));
-    let lines = code_lines(&shown);
-    let count = |word: &str| {
-        lines
-            .iter()
-            .filter(|(_, line)| {
-                let line = line.trim_start();
-                line.starts_with(word) || line.contains(&format!(" {word}"))
-            })
-            .count()
-    };
-    let (functions, timers) = (count("function "), count("Timer {"));
-    assert!(
-        functions <= MOST_FUNCTIONS,
-        "{functions} functions, at most {MOST_FUNCTIONS}"
-    );
-    assert!(
-        timers <= MOST_TIMERS,
-        "{timers} timers, at most {MOST_TIMERS}"
-    );
+    let mut found = [0; 7];
+    for (_, line) in code_lines(&shown) {
+        for (total, here) in found.iter_mut().zip(logic_in(&line)) {
+            *total += here;
+        }
+    }
+    let over: Vec<String> = MOST
+        .iter()
+        .zip(found)
+        .filter(|((_, most), found)| found > most)
+        .map(|((what, most), found)| format!("{found} {what}, at most {most}"))
+        .collect();
+    assert!(over.is_empty(), "{}", over.join("; "));
+}
+
+#[test]
+fn each_kind_of_logic_is_counted_where_it_is_written() {
+    let line = r#"if (a) x = list.filter(m => m.kind === "git" && m.name !== "") ? b : c; function f() {}"#;
+    assert_eq!(logic_in(line), [1, 0, 1, 1, 1, 1, 1]);
+    assert_eq!(logic_in("Timer { id: elif (x) }"), [0, 1, 0, 0, 0, 0, 0]);
 }

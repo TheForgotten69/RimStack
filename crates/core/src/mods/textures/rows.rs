@@ -70,6 +70,10 @@ pub struct Row {
     pub shipped: usize,
     pub not_converted: usize,
     pub state: &'static str,
+    /// The state is `Converted`.
+    pub complete: bool,
+    /// The state is `OutOfDate`.
+    pub stale: bool,
     pub skipped: bool,
     pub png_mb: f64,
     pub dds_mb: f64,
@@ -88,6 +92,7 @@ impl Row {
         active: bool,
     ) -> Option<Self> {
         let megabytes = |bytes: u64| bytes as f64 / 1_048_576.0;
+        let state = counted.state(skipped);
         (counted.textures > 0).then(|| Self {
             id,
             waits: counted.waits(skipped),
@@ -98,7 +103,9 @@ impl Row {
             out_of_date: counted.out_of_date,
             shipped: counted.shipped,
             not_converted: counted.not_converted(),
-            state: counted.state(skipped).label(),
+            state: state.label(),
+            complete: state == State::Converted,
+            stale: state == State::OutOfDate,
             skipped,
             png_mb: megabytes(counted.png_bytes),
             dds_mb: megabytes(counted.dds_bytes),

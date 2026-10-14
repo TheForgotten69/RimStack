@@ -312,7 +312,7 @@ Timer {
         Mods.reveal(Mods.active, picked, true)
         Mods.tab = Hub.number("--tab", 0)
         // `--notes` asks for the picked mod's change notes, as its Fetch button does.
-        if (Hub.given("--notes") && Mods.info.source === "Workshop")
+        if (Hub.given("--notes") && Mods.info.workshop)
             Hub.downloads.fetchNotes(Mods.selectedId)
     }
 }

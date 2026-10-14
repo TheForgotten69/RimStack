@@ -431,7 +431,7 @@ fn downloads(app: &App, shapes: &mut Shapes) {
     shapes.add("downloads.queue", &Answer::from(refused));
     let mut since = app.since_launch();
     since.items.push(Changed {
-        kind: "workshop",
+        git: false,
         id: "1".into(),
         mod_id: b,
         name: "Ann.B".into(),

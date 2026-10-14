@@ -253,8 +253,8 @@ Item {
                                 maxWidth: Theme.sized(190)
                                 Layout.alignment: Qt.AlignVCenter
                                 onAccent: row.current
-                                tone: row.modelData.state === "Converted" ? Theme.ok : row.modelData.state === "Out of date" ? Theme.warn : Theme.ink2
-                                icon: row.modelData.state === "Converted" ? "check" : row.modelData.state === "Out of date" ? "triangle-alert" : ""
+                                tone: row.modelData.complete ? Theme.ok : row.modelData.stale ? Theme.warn : Theme.ink2
+                                icon: row.modelData.complete ? "check" : row.modelData.stale ? "triangle-alert" : ""
                                 text: row.modelData.said
                             }
                             Item { Layout.fillWidth: true }

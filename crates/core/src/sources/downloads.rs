@@ -117,8 +117,8 @@ pub fn replaceable(
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Changed {
-    /// "workshop" or "git".
-    pub kind: &'static str,
+    /// A Git checkout's commits, not a Workshop item's update.
+    pub git: bool,
     /// Its Workshop id, or the folder of its checkout.
     pub id: String,
     pub mod_id: ModId,
@@ -142,7 +142,7 @@ pub fn changed(
     let one = |(id, was): &(String, u64)| {
         let item = items.get(id.as_str())?;
         Some(Changed {
-            kind: "workshop",
+            git: false,
             id: id.clone(),
             mod_id: item.mod_id,
             name: item.name.to_string(),
@@ -250,8 +250,8 @@ mod tests {
         let ids: Vec<&str> = rows.iter().map(|row| row.id.as_str()).collect();
         assert_eq!(ids, ["200", "100"]);
         assert_eq!(
-            (rows[0].was, rows[0].now, rows[0].kind),
-            (6, Some(70), "workshop")
+            (rows[0].was, rows[0].now, rows[0].git),
+            (6, Some(70), false)
         );
     }
 

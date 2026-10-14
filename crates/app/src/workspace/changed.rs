@@ -104,9 +104,9 @@ pub fn since_shown<'a>(
         .enumerate()
         .map(|(at, (row, on))| ChangedShown {
             row,
-            said: match row.kind {
-                "git" => &row.notes,
-                _ => notes.get(&row.id).map_or(&[][..], Vec::as_slice),
+            said: match row.git {
+                true => &row.notes,
+                false => notes.get(&row.id).map_or(&[][..], Vec::as_slice),
             },
             opens_day: at == 0 || rows[at - 1].1 != *on,
             day_count: rows.iter().filter(|(_, other)| other == on).count(),
@@ -117,11 +117,7 @@ pub fn since_shown<'a>(
         time: since.time,
         count: since.items.len(),
         active: since.items.iter().filter(|row| row.active).count(),
-        workshop: since
-            .items
-            .iter()
-            .filter(|row| row.kind == "workshop")
-            .count(),
+        workshop: since.items.iter().filter(|row| !row.git).count(),
         rows: shown,
     }
 }
@@ -129,7 +125,7 @@ pub fn since_shown<'a>(
 /// The Workshop mods among the changed ones, each with the time of the
 /// version it had: what change notes are asked for.
 pub fn notes_asked(since: &SinceLaunch) -> Vec<(String, u64)> {
-    let workshop = since.items.iter().filter(|row| row.kind == "workshop");
+    let workshop = since.items.iter().filter(|row| !row.git);
     workshop.map(|row| (row.id.clone(), row.was)).collect()
 }
 
@@ -171,7 +167,7 @@ impl App {
             let commits = changes::git_notes(&m.path, time);
             if let Some(newest) = commits.first() {
                 rows.push(Changed {
-                    kind: "git",
+                    git: true,
                     id: m.path.to_string_lossy().into_owned(),
                     mod_id,
                     name: m.display_name().to_string(),
@@ -217,7 +213,7 @@ mod tests {
 
     fn changed(id: &str, active: bool, now: u64) -> Changed {
         Changed {
-            kind: "workshop",
+            git: false,
             id: id.into(),
             mod_id: ModId::new(0, 0),
             name: id.into(),
