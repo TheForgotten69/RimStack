@@ -3,6 +3,7 @@
 
 use super::App;
 use rimstack_core::base::error::Error;
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::rimworld::{rimsaves, saves};
 use rimstack_core::{say, say_n};
 use serde::Serialize;
@@ -25,9 +26,9 @@ pub struct SavesReport {
 pub struct SaveShown<'a> {
     #[serde(flatten)]
     pub row: &'a saves::Row,
-    pub said: String,
+    pub said: Sentence,
     /// Its version, mod count and folder, as the row lists them under its name.
-    pub about: String,
+    pub about: Sentence,
     pub dir: String,
     pub not_installed: usize,
     pub not_active: usize,
@@ -39,12 +40,12 @@ pub struct SaveShown<'a> {
 #[serde(rename_all = "camelCase")]
 pub struct SavesShown<'a> {
     pub saves: Vec<SaveShown<'a>>,
-    pub heading: String,
+    pub heading: Sentence,
     /// Some save has a picture: every row keeps room for one.
     pub pictured: bool,
 }
 
-fn said(row: &saves::Row) -> String {
+fn said(row: &saves::Row) -> Sentence {
     match row.verdict {
         saves::Verdict::Unreadable => say!("Cannot be read"),
         saves::Verdict::Same => say!("Same mods as now"),
@@ -59,7 +60,7 @@ fn said(row: &saves::Row) -> String {
             if compared.is_some_and(|c| c.other_game) {
                 parts.push(say!("other game version"));
             }
-            parts.join(", ")
+            Sentence::listed(parts)
         }
     }
 }
@@ -76,17 +77,20 @@ pub fn shown<'a>(report: &'a SavesReport, folder: &str) -> SavesShown<'a> {
             let not_installed = missing.iter().filter(|m| !m.installed).count();
             let mut about = Vec::new();
             if let Some(compared) = compared {
-                about.push(format!("RimWorld {}", compared.game_version));
+                about.push(Sentence::Plain(format!(
+                    "RimWorld {}",
+                    compared.game_version
+                )));
                 about.push(say_n!(compared.mods, "{} mod", "{} mods"));
             }
             if report.rimsaves && folder.is_empty() {
-                about.push(row.folder.clone());
+                about.push(Sentence::Plain(row.folder.clone()));
             }
             let dir = std::path::Path::new(&row.path).parent();
             SaveShown {
                 row,
                 said: said(row),
-                about: about.join("   "),
+                about: Sentence::joined("   ", about),
                 dir: dir.map_or(String::new(), |d| d.to_string_lossy().into_owned()),
                 not_installed,
                 not_active: missing.len() - not_installed,
@@ -99,7 +103,7 @@ pub fn shown<'a>(report: &'a SavesReport, folder: &str) -> SavesShown<'a> {
         .collect();
     let count = saves.len();
     let mut heading = vec![match folder.is_empty() {
-        true => count.to_string(),
+        true => Sentence::Plain(count.to_string()),
         false => say!("{} in {}", count, folder),
     }];
     if let Some(version) = &report.all_from {
@@ -107,7 +111,7 @@ pub fn shown<'a>(report: &'a SavesReport, folder: &str) -> SavesShown<'a> {
     }
     SavesShown {
         pictured: saves.iter().any(|s| s.row.preview.is_some()),
-        heading: heading.join(", "),
+        heading: Sentence::listed(heading),
         saves,
     }
 }
@@ -197,7 +201,7 @@ mod tests {
         std::fs::create_dir_all(&saves).unwrap();
         std::fs::write(saves.join("Colony.rws"), SAVE).unwrap();
         let report = app.saves_report();
-        let all = serde_json::to_value(shown(&report, "")).unwrap();
+        let all = crate::qml::values::as_shown(&shown(&report, ""));
         let save = &all["saves"][0];
         assert_eq!(save["name"], "Colony");
         assert_eq!(save["verdict"], "breaks");
@@ -210,7 +214,7 @@ mod tests {
         assert_eq!(all["heading"], "1");
         assert_eq!(all["pictured"], false);
         assert!(!report.rimsaves);
-        let elsewhere = serde_json::to_value(shown(&report, "Other")).unwrap();
+        let elsewhere = crate::qml::values::as_shown(&shown(&report, "Other"));
         assert_eq!(elsewhere["saves"].as_array().unwrap().len(), 0);
         assert_eq!(elsewhere["heading"], "0 in Other");
     }

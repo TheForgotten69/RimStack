@@ -1,9 +1,9 @@
 //! The installed mods and which of them are active.
 
 use crate::base::error::Error;
+use crate::base::sentence::Sentence;
 use crate::base::translate::named;
 use crate::said;
-use crate::say;
 
 use crate::mods::list::{Category, Mod};
 use crate::rimworld::about::{self, About};
@@ -77,9 +77,9 @@ impl Installed {
     }
 
     /// "Defs, patches, code, textures": what the mod ships, in words.
-    pub fn contains(&self) -> String {
+    pub fn contains(&self) -> Sentence {
         let k = self.kinds;
-        [
+        let words = [
             (k.defs, named("defs")),
             (k.patches, named("patches")),
             (k.assemblies, named("code")),
@@ -87,9 +87,9 @@ impl Installed {
         ]
         .iter()
         .filter(|(present, _)| *present)
-        .map(|(_, word)| crate::base::translate::say(word))
-        .collect::<Vec<_>>()
-        .join(", ")
+        .map(|(_, word)| Sentence::named(word))
+        .collect::<Vec<_>>();
+        Sentence::listed(words)
     }
 
     pub fn display_name(&self) -> &str {
@@ -443,7 +443,7 @@ impl Library {
                         patched: Default::default(),
                         sub: String::new(),
                         load_micros: None,
-                        name: say!("{} (not installed)", written),
+                        name: written.to_string(),
                         author: String::new(),
                         version: String::new(),
                         category: Category::Content,

@@ -2,9 +2,9 @@
 //! between rounds is kept on disk so it outlives the app being closed to play.
 
 use super::App;
-use rimstack_core::keep;
 use rimstack_core::mods::bisect::{self, Bisect};
 use rimstack_core::rimworld::saves;
+use rimstack_core::say;
 use std::path::PathBuf;
 
 /// How many copies of the newest save from before a search are kept.
@@ -83,7 +83,7 @@ impl App {
         let list = self.session().current().to_vec();
         if records {
             let before = self.snapshot("@hunt", &list);
-            self.note_change(keep!("Began finding the broken mod"), before.as_deref());
+            self.note_change(say!("Began finding the broken mod"), before.as_deref());
         }
         // The newest save as it is before any round, apart from the
         // copies made before each launch: those are few and soon replaced.

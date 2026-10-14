@@ -15,6 +15,7 @@ mod saves_data;
 mod search_data;
 mod settings_data;
 mod textures_data;
+mod words;
 mod workspace;
 
 pub use workspace::*;
@@ -109,7 +110,7 @@ fn main() -> std::process::ExitCode {
         std::env::consts::OS
     );
     // Before the mods are read: their problems are put in words as they are.
-    app.speak();
+    words::show_in(words::Words::of(&app.speak()));
     if !std::env::args().any(|a| a == "--demo" || a == "--selftest") {
         let early = app.clone();
         crate::jobs::spawn("early read", move || {

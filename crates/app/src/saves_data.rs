@@ -145,7 +145,7 @@ impl qobject::SavesData {
         let report = &self.report;
         let on_show = shown(report, &self.folder.to_string());
         let saves = to_qml(&on_show.saves);
-        let heading = QString::from(&on_show.heading);
+        let heading = crate::words::said(&on_show.heading);
         let pictured = on_show.pictured;
         let folders = to_qml(&report.folders);
         let current = QString::from(report.current_folder.as_deref().unwrap_or_default());

@@ -5,6 +5,7 @@
 //! `at` is a place in the load order; a `mod_id` a place in
 //! `Library::installed`.
 
+use crate::base::sentence::Sentence;
 use crate::mods::conflicts::Overlaps;
 use crate::mods::library::ModId;
 use crate::mods::list::Mod;
@@ -19,7 +20,7 @@ use std::collections::BTreeMap;
 #[serde(rename_all = "camelCase")]
 pub struct Named {
     pub name: String,
-    pub note: String,
+    pub note: Sentence,
     pub trouble: bool,
     pub mod_id: Option<ModId>,
 }
@@ -29,7 +30,7 @@ pub fn required(requirements: Vec<(String, bool)>) -> Vec<Named> {
     let one = |(name, installed): (String, bool)| Named {
         name,
         note: match installed {
-            true => String::new(),
+            true => Sentence::default(),
             false => say!("not installed"),
         },
         trouble: !installed,
@@ -56,7 +57,7 @@ pub struct Neighbours {
 }
 
 /// Who a rule is by, said from the side of the mod at `at`.
-fn said_by(rule: &Rule, at: usize) -> String {
+fn said_by(rule: &Rule, at: usize) -> Sentence {
     match (rule.broken(), rule.kind, rule.declared_by()) {
         (true, ..) => say!("out of order"),
         (_, Kind::Yours, _) => say!("your rule"),
@@ -246,7 +247,7 @@ mod tests {
         let said = |lines: &[Named]| -> Vec<(String, String, bool)> {
             lines
                 .iter()
-                .map(|n| (n.name.clone(), n.note.clone(), n.trouble))
+                .map(|n| (n.name.clone(), n.note.to_string(), n.trouble))
                 .collect()
         };
         assert_eq!(
@@ -342,7 +343,7 @@ mod tests {
         assert_eq!(made_for(&versions(&["1.5"]), ""), None);
         let needs = required(vec![("Lib".into(), true), ("gone.lib".into(), false)]);
         assert_eq!(
-            (needs[0].trouble, needs[1].note.as_str()),
+            (needs[0].trouble, needs[1].note.to_string().as_str()),
             (false, "not installed")
         );
     }

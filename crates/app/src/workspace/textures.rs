@@ -5,7 +5,7 @@
 use super::App;
 use rayon::prelude::*;
 use rimstack_core::base::error::Error;
-use rimstack_core::base::translate;
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::hidden::{self, Hidden};
 use rimstack_core::mods::library::{Library, ModId};
 use rimstack_core::mods::{conflicts, ddsaudit, texdiff, textures};
@@ -24,7 +24,7 @@ pub struct RowShown<'a> {
     #[serde(flatten)]
     pub row: &'a textures::Row,
     /// Its state in words.
-    pub said: String,
+    pub said: Sentence,
 }
 
 /// The rows on show and what the screen says of them all.
@@ -97,7 +97,7 @@ pub fn shown(rows: &[textures::Row], active_only: bool) -> TexturesShown<'_> {
             .into_iter()
             .map(|row| RowShown {
                 row,
-                said: translate::say(row.state),
+                said: Sentence::named(row.state),
             })
             .collect(),
     }
@@ -111,7 +111,7 @@ pub struct Refused {
     pub file: String,
     /// The file's own name.
     pub name: String,
-    pub why: String,
+    pub why: Sentence,
 }
 
 #[derive(Serialize, Clone)]
@@ -235,11 +235,11 @@ impl App {
         ids: &[ModId],
         remove: bool,
         stop: &AtomicBool,
-        progress: &(dyn Fn(String) + Sync),
-    ) -> String {
+        progress: &(dyn Fn(Sentence) + Sync),
+    ) -> Sentence {
         let loaded = self.library();
         let Ok((library, _)) = &*loaded else {
-            return String::new();
+            return Sentence::default();
         };
         let roots: Vec<&Path> = ids
             .iter()
@@ -287,7 +287,7 @@ impl App {
         }
         self.textures_changed();
         match failed {
-            0 => String::new(),
+            0 => Sentence::default(),
             n => say_n!(
                 n,
                 "{} texture could not be converted; it keeps using its PNG.",
@@ -418,30 +418,22 @@ impl App {
         &self,
         comparison: &Comparison,
         keep_earlier: bool,
-    ) -> Result<String, Error> {
+    ) -> Result<Sentence, Error> {
         let all: Vec<&Shared> = comparison.textures.iter().collect();
         self.keep_textures(&all, keep_earlier)?;
         if !keep_earlier {
-            return Ok(String::new());
+            return Ok(Sentence::default());
         }
         let (n, name) = (all.len(), comparison.later.name.as_str());
-        let kept = translate::kept(
-            "#",
-            &[
-                n.into(),
-                "Set aside {} texture of {}".into(),
-                "Set aside {} textures of {}".into(),
-                name.into(),
-            ],
-        );
-        let folder = comparison.later_folder.to_string_lossy();
-        self.note(kept, format!("unhide {folder}"));
-        Ok(say_n!(
+        let aside = say_n!(
             n,
             "Set aside {} texture of {}",
             "Set aside {} textures of {}",
             name
-        ))
+        );
+        let folder = comparison.later_folder.to_string_lossy();
+        self.note(aside.clone(), format!("unhide {folder}"));
+        Ok(aside)
     }
 
     /// How many PNG textures RimStack has set aside in a mod.
@@ -526,7 +518,7 @@ mod tests {
         let (tmp, app) = installed();
         texture(&tmp.path().join("game/Mods/roads/Textures/road.png"));
         let rows = app.texture_rows();
-        let on_show = serde_json::to_value(shown(&rows, false)).unwrap();
+        let on_show = crate::qml::values::as_shown(&shown(&rows, false));
         assert_eq!(on_show["rows"][0]["name"], "Ann.Roads");
         assert_eq!(on_show["rows"][0]["state"], "Not converted");
         assert_eq!(on_show["usual"], "Not converted");
@@ -575,7 +567,7 @@ mod tests {
         assert!(compared.named("tree").is_empty());
 
         let said = app.keep_all_textures(&compared, true).unwrap();
-        assert_eq!(said, "Set aside 1 texture of Ann.B");
+        assert_eq!(said.to_string(), "Set aside 1 texture of Ann.B");
         assert_eq!((app.hidden_in(b), app.hidden_in(a)), (1, 0));
         let again = app.compare_textures(a, b).unwrap();
         assert_eq!((again.kept_earlier, again.yours), (1, 1));

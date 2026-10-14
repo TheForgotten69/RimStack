@@ -56,14 +56,16 @@ pub fn run(command: &mut Command, limit: Duration) -> std::io::Result<Output> {
                     limit.as_secs() as usize,
                     "no answer after {} second",
                     "no answer after {} seconds"
-                ),
+                )
+                .to_string(),
             ));
         }
         std::thread::sleep(pause);
         pause = (pause * 2).min(Duration::from_millis(50));
     };
     let read = |pipe: std::thread::JoinHandle<Vec<u8>>| {
-        let lost = |_| std::io::Error::other(say!("what the program wrote could not be read"));
+        let lost =
+            |_| std::io::Error::other(say!("what the program wrote could not be read").to_string());
         pipe.join().map_err(lost)
     };
     Ok(Output {

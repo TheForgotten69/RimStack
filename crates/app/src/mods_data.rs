@@ -594,24 +594,24 @@ impl qobject::ModsData {
             let session = app.session();
             (
                 session.is_dirty(),
-                session.changes().in_words(),
+                session.changes().said(),
                 session.can_undo(),
                 session.can_redo(),
             )
         };
         let installed = self.order.is_installed();
         self.as_mut().set_dirty(dirty && installed);
-        self.as_mut().set_unsaved(QString::from(&unsaved));
+        self.as_mut().set_unsaved(crate::words::said(&unsaved));
         self.as_mut().set_can_undo(undo);
         self.as_mut().set_can_redo(redo);
         let order = &self.order;
         let (errors, warnings) = order.errors_and_warnings();
         let troubled = order.troubles().iter().filter(|t| !t.is_empty()).count();
         let previewing = order.previewing();
-        let note = QString::from(&order.sort_note);
+        let note = crate::words::said(&order.sort_note);
         let moves = order.sort_move_count() as i32;
         let conflicts = order.in_conflict(&app).len() as i32;
-        let problem = QString::from(&order.problem);
+        let problem = crate::words::said(&order.problem);
         let status = order.status.clone();
         let overview = to_qml(&order.overview(&app));
         let fresh = to_qml(&order.fresh(&app, Side::Inactive));
@@ -623,8 +623,10 @@ impl qobject::ModsData {
         self.as_mut().set_sort_move_count(moves);
         self.as_mut().set_conflicts(conflicts);
         self.as_mut().set_problem(problem);
-        self.as_mut().set_status_active(QString::from(&status[0]));
-        self.as_mut().set_status_inactive(QString::from(&status[1]));
+        self.as_mut()
+            .set_status_active(crate::words::said(&status[0]));
+        self.as_mut()
+            .set_status_inactive(crate::words::said(&status[1]));
         self.as_mut().set_overview(overview);
         self.as_mut().set_fresh(fresh);
         self.describe();

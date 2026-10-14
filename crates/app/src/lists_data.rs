@@ -83,9 +83,7 @@ pub struct ListsDataRust {
 }
 
 fn said(done: Result<(), Error>) -> QString {
-    done.err().map_or_else(QString::default, |problem| {
-        QString::from(&problem.to_string())
-    })
+    crate::words::why_not(&done)
 }
 
 impl qobject::ListsData {
@@ -125,7 +123,7 @@ impl qobject::ListsData {
     fn keep_ids(&self, name: &QString, ids: &QVariant) -> QString {
         match from_qml::<Vec<String>>(ids) {
             Some(ids) => said(self.app().keep_list(&name.to_string(), Some(ids))),
-            None => QString::from(&say!("That is not a list of mods.")),
+            None => crate::words::said(&say!("That is not a list of mods.")),
         }
     }
 

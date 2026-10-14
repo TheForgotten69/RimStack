@@ -3,6 +3,7 @@
 
 use super::App;
 use crate::changes::Changes;
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::kept::{journal, lists};
 use std::path::PathBuf;
 
@@ -44,19 +45,19 @@ impl App {
         }
     }
 
-    /// A line in the history: `what` as `translate::kept` writes it, and
-    /// the snapshot that takes it back, if there is one.
-    pub fn note_change(&self, what: String, snapshot: Option<&str>) {
+    /// A line in the history, and the snapshot that takes it back, if
+    /// there is one.
+    pub fn note_change(&self, what: Sentence, snapshot: Option<&str>) {
         let revert = snapshot.map_or(String::new(), |name| format!("list {name}"));
         self.note(what, revert);
     }
 
     /// A line in the history; `revert` is "list <snapshot>", "unhide
     /// <mod folder>" or nothing.
-    pub fn note(&self, what: String, revert: String) {
+    pub fn note(&self, what: Sentence, revert: String) {
         let entry = journal::Entry {
             time: super::now_secs(),
-            what,
+            what: what.to_kept().to_string(),
             revert,
         };
         match journal::add(&self.journal_file(), entry) {
@@ -78,7 +79,7 @@ mod tests {
         assert!(name.starts_with("@saving 2"), "{name}");
         assert_eq!(lists::load(&app.snapshots_dir(), &name).unwrap(), ["a.b"]);
         app.note_change(
-            rimstack_core::keep!("Saved the load order: {}", "x"),
+            rimstack_core::say!("Saved the load order: {}", "x"),
             Some(&name),
         );
         let kept = journal::read(&app.journal_file());

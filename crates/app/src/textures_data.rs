@@ -110,6 +110,7 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QVariant};
 use rimstack_core::base::error::Error;
 use rimstack_core::base::locks::Held;
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::textures::Row;
 use std::path::Path;
@@ -138,9 +139,7 @@ pub struct TexturesDataRust {
 }
 
 fn said(done: Result<(), Error>) -> QString {
-    done.err().map_or_else(QString::default, |problem| {
-        QString::from(&problem.to_string())
-    })
+    crate::words::why_not(&done)
 }
 
 impl qobject::TexturesData {
@@ -220,8 +219,8 @@ impl qobject::TexturesData {
             "textures convert",
             self.qt_thread(),
             move || {
-                let progress = |text: String| {
-                    let _ = thread.queue(move |me| me.set_progress(QString::from(&text)));
+                let progress = |text: Sentence| {
+                    let _ = thread.queue(move |me| me.set_progress(crate::words::said(&text)));
                 };
                 let note = app.convert_textures(&ids, remove, &stop, &progress);
                 (app.texture_rows(), note)
@@ -230,7 +229,7 @@ impl qobject::TexturesData {
                 let me_rust = me.as_mut().rust_mut().get_mut();
                 me_rust.rows = rows;
                 me_rust.stale = false;
-                me.as_mut().set_progress(QString::from(&note));
+                me.as_mut().set_progress(crate::words::said(&note));
                 me.as_mut().set_busy(false);
                 me.show();
             },

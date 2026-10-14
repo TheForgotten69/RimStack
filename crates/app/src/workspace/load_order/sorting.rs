@@ -3,6 +3,7 @@
 
 use super::{rules, LoadOrder, Preview};
 use crate::App;
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::describe;
 use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::list::{Category, Mod, Row};
@@ -43,7 +44,7 @@ pub struct SortMove {
     pub to: usize,
     /// -1 for a mod that is not installed.
     pub mod_id: i32,
-    pub why: String,
+    pub why: Sentence,
 }
 
 impl LoadOrder {
@@ -109,7 +110,7 @@ impl LoadOrder {
         if let Some(preview) = self.preview.take() {
             self.active.set_grouped(preview.grouped_before);
             self.active.set_mods(preview.before);
-            self.sort_note.clear();
+            self.sort_note = Sentence::default();
             self.settle(app);
         }
     }
@@ -117,7 +118,7 @@ impl LoadOrder {
     /// Any edit keeps the order on show and drops its markers.
     pub(super) fn end_preview(&mut self) {
         self.preview = None;
-        self.sort_note.clear();
+        self.sort_note = Sentence::default();
     }
 
     /// What counting the mods Sort would move needs, taken from the list
@@ -177,12 +178,9 @@ impl LoadOrder {
             .collect()
     }
 
-    pub(super) fn why_moved(&self, index: usize) -> &str {
-        let why = self
-            .preview
-            .as_ref()
-            .and_then(|p| p.why.get(index)?.as_ref());
-        why.map_or("", |w| w.text.as_str())
+    pub(super) fn why_moved(&self, index: usize) -> Option<&Sentence> {
+        let why = self.preview.as_ref()?.why.get(index)?.as_ref();
+        why.map(|w| &w.text)
     }
 
     pub(super) fn moved_from(&self, index: usize) -> usize {
@@ -202,41 +200,39 @@ impl LoadOrder {
 }
 
 /// What a sort would do, in words.
-fn note(mods: &[Mod], sorted: &rimstack_core::mods::sort::Sorted, moves: usize) -> String {
-    let mut note = match moves {
+fn note(mods: &[Mod], sorted: &rimstack_core::mods::sort::Sorted, moves: usize) -> Sentence {
+    let mut note = vec![match moves {
         0 => say!("Already in order."),
         n => say_n!(
             n,
             "Sorting would move {} mod.",
             "Sorting would move {} mods."
         ),
-    };
+    }];
     // Rules come before groups: say which groups they keep apart.
     let apart = rimstack_core::mods::list::split_groups(sorted.order.iter().map(|&i| &mods[i]));
     if !apart.is_empty() {
-        note += " ";
-        note += &say_n!(
+        note.push(say_n!(
             apart.len(),
             "A rule keeps {} group in more than one place: {}.",
             "A rule keeps {} groups in more than one place: {}.",
             apart.join(", ")
-        );
+        ));
     }
     // A mod kept off the bottom by a stronger rule is expected, not news.
-    let each: Vec<String> = sorted
+    let each: Vec<Sentence> = sorted
         .dropped
         .iter()
         .filter(|r| !matches!(r.kind, Kind::CommunityBottom | Kind::Inferred))
         .map(|r| describe::rule(r, mods))
         .collect();
     if !each.is_empty() {
-        note += " ";
-        note += &say_n!(
+        note.push(say_n!(
             each.len(),
             "Ignored {} rule that contradicts another: {}.",
             "Ignored {} rules that contradict another: {}.",
-            each.join("; ")
-        );
+            Sentence::joined("; ", each).inside()
+        ));
     }
-    note
+    Sentence::joined(" ", note)
 }

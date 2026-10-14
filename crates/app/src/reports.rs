@@ -8,7 +8,9 @@ use serde::Serialize;
 #[serde(untagged)]
 pub enum Answer<T> {
     Done(T),
-    Failed { problem: String },
+    Failed {
+        problem: rimstack_core::base::sentence::Sentence,
+    },
 }
 
 impl<T> From<Result<T, rimstack_core::base::error::Error>> for Answer<T> {
@@ -16,7 +18,7 @@ impl<T> From<Result<T, rimstack_core::base::error::Error>> for Answer<T> {
         match outcome {
             Ok(done) => Answer::Done(done),
             Err(problem) => Answer::Failed {
-                problem: problem.to_string(),
+                problem: problem.sentence().clone(),
             },
         }
     }
@@ -97,9 +99,14 @@ pub struct ShortContrast {
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum ReleaseSaid {
-    Newer { version: String, page: String },
+    Newer {
+        version: String,
+        page: String,
+    },
     Latest {},
-    Failed { problem: String },
+    Failed {
+        problem: rimstack_core::base::sentence::Sentence,
+    },
 }
 
 /// `Hub.settings.databases`: Settings' list of community databases.
@@ -116,7 +123,7 @@ pub struct Database {
 /// The fields an answer has, as QML reads them, sorted.
 #[cfg(test)]
 pub(crate) fn fields<T: Serialize>(value: &T) -> Vec<String> {
-    let said = serde_json::to_value(value).unwrap();
+    let said = crate::qml::values::as_shown(&value);
     let mut keys: Vec<String> = said.as_object().unwrap().keys().cloned().collect();
     keys.sort();
     keys
@@ -190,7 +197,7 @@ mod tests {
     fn a_failure_is_its_problem_and_nothing_else() {
         let failed: Answer<Written> = Err(rimstack_core::base::error::Error::refused("no")).into();
         assert_eq!(
-            serde_json::to_value(&failed).unwrap(),
+            crate::qml::values::as_shown(&failed),
             serde_json::json!({ "problem": "no" })
         );
         let done: Answer<Written> = Ok(Written { file: "/a".into() }).into();

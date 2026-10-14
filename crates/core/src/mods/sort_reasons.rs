@@ -1,6 +1,7 @@
 //! Why Sort moves a mod: the rule its place broke, its category, or
 //! nothing of its own.
 
+use crate::base::sentence::Sentence;
 use crate::base::translate::named;
 use crate::mods::list::Category;
 use crate::mods::rules::{Kind, Rule};
@@ -11,7 +12,7 @@ pub struct Why {
     /// A short label many moves share, to list them under.
     pub group: &'static str,
     /// "after Harmony, which it requires".
-    pub text: String,
+    pub text: Sentence,
 }
 
 fn group(kind: Kind) -> &'static str {
@@ -49,7 +50,7 @@ pub fn moved(at: usize, rules: &[Rule], names: &[&str], categories: &[Category])
         };
         return Why {
             group: group(rule.kind),
-            text: format!("{side}, {says}"),
+            text: Sentence::listed(vec![side, says]),
         };
     }
     let bottom = |r: &&Rule| r.kind == Kind::CommunityBottom && r.then == at;
@@ -67,7 +68,7 @@ pub fn moved(at: usize, rules: &[Rule], names: &[&str], categories: &[Category])
             group: named("Category order"),
             text: say!(
                 "with the rest of {}",
-                crate::base::translate::say(mine.label())
+                Sentence::named(mine.label()).inside()
             ),
         };
     }
@@ -97,9 +98,9 @@ mod tests {
         ];
         let why = moved(0, &rules, &NAMES, &content);
         assert_eq!(why.group, "Required mods first");
-        assert_eq!(why.text, "after Harmony, which it requires");
+        assert_eq!(why.text.to_string(), "after Harmony, which it requires");
         let other = moved(1, &rules, &NAMES, &content);
-        assert_eq!(other.text, "before Mod, which requires it");
+        assert_eq!(other.text.to_string(), "before Mod, which requires it");
     }
 
     #[test]
@@ -114,13 +115,13 @@ mod tests {
         let mixed = [Category::Content, Category::Libraries, Category::Content];
         let why = moved(1, &[], &NAMES, &mixed);
         assert_eq!(why.group, "Category order");
-        assert_eq!(why.text, "with the rest of Libraries");
+        assert_eq!(why.text.to_string(), "with the rest of Libraries");
     }
 
     #[test]
     fn a_mod_kept_at_the_bottom_says_so() {
         let content = [Category::Content; 3];
         let why = moved(0, &[rule(0, 0, Kind::CommunityBottom)], &NAMES, &content);
-        assert_eq!(why.text, "near the bottom, by a community rule");
+        assert_eq!(why.text.to_string(), "near the bottom, by a community rule");
     }
 }

@@ -2,6 +2,7 @@
 //! the steps in between for Undo and Redo. Lists are package ids as they
 //! are written to `ModsConfig.xml`.
 
+use crate::base::sentence::Sentence;
 use crate::say;
 const KEPT_STEPS: usize = 200;
 
@@ -27,22 +28,8 @@ impl Changes<'_> {
         self.moved.is_empty() && self.activated.is_empty() && self.deactivated.is_empty()
     }
 
-    /// The same, kept for the journal: see `translate::kept`.
-    pub fn kept(&self) -> String {
-        let counted = [
-            ("{} moved", self.moved.len()),
-            ("{} activated", self.activated.len()),
-            ("{} deactivated", self.deactivated.len()),
-        ];
-        let parts = counted.iter().filter(|(_, n)| *n > 0);
-        let parts: Vec<serde_json::Value> = parts
-            .map(|(text, n)| serde_json::json!([text, n]))
-            .collect();
-        crate::base::translate::kept(",", &parts)
-    }
-
-    /// "4 moved, 2 activated, 1 deactivated"; empty for no change.
-    pub fn in_words(&self) -> String {
+    /// "4 moved, 2 activated, 1 deactivated"; nothing for no change.
+    pub fn said(&self) -> Sentence {
         let parts = [
             (self.moved.len(), say!("{} moved", self.moved.len())),
             (
@@ -54,12 +41,8 @@ impl Changes<'_> {
                 say!("{} deactivated", self.deactivated.len()),
             ),
         ];
-        let said: Vec<String> = parts
-            .into_iter()
-            .filter(|(n, _)| *n > 0)
-            .map(|(_, said)| said)
-            .collect();
-        said.join(", ")
+        let said = parts.into_iter().filter(|(n, _)| *n > 0);
+        Sentence::listed(said.map(|(_, said)| said).collect())
     }
 }
 
@@ -163,17 +146,20 @@ mod tests {
     fn changes_name_the_fewest_mods_that_moved_and_those_switched() {
         let mut s = Session::new(ids(&["a", "b", "c", "d", "e"]));
         assert!(s.changes().is_empty());
-        assert_eq!(s.changes().in_words(), "");
+        assert!(s.changes().said().is_empty());
         // "e" went to the top, "b" left, "x" came.
         s.record(ids(&["e", "a", "c", "x", "d"]));
         let changes = s.changes();
         assert_eq!(changes.moved, ["e"]);
         assert_eq!(changes.activated, ["x"]);
         assert_eq!(changes.deactivated, ["b"]);
-        assert_eq!(changes.in_words(), "1 moved, 1 activated, 1 deactivated");
         assert_eq!(
-            changes.kept(),
-            r#"[",",["{} moved",1],["{} activated",1],["{} deactivated",1]]"#
+            changes.said().to_string(),
+            "1 moved, 1 activated, 1 deactivated"
+        );
+        assert_eq!(
+            changes.said().to_kept().to_string(),
+            r#"[",",["{} moved","1"],["{} activated","1"],["{} deactivated","1"]]"#
         );
         s.mark_saved();
         assert!(s.changes().is_empty());

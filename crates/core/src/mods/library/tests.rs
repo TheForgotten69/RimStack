@@ -190,10 +190,7 @@ fn library_splits_active_and_inactive() {
     let library = build(mods, &active, "1.6");
 
     let names = |list: &[Mod]| list.iter().map(|m| m.name.clone()).collect::<Vec<_>>();
-    assert_eq!(
-        names(&library.active),
-        ["Core", "Dup (local)", "gone.mod (not installed)"]
-    );
+    assert_eq!(names(&library.active), ["Core", "Dup (local)", "gone.mod"]);
     assert_eq!(library.missing, 1);
     assert_eq!(library.unreadable, 2);
     // Libraries, then content (by name), then textures.
@@ -364,7 +361,7 @@ fn rows_point_back_at_their_mod_and_requirements_are_named() {
     let library = build(scan(&roots), &["test.art".to_string()], "1.6");
     let art = library.get(library.active[0].installed.unwrap()).unwrap();
     assert_eq!(art.display_name(), "Art");
-    assert_eq!(art.contains(), "textures");
+    assert_eq!(art.contains().to_string(), "textures");
     assert_eq!(art.source_label(), "Workshop");
     assert_eq!(library.requirements(art), [("Lib".to_string(), true)]);
     for m in &library.inactive {

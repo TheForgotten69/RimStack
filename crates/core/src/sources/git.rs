@@ -220,21 +220,16 @@ pub fn behind(mod_root: &Path) -> Result<usize> {
 
 /// The commits a checkout gained since `since` (seconds since 1970),
 /// newest first, at most thirty: each one's time and first line.
-/// Nothing where Git cannot be run there.
-pub fn commits_since(mod_root: &Path, since: u64) -> Vec<(u64, String)> {
-    let Ok(mut git) = in_checkout(mod_root) else {
-        return Vec::new();
-    };
+pub fn commits_since(mod_root: &Path, since: u64) -> Result<Vec<(u64, String)>> {
+    let mut git = in_checkout(mod_root)?;
     git.args(["log", "-n", "30", "--pretty=%ct%x09%s"])
         .arg(format!("--since=@{since}"));
-    let Ok(said) = ran(&mut git, crate::base::program::LOCAL) else {
-        return Vec::new();
-    };
+    let said = ran(&mut git, crate::base::program::LOCAL)?;
     let commit = |line: &str| {
         let (time, text) = line.split_once('\t')?;
         Some((time.parse().ok()?, text.to_string()))
     };
-    said.lines().filter_map(commit).collect()
+    Ok(said.lines().filter_map(commit).collect())
 }
 
 /// Brings a checkout up to its remote, only by moving forward: local
@@ -329,10 +324,10 @@ mod tests {
         git(&origin, &["commit", "--quiet", "-am", "second"]);
         assert_eq!(behind(&clone), Ok(1));
         assert!(update(&clone).unwrap().ends_with("second"));
-        let commits = commits_since(&clone, 0);
+        let commits = commits_since(&clone, 0).unwrap();
         assert_eq!(commits.len(), 2);
         assert_eq!(commits[0].1, "second");
-        assert!(commits_since(tmp.path(), 0).is_empty());
+        assert!(commits_since(tmp.path(), 0).is_err());
         assert_eq!(behind(&clone), Ok(0));
         assert!(behind(tmp.path()).is_err());
         assert_eq!(std::fs::read_to_string(clone.join("a")).unwrap(), "2");

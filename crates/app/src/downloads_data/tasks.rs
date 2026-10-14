@@ -8,15 +8,20 @@ use crate::workspace::fetch::{Done, SteamAsk};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
-use rimstack_core::base::translate::in_words;
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::library::ModId;
 use rimstack_core::say;
 
 impl qobject::DownloadsData {
-    fn task(mut self: Pin<&mut Self>, doing: String, work: impl FnOnce() -> Done + Send + 'static) {
+    fn task(
+        mut self: Pin<&mut Self>,
+        doing: Sentence,
+        work: impl FnOnce() -> Done + Send + 'static,
+    ) {
         if self.demo {
             return;
         }
+        let doing = crate::words::put(&doing);
         let work: Work = Box::new(work);
         match self.task_running {
             true => self
@@ -49,12 +54,12 @@ impl qobject::DownloadsData {
         }
         let failed = done.note.is_err();
         let said = match done.note {
-            Ok(kept) => {
-                let said = in_words(&kept);
-                app.note(kept, String::new());
+            Ok(did) => {
+                let said = crate::words::put(&did);
+                app.note(did, String::new());
                 said
             }
-            Err(problem) => problem.to_string(),
+            Err(problem) => crate::words::put(problem.sentence()),
         };
         self.as_mut().set_steamcmd(app.steamcmd().is_some());
         self.as_mut().set_updating(-1);

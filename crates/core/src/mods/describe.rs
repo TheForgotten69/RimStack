@@ -2,6 +2,7 @@
 //! a rule, what a mod's code is about. Plain sentences and short labels;
 //! how they are shown is the window's business.
 
+use crate::base::sentence::Sentence;
 use crate::base::translate::named;
 use crate::mods::checks::{self, Problem};
 use crate::mods::library::Library;
@@ -19,9 +20,9 @@ use std::collections::HashSet;
 pub struct Trouble {
     /// Whether it stops the game from working as intended.
     pub error: bool,
-    pub words: String,
+    pub words: Sentence,
     /// A few words for the row.
-    pub short: String,
+    pub short: Sentence,
     pub fix: Fix,
 }
 
@@ -264,19 +265,19 @@ pub fn troubles(
     all
 }
 
-/// What the code of a mod is about, in a line; empty for a mod with no
-/// code read.
-pub fn code(facts: &Facts) -> String {
+/// What the code of a mod is about, a line for its types and one for
+/// its patches; none for a mod with no code read.
+pub fn code(facts: &Facts) -> Vec<Sentence> {
     if facts.types == 0 {
-        return String::new();
+        return Vec::new();
     }
     // Only what there is some of: a line of zeroes says nothing.
-    let some = |count: usize, said: String| (count > 0).then_some(said);
-    let with = |counted: String, each: [Option<String>; 3]| {
-        let each: Vec<String> = each.into_iter().flatten().collect();
+    let some = |count: usize, said: Sentence| (count > 0).then_some(said);
+    let with = |counted: Sentence, each: [Option<Sentence>; 3]| {
+        let each: Vec<Sentence> = each.into_iter().flatten().collect();
         match each.is_empty() {
             true => counted,
-            false => say!("{}: {}", counted, each.join(", ")),
+            false => say!("{}: {}", counted.inside(), Sentence::listed(each).inside()),
         }
     };
     let types = [
@@ -297,7 +298,7 @@ pub fn code(facts: &Facts) -> String {
         let patched = say_n!(facts.patches, "{} patched method", "{} patched methods");
         parts.push(with(patched, aimed));
     }
-    parts.join("\n")
+    parts
 }
 
 /// For each of a mod's patched methods, the other mods that patch it
@@ -321,52 +322,58 @@ pub fn also_patching(mine: &[Aim], others: &[(&str, &[Aim])]) -> Vec<Vec<String>
 /// game runs the method, what the patch does to it, and the other mods
 /// in `also` that patch it too; those methods come first. At most
 /// `most`, then a line saying how many are left out.
-pub fn aims(aims: &[Aim], also: &[Vec<String>], most: usize) -> Vec<(String, String)> {
+pub fn aims(aims: &[Aim], also: &[Vec<String>], most: usize) -> Vec<(Sentence, Sentence)> {
     let note = |aim: &Aim, others: &[String]| {
         let when = match aim.when {
-            Some(When::Playing) => say!("while playing"),
-            Some(When::Interface) => say!("interface"),
-            Some(When::Loading) => say!("loading"),
-            None => String::new(),
+            Some(When::Playing) => Some(say!("while playing")),
+            Some(When::Interface) => Some(say!("interface")),
+            Some(When::Loading) => Some(say!("loading")),
+            None => None,
         };
+        // Harmony's own names for what a patch does: not put in words.
         let does = [
             (aim.does.prefix, "prefix"),
             (aim.does.postfix, "postfix"),
             (aim.does.transpiler, "transpiler"),
             (aim.does.finalizer, "finalizer"),
         ];
-        let does = does.iter().filter(|d| d.0).map(|d| d.1.to_string());
-        let parts: Vec<String> = std::iter::once(when).chain(does).collect();
-        let said: Vec<String> = parts.into_iter().filter(|p| !p.is_empty()).collect();
+        let does = does.iter().filter(|d| d.0).map(|d| Sentence::from(d.1));
+        let said = Sentence::listed(when.into_iter().chain(does).collect());
         match others.is_empty() {
-            true => said.join(", "),
-            false => say!("{}; also {}", said.join(", "), others.join(", ")),
+            true => said,
+            false => {
+                let others = Sentence::listed(others.iter().map(|o| o.as_str().into()).collect());
+                say!("{}; also {}", said.inside(), others.inside())
+            }
         }
     };
     let none = Vec::new();
     let others = |at: usize| also.get(at).unwrap_or(&none);
     let mut order: Vec<usize> = (0..aims.len()).collect();
     order.sort_by_key(|&at| others(at).is_empty());
-    let mut lines: Vec<(String, String)> = order
+    let mut lines: Vec<(Sentence, Sentence)> = order
         .iter()
         .take(most)
         .map(|&at| {
             let aim = &aims[at];
             let name = match aim.target.is_empty() {
                 true => say!("Target named in code"),
-                false => format!("{}.{}", aim.target, aim.method),
+                false => Sentence::Plain(format!("{}.{}", aim.target, aim.method)),
             };
             (name, note(aim, others(at)))
         })
         .collect();
     if aims.len() > most {
-        lines.push((say!("{} more", aims.len() - most), String::new()));
+        lines.push((
+            say!("{} more", aims.len() - most),
+            Sentence::listed(Vec::new()),
+        ));
     }
     lines
 }
 
 /// A rule in words, for the note about rules that contradict each other.
-pub fn rule(rule: &Rule, mods: &[Mod]) -> String {
+pub fn rule(rule: &Rule, mods: &[Mod]) -> Sentence {
     let Some(by) = rule.declared_by() else {
         let (first, then) = (&mods[rule.first].name, &mods[rule.then].name);
         return match rule.kind {
@@ -404,8 +411,8 @@ mod tests {
     fn a_mod_is_warned_for_its_version_when_one_of_its_problems_is_trusted_away() {
         let trouble = |fix| Trouble {
             error: false,
-            words: String::new(),
-            short: String::new(),
+            words: Sentence::default(),
+            short: Sentence::default(),
             fix,
         };
         assert!(warned_for_version(&[
@@ -453,9 +460,14 @@ mod tests {
             Versions::CheckedBut(&HashSet::new()),
             &Names::new(),
         );
+        let said: Vec<(String, String)> = found[0]
+            .iter()
+            .map(|t| (t.words.to_string(), t.short.to_string()))
+            .collect();
         let old: Vec<(bool, &str, &str, &Fix)> = found[0]
             .iter()
-            .map(|t| (t.error, t.words.as_str(), t.short.as_str(), &t.fix))
+            .zip(&said)
+            .map(|(t, (words, short))| (t.error, words.as_str(), short.as_str(), &t.fix))
             .collect();
         assert_eq!(
             old,
@@ -475,7 +487,7 @@ mod tests {
             ]
         );
         assert!(found[1].is_empty());
-        assert_eq!(found[2][0].short, "Not installed");
+        assert_eq!(found[2][0].short.to_string(), "Not installed");
         assert_eq!(found[2][0].fix, Fix::Search("not.here".to_string()));
     }
 
@@ -529,8 +541,8 @@ mod tests {
     fn problems_are_counted_by_what_solves_them() {
         let trouble = |error: bool, fix: Fix| Trouble {
             error,
-            words: String::new(),
-            short: String::new(),
+            words: Sentence::default(),
+            short: Sentence::default(),
             fix,
         };
         let needs = |id: &str| trouble(true, Fix::Activate(id.to_string()));
@@ -558,7 +570,7 @@ mod tests {
             &none,
         );
         assert_eq!(found[0].len(), 1);
-        assert!(found[0][0].error && found[0][0].short == "Missing gone.lib");
+        assert!(found[0][0].error && found[0][0].short.to_string() == "Missing gone.lib");
         let found = troubles(&library, &library.active, Versions::Ignored, &none);
         assert_eq!(found[0].len(), 1);
         let ignored = version_ignored(&library, &library.active, Versions::Ignored);
@@ -573,7 +585,7 @@ mod tests {
         let known: Names = [("gone.lib".to_string(), item)].into();
         let found = troubles(&library, &library.active, Versions::Ignored, &known);
         assert_eq!(
-            found[0][0].words,
+            found[0][0].words.to_string(),
             "Needs Gone Library, which is not installed."
         );
         assert_eq!(found[0][0].fix, Fix::Subscribe("42".to_string()));
@@ -581,7 +593,16 @@ mod tests {
 
     #[test]
     fn code_and_rules_read_as_plain_lines() {
-        assert_eq!(code(&Facts::default()), "");
+        let code = |facts: &Facts| -> Vec<String> {
+            code(facts).iter().map(Sentence::to_string).collect()
+        };
+        let aims = |aims_of: &[Aim], also: &[Vec<String>], most: usize| -> Vec<(String, String)> {
+            aims(aims_of, also, most)
+                .iter()
+                .map(|(name, note)| (name.to_string(), note.to_string()))
+                .collect()
+        };
+        assert!(code(&Facts::default()).is_empty());
         let facts = Facts {
             types: 1,
             drawing: 1,
@@ -591,7 +612,7 @@ mod tests {
         };
         assert_eq!(
             code(&facts),
-            "1 type: 1 drawing\n2 patched methods: 1 while playing"
+            ["1 type: 1 drawing", "2 patched methods: 1 while playing"]
         );
         let aim = |method: &str, when, prefix| Aim {
             target: "Verse.Pawn".into(),
@@ -670,12 +691,18 @@ mod tests {
             then: 0,
             kind: Kind::LoadAfter,
         };
-        assert_eq!(rule(&stated, mods), "Old asks to load after Fine");
+        assert_eq!(
+            rule(&stated, mods).to_string(),
+            "Old asks to load after Fine"
+        );
         let yours = Rule {
             first: 1,
             then: 0,
             kind: Kind::Yours,
         };
-        assert_eq!(rule(&yours, mods), "your rule puts Fine before Old");
+        assert_eq!(
+            rule(&yours, mods).to_string(),
+            "your rule puts Fine before Old"
+        );
     }
 }

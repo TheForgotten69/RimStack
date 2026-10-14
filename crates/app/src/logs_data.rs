@@ -182,7 +182,7 @@ impl qobject::LogsData {
                         }
                         (Some(report), QString::default())
                     }
-                    Err(problem) => (None, QString::from(&problem.to_string())),
+                    Err(problem) => (None, crate::words::said_of(&problem)),
                 };
                 me.as_mut().rust_mut().get_mut().report = report;
                 me.as_mut().set_problem(problem);

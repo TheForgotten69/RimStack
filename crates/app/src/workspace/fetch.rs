@@ -3,26 +3,27 @@
 
 use super::App;
 use rimstack_core::base::error::{Error, Result};
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::library::ModId;
 use rimstack_core::sources::{git, redownload};
-use rimstack_core::{keep, said};
+use rimstack_core::{said, say};
 use std::path::PathBuf;
 
 /// How a task ended.
 pub struct Done {
-    /// What it did, kept as `translate::kept` writes it, or why it changed nothing.
-    pub note: Result<String>,
+    /// What it did, or why it changed nothing.
+    pub note: Result<Sentence>,
     /// It changed a mod's folder on disk.
     pub wrote: bool,
 }
 
 impl Done {
-    fn told(note: Result<String>) -> Self {
+    fn told(note: Result<Sentence>) -> Self {
         Self { note, wrote: false }
     }
 
     /// For a task that changes a mod's folder unless it fails.
-    fn of_a_write(note: Result<String>) -> Self {
+    fn of_a_write(note: Result<Sentence>) -> Self {
         Self {
             wrote: note.is_ok(),
             note,
@@ -80,9 +81,9 @@ impl App {
         });
         Done::told(match ran {
             Ok(out) if out.status.success() && what == SteamAsk::Download => {
-                Ok(keep!("Steam was asked to update {}", ids.len()))
+                Ok(say!("Steam was asked to update {}", ids.len()))
             }
-            Ok(out) if out.status.success() => Ok(keep!("Steam was asked about {}", ids.len())),
+            Ok(out) if out.status.success() => Ok(say!("Steam was asked about {}", ids.len())),
             Ok(out) => Err(Error::program(said!(
                 "Steam was not asked: {}",
                 String::from_utf8_lossy(&out.stderr).trim()
@@ -102,7 +103,7 @@ impl App {
             self.checkout_updated(&folder);
         }
         Done::of_a_write(match updated {
-            Ok(commit) => Ok(keep!("Updated {}: {}", name, commit)),
+            Ok(commit) => Ok(say!("Updated {}: {}", name, commit)),
             Err(problem) => Err(Error::new(
                 problem.kind(),
                 said!("Not updated: {}", problem.within()),
@@ -116,7 +117,7 @@ impl App {
             return Done::told(Err(Error::refused(said!("The game's folder is not known"))));
         };
         Done::of_a_write(match git::clone(link, &mods) {
-            Ok(into) => Ok(keep!("Cloned {} into {}", link, into.display())),
+            Ok(into) => Ok(say!("Cloned {} into {}", link, into.display())),
             Err(problem) => Err(Error::new(
                 problem.kind(),
                 said!("Not cloned: {}", problem.within()),
@@ -129,7 +130,7 @@ impl App {
         Done::told(match redownload::install(self.data_dir()) {
             Ok(_) => {
                 self.look_for_steamcmd();
-                Ok(keep!("SteamCMD installed"))
+                Ok(say!("SteamCMD installed"))
             }
             Err(problem) => Err(Error::new(
                 problem.kind(),
@@ -163,7 +164,7 @@ impl App {
         Done {
             wrote: failed.len() < outcomes.len(),
             note: match failed.first() {
-                None => Ok(keep!("{} downloaded", outcomes.len())),
+                None => Ok(say!("{} downloaded", outcomes.len())),
                 Some(first) => Err(Error::new(
                     first.kind(),
                     said!(
@@ -195,7 +196,7 @@ impl App {
             redownload::replace(&folder, &fresh)
         });
         Done::of_a_write(match done {
-            Ok(()) => Ok(keep!("Downloaded again")),
+            Ok(()) => Ok(say!("Downloaded again")),
             Err(problem) => Err(Error::new(
                 problem.kind(),
                 said!("Not downloaded again: {}", problem.within()),

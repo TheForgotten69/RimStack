@@ -6,15 +6,14 @@ use crate::workspace::load_order::Side;
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QVariant};
-use rimstack_core::base::translate::{kept, named};
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::library::ModId;
 use rimstack_core::{say, say_n};
-use serde_json::json;
 
 impl qobject::ModsData {
-    fn done_said(mut self: Pin<&mut Self>, said: String) {
+    fn done_said(mut self: Pin<&mut Self>, said: Sentence) {
         if self.records {
-            self.as_mut().done(QString::from(&said));
+            self.as_mut().done(crate::words::said(&said));
         }
     }
 
@@ -158,13 +157,12 @@ impl qobject::ModsData {
         self.as_mut().order_mut().use_list(&app, ids);
         self.as_mut().changed();
         if keep {
-            let taken = json!([
-                "#",
+            let taken = say_n!(
                 count,
-                named("Another list taken: {} mod"),
-                named("Another list taken: {} mods")
-            ]);
-            app.note_change(taken.to_string(), before.as_deref());
+                "Another list taken: {} mod",
+                "Another list taken: {} mods"
+            );
+            app.note_change(taken, before.as_deref());
             let said = say_n!(count, "Using a list of {} mod", "Using a list of {} mods");
             self.done_said(said);
         }
@@ -176,23 +174,16 @@ impl qobject::ModsData {
         }
         let app = self.app();
         let records = self.records;
-        let changes = app.session().changes().kept();
+        let changes = app.session().changes().said();
         let before = records
             .then(|| app.snapshot("@saving", app.session().saved()))
             .flatten();
         let saved = self.as_mut().order_mut().save(&app);
-        let problem = saved
-            .as_ref()
-            .err()
-            .map(ToString::to_string)
-            .unwrap_or_default();
-        self.as_mut().set_save_problem(QString::from(&problem));
+        self.as_mut()
+            .set_save_problem(crate::words::why_not(&saved));
         if saved.is_ok() && records {
-            let changes: serde_json::Value = serde_json::from_str(&changes).unwrap_or_default();
-            app.note_change(
-                kept(named("Saved the load order: {}"), &[changes]),
-                before.as_deref(),
-            );
+            let saved = say!("Saved the load order: {}", changes.inside());
+            app.note_change(saved, before.as_deref());
         }
         self.changed();
         saved.is_ok()
@@ -224,18 +215,9 @@ impl qobject::ModsData {
         self.as_mut().order_mut().keep_sort(&app);
         self.as_mut().changed();
         if self.records {
-            let sorted = json!([
-                "#",
-                moves,
-                named("Sorted: {} mod moved"),
-                named("Sorted: {} mods moved")
-            ]);
-            app.note_change(sorted.to_string(), before.as_deref());
-            self.done_said(say_n!(
-                moves,
-                "Sorted: {} mod moved",
-                "Sorted: {} mods moved"
-            ));
+            let sorted = say_n!(moves, "Sorted: {} mod moved", "Sorted: {} mods moved");
+            app.note_change(sorted.clone(), before.as_deref());
+            self.done_said(sorted);
         }
     }
 
@@ -298,7 +280,7 @@ impl qobject::ModsData {
         self.as_mut().order_mut().sync(&app);
         self.as_mut().show();
         let said = say_n!(ids.len(), "Tagged {} mod: {}", "Tagged {} mods: {}", tag);
-        self.told(QString::from(&said), QString::from("ok"));
+        self.told(crate::words::said(&said), QString::from("ok"));
     }
 
     pub(super) fn group(mut self: Pin<&mut Self>, given: &QVariant, name: &QString) {
@@ -417,12 +399,8 @@ impl qobject::ModsData {
             return;
         };
         let binned = self.app().bin_mod(id);
-        let problem = binned
-            .as_ref()
-            .err()
-            .map(ToString::to_string)
-            .unwrap_or_default();
-        self.as_mut().set_upkeep_problem(QString::from(&problem));
+        self.as_mut()
+            .set_upkeep_problem(crate::words::why_not(&binned));
         if binned.is_ok() {
             self.rescan();
         }
@@ -437,9 +415,9 @@ impl qobject::ModsData {
         crate::jobs::run(
             "copy to the game folder",
             self.qt_thread(),
-            move || app.copy_to_local(id).err().map(|e| e.to_string()),
+            move || app.copy_to_local(id).err(),
             |mut me, problem| match problem {
-                Some(problem) => me.set_upkeep_problem(QString::from(&problem)),
+                Some(problem) => me.set_upkeep_problem(crate::words::said_of(&problem)),
                 None => me.as_mut().rescan(),
             },
         );

@@ -154,7 +154,7 @@ macro_rules! note {
     ($($part:tt)+) => {
         $crate::base::diagnostics::note(
             $crate::base::diagnostics::Level::Note,
-            &$crate::base::translate::in_english(|| format!($($part)+)),
+            &format!($($part)+),
         )
     };
 }
@@ -166,7 +166,7 @@ macro_rules! problem {
     ($($part:tt)+) => {
         $crate::base::diagnostics::note(
             $crate::base::diagnostics::Level::Problem,
-            &$crate::base::translate::in_english(|| format!($($part)+)),
+            &format!($($part)+),
         )
     };
 }

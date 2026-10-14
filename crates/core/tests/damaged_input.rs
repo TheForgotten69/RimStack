@@ -7,8 +7,8 @@
 use rimstack_core::mods::list::{Category, GroupedList, Mod};
 use rimstack_core::mods::rules::{Kind, Rule};
 use rimstack_core::{
-    base::markup, base::translate, base::vdf, kept::notes, kept::owntheme, mods::community,
-    mods::ddsaudit, mods::share, mods::sort, rimworld::about, rimworld::dotnet,
+    base::markup, base::sentence::Language, base::vdf, kept::notes, kept::owntheme,
+    mods::community, mods::ddsaudit, mods::share, mods::sort, rimworld::about, rimworld::dotnet,
     rimworld::loadfolders, rimworld::logs, rimworld::modsconfig, rimworld::rimsaves,
     rimworld::steamworks, rimworld::workshop, sources::changes,
 };
@@ -356,20 +356,20 @@ fn a_contradiction_among_many_rules_still_sorts_in_reasonable_time() {
 /// It sets that global, which the other probes here share while they
 /// run: none of them reads a sentence, so it is left to run with them.
 #[test]
-fn an_error_is_a_sentence_in_whatever_language_is_set_for_the_process() {
-    let not_dds = b"PNG....";
-    assert_eq!(
-        ddsaudit::problem(not_dds, 7).as_deref(),
-        Some("not a DDS file")
-    );
-    let french = [(
-        "not a DDS file".to_string(),
-        "pas un fichier DDS".to_string(),
-    )];
-    translate::set(french.into_iter().collect());
-    assert_eq!(
-        ddsaudit::problem(not_dds, 7).as_deref(),
-        Some("pas un fichier DDS")
-    );
-    translate::set(Default::default());
+fn an_error_is_a_sentence_put_in_whatever_language_shows_it() {
+    struct French;
+    impl Language for French {
+        fn word<'a>(&'a self, english: &'a str) -> &'a str {
+            match english {
+                "not a DDS file" => "pas un fichier DDS",
+                other => other,
+            }
+        }
+        fn plural_rule(&self) -> &str {
+            "0 1"
+        }
+    }
+    let said = ddsaudit::problem(b"PNG....", 7).unwrap();
+    assert_eq!(said.to_string(), "not a DDS file");
+    assert_eq!(said.put(&French), "pas un fichier DDS");
 }

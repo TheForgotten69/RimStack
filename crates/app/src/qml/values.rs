@@ -2,15 +2,34 @@
 //! reads as a JavaScript object or array, and the other way round.
 
 use cxx_qt_lib::{QList, QMap, QMapPair_QString_QVariant, QMetaTypeType, QString, QVariant};
+use rimstack_core::base::sentence::{Sentence, MARK};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{Map, Number, Value};
 
 pub fn to_qml(value: &impl Serialize) -> QVariant {
+    from_value(&as_shown(value))
+}
+
+/// A value as QML is given it: each sentence in it put in the words of
+/// the language shown.
+pub fn as_shown(value: &impl Serialize) -> Value {
+    fn shown(value: Value) -> Value {
+        match value {
+            Value::Object(fields) if fields.len() == 1 && fields.contains_key(MARK) => {
+                Value::from(crate::words::put(&Sentence::from_kept_value(&fields[MARK])))
+            }
+            Value::Object(fields) => {
+                Value::Object(fields.into_iter().map(|(k, v)| (k, shown(v))).collect())
+            }
+            Value::Array(items) => Value::Array(items.into_iter().map(shown).collect()),
+            other => other,
+        }
+    }
     match serde_json::to_value(value) {
-        Ok(value) => from_value(&value),
+        Ok(value) => shown(value),
         Err(problem) => {
             rimstack_core::problem!("not given to the window: {problem}");
-            QVariant::default()
+            Value::Null
         }
     }
 }

@@ -30,7 +30,7 @@ fn the_two_lists_are_the_load_order_and_the_rest() {
     };
     assert_eq!(ids(Side::Active), ["ludeon.rimworld"]);
     assert_eq!(ids(Side::Inactive), ["ann.roads"]);
-    assert!(order.status[0].contains('1'));
+    assert!(order.status[0].to_string().contains('1'));
 }
 
 #[test]
@@ -92,7 +92,10 @@ fn every_row_has_a_key_of_its_own_and_a_mod_row_its_id() {
     let rows = order.rows(&app, Side::Active);
     let keys: std::collections::HashSet<_> = rows.iter().map(|r| r.key.clone()).collect();
     assert_eq!(keys.len(), rows.len());
-    let roads = rows.iter().find(|r| r.name == "Ann.Roads").unwrap();
+    let roads = rows
+        .iter()
+        .find(|r| r.name.to_string() == "Ann.Roads")
+        .unwrap();
     assert!(roads.mod_id >= 0 && roads.number == 2 && roads.trouble > 0);
 }
 

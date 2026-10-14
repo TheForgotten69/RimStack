@@ -4,7 +4,7 @@
 use super::App;
 use crate::changes::Changes;
 use rimstack_core::base::error::Error;
-use rimstack_core::base::translate::in_words;
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::kept::{journal, lists};
 use rimstack_core::rimworld::modsconfig;
 use rimstack_core::say;
@@ -40,7 +40,7 @@ const MONTHS: [&[&str]; 12] = [
     &["dec", "déc", "dez"],
 ];
 
-fn before(kind: &str, when: &str) -> Option<String> {
+fn before(kind: &str, when: &str) -> Option<Sentence> {
     Some(match kind {
         "@saving" => say!("Before saving, {}", when),
         "@sorting" => say!("Before sorting, {}", when),
@@ -93,7 +93,7 @@ fn stamp(text: &str) -> String {
 }
 
 /// A snapshot's name in words: what it was taken before, and when.
-pub fn snapshot_title(name: &str) -> String {
+pub fn snapshot_title(name: &str) -> Sentence {
     let (kind, rest) = name.split_once(' ').unwrap_or((name, ""));
     if let Some(title) = before(kind, &stamp(rest)) {
         return title;
@@ -104,21 +104,21 @@ pub fn snapshot_title(name: &str) -> String {
             let rest = name.strip_prefix(english)?;
             before(kind, &stamp(rest))
         })
-        .unwrap_or_else(|| name.to_string())
+        .unwrap_or_else(|| Sentence::Plain(name.to_string()))
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub name: String,
-    pub title: String,
+    pub title: Sentence,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryLine {
     pub time: u64,
-    pub said: String,
+    pub said: Sentence,
     /// The snapshot that takes it back, if it is still kept.
     pub restore: String,
     /// The mod folder whose textures it set aside.
@@ -159,7 +159,7 @@ impl App {
                 let kept = |name: &str| snapshots.iter().any(|s| s == name);
                 HistoryLine {
                     time: entry.time,
-                    said: in_words(&entry.what),
+                    said: Sentence::from_kept(&entry.what),
                     restore: match how == "list" && kept(about) {
                         true => about.to_string(),
                         false => String::new(),
@@ -211,23 +211,21 @@ mod tests {
 
     #[test]
     fn a_snapshot_is_titled_by_its_kind_and_moment_whatever_version_named_it() {
+        let title = |name: &str| snapshot_title(name).to_string();
         assert_eq!(
-            snapshot_title("@sorting 2026-10-13 02.56.55"),
+            title("@sorting 2026-10-13 02.56.55"),
             "Before sorting, 2026-10-13 02:56"
         );
         assert_eq!(
-            snapshot_title("Before saving, 12 oct. 2026 20.17.39"),
+            title("Before saving, 12 oct. 2026 20.17.39"),
             "Before saving, 2026-10-12 20:17"
         );
         assert_eq!(
-            snapshot_title("@hunt 3 Mär 2025 08.05.00"),
+            title("@hunt 3 Mär 2025 08.05.00"),
             "Before finding the broken mod, 2025-03-03 08:05"
         );
-        assert_eq!(
-            snapshot_title("@list someday"),
-            "Before using another list, someday"
-        );
-        assert_eq!(snapshot_title("My own list"), "My own list");
+        assert_eq!(title("@list someday"), "Before using another list, someday");
+        assert_eq!(title("My own list"), "My own list");
     }
 
     #[test]
@@ -242,17 +240,18 @@ mod tests {
 
         let snapshot = app.snapshot("@saving", &["a.b".to_string()]).unwrap();
         app.note_change(
-            rimstack_core::keep!("Saved the load order: {}", "x"),
+            rimstack_core::say!("Saved the load order: {}", "x"),
             Some(&snapshot),
         );
-        app.note_change("[\"Set aside\"]".into(), None);
+        app.note(Sentence::from_kept("[\"Set aside\"]"), String::new());
         let history = app.history();
-        assert_eq!(history[0].said, "Set aside");
-        assert_eq!(history[1].said, "Saved the load order: x");
+        assert_eq!(history[0].said.to_string(), "Set aside");
+        assert_eq!(history[1].said.to_string(), "Saved the load order: x");
         assert_eq!(history[1].restore, snapshot);
         assert_eq!(app.recent_snapshots()[0].name, snapshot);
         assert!(app.recent_snapshots()[0]
             .title
+            .to_string()
             .starts_with("Before saving, 2"));
         assert_eq!(app.snapshot_named(&snapshot).unwrap(), ["a.b"]);
         assert_eq!(app.original_list(), None);

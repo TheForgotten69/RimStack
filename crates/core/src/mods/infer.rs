@@ -7,6 +7,7 @@
 //! That makes this a careful guess, which is why these rules are the
 //! weakest of all and each says which file it came from.
 
+use crate::base::sentence::Sentence;
 use crate::say;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -190,7 +191,7 @@ pub struct Inferred {
     pub first: usize,
     /// Loads after it: the mod that points.
     pub then: usize,
-    pub why: String,
+    pub why: Sentence,
     /// From compiled code: the game needs this order. Otherwise from
     /// patches and defs, which the game applies only after every mod's
     /// defs are loaded: a tidy order, not a need.
@@ -245,7 +246,7 @@ pub fn infer(
 
     let mut rules: Vec<Inferred> = Vec::new();
     let mut seen: HashSet<(usize, usize)> = HashSet::new();
-    let mut add = |first: usize, then: usize, why: String, code: bool| {
+    let mut add = |first: usize, then: usize, why: Sentence, code: bool| {
         if seen.insert((first, then)) {
             rules.push(Inferred {
                 first,
@@ -398,8 +399,11 @@ mod tests {
         );
         let pairs: Vec<(usize, usize)> = found.iter().map(|r| (r.first, r.then)).collect();
         assert_eq!(pairs, [(0, 1), (0, 2)]);
-        assert_eq!(found[0].why, "Patches/p.xml patches its Big_Bed");
-        assert_eq!(found[1].why, "Patches/p.xml has patches for it");
+        assert_eq!(
+            found[0].why.to_string(),
+            "Patches/p.xml patches its Big_Bed"
+        );
+        assert_eq!(found[1].why.to_string(), "Patches/p.xml has patches for it");
         assert!(found.iter().all(|r| !r.code));
     }
 
@@ -430,7 +434,10 @@ mod tests {
         let pairs: Vec<(usize, usize)> = found.iter().map(|r| (r.first, r.then)).collect();
         // "shared" is shipped by two mods, so it says nothing.
         assert_eq!(pairs, [(0, 1), (0, 3)]);
-        assert_eq!(found[0].why, "Assemblies/Mine.dll uses its code");
+        assert_eq!(
+            found[0].why.to_string(),
+            "Assemblies/Mine.dll uses its code"
+        );
         assert!(found.iter().all(|r| r.code));
     }
 

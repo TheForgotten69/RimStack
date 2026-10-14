@@ -7,6 +7,7 @@ use crate::changes::Changes;
 use crate::reports::{Database, LastLaunch, ReleaseSaid, SettingsReport, ShortContrast, Summary};
 use rimstack_core::base::error::Error;
 use rimstack_core::base::locks::Shared;
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::base::translate::named;
 use rimstack_core::kept::{owntheme, settings::Switch};
 use rimstack_core::mods::community;
@@ -221,20 +222,14 @@ impl App {
         rimstack_core::base::translate::table(shipped(name).unwrap_or_default(), &own)
     }
 
-    /// Has the sentences written in Rust said in the chosen language from
-    /// now on, and gives its table.
+    /// The chosen language's table.
     pub fn speak(&self) -> Map<String, Value> {
         let chosen = self
             .settings()
             .get("language")
             .unwrap_or_default()
             .to_string();
-        let words = self.language_table(&chosen);
-        let table = words
-            .iter()
-            .filter_map(|(english, said)| Some((english.clone(), said.as_str()?.to_string())));
-        rimstack_core::base::translate::set(table.collect());
-        words
+        self.language_table(&chosen)
     }
 
     /// Writes `languages/<name>.json` listing every text of the interface,
@@ -396,19 +391,19 @@ impl App {
 
     /// Copies your own rules from RimSort, if it is installed; says what
     /// happened.
-    pub fn import_rimsort_rules(&self) -> String {
+    pub fn import_rimsort_rules(&self) -> Sentence {
         let path = self.rimsort_rules_file();
         let read = std::fs::read_to_string(&path).map_err(|e| Error::file(&path, e));
         let pairs = match read.and_then(|text| Ok(community::parse(&text)?.pairs())) {
             Ok(pairs) => pairs,
-            Err(problem) => return problem.to_string(),
+            Err(problem) => return problem.sentence().clone(),
         };
         let mut yours = self.user_rules().writing();
         let added = yours.import(&pairs);
         let written = yours.write(&self.user_rules_file());
         drop(yours);
         match written {
-            Err(problem) => problem.to_string(),
+            Err(problem) => problem.sentence().clone(),
             Ok(()) if pairs.is_empty() => say!("RimSort has no rules of your own."),
             Ok(()) => {
                 self.publish(Changes::RULES | Changes::PROBLEMS);
@@ -424,7 +419,7 @@ impl App {
 
     /// Moves the settings every mod keeps out of the game's `Config`
     /// folder into a dated folder of RimStack's; says what happened.
-    pub fn set_mod_settings_aside(&self) -> String {
+    pub fn set_mod_settings_aside(&self) -> Sentence {
         let paths = self.paths();
         let Some(config) = paths.config.as_ref() else {
             return say!("The game's settings folder is not known");
@@ -440,7 +435,7 @@ impl App {
                 "{} files moved to {}",
                 aside.display()
             ),
-            Err(problem) => problem.to_string(),
+            Err(problem) => problem.sentence().clone(),
         }
     }
 }
@@ -469,7 +464,7 @@ pub fn newest_release() -> ReleaseSaid {
         }
         Ok(_) => ReleaseSaid::Latest {},
         Err(problem) => ReleaseSaid::Failed {
-            problem: problem.to_string(),
+            problem: problem.sentence().clone(),
         },
     }
 }
@@ -555,6 +550,6 @@ mod tests {
     fn rimsort_rules_missing_say_why() {
         let (_tmp, app) = installed();
         let said = app.import_rimsort_rules();
-        assert!(said.contains("userRules.json"), "{said}");
+        assert!(said.to_string().contains("userRules.json"), "{said}");
     }
 }

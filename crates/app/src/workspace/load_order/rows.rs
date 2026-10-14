@@ -3,10 +3,12 @@
 
 use super::{side_index, LoadOrder, Side};
 use crate::App;
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::describe::{Fix, Trouble};
 use rimstack_core::mods::library::{Library, ModId};
 use rimstack_core::mods::list::{Category, Mod, Row};
 use rimstack_core::rimworld::paths::Source;
+use rimstack_core::say;
 use std::collections::HashMap;
 
 /// What tells one row from every other, whatever its place: a heading
@@ -26,7 +28,7 @@ pub struct RowView {
     pub is_sub: bool,
     /// A heading of a category, or a group, that also stands further up.
     pub again: bool,
-    pub name: String,
+    pub name: Sentence,
     pub author: String,
     pub version: String,
     /// The mod's number in the load order, from 1; 0 for a heading.
@@ -45,7 +47,7 @@ pub struct RowView {
     pub trouble: i32,
     /// Its only trouble is the game version it lists.
     pub trouble_quiet: bool,
-    pub trouble_text: String,
+    pub trouble_text: Sentence,
     pub tags: String,
     pub local: bool,
     pub picture: String,
@@ -56,7 +58,7 @@ pub struct RowView {
     pub fresh: bool,
     /// 0 Workshop, 1 local, 2 a Git checkout, 3 the game's own.
     pub source: i32,
-    pub why_moved: String,
+    pub why_moved: Sentence,
     /// Every mod of a group, wherever in the category it is.
     pub group_size: i32,
     /// Another mod of this list goes by the same name.
@@ -70,7 +72,7 @@ impl RowView {
             is_header: true,
             is_sub: false,
             again: false,
-            name: name.to_string(),
+            name: Sentence::Plain(name.to_string()),
             author: String::new(),
             version: String::new(),
             number: 0,
@@ -82,7 +84,7 @@ impl RowView {
             moved_from: 0,
             trouble: 0,
             trouble_quiet: false,
-            trouble_text: String::new(),
+            trouble_text: Sentence::default(),
             tags: String::new(),
             local: false,
             picture: String::new(),
@@ -91,7 +93,7 @@ impl RowView {
             version_ignored: false,
             fresh: false,
             source: 0,
-            why_moved: String::new(),
+            why_moved: Sentence::default(),
             group_size: 0,
             twin: false,
         }
@@ -213,7 +215,10 @@ impl LoadOrder {
             is_header: false,
             is_sub: false,
             again: false,
-            name: m.name.clone(),
+            name: match m.installed {
+                Some(_) => Sentence::Plain(m.name.clone()),
+                None => say!("{} (not installed)", m.name),
+            },
             author: m.author.clone(),
             version: m.version.clone(),
             number: index as i32 + 1,
@@ -233,7 +238,7 @@ impl LoadOrder {
                 .max()
                 .unwrap_or(0),
             trouble_quiet: !own.is_empty() && own.iter().all(|t| t.fix == Fix::Trust),
-            trouble_text: first.map_or(String::new(), |t| t.short.clone()),
+            trouble_text: first.map_or_else(Sentence::default, |t| t.short.clone()),
             tags: m.tags.join(", "),
             local: m.local,
             picture,
@@ -243,9 +248,9 @@ impl LoadOrder {
             fresh: m.installed.is_some_and(|i| fresh.contains(&i)),
             source,
             why_moved: if preview {
-                self.why_moved(index).to_string()
+                self.why_moved(index).cloned().unwrap_or_default()
             } else {
-                String::new()
+                Sentence::default()
             },
             group_size: 0,
             twin: self.twins[side_index(side)]

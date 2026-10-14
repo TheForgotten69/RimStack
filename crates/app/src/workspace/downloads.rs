@@ -5,6 +5,7 @@
 use super::App;
 use rimstack_core::base::error::Error;
 use rimstack_core::base::locks::Shared;
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::kept::settings::Switch;
 use rimstack_core::kept::updates::{self, LastCheck, Remote};
 use rimstack_core::mods::library::{Installed, Library, ModId};
@@ -26,7 +27,7 @@ pub struct Checkout {
     /// It was asked at the last check.
     pub checked: bool,
     pub behind: Option<u64>,
-    pub problem: Option<String>,
+    pub problem: Option<Sentence>,
 }
 
 impl Checkout {
@@ -43,7 +44,7 @@ pub struct Updates {
     pub items: Vec<Behind>,
     pub checkouts: Vec<Checkout>,
     /// Why Steam was not asked this time; what it said before stands.
-    pub problem: Option<String>,
+    pub problem: Option<Sentence>,
 }
 
 #[derive(Serialize)]
@@ -59,7 +60,7 @@ pub struct BehindShown<'a> {
 #[serde(rename_all = "camelCase")]
 pub struct UpdatesShown<'a> {
     pub checked: Option<u64>,
-    pub problem: Option<&'a str>,
+    pub problem: Option<&'a Sentence>,
     pub count: usize,
     pub active: Vec<BehindShown<'a>>,
     pub inactive: Vec<BehindShown<'a>>,
@@ -80,7 +81,7 @@ pub fn updates_shown<'a>(updates: &'a Updates, asked: &HashSet<String>) -> Updat
     };
     UpdatesShown {
         checked: updates.checked,
-        problem: updates.problem.as_deref(),
+        problem: updates.problem.as_ref(),
         count: updates.items.len(),
         active: shown(true),
         inactive: shown(false),
@@ -95,7 +96,7 @@ pub struct Queue {
     pub items: Vec<Asked>,
     pub repositories: Vec<Repository>,
     /// Said when nothing in the text was a Workshop link.
-    pub note: Option<String>,
+    pub note: Option<Sentence>,
     /// The Workshop ids found and not installed.
     pub wanted: Vec<String>,
 }
@@ -134,7 +135,7 @@ impl App {
                 kept.now = now.iter().map(|d| (d.id.clone(), d.updated)).collect();
                 None
             }
-            Err(problem) => Some(problem.to_string()),
+            Err(problem) => Some(problem.sentence().clone()),
         };
         kept.checkouts = self.checkouts_asked(library);
         self.keep_check(&kept);
@@ -209,9 +210,10 @@ impl App {
                         behind: Some(count as u64),
                         problem: None,
                     },
+                    // Kept as a sentence, put in words when it is shown.
                     Err(problem) => Remote {
                         behind: None,
-                        problem: Some(problem.to_string()),
+                        problem: Some(problem.sentence().to_kept().to_string()),
                     },
                 };
                 (m.path.to_string_lossy().into_owned(), said)
@@ -231,7 +233,7 @@ impl App {
                     workshop: m.source == Source::Workshop,
                     checked: said.is_some(),
                     behind: said.and_then(|s| s.behind),
-                    problem: said.and_then(|s| s.problem.clone()),
+                    problem: said.and_then(|s| s.problem.as_deref().map(Sentence::from_kept)),
                 }
             })
             .collect()
@@ -246,7 +248,7 @@ impl App {
         if ids.is_empty() {
             let note = match repositories.is_empty() {
                 true => say!("No Workshop link, mod id or Git link found"),
-                false => String::new(),
+                false => Sentence::default(),
             };
             return Ok(Queue {
                 repositories,
@@ -347,7 +349,7 @@ mod tests {
             (row.checked, row.behind, row.workshop),
             (true, Some(2), false)
         );
-        assert_eq!(serde_json::to_value(row).unwrap()["modId"], id.to_qml());
+        assert_eq!(crate::qml::values::as_shown(&row)["modId"], id.to_qml());
         drop(loaded);
 
         app.checkout_updated(&roads);

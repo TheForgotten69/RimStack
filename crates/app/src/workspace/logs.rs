@@ -3,6 +3,7 @@
 
 use super::App;
 use rimstack_core::base::error::Error;
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::kept::launches::{self, LastStart, LogRead, Shown, SinceClean};
 use rimstack_core::mods::blame::{Blamed, Pointed};
 use rimstack_core::mods::library::ModId;
@@ -40,7 +41,7 @@ pub struct LogsReport {
 
 /// A launch's outcome in words: its kinds of error, or that its log was
 /// not read.
-pub fn outcome(errors: Option<usize>) -> String {
+pub fn outcome(errors: Option<usize>) -> Sentence {
     match errors {
         None => say!("Not read"),
         Some(0) => say!("Clean"),
@@ -57,20 +58,21 @@ pub struct Head<'a> {
     pub written: u64,
     pub lines: usize,
     /// The game's version and the log's length.
-    pub about: String,
+    pub about: Sentence,
     /// Said when only the first lines are shown.
-    pub cut: String,
-    pub outcome: String,
+    pub cut: Sentence,
+    pub outcome: Sentence,
     pub errors: usize,
     pub outside: bool,
 }
 
 pub fn head(report: &LogsReport) -> Head<'_> {
     let lines = say_n!(report.lines, "{} line", "{} lines");
-    let about = match &report.version {
-        Some(version) => format!("RimWorld {version}, {lines}"),
-        None => lines,
-    };
+    let version = report
+        .version
+        .as_ref()
+        .map(|v| Sentence::Plain(format!("RimWorld {v}")));
+    let about = Sentence::listed(version.into_iter().chain([lines]).collect());
     let shown = report.text.len();
     let cut = match report.lines > shown {
         true => say_n!(
@@ -79,7 +81,7 @@ pub fn head(report: &LogsReport) -> Head<'_> {
             "{} lines, the first {} shown",
             shown
         ),
-        false => String::new(),
+        false => Sentence::default(),
     };
     Head {
         previous: report.previous,
@@ -100,7 +102,7 @@ pub fn head(report: &LogsReport) -> Head<'_> {
 pub struct LaunchShown<'a> {
     #[serde(flatten)]
     pub launch: &'a Shown,
-    pub outcome: String,
+    pub outcome: Sentence,
 }
 
 pub fn launches(report: &LogsReport) -> Vec<LaunchShown<'_>> {
@@ -429,19 +431,19 @@ mod tests {
         launches::record(&app.launches_file(), &["ludeon.rimworld".to_string()], 1).unwrap();
         let (report, changed) = app.logs_report(false, None).unwrap();
         assert!(changed);
-        let errors = serde_json::to_value(listed(&report.errors, "", &HashSet::new())).unwrap();
+        let errors = crate::qml::values::as_shown(&listed(&report.errors, "", &HashSet::new()));
         assert_eq!(errors[0]["count"], 2);
         assert_eq!(errors[0]["mod"], "Ann.Roads");
         assert_eq!(errors[0]["kind"], "Could not load texture for Ann.Roads");
         assert_eq!(
-            serde_json::to_value(&report.culprits).unwrap()[0]["times"],
+            crate::qml::values::as_shown(&report.culprits)[0]["times"],
             2
         );
-        let shown = serde_json::to_value(launches(&report)).unwrap();
+        let shown = crate::qml::values::as_shown(&launches(&report));
         assert_eq!(shown[0]["errors"], 1);
         assert_eq!(shown[0]["added"], 1);
         assert_eq!(shown[0]["outcome"], "1 error");
-        let said = serde_json::to_value(head(&report)).unwrap();
+        let said = crate::qml::values::as_shown(&head(&report));
         assert_eq!(said["about"], "RimWorld 1.6.4871 rev600, 4 lines");
         assert_eq!(said["outside"], true);
         assert_eq!(said["cut"], "");

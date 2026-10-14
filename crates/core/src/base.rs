@@ -12,6 +12,7 @@ pub mod markup;
 pub mod path_text;
 pub mod program;
 pub mod reread;
+pub mod sentence;
 pub mod translate;
 pub mod vdf;
 pub mod walk;

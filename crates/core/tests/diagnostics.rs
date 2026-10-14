@@ -2,7 +2,7 @@
 //! of its own.
 
 use rimstack_core::base::error::Error;
-use rimstack_core::{base::diagnostics, base::translate, note, problem, said};
+use rimstack_core::{base::diagnostics, note, problem, said};
 
 #[test]
 fn notes_problems_and_a_panic_on_another_thread_are_all_in_the_file() {
@@ -13,16 +13,9 @@ fn notes_problems_and_a_panic_on_another_thread_are_all_in_the_file() {
     diagnostics::record_panics();
     note!("scan_ms={}", 12);
     problem!("{}: denied", "notes.json");
-    // In French on screen, in English in the record.
-    let french = [(
-        "{} is not a setting".to_string(),
-        "{} n'est pas un réglage".to_string(),
-    )];
-    translate::set(french.into_iter().collect());
+    // In English in the record, whatever the language on screen.
     let refused = Error::refused(said!("{} is not a setting", "gameDir"));
-    assert_eq!(refused.to_string(), "gameDir n'est pas un réglage");
     problem!("{refused}");
-    translate::set(Default::default());
     let crashed = std::thread::spawn(|| {
         let rows: Vec<u8> = Vec::new();
         rows[3]

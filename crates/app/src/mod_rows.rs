@@ -148,6 +148,7 @@ use cxx_qt::CxxQtType;
 use cxx_qt_lib::{
     QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant, QVector,
 };
+use rimstack_core::base::sentence::Sentence;
 use serde_json::{json, Value};
 
 #[derive(Default)]
@@ -196,6 +197,7 @@ enum Cell<'a> {
     Number(i32),
     Part(f64),
     Text(&'a str),
+    Said(&'a Sentence),
 }
 
 fn cell(row: &RowView, field: usize) -> Option<Cell<'_>> {
@@ -204,7 +206,7 @@ fn cell(row: &RowView, field: usize) -> Option<Cell<'_>> {
         0 => Flag(row.is_header),
         1 => Flag(row.is_sub),
         2 => Flag(row.again),
-        3 => Text(&row.name),
+        3 => Said(&row.name),
         4 => Text(&row.author),
         5 => Text(&row.version),
         6 => Number(row.number),
@@ -216,7 +218,7 @@ fn cell(row: &RowView, field: usize) -> Option<Cell<'_>> {
         12 => Number(row.moved_from),
         13 => Number(row.trouble),
         14 => Flag(row.trouble_quiet),
-        15 => Text(&row.trouble_text),
+        15 => Said(&row.trouble_text),
         16 => Text(&row.tags),
         17 => Flag(row.local),
         18 => Text(&row.picture),
@@ -225,7 +227,7 @@ fn cell(row: &RowView, field: usize) -> Option<Cell<'_>> {
         21 => Flag(row.version_ignored),
         22 => Flag(row.fresh),
         23 => Number(row.source),
-        24 => Text(&row.why_moved),
+        24 => Said(&row.why_moved),
         25 => Number(row.group_size),
         26 => Flag(row.twin),
         _ => return None,
@@ -239,6 +241,7 @@ impl Cell<'_> {
             Cell::Number(n) => QVariant::from(&n),
             Cell::Part(p) => QVariant::from(&p),
             Cell::Text(t) => QVariant::from(&QString::from(t)),
+            Cell::Said(s) => QVariant::from(&crate::words::said(s)),
         }
     }
 
@@ -248,6 +251,7 @@ impl Cell<'_> {
             Cell::Number(n) => json!(n),
             Cell::Part(p) => json!(p),
             Cell::Text(t) => json!(t),
+            Cell::Said(s) => json!(crate::words::put(s)),
         }
     }
 }

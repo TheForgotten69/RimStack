@@ -164,7 +164,7 @@ mod tests {
         Inferred {
             first,
             then,
-            why: String::new(),
+            why: Default::default(),
             code,
         }
     }

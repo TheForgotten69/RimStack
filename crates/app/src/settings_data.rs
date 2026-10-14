@@ -170,7 +170,9 @@ impl qobject::SettingsData {
         }
         if changes.contains(Changes::LANGUAGE) {
             self.as_mut().set_languages(to_qml(&app.languages()));
-            self.as_mut().set_words(to_qml(&app.speak()));
+            let table = app.speak();
+            crate::words::show_in(crate::words::Words::of(&table));
+            self.as_mut().set_words(to_qml(&table));
         }
         if changes.contains(Changes::THEME) {
             self.recolour();
@@ -186,22 +188,18 @@ impl qobject::SettingsData {
         let kept = self
             .app()
             .keep_setting(&name.to_string(), &value.to_string());
-        let problem = kept.as_ref().err().map(ToString::to_string);
-        self.as_mut()
-            .set_problem(QString::from(&problem.unwrap_or_default()));
+        self.as_mut().set_problem(crate::words::why_not(&kept));
         kept.is_ok()
     }
 
     fn use_database(mut self: Pin<&mut Self>, id: &QString, on: bool) {
         let kept = self.app().use_database(&id.to_string(), on);
-        let problem = kept.err().map(|e| e.to_string()).unwrap_or_default();
-        self.as_mut().set_problem(QString::from(&problem));
+        self.as_mut().set_problem(crate::words::why_not(&kept));
     }
 
     fn version_warnings(mut self: Pin<&mut Self>, choice: i32) {
         let kept = self.app().version_warnings(choice);
-        let problem = kept.err().map(|e| e.to_string()).unwrap_or_default();
-        self.as_mut().set_problem(QString::from(&problem));
+        self.as_mut().set_problem(crate::words::why_not(&kept));
     }
 
     fn use_language(self: Pin<&mut Self>, name: &QString) {
@@ -242,15 +240,11 @@ impl qobject::SettingsData {
         crate::jobs::run(
             "community download",
             self.qt_thread(),
-            move || {
-                app.download_databases()
-                    .err()
-                    .map(|problem| problem.to_string())
-            },
-            |mut me, problem| {
-                me.as_mut().set_community_current(problem.is_none());
+            move || app.download_databases(),
+            |mut me, done| {
+                me.as_mut().set_community_current(done.is_ok());
                 me.as_mut()
-                    .set_community_problem(QString::from(&problem.unwrap_or_default()));
+                    .set_community_problem(crate::words::why_not(&done));
                 me.as_mut().set_community_busy(false);
             },
         );
@@ -273,11 +267,11 @@ impl qobject::SettingsData {
     }
 
     fn import_rimsort_rules(&self) -> QString {
-        QString::from(&self.app().import_rimsort_rules())
+        crate::words::said(&self.app().import_rimsort_rules())
     }
 
     fn set_mod_settings_aside(&self) -> QString {
-        QString::from(&self.app().set_mod_settings_aside())
+        crate::words::said(&self.app().set_mod_settings_aside())
     }
 
     fn files_changed(&self) {

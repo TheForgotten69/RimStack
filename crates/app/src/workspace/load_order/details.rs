@@ -4,6 +4,7 @@
 use super::{rules, LoadOrder};
 use crate::App;
 use rimstack_core::base::locks::Shared;
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::describe::{self, Trouble};
 use rimstack_core::mods::details::{self, Clash, Named, OwnRule, Slow};
 use rimstack_core::mods::library::ModId;
@@ -45,8 +46,8 @@ pub struct ProblemSaid {
     name: String,
     error: bool,
     group: &'static str,
-    words: String,
-    short: String,
+    words: Sentence,
+    short: Sentence,
     fix: FixSaid,
 }
 
@@ -67,7 +68,7 @@ impl ProblemSaid {
 #[derive(Serialize)]
 pub struct Detected {
     name: String,
-    why: String,
+    why: Sentence,
     /// Compiled code says so; otherwise it is a hint the game does not need.
     code: bool,
 }
@@ -87,8 +88,8 @@ pub struct Files {
 
 #[derive(Serialize)]
 pub struct Patched {
-    method: String,
-    note: String,
+    method: Sentence,
+    note: Sentence,
 }
 
 #[derive(Serialize, Default)]
@@ -96,7 +97,7 @@ pub struct Patched {
 pub struct Details {
     name: String,
     source: &'static str,
-    contains: String,
+    contains: Sentence,
     path: String,
     repository: String,
     folder: String,
@@ -109,7 +110,7 @@ pub struct Details {
     description_rich: String,
     url: String,
     load_time: String,
-    unreadable: Option<String>,
+    unreadable: Option<Sentence>,
     tags: String,
     note: String,
     category_chosen: String,
@@ -124,8 +125,8 @@ pub struct Details {
     /// The DDS files RimStack made for the mod's textures.
     dds_made: usize,
     requires: Vec<Named>,
-    load_folders: Vec<String>,
-    code: String,
+    load_folders: Vec<Sentence>,
+    code: Sentence,
     sub: String,
     patches: Vec<Patched>,
     category: Option<&'static str>,
@@ -139,7 +140,7 @@ pub struct Details {
     loads_before: Vec<Named>,
     /// The mods of `loads_after` that `requires` already lists.
     required_above: usize,
-    placement: Option<String>,
+    placement: Option<Sentence>,
     /// One of its problems is only the game version it lists.
     offer_trust: bool,
     /// Neither the game's own nor in the load order: it may go to the bin.
@@ -226,7 +227,7 @@ impl LoadOrder {
                 .made_in(&m.path),
             requires: details::required(library.requirements(m)),
             load_folders: self.load_folders(library, m),
-            code: describe::code(&m.code.facts),
+            code: Sentence::joined("\n", describe::code(&m.code.facts)),
             ..Details::default()
         };
         match &m.about {
@@ -242,7 +243,7 @@ impl LoadOrder {
                     rimstack_core::rimworld::startup::in_words(&app.startup(), &about.package_id);
                 said.made_for = details::made_for(&about.supported_versions, &library.game_version);
             }
-            Err(reason) => said.unreadable = Some(reason.to_string()),
+            Err(reason) => said.unreadable = Some(reason.sentence().clone()),
         }
         let chosen = Category::from_kept(&note.category);
         said.category = chosen.or(library.category_of(id)).map(Category::label);
@@ -329,7 +330,7 @@ impl LoadOrder {
         &self,
         library: &rimstack_core::mods::library::Library,
         m: &rimstack_core::mods::library::Installed,
-    ) -> Vec<String> {
+    ) -> Vec<Sentence> {
         let active: std::collections::HashSet<String> = self
             .active
             .mods()
@@ -341,7 +342,7 @@ impl LoadOrder {
             .iter()
             .map(|folder| match folder.strip_prefix(&m.path) {
                 Ok(inside) if !inside.as_os_str().is_empty() => {
-                    inside.to_string_lossy().into_owned()
+                    Sentence::Plain(inside.to_string_lossy().into_owned())
                 }
                 _ => say!("(the mod's own folder)"),
             })
@@ -435,7 +436,7 @@ impl LoadOrder {
                 Named {
                     name: library.name_of(key).unwrap_or_else(|| key.to_string()),
                     note: match found {
-                        Some(_) => String::new(),
+                        Some(_) => Sentence::default(),
                         None => say!("not installed"),
                     },
                     trouble: false,

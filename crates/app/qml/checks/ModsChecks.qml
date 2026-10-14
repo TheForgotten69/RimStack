@@ -160,6 +160,7 @@ Item {
             check("apply keeps the sorted order", order() !== start && Hub.mods.dirty && !Hub.mods.previewing)
             Mods.previewSort()
             check("sorting a sorted list moves nothing", !Hub.mods.previewing)
+            check("and says so in the language chosen", Hub.mods.sortNote.startsWith(Theme.say("Already in order.")))
             Hub.mods.sortNote = ""
             Mods.undo()
             check("undo takes the sort back", order() === start)
@@ -168,6 +169,7 @@ Item {
 
         Hub.mods.moveMod(true, 0, 3)
         check("a move makes the list dirty", Hub.mods.dirty && Hub.mods.canUndo && order() !== start)
+        check("what is unsaved is said in the language chosen", Hub.mods.unsaved === Theme.fill("{} moved", 1))
         Mods.undo()
         check("undo puts it back", !Hub.mods.dirty && order() === start && Hub.mods.canRedo)
         check("and the inactive mods are still in name order", byName() && Mods.inactive.rows() === Mods.inactive.count)

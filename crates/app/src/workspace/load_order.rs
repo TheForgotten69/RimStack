@@ -4,10 +4,12 @@
 
 use crate::App;
 use rimstack_core::base::locks::Shared;
+use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::describe::Trouble;
 use rimstack_core::mods::library::{Library, ModId};
 use rimstack_core::mods::list::{flag, Category, GroupedList, Mod, SortKey};
 use rimstack_core::mods::{demo, sort_reasons};
+use rimstack_core::say;
 use std::collections::{HashMap, HashSet};
 
 mod details;
@@ -72,10 +74,10 @@ pub struct LoadOrder {
     /// Lists of the installed mods, not made-up ones.
     installed: bool,
     detected: rules::Detected,
-    pub status: [String; 2],
+    pub status: [Sentence; 2],
     /// Why the mods could not be read; empty when they were.
-    pub problem: String,
-    pub sort_note: String,
+    pub problem: Sentence,
+    pub sort_note: Sentence,
 }
 
 fn side_index(side: Side) -> usize {
@@ -125,9 +127,9 @@ impl LoadOrder {
             by_name: false,
             installed,
             detected: rules::Detected::default(),
-            status: [String::new(), String::new()],
-            problem: String::new(),
-            sort_note: String::new(),
+            status: [Sentence::default(), Sentence::default()],
+            problem: Sentence::default(),
+            sort_note: Sentence::default(),
         }
     }
 
@@ -151,7 +153,7 @@ impl LoadOrder {
             Ok(read) => read,
             Err(problem) => {
                 let mut order = Self::empty(false);
-                order.problem = problem.to_string();
+                order.problem = problem.sentence().clone();
                 return order;
             }
         };
@@ -166,10 +168,10 @@ impl LoadOrder {
         order.inactive.arrange(by_name);
         order.status = [
             match library.missing {
-                0 => rimstack_core::say!("{} active", library.active.len()),
-                n => rimstack_core::say!("{} active, {} not installed", library.active.len(), n),
+                0 => say!("{} active", library.active.len()),
+                n => say!("{} active, {} not installed", library.active.len(), n),
             },
-            rimstack_core::say!(
+            say!(
                 "{} inactive, read in {} ms",
                 library.inactive.len(),
                 took.as_millis()
@@ -298,7 +300,7 @@ impl LoadOrder {
             return;
         }
         self.preview = None;
-        self.sort_note.clear();
+        self.sort_note = Sentence::default();
         let now = arranged(app, library);
         let (mods, _) = rules::sorted_by_category(app, &mut self.detected, library, now.active);
         self.active.set_grouped(self.headings);

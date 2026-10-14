@@ -290,7 +290,7 @@ impl qobject::DownloadsData {
                 match checked {
                     Ok(updates) => me.show_updates(updates),
                     Err(problem) => me.show_updates(Updates {
-                        problem: Some(problem.to_string()),
+                        problem: Some(problem.sentence().clone()),
                         ..Updates::default()
                     }),
                 }
