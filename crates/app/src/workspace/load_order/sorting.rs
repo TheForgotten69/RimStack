@@ -11,6 +11,23 @@ use rimstack_core::mods::sort_reasons::{self, Why};
 use rimstack_core::{say, say_n};
 use serde::Serialize;
 
+pub struct SortCount {
+    mods: Vec<Mod>,
+    detected: rules::Detected,
+}
+
+impl SortCount {
+    /// How many mods Sort would move.
+    pub fn moves(mut self, app: &App) -> usize {
+        let loaded = app.library();
+        let Ok((library, _)) = &*loaded else {
+            return 0;
+        };
+        let (_, sorted) = rules::sorted_by_category(app, &mut self.detected, library, self.mods);
+        sorted.moved().iter().filter(|moved| **moved).count()
+    }
+}
+
 /// One kind of reason, with the moves it explains.
 #[derive(Serialize)]
 pub struct SortGroup {
@@ -103,18 +120,14 @@ impl LoadOrder {
         self.sort_note.clear();
     }
 
-    /// How many mods Sort would move now.
-    pub fn sort_pending(&mut self, app: &App) -> usize {
-        let loaded = app.library();
-        let Ok((library, _)) = &*loaded else {
-            return 0;
-        };
-        if self.preview.is_some() || !self.installed {
-            return 0;
-        }
-        let mods = self.active.mods().to_vec();
-        let (_, sorted) = rules::sorted_by_category(app, &mut self.detected, library, mods);
-        sorted.moved().iter().filter(|moved| **moved).count()
+    /// What counting the mods Sort would move needs, taken from the list
+    /// so it can be counted off the window's thread; nothing while a sort
+    /// is on show or the list is made up.
+    pub fn sort_count(&self) -> Option<SortCount> {
+        (self.preview.is_none() && self.installed).then(|| SortCount {
+            mods: self.active.mods().to_vec(),
+            detected: self.detected.clone(),
+        })
     }
 
     /// Each mod the sort on show moves: its place now, the mod, its place

@@ -103,7 +103,7 @@ fn a_sort_of_a_list_in_order_moves_nothing_and_says_so() {
     order.preview_sort(&app);
     assert!(!order.previewing());
     assert!(!order.sort_note.is_empty());
-    assert_eq!(order.sort_pending(&app), 0);
+    assert_eq!(order.sort_count().map(|count| count.moves(&app)), Some(0));
 }
 
 #[test]

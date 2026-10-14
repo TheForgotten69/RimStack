@@ -1,10 +1,10 @@
 use rimstack_core::said;
 
-mod background;
 mod changes;
 mod downloads_data;
 mod game_data;
 mod hub;
+mod jobs;
 mod lists_data;
 mod logs_data;
 mod mod_rows;
@@ -106,7 +106,7 @@ fn main() -> std::process::ExitCode {
     app.speak();
     if !std::env::args().any(|a| a == "--demo" || a == "--selftest") {
         let early = app.clone();
-        std::thread::spawn(move || {
+        crate::jobs::spawn("early read", move || {
             early.community();
             early.library();
         });

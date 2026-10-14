@@ -109,7 +109,8 @@ impl qobject::GameData {
         };
         let thread = self.qt_thread();
         let at_start = app.clone();
-        crate::background::run(
+        crate::jobs::run(
+            "emptied list",
             self.qt_thread(),
             move || at_start.list_reset_by_game(),
             |me, ids| {
@@ -118,7 +119,7 @@ impl qobject::GameData {
                 }
             },
         );
-        std::thread::spawn(move || loop {
+        crate::jobs::spawn("watch", move || loop {
             std::thread::sleep(every);
             let running = app.game_running();
             let stamps = looking.load(Ordering::Relaxed).then(|| app.stamps());
@@ -143,7 +144,7 @@ impl qobject::GameData {
             // Whoever started it: what it loads now is what later changes are counted from.
             if running {
                 let app = app.clone();
-                std::thread::spawn(move || app.record_versions());
+                crate::jobs::spawn("versions at start", move || app.record_versions());
             }
         }
         let Some(stamps) = stamps else {

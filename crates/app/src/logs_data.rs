@@ -118,7 +118,7 @@ impl qobject::LogsData {
         });
         if keep {
             let app = app.clone();
-            std::thread::spawn(move || app.keep_logs());
+            crate::jobs::spawn("keep logs", move || app.keep_logs());
         }
         let me = self.as_mut().rust_mut().get_mut();
         me.app = Some(app);
@@ -137,7 +137,7 @@ impl qobject::LogsData {
     fn heard(mut self: Pin<&mut Self>, changes: Changes) {
         if changes.contains(Changes::LOGS) && self.keep {
             let app = self.app();
-            std::thread::spawn(move || app.keep_logs());
+            crate::jobs::spawn("keep logs", move || app.keep_logs());
         }
         let mut read_again = Changes::LIBRARY | Changes::LOAD_ORDER | Changes::LOGS;
         if !std::mem::take(&mut self.as_mut().rust_mut().get_mut().told_launches) {
@@ -169,7 +169,8 @@ impl qobject::LogsData {
         let kept = Some(self.kept.to_string())
             .filter(|kept| !kept.is_empty())
             .map(PathBuf::from);
-        crate::background::run(
+        crate::jobs::run(
+            "log",
             self.qt_thread(),
             move || app.logs_report(previous, kept.as_deref()),
             |mut me, read| {

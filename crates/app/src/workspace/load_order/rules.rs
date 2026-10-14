@@ -19,7 +19,7 @@ use std::collections::HashSet;
 /// then, and the rules.
 type Kept = (Vec<Option<ModId>>, Vec<ModId>, Vec<infer::Inferred>);
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Detected {
     kept: Option<Kept>,
 }

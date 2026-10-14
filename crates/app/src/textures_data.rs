@@ -190,7 +190,8 @@ impl qobject::TexturesData {
         self.as_mut().rust_mut().get_mut().stale = false;
         self.as_mut().set_busy(true);
         let app = self.app();
-        crate::background::run(
+        crate::jobs::run(
+            "textures count",
             self.qt_thread(),
             move || app.texture_rows(),
             |mut me, rows| {
@@ -215,7 +216,8 @@ impl qobject::TexturesData {
         self.as_mut().set_busy(true);
         self.stop.store(false, Ordering::Relaxed);
         let (app, stop, thread) = (self.app(), self.stop.clone(), self.qt_thread());
-        crate::background::run(
+        crate::jobs::run(
+            "textures convert",
             self.qt_thread(),
             move || {
                 let progress = |text: String| {
@@ -262,7 +264,8 @@ impl qobject::TexturesData {
         }
         self.as_mut().set_auditing(true);
         let app = self.app();
-        crate::background::run(
+        crate::jobs::run(
+            "dds audit",
             self.qt_thread(),
             move || app.refused_dds(),
             |mut me, found| {

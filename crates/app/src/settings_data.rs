@@ -239,7 +239,8 @@ impl qobject::SettingsData {
         self.as_mut().set_community_busy(true);
         self.as_mut().set_community_problem(QString::default());
         let app = self.app();
-        crate::background::run(
+        crate::jobs::run(
+            "community download",
             self.qt_thread(),
             move || app.download_databases().err().map(String::from),
             |mut me, problem| {
@@ -256,7 +257,8 @@ impl qobject::SettingsData {
             return;
         }
         self.as_mut().set_release_busy(true);
-        crate::background::run(
+        crate::jobs::run(
+            "release check",
             self.qt_thread(),
             crate::workspace::newest_release,
             |mut me, found| {

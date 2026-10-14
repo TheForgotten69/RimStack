@@ -39,7 +39,7 @@ impl qobject::DownloadsData {
             .collect();
         self.as_mut().set_notes_busy(true);
         let thread = self.qt_thread();
-        std::thread::spawn(move || {
+        crate::jobs::spawn("change notes", move || {
             let state = |done: usize, resume: u64, refused: bool| {
                 let state = NotesState {
                     done,

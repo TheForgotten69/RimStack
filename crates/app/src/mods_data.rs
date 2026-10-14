@@ -130,9 +130,6 @@ pub mod qobject {
         #[cxx_name = "endSort"]
         fn end_sort(self: Pin<&mut ModsData>, keep: bool);
         #[qinvokable]
-        #[cxx_name = "countSortPending"]
-        fn count_sort_pending(self: Pin<&mut ModsData>);
-        #[qinvokable]
         fn rescan(self: Pin<&mut ModsData>);
         #[qinvokable]
         fn trust(self: Pin<&mut ModsData>, ids: &QVariant, yes: bool);
@@ -301,6 +298,8 @@ pub struct ModsDataRust {
     inactive: *mut ModRows,
     owned_active: UniquePtr<ModRows>,
     owned_inactive: UniquePtr<ModRows>,
+    loading: crate::jobs::Lane,
+    counting: crate::jobs::Lane,
     dirty: bool,
     unsaved: QString,
     can_undo: bool,
@@ -344,6 +343,8 @@ impl Default for ModsDataRust {
             inactive: std::ptr::null_mut(),
             owned_active: UniquePtr::null(),
             owned_inactive: UniquePtr::null(),
+            loading: crate::jobs::Lane::default(),
+            counting: crate::jobs::Lane::default(),
             dirty: false,
             unsaved: QString::default(),
             can_undo: false,
@@ -455,6 +456,15 @@ impl qobject::ModsData {
             })
             .release();
         self.as_mut()
+            .on_unsaved_changed(|me| me.count_sort_moves())
+            .release();
+        self.as_mut()
+            .on_files_read_changed(|me| me.count_sort_moves())
+            .release();
+        self.as_mut()
+            .on_previewing_changed(|me| me.count_sort_moves())
+            .release();
+        self.as_mut()
             .on_filter_changed(|mut me| {
                 let text = me.filter.to_string();
                 me.as_mut().rust_mut().get_mut().order.set_filter(&text);
@@ -477,9 +487,10 @@ impl qobject::ModsData {
         let app = self.app();
         let (headings, by_name) = (self.headings, self.by_name);
         self.as_mut().set_rescanning(true);
-        crate::background::run(
+        self.loading.run(
+            "load order",
             self.qt_thread(),
-            move || LoadOrder::read(&app, headings, by_name),
+            move |_| LoadOrder::read(&app, headings, by_name),
             move |mut me, mut order| {
                 order.set_filter(&me.filter.to_string());
                 me.as_mut().rust_mut().get_mut().order = order;
@@ -508,7 +519,8 @@ impl qobject::ModsData {
             return;
         };
         self.as_mut().set_files_read(false);
-        crate::background::run(
+        crate::jobs::run(
+            "active files",
             self.qt_thread(),
             move || app.read_active_files(members),
             |_, ()| {},
@@ -537,7 +549,12 @@ impl qobject::ModsData {
         }
         if changes.contains(Changes::FOLDERS) {
             self.as_mut().set_rescanning(true);
-            crate::background::run(self.qt_thread(), move || app.reread_folders(), |_, ()| {});
+            crate::jobs::run(
+                "folders",
+                self.qt_thread(),
+                move || app.reread_folders(),
+                |_, ()| {},
+            );
             return;
         }
         let order = &mut self.as_mut().rust_mut().get_mut().order;

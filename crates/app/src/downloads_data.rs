@@ -164,6 +164,7 @@ pub struct DownloadsDataRust {
     asked_of_steam: HashSet<String>,
     /// The tasks asked for while one runs, each with what it says it is doing.
     waiting: VecDeque<(String, Work)>,
+    since_reading: crate::jobs::Lane,
 }
 
 type Work = Box<dyn FnOnce() -> Done + Send>;
@@ -194,6 +195,7 @@ impl Default for DownloadsDataRust {
             fetched: ChangeNotes::new(),
             asked_of_steam: HashSet::new(),
             waiting: VecDeque::new(),
+            since_reading: crate::jobs::Lane::default(),
         }
     }
 }
@@ -240,7 +242,8 @@ impl qobject::DownloadsData {
     /// What the last check learnt, against the mods as they are on disk now.
     fn restore_updates(self: Pin<&mut Self>) {
         let app = self.app();
-        crate::background::run(
+        crate::jobs::run(
+            "updates restore",
             self.qt_thread(),
             move || app.kept_updates(),
             |mut me, kept| {
@@ -274,7 +277,8 @@ impl qobject::DownloadsData {
         }
         self.as_mut().set_updates_busy(true);
         let app = self.app();
-        crate::background::run(
+        crate::jobs::run(
+            "updates check",
             self.qt_thread(),
             move || {
                 let checked = app.check_updates();
@@ -300,7 +304,8 @@ impl qobject::DownloadsData {
         }
         self.as_mut().set_queue_busy(true);
         let (app, pasted) = (self.app(), pasted.to_string());
-        crate::background::run(
+        crate::jobs::run(
+            "look up",
             self.qt_thread(),
             move || app.look_up(&pasted),
             |mut me, looked_up| {
@@ -317,9 +322,10 @@ impl qobject::DownloadsData {
 
     fn read_since(self: Pin<&mut Self>) {
         let app = self.app();
-        crate::background::run(
+        self.since_reading.run(
+            "changed since launch",
             self.qt_thread(),
-            move || app.since_launch(),
+            move |_| app.since_launch(),
             |mut me, changed| {
                 me.as_mut().rust_mut().get_mut().changed = changed;
                 me.show_since();

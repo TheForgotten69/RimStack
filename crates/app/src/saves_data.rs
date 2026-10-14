@@ -77,6 +77,7 @@ pub struct SavesDataRust {
     report: SavesReport,
     /// What was read no longer holds.
     stale: bool,
+    reading: crate::jobs::Lane,
 }
 
 impl qobject::SavesData {
@@ -105,7 +106,7 @@ impl qobject::SavesData {
 
     fn back_up(&self) {
         let app = self.app();
-        std::thread::spawn(move || {
+        crate::jobs::spawn("save backup", move || {
             if let Err(problem) = app.back_up_newest_save("save-backups", 5) {
                 rimstack_core::problem!("save not backed up: {problem}");
             }
@@ -122,20 +123,20 @@ impl qobject::SavesData {
     }
 
     fn read(mut self: Pin<&mut Self>) {
-        if !self.wanted || !self.stale || self.busy {
+        if !self.wanted || !self.stale {
             return;
         }
         self.as_mut().rust_mut().get_mut().stale = false;
         self.as_mut().set_busy(true);
         let app = self.app();
-        crate::background::run(
+        self.reading.run(
+            "saves",
             self.qt_thread(),
-            move || app.saves_report(),
+            move |_| app.saves_report(),
             |mut me, report| {
                 me.as_mut().rust_mut().get_mut().report = report;
                 me.as_mut().set_busy(false);
-                me.as_mut().show();
-                me.read();
+                me.show();
             },
         );
     }

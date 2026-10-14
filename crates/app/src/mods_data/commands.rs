@@ -239,13 +239,30 @@ impl qobject::ModsData {
         }
     }
 
-    pub(super) fn count_sort_pending(mut self: Pin<&mut Self>) {
-        let app = self.app();
-        let pending = match self.files_read && !self.order.previewing() {
-            true => self.as_mut().order_mut().sort_pending(&app) as i32,
-            false => 0,
+    /// Counts the mods Sort would move, once the list has been quiet a
+    /// moment: a drag or a run of key presses changes it many times.
+    pub(super) fn count_sort_moves(self: Pin<&mut Self>) {
+        const QUIET: std::time::Duration = std::time::Duration::from_millis(400);
+        let count = self.order.sort_count().filter(|_| self.files_read);
+        let Some(count) = count else {
+            self.counting.cancel();
+            self.set_sort_pending(0);
+            return;
         };
-        self.set_sort_pending(pending);
+        let app = self.app();
+        self.counting.run(
+            "sort count",
+            self.qt_thread(),
+            move |turn| {
+                std::thread::sleep(QUIET);
+                turn.current().then(|| count.moves(&app))
+            },
+            |me, moves| {
+                if let Some(moves) = moves {
+                    me.set_sort_pending(i32::try_from(moves).unwrap_or(i32::MAX));
+                }
+            },
+        );
     }
 
     pub(super) fn rescan(mut self: Pin<&mut Self>) {
@@ -254,7 +271,7 @@ impl qobject::ModsData {
         }
         self.as_mut().set_rescanning(true);
         let app = self.app();
-        crate::background::run(self.qt_thread(), move || app.rescan(), |_, ()| {});
+        crate::jobs::run("rescan", self.qt_thread(), move || app.rescan(), |_, ()| {});
     }
 
     pub(super) fn trust(mut self: Pin<&mut Self>, given: &QVariant, yes: bool) {
@@ -417,7 +434,8 @@ impl qobject::ModsData {
         };
         self.as_mut().set_upkeep_problem(QString::default());
         let app = self.app();
-        crate::background::run(
+        crate::jobs::run(
+            "copy to the game folder",
             self.qt_thread(),
             move || app.copy_to_local(id).err().map(|e| e.to_string()),
             |mut me, problem| match problem {

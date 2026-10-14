@@ -181,15 +181,9 @@ Item {
     // T and N on a row: type the selected mod's tags or its note.
     signal editRequested(string what)
 
-    // How many mods Sort would move now; counted a moment after the
-    // list last changed, not on every change.
     readonly property int sortPending: Hub.mods.sortPending
-    property Timer sortCount: Timer { interval: 400; onTriggered: Hub.mods.countSortPending() }
     property Connections sortWatch: Connections {
         target: Hub.mods
-        function onUnsavedChanged() { mods.sortCount.restart() }
-        function onFilesReadChanged() { mods.sortCount.restart() }
-        function onPreviewingChanged() { mods.sortCount.restart() }
         function onLibraryVersionChanged() {
             mods.select(-1, false)
             mods.rescanned()

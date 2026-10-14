@@ -32,7 +32,7 @@ impl qobject::DownloadsData {
     fn start(mut self: Pin<&mut Self>, doing: &str, work: Work) {
         self.as_mut().set_task_running(true);
         self.as_mut().set_task_note(QString::from(doing));
-        crate::background::run(self.qt_thread(), work, |mut me, done| {
+        crate::jobs::run("download task", self.qt_thread(), work, |mut me, done| {
             me.as_mut().finish(done);
             if let Some((doing, work)) = me.as_mut().rust_mut().get_mut().waiting.pop_front() {
                 me.start(&doing, work);
