@@ -268,17 +268,14 @@ QtObject {
 
     // A date, or a date and time, in figures: the same in every language.
     function day(seconds) {
-        const d = new Date(seconds * 1000)
-        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0")
+        return Qt.formatDateTime(new Date(seconds * 1000), "yyyy-MM-dd")
     }
     function moment(seconds) {
-        const d = new Date(seconds * 1000)
-        return day(seconds) + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0")
+        return Qt.formatDateTime(new Date(seconds * 1000), "yyyy-MM-dd HH:mm")
     }
 
     function clock(seconds) {
-        const d = new Date(seconds * 1000)
-        return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0")
+        return Qt.formatDateTime(new Date(seconds * 1000), "HH:mm")
     }
 
     // How long ago a moment (seconds since 1970) was.

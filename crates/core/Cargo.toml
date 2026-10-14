@@ -28,6 +28,8 @@ icu_plurals = "2.3"
 icu_locale_core = "2.3"
 # Rules shared between threads.
 icu_provider = { version = "2.3", features = ["sync"] }
+# Dates in the diagnostics; already built for the app (MIT/Apache-2.0).
+chrono = { version = "0.4", default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 tempfile = "3"

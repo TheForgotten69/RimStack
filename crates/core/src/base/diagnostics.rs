@@ -34,28 +34,10 @@ impl Level {
 
 /// Seconds since 1970 as `2026-10-14 19:37:35Z`.
 fn time_in_words(secs: u64) -> String {
-    let (days, of_day) = (secs / 86_400, secs % 86_400);
-    // Days to a date of the Gregorian calendar, counted in eras of 400
-    // years from 0000-03-01 (Howard Hinnant's `civil_from_days`).
-    let shifted = days + 719_468;
-    let (era, day_of_era) = (shifted / 146_097, shifted % 146_097);
-    let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let shifted_month = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * shifted_month + 2) / 5 + 1;
-    let month = if shifted_month < 10 {
-        shifted_month + 3
-    } else {
-        shifted_month - 9
-    };
-    let year = year_of_era + era * 400 + u64::from(month <= 2);
-    format!(
-        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02}Z",
-        of_day / 3_600,
-        of_day % 3_600 / 60,
-        of_day % 60
-    )
+    let at = i64::try_from(secs)
+        .ok()
+        .and_then(|secs| chrono::DateTime::from_timestamp(secs, 0));
+    at.map_or_else(|| secs.to_string(), |at| at.format("%Y-%m-%d %H:%M:%SZ").to_string())
 }
 
 fn line(secs: u64, level: Level, text: &str) -> String {
