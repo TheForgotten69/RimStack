@@ -580,6 +580,7 @@ mod tests {
         let (a, b) = (id_of("a"), id_of("b"));
         let compared = app.compare_textures(a, b).unwrap();
         assert_eq!((compared.total, compared.kept_earlier), (1, 0));
+        assert_eq!(compared.textures[0].used.to_string(), "Ann.B");
         assert_eq!(compared.named(" ROCK").len(), 1);
         assert!(compared.named("tree").is_empty());
 
@@ -588,6 +589,7 @@ mod tests {
         assert_eq!((app.hidden_in(b), app.hidden_in(a)), (1, 0));
         let again = app.compare_textures(a, b).unwrap();
         assert_eq!((again.kept_earlier, again.yours), (1, 1));
+        assert_eq!(again.textures[0].used.to_string(), "Ann.A, chosen");
         let history = app.history();
         assert_eq!(history[0].said, said);
         assert_eq!(Path::new(&history[0].bring_back), mods.join("b"));
@@ -597,5 +599,24 @@ mod tests {
             .unwrap();
         assert_eq!(app.hidden_in(b), 0);
         assert!(mods.join("b/Textures/Things/rock.png").is_file());
+    }
+
+    #[test]
+    fn a_shared_texture_keeps_its_fields() {
+        assert_eq!(
+            crate::reports::fields(&Shared::default()),
+            [
+                "at: number",
+                "earlierBytes: number",
+                "earlierShown: text",
+                "file: text",
+                "keepsEarlier: bool",
+                "laterBytes: number",
+                "laterShown: text",
+                "name: text",
+                "used: text",
+                "yourChoice: bool",
+            ]
+        );
     }
 }

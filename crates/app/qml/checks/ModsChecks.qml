@@ -95,14 +95,14 @@ Item {
         const tools = Hub.textures
         tools.compare(a, b)
         let shared = tools.shared
-        textureCheck("the comparison lists the shared texture, kept by load order", shared.length === 1 && !shared[0].keepsEarlier && !shared[0].yourChoice)
+        textureCheck("the comparison lists the shared texture, kept by load order", shared.length === 1 && !shared[0].keepsEarlier && !shared[0].yourChoice && shared[0].used === "second")
         textureCheck("and names the two mods, the earlier first", tools.comparison.earlier.name === "first" && tools.comparison.later.name === "second")
         const differing = tools.difference(shared[0].at)
         textureCheck("the difference of the two versions is a picture of every pixel", differing.total === 64 && differing.differing === 64 && differing.file.endsWith(".png"))
         textureCheck("keeping the earlier mod's version works", tools.keep(shared[0].at, true) === "")
         shared = tools.shared
         const now = shared[0]
-        textureCheck("the comparison then shows your choice", shared.length === 1 && now.keepsEarlier && now.yourChoice && now.laterShown.endsWith(".rimstack-hidden"))
+        textureCheck("the comparison then shows your choice", shared.length === 1 && now.keepsEarlier && now.yourChoice && now.used === Theme.fill("{}, chosen", "first") && now.laterShown.endsWith(".rimstack-hidden"))
         const picture = Qt.createQmlObject("import QtQuick; Image { asynchronous: false; cache: false }", checks)
         picture.source = Theme.fileUrl(now.laterShown)
         textureCheck("the hidden picture can still be shown", picture.status === Image.Ready && picture.sourceSize.width > 0)
@@ -121,7 +121,7 @@ Item {
             checks.textureCheck("unhide all puts it back", tools.unhideMod(b) === "" && tools.hiddenIn(b) === 0)
             tools.compare(a, b)
             const shared = tools.shared
-            checks.textureCheck("and the load order decides again", shared.length === 1 && !shared[0].keepsEarlier && !shared[0].yourChoice)
+            checks.textureCheck("and the load order decides again", shared.length === 1 && !shared[0].keepsEarlier && !shared[0].yourChoice && shared[0].used === "second")
             Qt.exit(checks.textureFailures > 0 ? 1 : 0)
         }
     }
