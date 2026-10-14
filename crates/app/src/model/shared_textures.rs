@@ -6,7 +6,7 @@ use super::*;
 impl qobject::ModListModel {
     /// The library ids of the active mods that share a texture with
     /// another active mod.
-    pub(crate) fn in_conflict(&self) -> std::collections::HashSet<usize> {
+    pub(crate) fn in_conflict(&self) -> std::collections::HashSet<ModId> {
         let known = crate::app().conflicts().reading();
         let Some(known) = known.as_ref() else {
             return Default::default();
@@ -18,7 +18,7 @@ impl qobject::ModListModel {
     pub(crate) fn is_new(&self, m: &Mod) -> bool {
         let loaded = crate::app().library();
         let installed = match (&*loaded, m.installed) {
-            (Ok((library, _)), Some(i)) => library.installed.get(i),
+            (Ok((library, _)), Some(i)) => library.get(i),
             _ => None,
         };
         let seen = crate::app().seen().reading();
@@ -28,13 +28,13 @@ impl qobject::ModListModel {
     /// The library ids of this list's mods that are new, as a JSON array.
     pub(crate) fn fresh_ids(&self) -> QString {
         let mods = self.list.mods().iter().filter(|m| self.is_new(m));
-        let ids: Vec<usize> = mods.filter_map(|m| m.installed).collect();
-        QString::from(&serde_json::json!(ids).to_string())
+        let ids: Vec<ModId> = mods.filter_map(|m| m.installed).collect();
+        crate::reports::said(&ids)
     }
 
     /// Per mod in load order, what the `is:` filter terms can ask about.
     pub(crate) fn flags(&self) -> Vec<u16> {
-        use rimstack_core::list::flag;
+        use rimstack_core::mods::list::flag;
         let conflict = self.in_conflict();
         let behind = crate::app().behind().reading();
         let loaded = crate::app().library();
@@ -76,13 +76,11 @@ impl qobject::ModListModel {
             if m.installed.is_some_and(|i| conflict.contains(&i)) {
                 flags |= flag::CONFLICT;
             }
-            let folder = m
-                .installed
-                .and_then(|i| Some(&library?.0.installed.get(i)?.folder));
+            let folder = m.installed.and_then(|i| Some(&library?.0.get(i)?.folder));
             if folder.is_some_and(|f| behind.as_ref().is_some_and(|b| b.contains(f))) {
                 flags |= flag::UPDATED;
             }
-            let key = rimstack_core::id::split_steam(&m.id).0;
+            let key = rimstack_core::rimworld::id::split_steam(&m.id).0;
             if in_save.is_some_and(|ids| !ids.contains(&key)) {
                 flags |= flag::NOT_IN_SAVE;
             }
@@ -106,7 +104,7 @@ impl qobject::ModListModel {
     /// Works out, in the background, which active mods provide the same
     /// textures; unless that is already known for this set of mods.
     pub(crate) fn find_conflicts(mut self: Pin<&mut Self>, loaded: std::sync::Arc<crate::Loaded>) {
-        let mut members: Vec<usize> = self.checked_order.iter().flatten().copied().collect();
+        let mut members: Vec<ModId> = self.checked_order.iter().flatten().copied().collect();
         members.sort_unstable();
         members.dedup();
         let known = crate::app().conflicts().reading();
@@ -134,17 +132,22 @@ impl qobject::ModListModel {
     }
 }
 
-/// What the files of these mods (library ids, ascending) provide and
+/// What the files of these mods (ascending) provide and
 /// point at, each read from the folders the game would load it from.
-fn read_files(library: &rimstack_core::library::Library, members: Vec<usize>) -> crate::Conflicts {
+fn read_files(
+    library: &rimstack_core::mods::library::Library,
+    members: Vec<ModId>,
+) -> crate::Conflicts {
     let active: std::collections::HashSet<String> = members
         .iter()
-        .filter_map(|&i| library.installed[i].key())
+        .filter_map(|&i| library.get(i)?.key())
         .collect();
     let read: Vec<(Vec<String>, infer::Scanned)> = members
         .par_iter()
         .map(|&i| {
-            let root = &library.installed[i].path;
+            let Some(root) = library.get(i).map(|m| &m.path) else {
+                return Default::default();
+            };
             let loaded = loadfolders::folders(root, &library.game_version, &|m| active.contains(m));
             (conflicts::provided(&loaded), infer::scan(&loaded))
         })

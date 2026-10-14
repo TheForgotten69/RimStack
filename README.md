@@ -5,7 +5,7 @@ A fast, open-source mod manager for RimWorld. Rust core, Qt Quick interface.
 Status: early, usable. Every section has a working version laid out as in the mockup:
 
 - **Mods.** The load order and the inactive mods; problems, texture conflicts with a comparison to choose each texture; Sort as a preview (the mods' own rules, community rules, rules of your own, and rules detected from compiled code); Undo, Redo, saved lists, tags and notes, filter terms, keyboard, Ctrl+K; Save to the game's `ModsConfig.xml` (the file as it was is kept beside it).
-- **Downloads.** Which Workshop mods are behind their Workshop version; looking up pasted links; suggested replacements. Steam does the downloading.
+- **Downloads.** Which Workshop mods are behind their Workshop version; looking up pasted links; suggested replacements. Steam does the downloading. SteamCMD, when you ask for it, is fetched from Valve's own server over HTTPS; Valve publishes nothing to check it against.
 - **Textures.** PNG to DDS conversion built in, with a record of every file made so only those are ever removed.
 - **Saves.** Each save's mods compared with the load order; RimSaves folders, previews and colony facts when that mod is used.
 - **Logs.** Errors in the game's last two logs, grouped, with the mods in each stack trace; a record of launches.

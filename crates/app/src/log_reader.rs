@@ -68,7 +68,7 @@ pub struct LogReaderRust {
     logs: QString,
     logs_busy: bool,
     /// The errors of the report in `logs`, kept for filtering.
-    errors: Vec<serde_json::Value>,
+    errors: Vec<rimstack_core::mods::blame::Pointed>,
 }
 
 impl qobject::LogReader {
@@ -91,23 +91,23 @@ impl qobject::LogReader {
 
     fn errors_listed(&self, filter: &QString, open_runs: &QString) -> QString {
         let filter = filter.to_string();
-        let open: Vec<u64> = serde_json::from_str(&open_runs.to_string()).unwrap_or_default();
-        let listed = |error: &&serde_json::Value| {
-            let run = error["run"].as_u64();
-            rimstack_core::logs::listed(
+        let open: Vec<usize> = serde_json::from_str(&open_runs.to_string()).unwrap_or_default();
+        let listed = |error: &&rimstack_core::mods::blame::Pointed| {
+            rimstack_core::rimworld::logs::listed(
                 &filter,
-                error["head"].as_str().unwrap_or_default(),
-                error["mod"].as_str(),
-                run == error["at"].as_u64(),
-                run.is_some_and(|run| open.contains(&run)),
+                &error.head,
+                error.first.as_deref(),
+                error.run == error.at,
+                open.contains(&error.run),
             )
         };
-        let shown: Vec<&serde_json::Value> = self.errors.iter().filter(listed).collect();
-        QString::from(&serde_json::json!(shown).to_string())
+        let shown: Vec<&rimstack_core::mods::blame::Pointed> =
+            self.errors.iter().filter(listed).collect();
+        crate::reports::said(&shown)
     }
 
     fn no_mod_filter(&self) -> QString {
-        QString::from(rimstack_core::logs::NO_MOD)
+        QString::from(rimstack_core::rimworld::logs::NO_MOD)
     }
 
     fn read_log(mut self: Pin<&mut Self>, previous: bool, kept: Option<PathBuf>) {
@@ -118,10 +118,14 @@ impl qobject::LogReader {
         let read = move || {
             let report = match &*crate::app().library() {
                 Ok((library, _)) => log_report::logs_report(crate::app(), library, previous, kept),
-                Err(problem) => serde_json::json!({ "problem": problem }),
+                Err(problem) => Err(problem.clone()),
             };
-            let errors = report["errors"].as_array().cloned().unwrap_or_default();
-            (report.to_string(), errors)
+            let errors = report
+                .as_ref()
+                .map(|r| r.errors.clone())
+                .unwrap_or_default();
+            let report = crate::reports::Answer::from(report);
+            (crate::reports::said(&report).to_string(), errors)
         };
         crate::background::run(self.qt_thread(), read, |mut reader, (report, errors)| {
             reader.as_mut().rust_mut().errors = errors;

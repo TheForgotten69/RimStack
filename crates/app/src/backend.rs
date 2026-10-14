@@ -1,11 +1,21 @@
 //! What the screens other than Mods show. Each list is worked out on a
 //! background thread and handed to QML as JSON text in a property.
 
-use rimstack_core::locks::Shared;
+use rimstack_core::base::locks::Shared;
+use rimstack_core::kept::settings::Switch;
 use rimstack_core::say;
 use rimstack_core::{
-    id, launches, library::Library, lists, loadfolders, logs, owntheme, paths::Source, rimsaves,
-    saves, workshop,
+    kept::launches,
+    kept::lists,
+    kept::owntheme,
+    mods::library::{Library, ModId},
+    rimworld::id,
+    rimworld::loadfolders,
+    rimworld::logs,
+    rimworld::paths::Source,
+    rimworld::rimsaves,
+    rimworld::saves,
+    rimworld::workshop,
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -129,12 +139,19 @@ pub mod qobject {
         #[qinvokable]
         fn summary(self: &Backend) -> QString;
 
-        /// When each thing shown was last changed on disk, as a JSON
-        /// object of times by name: `mods`, `saves`, `log`, `modsConfig`,
-        /// `theme`, `language`. A time that differs from the one before
-        /// says what to read again.
+        /// What changed on disk since the last look, to be read again:
+        /// `{ mods, saves, log, modsConfig, theme, language }`, each true
+        /// or false. `in_the_way`: the mods cannot be read again now.
         #[qinvokable]
-        fn stamps(self: &Backend) -> QString;
+        fn look(self: Pin<&mut Backend>, game_running: bool, in_the_way: bool) -> QString;
+
+        /// The last start of the game, `{ time, errors }`, or null: from
+        /// the launches on record, the log last read (when it was
+        /// written, 0 for none; whether it is the one before the last;
+        /// its kinds of error) and when the game last wrote a log.
+        #[qinvokable]
+        #[cxx_name = "lastStart"]
+        fn last_start(self: &Backend, log_written: i64, previous: bool, errors: i32) -> QString;
 
         /// New texts take this font family from now on; empty for the
         /// system's own. Returns the family in use, for `Theme.refont`
@@ -187,13 +204,13 @@ pub mod qobject {
 }
 
 use core::pin::Pin;
-use cxx_qt::Threading;
+use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use std::path::PathBuf;
 
 /// Asked once: the program does not appear or leave while RimStack runs.
 static GIT: std::sync::LazyLock<Option<String>> =
-    std::sync::LazyLock::new(rimstack_core::git::installed);
+    std::sync::LazyLock::new(rimstack_core::sources::git::installed);
 
 mod appearance;
 mod columns;
@@ -212,10 +229,11 @@ pub struct BackendRust {
     /// none is; `{ problem }` where GitHub could not be asked.
     release: QString,
     release_busy: bool,
+    watcher: rimstack_core::base::watch::Watcher,
 }
 
-fn languages_dir() -> PathBuf {
-    crate::app().settings_file().with_file_name("languages")
+fn languages_dir(app: &crate::App) -> PathBuf {
+    app.settings_file().with_file_name("languages")
 }
 
 /// The app's icon on its window, for the desktop to show with it.
@@ -223,52 +241,145 @@ pub fn use_window_icon() {
     qobject::set_window_icon(&QString::from(":/qt/qml/RimStack/Ui/assets/rimstack.svg"));
 }
 
-fn theme_file() -> PathBuf {
-    crate::app().settings_file().with_file_name("theme.json")
+fn theme_file(app: &crate::App) -> PathBuf {
+    app.settings_file().with_file_name("theme.json")
 }
 
 /// RimSort's file of your own rules: beside RimStack's data folder.
-fn rimsort_rules_file() -> PathBuf {
-    crate::app()
-        .data_dir()
+fn rimsort_rules_file(app: &crate::App) -> PathBuf {
+    app.data_dir()
         .with_file_name("RimSort")
         .join("dbs")
         .join("userRules.json")
 }
 
-fn rimsort_rules() -> Result<Vec<(String, String)>, rimstack_core::error::Error> {
-    let path = rimsort_rules_file();
-    let text =
-        std::fs::read_to_string(&path).map_err(|e| rimstack_core::error::Error::file(&path, e))?;
-    Ok(rimstack_core::community::parse(&text)?.pairs())
+fn rimsort_rules(
+    app: &crate::App,
+) -> Result<Vec<(String, String)>, rimstack_core::base::error::Error> {
+    let path = rimsort_rules_file(app);
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| rimstack_core::base::error::Error::file(&path, e))?;
+    Ok(rimstack_core::mods::community::parse(&text)?.pairs())
 }
 
-pub(crate) fn hidden_file() -> PathBuf {
-    crate::app().data_dir().join("hidden.json")
+pub(crate) fn hidden_file(app: &crate::App) -> PathBuf {
+    app.data_dir().join("hidden.json")
 }
 
 /// The folders the game loads a mod from with the load order being edited.
-pub(crate) fn loaded_folders(library: &Library, mod_id: usize) -> Vec<PathBuf> {
-    let list = crate::app().session().current().to_vec();
+pub(crate) fn loaded_folders(app: &crate::App, library: &Library, mod_id: ModId) -> Vec<PathBuf> {
+    let list = app.session().current().to_vec();
     let arranged = library.arrange(&list);
     let active: std::collections::HashSet<String> = arranged
         .active
         .iter()
-        .filter_map(|m| library.installed.get(m.installed?)?.key())
+        .filter_map(|m| library.get(m.installed?)?.key())
         .collect();
-    let root = &library.installed[mod_id].path;
+    let Some(root) = library.get(mod_id).map(|m| &m.path) else {
+        return Vec::new();
+    };
     loadfolders::folders(root, &library.game_version, &|k| active.contains(k))
 }
 
-pub(crate) fn snapshots_dir() -> PathBuf {
-    crate::app().data_dir().join("snapshots")
+pub(crate) fn snapshots_dir(app: &crate::App) -> PathBuf {
+    app.data_dir().join("snapshots")
 }
 
-pub(crate) fn lists_dir() -> PathBuf {
-    crate::app().data_dir().join("lists")
+pub(crate) fn lists_dir(app: &crate::App) -> PathBuf {
+    app.data_dir().join("lists")
 }
 
-pub(crate) fn ids_from(json: &QString) -> Vec<usize> {
+/// Every folder and setting RimStack uses, as Settings shows them.
+fn settings_report(app: &crate::App) -> crate::reports::SettingsReport {
+    let paths = app.paths();
+    let shown = |p: &Option<PathBuf>| p.as_ref().map(|p| p.to_string_lossy().into_owned());
+    let settings = app.settings();
+    let owned = |name: &str| settings.get(name).map(String::from);
+    let config = paths.mods_config();
+    let backup = config
+        .as_ref()
+        .map(|c| c.with_file_name("ModsConfig.xml.rimstack-backup"));
+    crate::reports::SettingsReport {
+        game: shown(&paths.game),
+        config: shown(&paths.config),
+        workshop: shown(&paths.workshop),
+        game_version: paths.game_version.clone(),
+        mods_config: shown(&config),
+        backup: shown(&backup.filter(|b| b.exists())),
+        set_game: owned("game"),
+        set_config: owned("config"),
+        set_workshop: owned("workshop"),
+        launch_arguments: owned("launchArguments"),
+        launch_directly: settings.launch_directly(),
+        language: owned("language"),
+        steamcmd: app.steamcmd().is_some(),
+        interface_scale: settings.get("interfaceScale").unwrap_or("1").to_string(),
+        font: owned("font"),
+        community_rules: settings.switch(Switch::CommunityRules),
+        version_warnings: settings.switch(Switch::VersionWarnings),
+        version_aside_for: owned("versionAsideFor"),
+        file_hints: settings.switch(Switch::FileHints),
+        git_for_workshop: settings.switch(Switch::GitForWorkshop),
+        git: GIT.clone(),
+        self_check: settings.switch(Switch::SelfCheck),
+        logs_kept: log_report::logs_kept_limit(app),
+        logs_kept_now: logs::kept(&log_report::kept_logs_dir(app)).len(),
+        replacements_ignored: settings
+            .listed("replacementsIgnored")
+            .map(String::from)
+            .collect(),
+        setup_done: settings.get("setupDone").is_some(),
+        rimsort_rules: rimsort_rules_file(app).is_file(),
+        data_folder: app.data_dir().to_string_lossy().into_owned(),
+        settings_file: app.settings_file().to_string_lossy().into_owned(),
+        diagnostics_file: app.diagnostics_file().to_string_lossy().into_owned(),
+        version: env!("CARGO_PKG_VERSION"),
+    }
+}
+
+/// The counts Settings shows beside its sections.
+fn summary(app: &crate::App) -> crate::reports::Summary {
+    let config = app.paths().config.clone();
+    let saves = config
+        .as_ref()
+        .and_then(|config| std::fs::read_dir(config.join("Saves")).ok())
+        .into_iter()
+        .flatten()
+        .flatten();
+    let saves = saves
+        .filter(|e| {
+            e.path()
+                .extension()
+                .is_some_and(|x| x.eq_ignore_ascii_case("rws"))
+        })
+        .count();
+    let kept = config.as_deref().and_then(rimsaves::settings);
+    let last = launches::read(&launches_file(app)).pop();
+    let ignored = app.replacements_ignored();
+    let replacements = match &*app.library() {
+        Ok((library, _)) => library
+            .workshop_mods()
+            .keys()
+            .filter(|id| app.replacements().contains_key(**id))
+            .filter(|id| !ignored.contains(**id))
+            .count(),
+        Err(_) => 0,
+    };
+    crate::reports::Summary {
+        saves,
+        folders: kept.map_or(1, |s| s.folders.len()),
+        snapshots: lists::count(&snapshots_dir(app)),
+        replacements,
+        rules: app.user_rules().reading().len(),
+        last_launch: last.map(|l| crate::reports::LastLaunch {
+            time: l.time,
+            errors: l.errors,
+            mods: l.ids.len(),
+        }),
+    }
+}
+
+pub(crate) fn ids_from(json: &QString) -> Vec<ModId> {
     let json = json.to_string();
     serde_json::from_str(&json).unwrap_or_else(|e| {
         rimstack_core::problem!("mod ids given as {json:?}: {e}");
@@ -304,7 +415,7 @@ impl qobject::Backend {
                 let Some(local) = local else {
                     return say!("The game's folder is not known");
                 };
-                let copied = rimstack_core::upkeep::copy_to_local(&from, &local);
+                let copied = rimstack_core::sources::maintenance::copy_to_local(&from, &local);
                 copied.err().map(String::from).unwrap_or_default()
             },
             |backend, problem| backend.copied(QString::from(&problem)),
@@ -319,7 +430,8 @@ impl qobject::Backend {
         let aside = crate::app()
             .data_dir()
             .join(format!("mod-settings-{}", now_secs()));
-        let said = match rimstack_core::upkeep::set_mod_settings_aside(config, &aside) {
+        let said = match rimstack_core::sources::maintenance::set_mod_settings_aside(config, &aside)
+        {
             Ok(0) => say!("No mod has settings"),
             Ok(count) => say!("{} files moved to {}", count, aside.display()),
             Err(problem) => problem.into(),
@@ -328,47 +440,7 @@ impl qobject::Backend {
     }
 
     fn settings(&self) -> QString {
-        let paths = crate::app().paths();
-        let shown = |p: &Option<PathBuf>| p.as_ref().map(|p| p.to_string_lossy().into_owned());
-        let settings = crate::app().settings();
-        let config = paths.mods_config();
-        let backup = config
-            .as_ref()
-            .map(|c| c.with_file_name("ModsConfig.xml.rimstack-backup"));
-        let report = json!({
-            "game": shown(&paths.game),
-            "config": shown(&paths.config),
-            "workshop": shown(&paths.workshop),
-            "gameVersion": paths.game_version,
-            "modsConfig": shown(&config),
-            "backup": backup.filter(|b| b.exists()).map(|b| b.to_string_lossy().into_owned()),
-            "setGame": settings.get("game"),
-            "setConfig": settings.get("config"),
-            "setWorkshop": settings.get("workshop"),
-            "launchArguments": settings.get("launchArguments"),
-            "launchDirectly": settings.get("launch") == Some("direct"),
-            "language": settings.get("language"),
-            "steamcmd": rimstack_core::redownload::steamcmd(crate::app().data_dir()).is_some(),
-            "interfaceScale": settings.get("interfaceScale").unwrap_or("1"),
-            "font": settings.get("font"),
-            "communityRules": settings.is_on("communityRules"),
-            "versionWarnings": settings.get("versionWarnings") != Some("off"),
-            "versionAsideFor": settings.get("versionAsideFor"),
-            "fileHints": settings.get("fileHints") == Some("on"),
-            "gitForWorkshop": settings.get("gitForWorkshop") == Some("on"),
-            "git": *GIT,
-            "selfCheck": settings.get("selfCheck") != Some("off"),
-            "logsKept": log_report::logs_kept_limit(crate::app()),
-            "logsKeptNow": logs::kept(&log_report::kept_logs_dir(crate::app())).len(),
-            "replacementsIgnored": settings.listed("replacementsIgnored").collect::<Vec<_>>(),
-            "setupDone": settings.get("setupDone").is_some(),
-            "rimsortRules": rimsort_rules_file().is_file(),
-            "dataFolder": crate::app().data_dir().to_string_lossy(),
-            "settingsFile": crate::app().settings_file().to_string_lossy(),
-            "diagnosticsFile": crate::app().diagnostics_file().to_string_lossy(),
-            "version": env!("CARGO_PKG_VERSION"),
-        });
-        QString::from(&report.to_string())
+        crate::reports::said(&settings_report(crate::app()))
     }
 
     fn setting(&self, name: &QString) -> QString {
@@ -384,39 +456,6 @@ impl qobject::Backend {
     }
 
     fn summary(&self) -> QString {
-        let config = crate::app().paths().config.clone().unwrap_or_default();
-        let saves = std::fs::read_dir(config.join("Saves"))
-            .into_iter()
-            .flatten()
-            .flatten();
-        let saves = saves
-            .filter(|e| {
-                e.path()
-                    .extension()
-                    .is_some_and(|x| x.eq_ignore_ascii_case("rws"))
-            })
-            .count();
-        let folders = rimsaves::settings(&config).map_or(1, |s| s.folders.len());
-        let last = launches::read(&launches_file(crate::app())).pop();
-        let ignored = crate::app().replacements_ignored();
-        let replacements = match &*crate::app().library() {
-            Ok((library, _)) => library
-                .workshop_mods()
-                .keys()
-                .filter(|id| crate::app().replacements().contains_key(**id))
-                .filter(|id| !ignored.contains(**id))
-                .count(),
-            Err(_) => 0,
-        };
-        let rules = crate::app().user_rules().reading().len();
-        let report = json!({
-            "saves": saves,
-            "folders": folders,
-            "snapshots": lists::all(&snapshots_dir()).len(),
-            "replacements": replacements,
-            "rules": rules,
-            "lastLaunch": last.map(|l| json!({ "time": l.time, "errors": l.errors, "mods": l.ids.len() })),
-        });
-        QString::from(&report.to_string())
+        crate::reports::said(&summary(crate::app()))
     }
 }

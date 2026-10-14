@@ -4,11 +4,13 @@
 //! `RIMSTACK_DLL` may name any mod's .dll for the assembly fuzz; without
 //! it that probe says so and passes.
 
-use rimstack_core::list::{Category, GroupedList, Mod};
-use rimstack_core::rules::{Kind, Rule};
+use rimstack_core::mods::list::{Category, GroupedList, Mod};
+use rimstack_core::mods::rules::{Kind, Rule};
 use rimstack_core::{
-    about, changes, community, ddsaudit, dotnet, loadfolders, logs, markup, modsconfig, notes,
-    owntheme, rimsaves, share, sort, steamworks, tongue, vdf, workshop,
+    base::markup, base::translate, base::vdf, kept::notes, kept::owntheme, mods::community,
+    mods::ddsaudit, mods::share, mods::sort, rimworld::about, rimworld::dotnet,
+    rimworld::loadfolders, rimworld::logs, rimworld::modsconfig, rimworld::rimsaves,
+    rimworld::steamworks, rimworld::workshop, sources::changes,
 };
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::time::{Duration, Instant};
@@ -364,10 +366,10 @@ fn an_error_is_a_sentence_in_whatever_language_is_set_for_the_process() {
         "not a DDS file".to_string(),
         "pas un fichier DDS".to_string(),
     )];
-    tongue::set(french.into_iter().collect());
+    translate::set(french.into_iter().collect());
     assert_eq!(
         ddsaudit::problem(not_dds, 7).as_deref(),
         Some("pas un fichier DDS")
     );
-    tongue::set(Default::default());
+    translate::set(Default::default());
 }

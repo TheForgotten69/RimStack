@@ -1,8 +1,8 @@
 //! The load order's columns, as the Mods screen keeps them in two lines
-//! of its settings: see `rimstack_core::columns`.
+//! of its settings: see `rimstack_core::mods::columns`.
 
 use super::*;
-use rimstack_core::columns;
+use rimstack_core::mods::columns;
 
 impl qobject::Backend {
     pub(super) fn columns_toggled(&self, kept: &QString, column: &QString) -> QString {
@@ -14,7 +14,7 @@ impl qobject::Backend {
     }
 
     pub(super) fn column_widths(&self, kept: &QString) -> QString {
-        QString::from(&json!(columns::widths(&kept.to_string())).to_string())
+        crate::reports::said(&columns::widths(&kept.to_string()))
     }
 
     pub(super) fn column_sized(&self, kept: &QString, column: &QString, width: f64) -> QString {
@@ -33,6 +33,6 @@ impl qobject::Backend {
     ) -> QString {
         let asked = asked.to_string();
         let now = columns::pressed(&by.to_string(), descending, &asked);
-        QString::from(&json!(now).to_string())
+        crate::reports::said(&now)
     }
 }

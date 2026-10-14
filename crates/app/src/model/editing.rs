@@ -7,10 +7,10 @@ use super::*;
 impl qobject::ModListModel {
     pub(crate) fn tags_changed(mut self: Pin<&mut Self>, mod_id: i32) {
         let loaded = crate::app().library();
-        let (Ok((library, _)), Ok(installed)) = (&*loaded, usize::try_from(mod_id)) else {
+        let (Ok((library, _)), Some(installed)) = (&*loaded, ModId::from_qml(mod_id)) else {
             return;
         };
-        let Some(key) = library.installed.get(installed).and_then(|m| m.key()) else {
+        let Some(key) = library.get(installed).and_then(|m| m.key()) else {
             return;
         };
         let notes = crate::app().notes().reading();
@@ -40,21 +40,21 @@ impl qobject::ModListModel {
         let mods = self.list.mods();
         let tag = mods[first].sub.clone();
         let members = self.list.in_sub_of(first).into_iter();
-        let ids: Vec<usize> = members.filter_map(|at| mods[at].installed).collect();
+        let ids: Vec<ModId> = members.filter_map(|at| mods[at].installed).collect();
         for id in ids {
-            crate::mod_edits::change_note(id as i32, |note| note.remove_tag(&tag));
+            crate::mod_edits::change_note(crate::app(), id, |note| note.remove_tag(&tag));
         }
     }
 
     pub(crate) fn subs_beside(&self, mod_id: i32) -> QString {
-        let listed = |m: &&Mod| m.installed == usize::try_from(mod_id).ok();
+        let listed = |m: &&Mod| m.installed.is_some() && m.installed == ModId::from_qml(mod_id);
         let category = self.list.mods().iter().find(listed).map(|m| m.category);
         let subs = category.map(|c| self.list.subs(c)).unwrap_or_default();
         QString::from(&subs.join("\n"))
     }
 
     pub(crate) fn show_by(mut self: Pin<&mut Self>, column: &QString, descending: bool) {
-        use rimstack_core::list::SortKey;
+        use rimstack_core::mods::list::SortKey;
         let key = match column.to_string().as_str() {
             "name" => Some(SortKey::Name),
             "author" => Some(SortKey::Author),
@@ -115,7 +115,7 @@ impl qobject::ModListModel {
         else {
             return;
         };
-        let to = rimstack_core::list::edge_of_run(self.list.mods(), at, top);
+        let to = rimstack_core::mods::list::edge_of_run(self.list.mods(), at, top);
         self.as_mut().move_mod(from, to as i32);
     }
 
@@ -151,12 +151,12 @@ impl qobject::ModListModel {
         let (true, Ok((library, _))) = (self.installed, &*loaded) else {
             return;
         };
-        let now = arranged(library);
+        let now = arranged(crate::app(), library);
         if self.checked {
             if self.preview.is_some() {
                 self.as_mut().end_preview();
             }
-            let (mods, _) = sorted_by_category(library, now.active);
+            let (mods, _) = sorted_by_category(crate::app(), library, now.active);
             let grouped = self.wants_headings();
             self.as_mut().reset_with(|list| {
                 list.set_grouped(grouped);
@@ -207,6 +207,8 @@ impl qobject::ModListModel {
             }
         };
         let (first, last) = (first as i32, (first + count - 1) as i32);
+        // SAFETY: the rows named are those `toggling` said the toggle
+        // adds or takes away, and it is done between the two calls.
         unsafe {
             match inserting {
                 true => self.as_mut().begin_insert_rows(&parent, first, last),
@@ -214,6 +216,7 @@ impl qobject::ModListModel {
             }
         }
         self.as_mut().rust_mut().list.toggle(category);
+        // SAFETY: ends the change begun above, of the same kind.
         unsafe {
             match inserting {
                 true => self.as_mut().end_insert_rows(),
@@ -264,7 +267,7 @@ impl qobject::ModListModel {
         self.as_mut().reset_with(|list| {
             let at = list.insert_in_category(m);
             if rules_apply {
-                settle(list, at);
+                settle(crate::app(), list, at);
             }
             if let Some(by_name) = rearrange {
                 list.arrange(by_name);
@@ -279,16 +282,15 @@ impl qobject::ModListModel {
         }
         // SAFETY: non-null, not `self`, and QML keeps the object alive for
         // the call; each borrow of it ends before the next begins.
-        let place = move |id: usize| unsafe { &*other }.index_of(id as i32);
+        let place = move |id: ModId| unsafe { &*other }.position_of(id);
         let mut ids = crate::backend::ids_from(ids);
         ids.sort_by_key(|id| place(*id));
         // Whichever of the two is the load order notes the one step.
         self.as_mut().begin_batch();
         unsafe { Pin::new_unchecked(&mut *other) }.begin_batch();
         for id in ids {
-            let at = place(id);
-            if at >= 0 {
-                self.as_mut().take_from(other, at);
+            if let Some(at) = place(id) {
+                self.as_mut().take_from(other, at as i32);
             }
         }
         unsafe { Pin::new_unchecked(&mut *other) }.end_batch();
@@ -297,14 +299,14 @@ impl qobject::ModListModel {
 
     pub(crate) fn move_all_to_edge(mut self: Pin<&mut Self>, ids: &QString, top: bool) {
         let mut ids = crate::backend::ids_from(ids);
-        ids.sort_by_key(|id| self.index_of(*id as i32));
+        ids.sort_by_key(|id| self.position_of(*id));
         // The last one moved ends up outermost.
         if top {
             ids.reverse();
         }
         self.as_mut().begin_batch();
         for id in ids {
-            let at = self.index_of(id as i32);
+            let at = self.position_of(id).map_or(-1, |at| at as i32);
             self.as_mut().move_to_edge(at, top);
         }
         self.as_mut().end_batch();

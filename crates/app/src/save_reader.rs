@@ -44,8 +44,7 @@ use crate::backend::save_report::{save_row, saves_dir};
 use core::pin::Pin;
 use cxx_qt::Threading;
 use cxx_qt_lib::QString;
-use rimstack_core::{rimsaves, saves};
-use serde_json::json;
+use rimstack_core::{rimworld::rimsaves, rimworld::saves};
 
 #[derive(Default)]
 pub struct SaveReaderRust {
@@ -73,8 +72,8 @@ impl qobject::SaveReader {
             };
             // RimSaves' folders, when the mod has been used: those it
             // lists, and any that only show up in a file name.
-            let config = crate::app().paths().config.clone().unwrap_or_default();
-            let kept = rimsaves::settings(&config);
+            let config = crate::app().paths().config.clone();
+            let kept = config.as_deref().and_then(rimsaves::settings);
             let mut folders = kept.as_ref().map_or(Vec::new(), |s| s.folders.clone());
             for row in &rows {
                 if !folders.contains(&row.folder) {
@@ -88,14 +87,14 @@ impl qobject::SaveReader {
                     None => ("", false),
                 })
                 .collect();
-            json!({
-                "saves": rows,
-                "allFrom": saves::version_all_share(&versions),
-                "rimsaves": kept.is_some(),
-                "folders": folders,
-                "currentFolder": kept.map(|s| s.current),
-            })
-            .to_string()
+            let report = crate::reports::SavesReport {
+                all_from: saves::version_all_share(&versions),
+                rimsaves: kept.is_some(),
+                folders,
+                current_folder: kept.map(|s| s.current),
+                saves: rows,
+            };
+            crate::reports::said(&report).to_string()
         };
         crate::background::run(self.qt_thread(), listed, |mut reader, saves| {
             reader.as_mut().set_saves(QString::from(&saves));

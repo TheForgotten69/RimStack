@@ -105,11 +105,10 @@ use crate::backend::{hidden_file, ids_from, loaded_folders};
 use core::pin::Pin;
 use cxx_qt::Threading;
 use cxx_qt_lib::QString;
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
-use rimstack_core::hidden::Hidden;
-use rimstack_core::library::Library;
-use rimstack_core::{conflicts, say, textures};
-use serde_json::{json, Value};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rimstack_core::mods::hidden::Hidden;
+use rimstack_core::mods::library::{Library, ModId};
+use rimstack_core::{mods::conflicts, mods::textures, say, say_n};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -117,6 +116,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 mod texture_report;
 #[path = "texture_tools/texture_work.rs"]
 mod texture_work;
+pub(crate) use texture_report::manifest_file;
 use texture_report::*;
 
 /// Set while a conversion should stop after the mod it is on.
@@ -136,7 +136,7 @@ impl qobject::TextureTools {
 
     /// Brings back the textures RimStack set aside in this mod folder.
     fn unhide_in(&self, folder: &QString) -> QString {
-        let file = hidden_file();
+        let file = hidden_file(crate::app());
         let mut hidden = Hidden::read(&file);
         let path = PathBuf::from(folder.to_string());
         let done = hidden.unhide_all(&path).and_then(|_| hidden.write(&file));

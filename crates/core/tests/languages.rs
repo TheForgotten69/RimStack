@@ -2,7 +2,7 @@
 //! of its English. Their sense is not checked here: five of them were
 //! translated by machine.
 
-use rimstack_core::tongue::{misfit, PLURAL_RULE};
+use rimstack_core::base::translate::{misfit, PLURAL_RULE};
 use serde_json::{Map, Value};
 use std::path::Path;
 

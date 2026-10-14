@@ -247,6 +247,13 @@ Item {
         Mods.undo()
         check("and one undo brings it back", Mods.active.count === counts[0] && order() === start)
         Mods.select(Mods.nthMod(Mods.active, 0), true)
+        Mods.nudge(Mods.active, -1)
+        check("Alt+Up on the first mod moves nothing", order() === start)
+        Mods.nudge(Mods.active, 1)
+        check("Alt+Down moves the mod one place down", Mods.active.indexOf(Mods.selectedId) === 1 && order() !== start)
+        Mods.undo()
+        check("and one undo puts it back", order() === start)
+        Mods.select(Mods.nthMod(Mods.active, 0), true)
 
         const nameOn = r => Mods.active.data(Mods.active.index(r, 0), 258).toLowerCase()
         const orderBefore = order()

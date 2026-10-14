@@ -1,0 +1,28 @@
+//! What RimStack makes of the installed mods: the library, the lists,
+//! their problems and their order, and the textures they share.
+
+pub mod bisect;
+pub mod blame;
+pub mod checks;
+pub mod classify;
+pub mod columns;
+pub mod community;
+pub mod conflicts;
+pub mod ddsaudit;
+pub mod demo;
+pub mod describe;
+pub mod details;
+pub mod hidden;
+pub mod infer;
+pub mod library;
+pub mod list;
+pub mod ordering;
+pub mod rules;
+pub mod session;
+pub mod share;
+pub mod sort;
+pub mod sort_reasons;
+pub mod texdiff;
+pub mod textures;
+pub mod tree;
+pub mod userrules;

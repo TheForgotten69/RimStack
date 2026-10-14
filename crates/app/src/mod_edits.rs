@@ -2,9 +2,10 @@
 //! category or group chosen by hand, "works on this game version". Each
 //! is kept on disk at once; the lists are told to read it by QML.
 
-use rimstack_core::list::Category;
-use rimstack_core::locks::Shared;
-use rimstack_core::notes;
+use rimstack_core::base::locks::Shared;
+use rimstack_core::kept::notes;
+use rimstack_core::mods::library::ModId;
+use rimstack_core::mods::list::Category;
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -70,22 +71,28 @@ pub struct ModEditsRust {
     rules_version: i32,
 }
 
-/// Changes what is noted about the mod with this library id, and keeps it.
-pub(crate) fn change_note(mod_id: i32, change: impl FnOnce(&mut notes::Note)) {
-    let loaded = crate::app().library();
+/// Changes what is noted about the mod, and keeps it.
+pub(crate) fn change_note(app: &crate::App, mod_id: ModId, change: impl FnOnce(&mut notes::Note)) {
+    let loaded = app.library();
     let Ok((library, _)) = &*loaded else {
         return;
     };
-    let installed = usize::try_from(mod_id).ok();
-    let Some(key) = installed.and_then(|i| library.installed.get(i)?.key()) else {
+    let Some(key) = library.get(mod_id).and_then(|m| m.key()) else {
         return;
     };
-    let mut all = crate::app().notes().writing();
+    let mut all = app.notes().writing();
     let mut note = all.get(&key).cloned().unwrap_or_default();
     change(&mut note);
     all.set(&key, note);
-    if let Err(problem) = all.write(&crate::app().notes_file()) {
+    if let Err(problem) = all.write(&app.notes_file()) {
         rimstack_core::problem!("{problem}");
+    }
+}
+
+/// `change_note` for an id the window holds; a negative one is no mod.
+fn change_held(mod_id: i32, change: impl FnOnce(&mut notes::Note)) {
+    if let Some(id) = ModId::from_qml(mod_id) {
+        change_note(crate::app(), id, change);
     }
 }
 
@@ -93,7 +100,7 @@ impl qobject::ModEdits {
     fn set_note(&self, mod_id: i32, tags: &QString, note: &QString) {
         let tags = notes::tags_in(&tags.to_string());
         let text = note.to_string().trim().to_string();
-        change_note(mod_id, |kept| {
+        change_held(mod_id, |kept| {
             kept.tags = tags;
             kept.text = text;
         });
@@ -101,7 +108,7 @@ impl qobject::ModEdits {
 
     fn add_tag(&self, mod_id: i32, tag: &QString) {
         let tag = tag.to_string().trim().to_string();
-        change_note(mod_id, |note| {
+        change_held(mod_id, |note| {
             if !tag.is_empty() && !note.tags.contains(&tag) {
                 note.tags.push(tag);
             }
@@ -109,18 +116,18 @@ impl qobject::ModEdits {
     }
 
     fn set_version_ok(&self, mod_id: i32, ok: bool) {
-        change_note(mod_id, |note| note.version_ok = ok);
+        change_held(mod_id, |note| note.version_ok = ok);
     }
 
     fn set_category(&self, mod_id: i32, label: &QString) {
         let label = label.to_string();
         let known = Category::from_label(&label).map_or("", Category::key);
-        change_note(mod_id, |note| note.category = known.to_string());
+        change_held(mod_id, |note| note.category = known.to_string());
     }
 
     fn set_sub(&self, mod_id: i32, name: &QString) {
         let name = name.to_string().trim().to_string();
-        change_note(mod_id, |note| note.set_group(&name));
+        change_held(mod_id, |note| note.set_group(&name));
     }
 
     fn add_rule(self: Pin<&mut Self>, first: i32, then: i32) {
@@ -136,7 +143,7 @@ impl qobject::ModEdits {
         let Ok((library, _)) = &*loaded else {
             return;
         };
-        let key = |id: i32| library.installed.get(usize::try_from(id).ok()?)?.key();
+        let key = |id: i32| library.get(ModId::from_qml(id)?)?.key();
         let (Some(first), Some(then)) = (key(first), key(then)) else {
             return;
         };

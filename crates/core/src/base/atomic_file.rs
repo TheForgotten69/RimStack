@@ -1,0 +1,134 @@
+//! A file written so that a crash, or the power going, leaves the one
+//! before: whole under another name and on the disk, then moved into
+//! place.
+
+use crate::base::error::Error;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Makes the file's folder if need be. The error names the file.
+pub fn write(path: &Path, contents: impl AsRef<[u8]>) -> Result<(), Error> {
+    static WRITES: AtomicU64 = AtomicU64::new(0);
+    let failed = |e: std::io::Error| Error::file(path, e);
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(failed)?;
+    }
+    let real = through_links(path);
+    // A name no other write has, in this program or another: two that
+    // shared one would each write over the other's bytes.
+    let mut partial = real.as_os_str().to_os_string();
+    let nth = WRITES.fetch_add(1, Ordering::Relaxed);
+    partial.push(format!(".{}-{nth}.part", std::process::id()));
+    put(Path::new(&partial), &real, contents.as_ref()).map_err(failed)
+}
+
+/// The file a name stands for: where the name is a link, a file moved
+/// onto it would take the link's place and leave what it pointed at.
+pub(crate) fn through_links(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// Writes `partial`, waits for it to be on the disk, then gives it the
+/// name `path`, with the permissions the file there had. Without the
+/// wait a rename can outlive a power cut that the bytes did not: the
+/// file would be there, and empty. A write that fails leaves no `partial`.
+pub(crate) fn put(partial: &Path, path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let written = (|| {
+        let mut file = std::fs::File::create(partial)?;
+        file.write_all(contents)?;
+        if let Ok(before) = std::fs::metadata(path) {
+            file.set_permissions(before.permissions())?;
+        }
+        file.sync_all()?;
+        std::fs::rename(partial, path)
+    })();
+    if written.is_err() && partial.is_file() {
+        let _ = std::fs::remove_file(partial);
+    }
+    written
+}
+
+fn damaged(path: &Path) -> PathBuf {
+    let mut name = path.as_os_str().to_os_string();
+    name.push(".damaged");
+    name.into()
+}
+
+/// The JSON a file of RimStack's own holds; nothing for a file that is
+/// not there. One that is there and is not JSON is first copied to
+/// `<name>.damaged`, because whoever reads nothing starts afresh and the
+/// next write would replace what the user had; the record says so.
+pub fn read_json(path: &Path) -> Option<serde_json::Value> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(e) => {
+            crate::problem!("{}: {e}", path.display());
+            return None;
+        }
+    };
+    match serde_json::from_str(&text) {
+        Ok(value) => Some(value),
+        Err(e) => {
+            let kept = damaged(path);
+            match std::fs::copy(path, &kept) {
+                Ok(_) => crate::problem!("{}: {e}; kept as {}", path.display(), kept.display()),
+                Err(not_kept) => crate::problem!("{}: {e}; not kept: {not_kept}", path.display()),
+            }
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_file_that_is_not_json_reads_as_nothing_and_is_kept_beside_itself() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.json");
+        assert_eq!(read_json(&path), None);
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+
+        write(&path, r#"{ "a.b": 1 }"#).unwrap();
+        assert_eq!(read_json(&path), Some(serde_json::json!({ "a.b": 1 })));
+        assert!(!damaged(&path).exists());
+
+        std::fs::write(&path, r#"{ "a.b": { "note": "two years of no"#).unwrap();
+        assert_eq!(read_json(&path), None);
+        write(&path, "{}").unwrap();
+        let kept = std::fs::read_to_string(damaged(&path)).unwrap();
+        assert!(kept.ends_with("two years of no"));
+    }
+
+    #[test]
+    fn the_file_and_its_folder_are_made_and_nothing_else_is_left() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("RimStack").join("notes.v2.json");
+        write(&path, "first").unwrap();
+        write(&path, "second").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "second");
+        assert_eq!(
+            std::fs::read_dir(path.parent().unwrap()).unwrap().count(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_file_that_cannot_be_written_keeps_what_it_held() {
+        let dir = tempfile::tempdir().unwrap();
+        // A folder that is not empty, where the file should be.
+        let path = dir.path().join("settings.json");
+        write(&path.join("inside"), "kept").unwrap();
+        let lost = write(&path, "lost").unwrap_err();
+        assert_eq!(lost.kind(), crate::base::error::Kind::File);
+        assert!(lost.to_string().contains("settings.json"));
+        assert_eq!(
+            std::fs::read_to_string(path.join("inside")).unwrap(),
+            "kept"
+        );
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+}

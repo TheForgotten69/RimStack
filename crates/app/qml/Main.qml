@@ -94,66 +94,39 @@ ApplicationWindow {
     function readLastLaunch() {
         if (Theme.demo)
             return
-        const recorded = JSON.parse(appBackend.summary()).lastLaunch
         const report = appLogs.logs ? JSON.parse(appLogs.logs) : ({})
-        const written = Math.floor((JSON.parse(appBackend.stamps()).log || 0) / 1000)
-        // The log knows of starts not recorded here: a round of the
-        // search for the broken mod, or the game started from Steam.
-        if (report.written && !report.previous && (!recorded || report.written >= recorded.time))
-            lastLaunch = { time: report.written, errors: (report.errors || []).length }
-        else if (written > 0 && (!recorded || written > recorded.time + 120))
-            lastLaunch = { time: written, errors: null }
-        else
-            lastLaunch = recorded
+        lastLaunch = JSON.parse(appBackend.lastStart(report.written || 0, !!report.previous, (report.errors || []).length))
         Mods.lastStart = lastLaunch
     }
     // What changed on disk while the window was open is read again
     // without being asked: looked for every two seconds while the window
     // is in front, and when the game stops.
-    property var stamps: ({})
-    property bool modsPending: false
     function look() {
         // `--live` keeps looking while a picture is taken; for checking this.
         if (Theme.demo || (Mods.checkMode !== "" && Mods.checkMode !== "live") || (shotPath !== "" && Qt.application.arguments.indexOf("--live") === -1))
             return
-        const now = JSON.parse(appBackend.stamps()), before = stamps
-        const changed = what => before[what] !== undefined && now[what] !== before[what]
-        // Steam writes its record again and again while it downloads:
-        // the folders are read once it has been quiet for a look, and
-        // not under a sort on show, a drag or a comparison.
-        if (changed("mods"))
-            modsPending = true
-        else if (modsPending && !Mods.active.rescanning && !Mods.active.previewing && Mods.drag.held === null && Mods.comparing === null) {
-            modsPending = false
+        const inTheWay = Mods.active.rescanning || Mods.active.previewing || Mods.drag.held !== null || Mods.comparing !== null
+        const noticed = JSON.parse(appBackend.look(gameRunning, inTheWay))
+        if (noticed.mods)
             Mods.active.rescan()
-        }
-        if (changed("theme"))
+        if (noticed.theme)
             readOwnColours()
-        if (changed("language"))
+        if (noticed.language)
             Theme.words = JSON.parse(appBackend.languageWords(appBackend.setting("language")))
-        if (changed("saves") && section === 3)
+        if (noticed.saves && section === 3)
             appSaves.loadSaves()
-        if (changed("log")) {
-            // The game writes its log all the time it runs.
-            if (gameRunning)
-                now.log = before.log
-            else {
-                appLogs.keepLogs()
-                if (section === 4 && logsLoader.item)
-                    logsLoader.item.load()
-                Qt.callLater(readLastLaunch)
-            }
+        if (noticed.log) {
+            appLogs.keepLogs()
+            if (section === 4 && logsLoader.item)
+                logsLoader.item.load()
+            Qt.callLater(readLastLaunch)
         }
         // Never taken unasked: the game empties the file when it first
-        // starts on a new version. And it writes it while starting.
-        if (changed("modsConfig") && now.modsConfig !== 0) {
-            const ids = gameRunning ? null : JSON.parse(appLists.listOnDisk() || "[]")
-            if (ids === null)
-                now.modsConfig = before.modsConfig
-            else
-                Notices.offer(Theme.fill("ModsConfig.xml was written outside RimStack and now lists {} mods; the list here has {}.", ids.length, Mods.active.count), Theme.say("Use the file's"), () => { window.useList(ids); Mods.save() })
+        // starts on a new version.
+        if (noticed.modsConfig) {
+            const ids = JSON.parse(appLists.listOnDisk() || "[]")
+            Notices.offer(Theme.fill("ModsConfig.xml was written outside RimStack and now lists {} mods; the list here has {}.", ids.length, Mods.active.count), Theme.say("Use the file's"), () => { window.useList(ids); Mods.save() })
         }
-        stamps = now
     }
     // While the window shows, in front or not: a list beside the game or Steam stays true.
     Timer { interval: Mods.checkMode === "live" ? 500 : 2000; repeat: true; triggeredOnStart: true; running: (window.visibility !== Window.Minimized && window.visibility !== Window.Hidden) || Mods.checkMode === "live"; onTriggered: window.look() }

@@ -90,9 +90,7 @@ Item {
     }
 
     function step(model, by) {
-        const position = selectedId >= 0 ? model.indexOf(selectedId) : -1
-        const from = position >= 0 ? model.rowOf(position) : (by > 0 ? -1 : model.rows())
-        const row = model.stepRow(from, by)
+        const row = model.stepFrom(selectedId, by)
         if (row < 0)
             return
         select(idAt(model, row), model === activeModel)
@@ -105,7 +103,7 @@ Item {
         const position = selectedId >= 0 ? model.indexOf(selectedId) : -1
         if (position < 0 || activeModel.previewing)
             return
-        const next = model.idBeside(model.rowOf(position))
+        const next = model.besideMod(selectedId)
         moveAcross(model, position, selectedId)
         if (next >= 0)
             select(next, model === activeModel)
@@ -120,11 +118,9 @@ Item {
     property TextureTools textureTools
 
     function compareWith(otherId) {
-        const mine = activeModel.indexOf(selectedId)
-        const theirs = activeModel.indexOf(otherId)
-        if (mine < 0 || theirs < 0)
-            return
-        comparing = { earlier: mine < theirs ? selectedId : otherId, later: mine < theirs ? otherId : selectedId }
+        const pair = JSON.parse(activeModel.inLoadOrder(selectedId, otherId))
+        if (pair)
+            comparing = { earlier: pair[0], later: pair[1] }
     }
 
     signal showLogs()
@@ -185,8 +181,8 @@ Item {
             moveAcross(activeModel, Number(fix.target), -1)
         } else if (fix.action === "subscribe") {
             Theme.openWorkshop(fix.target)
-        } else if (fix.action === "search") {
-            Qt.openUrlExternally("https://steamcommunity.com/workshop/browse/?appid=294100&searchtext=" + encodeURIComponent(fix.target))
+        } else if (fix.page) {
+            Qt.openUrlExternally(fix.page)
         } else if (fix.action === "trust") {
             trust(modId, true)
         }
@@ -195,7 +191,7 @@ Item {
     function fixAll() {
         if (activeModel.previewing)
             return
-        const ids = needed.map(key => inactiveModel.packageMod(key)).filter(id => id >= 0)
+        const ids = JSON.parse(inactiveModel.packageMods(JSON.stringify(needed)))
         keepingScroll(() => activeModel.takeAllFrom(inactiveModel, JSON.stringify(ids)))
         done(Theme.say("Activated the needed mods"))
         refresh()
@@ -203,10 +199,9 @@ Item {
 
     function winAll(otherId) {
         edits.addRule(otherId, selectedId)
-        const mine = activeModel.indexOf(selectedId)
-        const theirs = activeModel.indexOf(otherId)
-        if (mine >= 0 && theirs > mine)
-            keepingScroll(() => activeModel.moveMod(mine, theirs))
+        const to = activeModel.placeBelow(selectedId, otherId)
+        if (to >= 0)
+            keepingScroll(() => activeModel.moveMod(activeModel.indexOf(selectedId), to))
         refresh()
     }
 
@@ -226,7 +221,8 @@ Item {
     }
 
     // The selected mods that are warned about for the game version they list.
-    readonly property var versionWarned: selectedCount < 2 ? [] : selectedIds.filter(id => troubles.some(t => t.modId === id && t.fix.action === "trust"))
+    // Read again when the problems change, though they are not passed.
+    readonly property var versionWarned: selectedCount < 2 || troubles === null ? [] : JSON.parse(activeModel.versionWarned(JSON.stringify(selectedIds)))
     function trustSelected(yes) {
         const ids = yes ? versionWarned : selectedIds
         keepingScroll(() => {
@@ -399,9 +395,9 @@ Item {
 
     // Alt + Up and Alt + Down: the selected mod one place up or down.
     function nudge(model, by) {
-        const at = selectedId >= 0 ? model.indexOf(selectedId) : -1
-        const to = at + by
-        if (at < 0 || to < 0 || to >= model.count || activeModel.previewing || (model === activeModel && columns.shownBy !== ""))
+        const at = model.indexOf(selectedId)
+        const to = model.nudgeTo(selectedId, by)
+        if (to < 0 || activeModel.previewing || (model === activeModel && columns.shownBy !== ""))
             return
         slide(selectedId, -by)
         keepingScroll(() => model.moveMod(at, to))
@@ -501,15 +497,12 @@ Item {
         if (selectedId < 0 || inActive !== selectedActive)
             return select(modId, inActive)
         const model = inActive ? activeModel : inactiveModel
-        const from = model.rowOf(model.indexOf(selectedId))
-        const to = model.rowOf(model.indexOf(modId))
-        if (from < 0 || to < 0)
+        const others = JSON.parse(model.othersThrough(selectedId, modId))
+        if (!others)
             return
         const next = {}
-        for (const id of JSON.parse(model.idsBetween(from, to))) {
-            if (id !== selectedId)
-                next[id] = true
-        }
+        for (const id of others)
+            next[id] = true
         also = next
     }
 
@@ -592,7 +585,7 @@ Item {
     function endSort(keep) {
         const applies = keep && activeModel.previewing
         const before = applies ? snapshot("@sorting") : ""
-        const moves = applies ? JSON.parse(activeModel.sortMoves()).reduce((sum, group) => sum + group.moves.length, 0) : 0
+        const moves = applies ? activeModel.sortMoveCount() : 0
         keepingScroll(() => keep ? activeModel.applySort() : activeModel.discardSort())
         if (applies) {
             const sorted = ["#", moves, Theme.kept("Sorted: {} mod moved"), Theme.kept("Sorted: {} mods moved")]

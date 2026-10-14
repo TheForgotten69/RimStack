@@ -49,10 +49,10 @@ for block in re.findall(r"(?:swatches|terms): [\[(]\{?(.*?)\n    \}?[\])]|(?:cat
     words.update(json.loads(f'"{t}"') for part in block for t in re.findall(literal, part) if re.search(r"[A-Za-z]{2}", t) and not t.startswith("#"))
 words.update(json.loads(f'"{t}"') for t in re.findall(r"(?<![\w.])(?:say|fill)\(" + literal, theme))
 words.update(json.loads(f'"{t}"') for t in re.findall(r"\"@\w+\": " + literal, theme))
-# The sentences written in Rust: `say!("…")` and `named("…")`.
+# The sentences written in Rust: `say!("…")`, `said!("…")` and `named("…")`.
 for path in glob.glob(os.path.join(root, "..", "*", "src", "**", "*.rs"), recursive=True):
     source = open(path, encoding="utf-8").read().split("#[cfg(test)]")[0]
-    words.update(json.loads(f'"{t}"') for t in re.findall(r"(?:say!|keep!|named)\(\s*" + literal, source))
+    words.update(json.loads(f'"{t}"') for t in re.findall(r"(?:say!|said!|keep!|named)\(\s*" + literal, source))
     for pair in re.findall(r"say_n!\([^\"]*" + literal + r"\s*,\s*" + literal, source):
         words.update(json.loads(f'"{t}"') for t in pair)
 

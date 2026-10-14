@@ -2,22 +2,19 @@
 //! rounds, kept on disk so it outlives the app being closed to play.
 
 use super::*;
-use rimstack_core::bisect::{self, Bisect};
+use rimstack_core::mods::bisect::{self, Bisect};
 
-fn search_file() -> PathBuf {
-    crate::app().data_dir().join("bisect.json")
+fn search_file(app: &crate::App) -> PathBuf {
+    app.data_dir().join("bisect.json")
 }
 
-/// `{ active, suspects, rounds, list, original, found, foundId, stuck }`:
-/// `list` is the load order to try now; `found` names the mod once one
-/// suspect is left; `stuck` names suspects that need each other.
-fn state(search: Option<&Bisect>) -> QString {
+fn state(app: &crate::App, search: Option<&Bisect>) -> QString {
     let Some(search) = search else {
-        return QString::from(&json!({ "active": false }).to_string());
+        return crate::reports::said(&crate::reports::HuntState::default());
     };
     let name = |id: &str| {
-        let key = rimstack_core::id::split_steam(id).0;
-        let known = crate::app()
+        let key = rimstack_core::rimworld::id::split_steam(id).0;
+        let known = app
             .library()
             .as_ref()
             .as_ref()
@@ -33,29 +30,34 @@ fn state(search: Option<&Bisect>) -> QString {
             .collect(),
         false => Vec::new(),
     };
-    let said = json!({
-        "active": true,
-        "suspects": search.suspects.len(),
-        "rounds": search.rounds_left(),
-        "list": search.list(),
-        "original": search.original,
-        "found": search.found().map(name).unwrap_or_default(),
-        "foundId": search.found().unwrap_or_default(),
-        "stuck": stuck,
-    });
-    QString::from(&said.to_string())
+    let found = search.found();
+    crate::reports::said(&crate::reports::HuntState {
+        active: true,
+        search: Some(crate::reports::HuntSearch {
+            suspects: search.suspects.len(),
+            rounds: search.rounds_left(),
+            list: search.list(),
+            original: search.original.clone(),
+            found: found.map(name).unwrap_or_default(),
+            found_id: found.unwrap_or_default().to_string(),
+            stuck,
+        }),
+    })
 }
 
 impl qobject::BrokenModSearch {
     pub(super) fn hunt_state(&self) -> QString {
-        state(Bisect::read(&search_file()).as_ref())
+        state(
+            crate::app(),
+            Bisect::read(&search_file(crate::app())).as_ref(),
+        )
     }
 
     /// Begins a search over the load order as it is now.
     pub(super) fn hunt_start(&self) -> QString {
         let loaded = crate::app().library();
         let Ok((library, _)) = &*loaded else {
-            return state(None);
+            return state(crate::app(), None);
         };
         // The newest save as it is before any round, apart from the
         // copies made before each launch: those are few and soon replaced.
@@ -68,25 +70,25 @@ impl qobject::BrokenModSearch {
         }
         let now = library.arrange(crate::app().session().current()).active;
         let search = bisect::start(library, &now);
-        if let Err(problem) = search.write(&search_file()) {
+        if let Err(problem) = search.write(&search_file(crate::app())) {
             rimstack_core::problem!("{problem}");
         }
-        state(Some(&search))
+        state(crate::app(), Some(&search))
     }
 
     /// The game was tried with the round's list: still broken, or not.
     pub(super) fn hunt_answer(&self, broken: bool) -> QString {
-        let Some(mut search) = Bisect::read(&search_file()) else {
-            return state(None);
+        let Some(mut search) = Bisect::read(&search_file(crate::app())) else {
+            return state(crate::app(), None);
         };
         search.answer(broken);
-        if let Err(problem) = search.write(&search_file()) {
+        if let Err(problem) = search.write(&search_file(crate::app())) {
             rimstack_core::problem!("{problem}");
         }
-        state(Some(&search))
+        state(crate::app(), Some(&search))
     }
 
     pub(super) fn hunt_stop(&self) {
-        let _ = std::fs::remove_file(search_file());
+        let _ = std::fs::remove_file(search_file(crate::app()));
     }
 }

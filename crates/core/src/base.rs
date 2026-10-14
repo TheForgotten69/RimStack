@@ -1,0 +1,17 @@
+//! What any program could use: errors, the language of sentences, locks,
+//! the diagnostics, files written whole, other programs and the web.
+//! Nothing here knows of RimWorld.
+
+pub mod atomic_file;
+pub mod diagnostics;
+pub mod error;
+pub mod grouped;
+pub mod locks;
+pub mod markup;
+pub mod program;
+pub mod reread;
+pub mod translate;
+pub mod vdf;
+pub mod walk;
+pub mod watch;
+pub(crate) mod web;

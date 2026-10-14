@@ -1,13 +1,16 @@
 //! The load-order list exposed to QML as a list model.
 
-use rimstack_core::locks::{Held, Shared};
+use rimstack_core::base::locks::{Held, Shared};
 use rimstack_core::{
-    conflicts, demo, infer,
-    library::Library,
-    list::{Category, Change, GroupedList, Mod, Row},
-    loadfolders, modsconfig,
-    rules::{Kind, Rule},
-    sort,
+    mods::conflicts,
+    mods::demo,
+    mods::infer,
+    mods::library::{Library, ModId},
+    mods::list::{Category, Change, GroupedList, Mod, Row},
+    mods::rules::{Kind, Rule},
+    mods::sort,
+    rimworld::loadfolders,
+    rimworld::modsconfig,
 };
 use rimstack_core::{say, say_n};
 
@@ -327,24 +330,59 @@ pub mod qobject {
         #[cxx_name = "modIdAt"]
         fn mod_id_at(self: &ModListModel, row: i32) -> i32;
 
-        /// The row of the nearest installed mod from `from`, going down
-        /// (`by` 1) or up (-1), headings skipped; -1 at the end. `from`
-        /// may be -1 or `rows()` to start at an end.
+        /// The row a step of `by` (1 down, -1 up) from the mod's row
+        /// leads to, headings skipped; from no mod (-1) a step starts at
+        /// an end. -1 past the end.
         #[qinvokable]
-        #[cxx_name = "stepRow"]
-        fn step_row(self: &ModListModel, from: i32, by: i32) -> i32;
+        #[cxx_name = "stepFrom"]
+        fn step_from(self: &ModListModel, mod_id: i32, by: i32) -> i32;
 
-        /// The library ids of the installed mods on the rows from one to
-        /// the other, as a JSON array.
+        /// The mod the selection goes to when this one leaves the list;
+        /// -1 for none.
         #[qinvokable]
-        #[cxx_name = "idsBetween"]
-        fn ids_between(self: &ModListModel, a: i32, b: i32) -> QString;
+        #[cxx_name = "besideMod"]
+        fn beside_mod(self: &ModListModel, mod_id: i32) -> i32;
 
-        /// The library id of the mod the selection goes to when the one
-        /// on this row leaves the list; -1 for none.
+        /// The other mods on the rows from one mod to another, as a JSON
+        /// array; null unless both are shown.
         #[qinvokable]
-        #[cxx_name = "idBeside"]
-        fn id_beside(self: &ModListModel, row: i32) -> i32;
+        #[cxx_name = "othersThrough"]
+        fn others_through(self: &ModListModel, from: i32, to: i32) -> QString;
+
+        /// The two mods as `[earlier, later]` in load order; null unless
+        /// both are in the list.
+        #[qinvokable]
+        #[cxx_name = "inLoadOrder"]
+        fn in_load_order(self: &ModListModel, a: i32, b: i32) -> QString;
+
+        /// The place a move of `by` takes the mod to; -1 when that would
+        /// leave the list.
+        #[qinvokable]
+        #[cxx_name = "nudgeTo"]
+        fn nudge_to(self: &ModListModel, mod_id: i32, by: i32) -> i32;
+
+        /// Of these mods (a JSON array), those warned about only for the
+        /// game version they list.
+        #[qinvokable]
+        #[cxx_name = "versionWarned"]
+        fn version_warned(self: &ModListModel, ids: &QString) -> QString;
+
+        /// The mods of this list with these folded package ids (a JSON
+        /// array), in that order, as a JSON array.
+        #[qinvokable]
+        #[cxx_name = "packageMods"]
+        fn package_mods(self: &ModListModel, keys: &QString) -> QString;
+
+        /// The place to move the mod to so that it loads just after
+        /// `other`; -1 when `other` already loads before it.
+        #[qinvokable]
+        #[cxx_name = "placeBelow"]
+        fn place_below(self: &ModListModel, mod_id: i32, other: i32) -> i32;
+
+        /// How many mods the sort on show moves.
+        #[qinvokable]
+        #[cxx_name = "sortMoveCount"]
+        fn sort_move_count(self: &ModListModel) -> i32;
 
         /// Number of rows on screen; for the self-test.
         #[qinvokable]
@@ -418,6 +456,7 @@ mod fields;
 pub use fields::ModListModelRust;
 use fields::Preview;
 mod editing;
+mod navigation;
 mod reset;
 mod rows;
 mod shared_textures;
@@ -425,13 +464,13 @@ mod sorting;
 mod sources;
 mod trust;
 
-use rimstack_core::share;
-use rimstack_core::tree::folder_tree;
+use rimstack_core::mods::share;
+use rimstack_core::mods::tree::folder_tree;
 use sources::*;
 use trust::troubles;
 
-use rimstack_core::ordering::{self, Sources};
-use rimstack_core::words::{self as words, Trouble};
+use rimstack_core::mods::describe::{self as describe, Trouble};
+use rimstack_core::mods::ordering::{self, Sources};
 
 fn text(s: &str) -> QVariant {
     QVariant::from(&QString::from(s))
@@ -439,18 +478,18 @@ fn text(s: &str) -> QVariant {
 
 /// The installed mods split by the load order being edited, each with
 /// your tags.
-fn arranged(library: &Library) -> rimstack_core::library::Arranged {
-    let mut now = library.arrange(crate::app().session().current());
+fn arranged(app: &crate::App, library: &Library) -> rimstack_core::mods::library::Arranged {
+    let mut now = library.arrange(app.session().current());
     for m in now.active.iter_mut() {
-        let took = crate::app()
+        let took = app
             .startup()
-            .of(&rimstack_core::id::split_steam(&m.id).0);
+            .of(&rimstack_core::rimworld::id::split_steam(&m.id).0);
         m.load_micros = took.map(|ms| (ms * 1000.0) as u32);
     }
-    let notes = crate::app().notes().reading();
+    let notes = app.notes().reading();
     if !notes.is_empty() {
         for m in now.active.iter_mut().chain(now.inactive.iter_mut()) {
-            let key = m.installed.and_then(|i| library.installed[i].key());
+            let key = m.installed.and_then(|i| library.get(i)?.key());
             if let Some(note) = key.and_then(|k| notes.get(&k)) {
                 m.tags = note.tags.clone();
                 m.sub = note.group().to_string();
@@ -466,7 +505,12 @@ fn arranged(library: &Library) -> rimstack_core::library::Arranged {
 
 /// One of the two lists as first shown, with the line under it and why
 /// the mods could not be read, if they could not.
-fn listed(loaded: &crate::Loaded, active: bool, headings: bool) -> (GroupedList, String, String) {
+fn listed(
+    app: &crate::App,
+    loaded: &crate::Loaded,
+    active: bool,
+    headings: bool,
+) -> (GroupedList, String, String) {
     let (library, scan) = match loaded {
         Ok(read) => read,
         Err(problem) => {
@@ -484,12 +528,12 @@ fn listed(loaded: &crate::Loaded, active: bool, headings: bool) -> (GroupedList,
             scan.as_millis()
         );
         return (
-            GroupedList::new(arranged(library).inactive),
+            GroupedList::new(arranged(app, library).inactive),
             status,
             String::new(),
         );
     }
-    let (mods, _) = sorted_by_category(library, arranged(library).active);
+    let (mods, _) = sorted_by_category(app, library, arranged(app, library).active);
     let mut list = GroupedList::flat(mods);
     list.set_grouped(headings);
     let status = match library.missing {
@@ -509,7 +553,7 @@ impl qobject::ModListModel {
     fn load_installed(self: Pin<&mut Self>, active: bool) {
         let headings = self.wants_headings();
         // Waits there, off the interface thread, until the scan is done.
-        let read = move || listed(&crate::app().library(), active, headings);
+        let read = move || listed(crate::app(), &crate::app().library(), active, headings);
         crate::background::run(self.qt_thread(), read, move |mut model, listed| {
             let (list, status, problem) = listed;
             model.as_mut().rust_mut().checked = active && problem.is_empty();
@@ -547,7 +591,7 @@ impl qobject::ModListModel {
         let rows = self.list.rows();
         match usize::try_from(row).ok().and_then(|r| rows.get(r)) {
             Some(Row::Mod { index }) => {
-                rimstack_core::checks::place_among(&self.troubled(), *index).0 as i32
+                rimstack_core::mods::checks::place_among(&self.troubled(), *index).0 as i32
             }
             _ => 0,
         }
@@ -557,24 +601,12 @@ impl qobject::ModListModel {
         self.troubled().iter().filter(|t| **t).count() as i32
     }
 
-    fn index_of(&self, mod_id: i32) -> i32 {
-        let Ok(id) = usize::try_from(mod_id) else {
-            return -1;
-        };
-        let found = self
-            .list
-            .mods()
-            .iter()
-            .position(|m| m.installed == Some(id));
-        found.map_or(-1, |i| i as i32)
-    }
-
     fn listing(&self) -> QString {
         let loaded = crate::app().library();
         let Ok((library, _)) = &*loaded else {
             return QString::default();
         };
-        let installed = |m: &Mod| library.installed.get(m.installed?);
+        let installed = |m: &Mod| library.get(m.installed?);
         let entries: Vec<share::Entry> = self
             .list
             .mods()
@@ -590,59 +622,24 @@ impl qobject::ModListModel {
         let Ok((library, _)) = &*loaded else {
             return QString::from("[]");
         };
-        let active: std::collections::HashSet<usize> = library
+        let active: std::collections::HashSet<ModId> = library
             .arrange(crate::app().session().current())
             .active
             .iter()
             .filter_map(|m| m.installed)
             .collect();
-        let found: Vec<serde_json::Value> = library
+        let found: Vec<crate::reports::FoundMod> = library
             .find(&text.to_string(), usize::try_from(most).unwrap_or(0))
             .into_iter()
-            .map(|i| {
-                serde_json::json!({
-                    "name": library.installed[i].display_name(),
-                    "modId": i,
-                    "active": active.contains(&i),
+            .filter_map(|i| {
+                Some(crate::reports::FoundMod {
+                    name: library.get(i)?.display_name(),
+                    mod_id: i,
+                    active: active.contains(&i),
                 })
             })
             .collect();
-        QString::from(&serde_json::Value::Array(found).to_string())
-    }
-
-    fn mod_id_at(&self, row: i32) -> i32 {
-        let on_row = usize::try_from(row)
-            .ok()
-            .and_then(|row| self.list.installed_on(row));
-        on_row.map_or(-1, |id| id as i32)
-    }
-
-    fn step_row(&self, from: i32, by: i32) -> i32 {
-        let found = self.list.step(from as isize, by.signum() as isize);
-        found.map_or(-1, |row| row as i32)
-    }
-
-    fn ids_between(&self, a: i32, b: i32) -> QString {
-        let ids = match (usize::try_from(a), usize::try_from(b)) {
-            (Ok(a), Ok(b)) => self.list.installed_between(a, b),
-            _ => Vec::new(),
-        };
-        QString::from(&serde_json::json!(ids).to_string())
-    }
-
-    fn id_beside(&self, row: i32) -> i32 {
-        let beside = usize::try_from(row)
-            .ok()
-            .and_then(|row| self.list.beside(row));
-        beside.map_or(-1, |id| id as i32)
-    }
-
-    fn row_of(&self, position: i32) -> i32 {
-        let rows = self.list.rows();
-        let found = rows
-            .iter()
-            .position(|r| matches!(r, Row::Mod { index } if *index as i32 == position));
-        found.map_or(-1, |r| r as i32)
+        crate::reports::said(&found)
     }
 
     fn rescan(self: Pin<&mut Self>) {
@@ -682,3 +679,6 @@ impl qobject::ModListModel {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

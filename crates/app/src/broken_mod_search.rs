@@ -39,8 +39,7 @@ pub mod qobject {
 use crate::backend::now_secs;
 use crate::backend::save_report::saves_dir;
 use cxx_qt_lib::QString;
-use rimstack_core::saves;
-use serde_json::json;
+use rimstack_core::rimworld::saves;
 use std::path::PathBuf;
 
 #[path = "broken_mod_search/broken_mod.rs"]

@@ -11,14 +11,22 @@ impl qobject::Backend {
         self.as_mut().set_release_busy(true);
         let asked = || {
             let running = env!("CARGO_PKG_VERSION");
-            let found = match rimstack_core::release::latest() {
-                Ok(Some(release)) if rimstack_core::release::newer(running, &release.version) => {
-                    json!({ "version": release.version, "page": release.page })
+            use crate::reports::ReleaseSaid;
+            let found = match rimstack_core::sources::release::latest() {
+                Ok(Some(release))
+                    if rimstack_core::sources::release::newer(running, &release.version) =>
+                {
+                    ReleaseSaid::Newer {
+                        version: release.version,
+                        page: release.page,
+                    }
                 }
-                Ok(_) => json!({}),
-                Err(problem) => json!({ "problem": problem }),
+                Ok(_) => ReleaseSaid::Latest {},
+                Err(problem) => ReleaseSaid::Failed {
+                    problem: problem.into(),
+                },
             };
-            found.to_string()
+            crate::reports::said(&found).to_string()
         };
         crate::background::run(self.qt_thread(), asked, |mut backend, found| {
             backend.as_mut().set_release(QString::from(&found));

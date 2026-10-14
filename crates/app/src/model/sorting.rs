@@ -15,7 +15,7 @@ impl qobject::ModListModel {
         };
         let started = std::time::Instant::now();
         let before = self.list.mods().to_vec();
-        let (mods, sorted) = sorted_by_category(library, before.clone());
+        let (mods, sorted) = sorted_by_category(crate::app(), library, before.clone());
         let moved = sorted.moved();
         rimstack_core::note!("sort_us={}", started.elapsed().as_micros());
 
@@ -29,7 +29,7 @@ impl qobject::ModListModel {
             ),
         };
         // Rules come before groups: say which groups they keep apart.
-        let apart = rimstack_core::list::split_groups(sorted.order.iter().map(|&i| &mods[i]));
+        let apart = rimstack_core::mods::list::split_groups(sorted.order.iter().map(|&i| &mods[i]));
         if !apart.is_empty() {
             note += " ";
             note += &say_n!(
@@ -43,7 +43,7 @@ impl qobject::ModListModel {
         let dropped = sorted.dropped.iter();
         let each: Vec<String> = dropped
             .filter(|r| !matches!(r.kind, Kind::CommunityBottom | Kind::Inferred))
-            .map(|r| words::rule(r, &mods))
+            .map(|r| describe::rule(r, &mods))
             .collect();
         if !each.is_empty() {
             note += " ";
@@ -58,7 +58,7 @@ impl qobject::ModListModel {
         if moves == 0 {
             return;
         }
-        let found = all_rules(library, &mods);
+        let found = all_rules(crate::app(), library, &mods);
         let names: Vec<&str> = mods.iter().map(|m| m.name.as_str()).collect();
         let categories: Vec<Category> = mods.iter().map(|m| m.category).collect();
         let why = sorted
@@ -66,7 +66,9 @@ impl qobject::ModListModel {
             .iter()
             .zip(&moved)
             .map(|(&old, moved)| {
-                moved.then(|| rimstack_core::why::moved(old, &found, &names, &categories))
+                moved.then(|| {
+                    rimstack_core::mods::sort_reasons::moved(old, &found, &names, &categories)
+                })
             })
             .collect();
         let moved_from = sorted
@@ -151,7 +153,7 @@ impl qobject::ModListModel {
             self.as_mut().reset_with(|_| ());
             return;
         };
-        let (mods, _) = sorted_by_category(library, self.list.mods().to_vec());
+        let (mods, _) = sorted_by_category(crate::app(), library, self.list.mods().to_vec());
         self.as_mut().reset_with(|list| list.set_mods(mods));
     }
 
@@ -163,40 +165,51 @@ impl qobject::ModListModel {
         if self.preview.is_some() || !self.checked {
             return 0;
         }
-        let (_, sorted) = sorted_by_category(library, self.list.mods().to_vec());
+        let (_, sorted) = sorted_by_category(crate::app(), library, self.list.mods().to_vec());
         sorted.moved().iter().filter(|moved| **moved).count() as i32
     }
 
-    pub(crate) fn sort_moves(&self) -> QString {
+    /// Each mod the sort on show moves: its place now, the mod, its place
+    /// before (from 1) and why.
+    fn previewed_moves(
+        &self,
+    ) -> Vec<(usize, &Mod, usize, &rimstack_core::mods::sort_reasons::Why)> {
         let Some(preview) = &self.preview else {
-            return QString::from("[]");
+            return Vec::new();
         };
         let moved = self.list.mods().iter().zip(&preview.moved_from).enumerate();
         let reasoned = moved.filter_map(|(now, (m, &from))| {
             let why = preview.why.get(now)?.as_ref()?;
             (from > 0).then_some((now, m, from, why))
         });
-        let mut groups = rimstack_core::grouped::by_key(reasoned, |(_, _, _, why)| why.group);
+        reasoned.collect()
+    }
+
+    pub(crate) fn sort_move_count(&self) -> i32 {
+        self.previewed_moves().len() as i32
+    }
+
+    pub(crate) fn sort_moves(&self) -> QString {
+        let reasoned = self.previewed_moves().into_iter();
+        let mut groups = rimstack_core::base::grouped::by_key(reasoned, |(_, _, _, why)| why.group);
         groups.sort_by_key(|(_, moves)| std::cmp::Reverse(moves.len()));
-        let said: Vec<serde_json::Value> = groups
+        let said: Vec<crate::reports::SortGroup> = groups
             .iter()
-            .map(|(name, moves)| {
-                let moves: Vec<serde_json::Value> = moves
+            .map(|(name, moves)| crate::reports::SortGroup {
+                name,
+                moves: moves
                     .iter()
-                    .map(|(now, m, from, why)| {
-                        serde_json::json!({
-                            "name": m.name,
-                            "from": from,
-                            "to": now + 1,
-                            "modId": m.installed.map_or(-1, |i| i as i64),
-                            "why": why.text,
-                        })
+                    .map(|(now, m, from, why)| crate::reports::SortMove {
+                        name: m.name.clone(),
+                        from: *from,
+                        to: now + 1,
+                        mod_id: m.installed.map_or(-1, ModId::to_qml),
+                        why: why.text.clone(),
                     })
-                    .collect();
-                serde_json::json!({ "name": name, "moves": moves })
+                    .collect(),
             })
             .collect();
-        QString::from(&serde_json::Value::Array(said).to_string())
+        crate::reports::said(&said)
     }
 
     /// Why Sort moves the mod at this position of the order on show.

@@ -2,11 +2,11 @@
 //! from disk, and the load order being edited. Each is read on first
 //! use; what follows the folders is read again when they change.
 
-use rimstack_core::locks::{Held, Shared};
-use rimstack_core::reread::Reread;
+use rimstack_core::base::locks::{Held, Shared};
+use rimstack_core::base::reread::Reread;
 use rimstack_core::{
-    community, library, notes::Notes, paths, session::Session, settings::Settings,
-    userrules::UserRules,
+    kept::notes::Notes, kept::settings::Settings, mods::community, mods::library,
+    mods::session::Session, mods::userrules::UserRules, rimworld::paths,
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -66,18 +66,18 @@ pub fn language_name(chosen: &str) -> &str {
 /// textures, and which point at each other. Worked out in the background
 /// whenever the set of active mods changes.
 pub struct Conflicts {
-    /// The active mods it was worked out for, by library id, ascending.
-    pub members: Vec<usize>,
+    /// The active mods it was worked out for, ascending.
+    pub members: Vec<library::ModId>,
     /// By place in `members`.
-    pub overlaps: rimstack_core::conflicts::Overlaps,
-    /// What each of those mods defines and points at, by library id; the
-    /// rules detected from files are worked out from these.
-    pub scanned: HashMap<usize, rimstack_core::infer::Scanned>,
+    pub overlaps: rimstack_core::mods::conflicts::Overlaps,
+    /// What each of those mods defines and points at; the rules detected
+    /// from files are worked out from these.
+    pub scanned: HashMap<library::ModId, rimstack_core::mods::infer::Scanned>,
 }
 
 /// The installed mods and how long reading them took, or why they could
 /// not be read.
-pub type Loaded = Result<(library::Library, Duration), rimstack_core::error::Error>;
+pub type Loaded = Result<(library::Library, Duration), rimstack_core::base::error::Error>;
 
 /// When each Workshop item on disk was last updated, and how big it is,
 /// by Workshop id.
@@ -98,12 +98,15 @@ pub struct App {
     user_rules: OnceLock<RwLock<UserRules>>,
     community: OnceLock<RwLock<Option<community::Community>>>,
     works_on: OnceLock<RwLock<HashSet<String>>>,
-    replacements: OnceLock<HashMap<String, rimstack_core::replacements::Replacement>>,
-    workshop_names: OnceLock<RwLock<rimstack_core::workshopdb::Names>>,
-    seen: OnceLock<RwLock<rimstack_core::seen::Seen>>,
+    replacements: OnceLock<HashMap<String, rimstack_core::sources::replacements::Replacement>>,
+    workshop_names: OnceLock<RwLock<rimstack_core::rimworld::workshopdb::Names>>,
+    seen: OnceLock<RwLock<rimstack_core::kept::new_mods::Seen>>,
     steam_record: Reread<SteamRecord>,
-    startup: Reread<rimstack_core::startup::Measured>,
+    startup: Reread<rimstack_core::rimworld::startup::Measured>,
     newest_save: Reread<Option<HashSet<String>>>,
+    /// Where SteamCMD is: found by looking through `PATH`, which several
+    /// screens ask after on every change.
+    steamcmd: Reread<Option<PathBuf>>,
     conflicts: RwLock<Option<Conflicts>>,
     behind: RwLock<Option<HashSet<String>>>,
     /// Counted when first asked for: walking a mod of 10,935 textures
@@ -156,6 +159,7 @@ impl App {
             steam_record: Reread::new(),
             startup: Reread::new(),
             newest_save: Reread::new(),
+            steamcmd: Reread::new(),
             conflicts: RwLock::new(None),
             behind: RwLock::new(None),
             texture_counts: Mutex::new(BTreeMap::new()),
@@ -195,9 +199,13 @@ impl App {
         self.settings.reading()
     }
 
-    pub fn set_setting(&self, name: &str, value: &str) -> Result<(), rimstack_core::error::Error> {
+    pub fn set_setting(
+        &self,
+        name: &str,
+        value: &str,
+    ) -> Result<(), rimstack_core::base::error::Error> {
         let mut settings = self.settings.writing();
-        settings.set(name, value);
+        settings.set(name, value)?;
         settings.write(&self.settings_file())
     }
 
@@ -234,8 +242,8 @@ impl App {
         let record = file.and_then(|file| std::fs::read_to_string(file).ok());
         let record = record.unwrap_or_default();
         (
-            rimstack_core::workshop::installed_times(&record),
-            rimstack_core::workshop::installed_sizes(&record),
+            rimstack_core::rimworld::workshop::installed_times(&record),
+            rimstack_core::rimworld::workshop::installed_sizes(&record),
         )
     }
 
@@ -279,8 +287,8 @@ impl App {
             .held()
     }
 
-    /// The library ids of the mods in the load order being edited.
-    pub fn active_now(&self, library: &library::Library) -> HashSet<usize> {
+    /// The mods in the load order being edited.
+    pub fn active_now(&self, library: &library::Library) -> HashSet<library::ModId> {
         let list = self.session().current().to_vec();
         library.active_ids(&list)
     }
@@ -304,7 +312,7 @@ impl App {
         if let Some(known) = self.texture_counts.held().get(mod_root) {
             return *known;
         }
-        let counted = rimstack_core::textures::pngs(mod_root).len();
+        let counted = rimstack_core::mods::textures::pngs(mod_root).len();
         let mut counts = self.texture_counts.held();
         counts.insert(mod_root.to_path_buf(), counted);
         counted
@@ -348,13 +356,15 @@ impl App {
         let Some(file) = self.paths().mods_config() else {
             return 0;
         };
-        let written = rimstack_core::watch::changed_at(&file);
+        let written = rimstack_core::base::watch::changed_at(&file);
         let mut last = self.list_on_disk.held();
         if last.0 != written {
-            let on_disk = rimstack_core::modsconfig::read(&file).map(|config| config.active);
+            let on_disk =
+                rimstack_core::rimworld::modsconfig::read(&file).map(|config| config.active);
             let saved = self.session().saved().to_vec();
-            let differs = on_disk
-                .is_ok_and(|on_disk| !rimstack_core::modsconfig::same_order(&on_disk, &saved));
+            let differs = on_disk.is_ok_and(|on_disk| {
+                !rimstack_core::rimworld::modsconfig::same_order(&on_disk, &saved)
+            });
             *last = (written, differs);
         }
         if last.1 {
@@ -364,10 +374,24 @@ impl App {
         }
     }
 
-    /// When each thing RimStack shows was last changed on disk, by name:
-    /// compared with the time before, it says what to read again.
-    pub fn stamps(&self) -> serde_json::Value {
-        use rimstack_core::watch::{changed_at, newest};
+    /// When the game last wrote a log, in milliseconds since 1970; 0 for
+    /// never. Up to 1.6 in the settings folder, from 1.7 in `Logs` there.
+    pub fn log_written(&self) -> u64 {
+        let paths = self.paths();
+        let Some(config) = paths.config.as_ref() else {
+            return 0;
+        };
+        let logs = [
+            config.join("Player.log"),
+            config.join("Logs").join("Player.log"),
+        ];
+        rimstack_core::base::watch::newest(logs.iter().map(PathBuf::as_path))
+    }
+
+    /// When each thing RimStack shows was last changed on disk: compared
+    /// with the time before, it says what to read again.
+    pub fn stamps(&self) -> rimstack_core::base::watch::Stamps {
+        use rimstack_core::base::watch::{changed_at, newest};
         let paths = self.paths();
         let (record, local) = (paths.steam_record(), paths.local_mods());
         let mods = [paths.workshop.clone(), record, local];
@@ -385,26 +409,21 @@ impl App {
             }
             Err(_) => Vec::new(),
         };
-        let config = paths.config.as_ref();
-        let saves = config.map(|c| c.join("Saves"));
-        let logs = [
-            config.map(|c| c.join("Player.log")),
-            config.map(|c| c.join("Logs").join("Player.log")),
-        ];
+        let saves = paths.config.as_ref().map(|c| c.join("Saves"));
         let language = self.settings().get("language").map(|name| {
             self.settings_file()
                 .with_file_name("languages")
                 .join(format!("{}.json", language_name(name)))
         });
         let one = |path: Option<PathBuf>| path.map_or(0, |p| changed_at(&p));
-        serde_json::json!({
-            "mods": newest(mods.iter().flatten().chain(&inside).map(PathBuf::as_path)),
-            "saves": one(saves),
-            "log": newest(logs.iter().flatten().map(PathBuf::as_path)),
-            "modsConfig": self.list_changed_outside(),
-            "theme": one(Some(self.settings_file().with_file_name("theme.json"))),
-            "language": one(language),
-        })
+        rimstack_core::base::watch::Stamps {
+            mods: newest(mods.iter().flatten().chain(&inside).map(PathBuf::as_path)),
+            saves: one(saves),
+            log: self.log_written(),
+            mods_config: self.list_changed_outside(),
+            theme: one(Some(self.settings_file().with_file_name("theme.json"))),
+            language: one(language),
+        }
     }
 
     /// The community rules, if they were ever downloaded.
@@ -431,25 +450,39 @@ impl App {
     /// Workshop mods with a maintained replacement, by Workshop id: its
     /// own download of the Use This Instead list, or RimSort's copy for
     /// an install that has none yet.
-    pub fn replacements(&self) -> &HashMap<String, rimstack_core::replacements::Replacement> {
+    pub fn replacements(
+        &self,
+    ) -> &HashMap<String, rimstack_core::sources::replacements::Replacement> {
         self.replacements.get_or_init(|| {
-            let own = rimstack_core::replacements::file_in(&self.data_dir);
+            let own = rimstack_core::sources::replacements::file_in(&self.data_dir);
             let rimsort = self
                 .data_dir
                 .with_file_name("RimSort")
                 .join("dbs/UseThisInstead/replacements.json.gz");
-            rimstack_core::replacements::read(if own.is_file() { &own } else { &rimsort })
+            rimstack_core::sources::replacements::read(if own.is_file() { &own } else { &rimsort })
         })
     }
 
-    pub fn workshop_names(&self) -> &RwLock<rimstack_core::workshopdb::Names> {
+    pub fn workshop_names(&self) -> &RwLock<rimstack_core::rimworld::workshopdb::Names> {
         self.workshop_names.get_or_init(|| {
-            let file = rimstack_core::workshopdb::file_in(&self.data_dir);
-            RwLock::new(rimstack_core::workshopdb::read(&file))
+            let file = rimstack_core::rimworld::workshopdb::file_in(&self.data_dir);
+            RwLock::new(rimstack_core::rimworld::workshopdb::read(&file))
         })
     }
 
-    fn read_startup(&self) -> rimstack_core::startup::Measured {
+    /// SteamCMD, RimStack's own or the system's; see `redownload::steamcmd`.
+    pub fn steamcmd(&self) -> Arc<Option<PathBuf>> {
+        self.steamcmd
+            .get(|| rimstack_core::sources::redownload::steamcmd(&self.data_dir))
+    }
+
+    /// SteamCMD was installed or removed: look for it again.
+    pub fn look_for_steamcmd(&self) {
+        self.steamcmd
+            .put(rimstack_core::sources::redownload::steamcmd(&self.data_dir));
+    }
+
+    fn read_startup(&self) -> rimstack_core::rimworld::startup::Measured {
         let paths = self.paths();
         let config = paths.config.as_deref();
         // Measured before the game was last updated, the times are of
@@ -463,19 +496,25 @@ impl App {
         if matches!((measured, updated), (Some(measured), Some(updated)) if measured < updated) {
             return Default::default();
         }
-        config.map(rimstack_core::startup::read).unwrap_or_default()
+        config
+            .map(rimstack_core::rimworld::startup::read)
+            .unwrap_or_default()
     }
 
     /// What Loading Progress measured at the game's last start.
-    pub fn startup(&self) -> Arc<rimstack_core::startup::Measured> {
+    pub fn startup(&self) -> Arc<rimstack_core::rimworld::startup::Measured> {
         self.startup.get(|| self.read_startup())
     }
 
     fn read_newest_save(&self) -> Option<HashSet<String>> {
-        let saves = rimstack_core::saves::list(&self.paths().config.as_ref()?.join("Saves"));
+        let saves =
+            rimstack_core::rimworld::saves::list(&self.paths().config.as_ref()?.join("Saves"));
         let header = saves.into_iter().next()?.header.ok()?;
         let ids = header.mod_ids.iter();
-        Some(ids.map(|id| rimstack_core::id::split_steam(id).0).collect())
+        Some(
+            ids.map(|id| rimstack_core::rimworld::id::split_steam(id).0)
+                .collect(),
+        )
     }
 
     /// The mods of the newest save, by folded package id; `None` without a save.
@@ -483,13 +522,14 @@ impl App {
         self.newest_save.get(|| self.read_newest_save())
     }
 
-    fn all_seen(&self) -> rimstack_core::seen::Seen {
+    fn all_seen(&self) -> rimstack_core::kept::new_mods::Seen {
         let loaded = self.library();
         let installed = loaded.as_ref().as_ref().ok();
         let installed = installed.map(|(library, _)| library.installed.as_slice());
         let folders = installed.unwrap_or_default().iter();
-        let now =
-            rimstack_core::seen::Seen::of(folders.map(|m| m.path.to_string_lossy().into_owned()));
+        let now = rimstack_core::kept::new_mods::Seen::of(
+            folders.map(|m| m.path.to_string_lossy().into_owned()),
+        );
         if let Err(problem) = now.write(&self.seen_file()) {
             rimstack_core::problem!("{problem}");
         }
@@ -498,9 +538,9 @@ impl App {
 
     /// The mod folders there at the last start of the game from RimStack.
     /// On a first run every installed mod counts as seen.
-    pub fn seen(&self) -> &RwLock<rimstack_core::seen::Seen> {
+    pub fn seen(&self) -> &RwLock<rimstack_core::kept::new_mods::Seen> {
         self.seen.get_or_init(|| {
-            let kept = rimstack_core::seen::Seen::read(&self.seen_file());
+            let kept = rimstack_core::kept::new_mods::Seen::read(&self.seen_file());
             RwLock::new(if kept.is_recorded() {
                 kept
             } else {
@@ -602,7 +642,7 @@ pub(crate) mod tests {
     fn a_list_written_outside_is_noticed_and_one_of_the_same_order_is_not() {
         let (tmp, app) = installed();
         let file = tmp.path().join("config/Config/ModsConfig.xml");
-        assert_eq!(app.stamps()["modsConfig"], 0);
+        assert_eq!(app.stamps().mods_config, 0);
         let write = |ids: &str, at: u64| {
             fs::write(
                 &file,
@@ -619,9 +659,9 @@ pub(crate) mod tests {
         };
         // As the game writes it at a start: the same mods, another case.
         write("<li>Ludeon.RimWorld</li>", 2_000_000_000);
-        assert_eq!(app.stamps()["modsConfig"], 0);
+        assert_eq!(app.stamps().mods_config, 0);
         write("<li>ludeon.rimworld</li><li>ann.roads</li>", 2_000_000_100);
-        assert_ne!(app.stamps()["modsConfig"], 0);
+        assert_ne!(app.stamps().mods_config, 0);
     }
 
     #[test]

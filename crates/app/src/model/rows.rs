@@ -153,7 +153,10 @@ impl qobject::ModListModel {
                         // Under a millisecond is nothing worth a number.
                         let took = m.load_micros.filter(|micros| *micros >= 1000);
                         let ms = took.map(|micros| f64::from(micros) / 1000.0);
-                        text(&ms.map(rimstack_core::startup::seconds).unwrap_or_default())
+                        text(
+                            &ms.map(rimstack_core::rimworld::startup::seconds)
+                                .unwrap_or_default(),
+                        )
                     }
                     LOAD_PART => {
                         let part = match (m.load_micros, self.slowest) {
@@ -166,10 +169,10 @@ impl qobject::ModListModel {
                     SOURCE => {
                         let loaded = crate::app().library();
                         let installed = match (&*loaded, m.installed) {
-                            (Ok((library, _)), Some(i)) => library.installed.get(i),
+                            (Ok((library, _)), Some(i)) => library.get(i),
                             _ => None,
                         };
-                        use rimstack_core::paths::Source;
+                        use rimstack_core::rimworld::paths::Source;
                         let source = installed.map_or(0, |i| match i.source {
                             Source::Official => 3,
                             Source::Local if i.git => 2,
@@ -182,7 +185,7 @@ impl qobject::ModListModel {
                     COUNT => QVariant::from(&0),
                     CATEGORY => QVariant::from(&(m.category as i32)),
                     MOD_INDEX => QVariant::from(&(index as i32)),
-                    MOD_ID => QVariant::from(&m.installed.map_or(-1, |i| i as i32)),
+                    MOD_ID => QVariant::from(&m.installed.map_or(-1, ModId::to_qml)),
                     GROUP_SIZE => QVariant::from(&0),
                     TAGS => text(&m.tags.join(", ")),
                     TROUBLE => {
@@ -201,7 +204,8 @@ impl qobject::ModListModel {
                             .get(index)
                             .map(Vec::as_slice)
                             .unwrap_or_default();
-                        let version = |t: &Trouble| t.fix == rimstack_core::words::Fix::Trust;
+                        let version =
+                            |t: &Trouble| t.fix == rimstack_core::mods::describe::Fix::Trust;
                         QVariant::from(&(!own.is_empty() && own.iter().all(version)))
                     }
                     TROUBLE_TEXT => {
@@ -217,7 +221,7 @@ impl qobject::ModListModel {
                     PICTURE => {
                         let loaded = crate::app().library();
                         let installed = match (&*loaded, m.installed) {
-                            (Ok((library, _)), Some(i)) => library.installed.get(i),
+                            (Ok((library, _)), Some(i)) => library.get(i),
                             _ => None,
                         };
                         let picture = installed.and_then(|i| i.preview.as_ref());

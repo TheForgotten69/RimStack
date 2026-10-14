@@ -1,4 +1,4 @@
-use rimstack_core::say;
+use rimstack_core::said;
 
 mod backend;
 mod background;
@@ -9,6 +9,7 @@ mod list_store;
 mod log_reader;
 mod mod_edits;
 mod model;
+mod reports;
 mod save_reader;
 mod state;
 mod texture_tools;
@@ -30,7 +31,7 @@ fn put_among_applications() {
     };
     let entry = include_str!("../assets/rimstack.desktop");
     let icon = include_bytes!("../assets/rimstack.svg");
-    match rimstack_core::desktop::install(&home, &exe, entry, icon) {
+    match rimstack_core::kept::desktop::install(&home, &exe, entry, icon) {
         // A running desktop holds the icons it has looked up: KDE reads
         // them again on this signal. Without the tool, the next login does.
         Ok(true) => {
@@ -51,13 +52,13 @@ fn put_among_applications() {
 /// `rimstack --steamworks=subscribe:1,2`. It ends with 0 when Steam took
 /// the requests, and says why not otherwise.
 fn steamworks(request: &str) -> std::process::ExitCode {
-    use rimstack_core::error::Error;
-    use rimstack_core::steamworks;
+    use rimstack_core::base::error::Error;
+    use rimstack_core::rimworld::steamworks;
     let asked = steamworks::parse(request).ok_or_else(|| Error::refused("not a request"));
     let library = app().paths().game.as_deref().and_then(steamworks::library);
     let done = asked.and_then(|(action, ids)| {
         let library = library
-            .ok_or_else(|| Error::program(say!("the game's Steam library was not found")))?;
+            .ok_or_else(|| Error::program(said!("the game's Steam library was not found")))?;
         steamworks::act(&library, action, &ids)
     });
     match done {
@@ -87,17 +88,17 @@ fn main() -> std::process::ExitCode {
         return steamworks(&request);
     }
     STARTED.get_or_init(Instant::now);
-    if let Err(problem) = rimstack_core::diagnostics::start(&app().diagnostics_file()) {
+    if let Err(problem) = rimstack_core::base::diagnostics::start(&app().diagnostics_file()) {
         rimstack_core::problem!("{}: {problem}", app().diagnostics_file().display());
     }
-    rimstack_core::diagnostics::record_panics();
+    rimstack_core::base::diagnostics::record_panics();
     rimstack_core::note!(
         "RimStack {} started on {}",
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS
     );
     // Before the mods are read: their problems are put in words as they are.
-    backend::speak(app().settings().get("language").unwrap_or_default());
+    backend::speak(app(), app().settings().get("language").unwrap_or_default());
     if !std::env::args().any(|a| a == "--demo" || a == "--selftest") {
         std::thread::spawn(|| {
             app().community();

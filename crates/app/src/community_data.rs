@@ -36,10 +36,9 @@ pub mod qobject {
 use core::pin::Pin;
 use cxx_qt::Threading;
 use cxx_qt_lib::QString;
-use rimstack_core::locks::Shared;
-use rimstack_core::tongue::named;
-use rimstack_core::{community, replacements, workshopdb};
-use serde_json::{json, Value};
+use rimstack_core::base::locks::Shared;
+use rimstack_core::base::translate::named;
+use rimstack_core::{mods::community, rimworld::workshopdb, sources::replacements};
 
 #[derive(Default)]
 pub struct CommunityDataRust {
@@ -51,30 +50,30 @@ pub struct CommunityDataRust {
 
 /// Downloads every database that is in use and puts each to use. What
 /// comes back is the first failure, the one shown; each is in the record.
-fn download_all() -> String {
-    let data = crate::app().data_dir();
-    let mut failed: Vec<rimstack_core::error::Error> = Vec::new();
-    if crate::app().database_on("rules") {
+fn download_all(app: &crate::App) -> String {
+    let data = app.data_dir();
+    let mut failed: Vec<rimstack_core::base::error::Error> = Vec::new();
+    if app.database_on("rules") {
         match community::download(&community::file_in(data)) {
-            Ok(fresh) => *crate::app().community().writing() = Some(fresh),
+            Ok(fresh) => *app.community().writing() = Some(fresh),
             Err(why) => failed.push(why),
         }
     }
-    let paths = crate::app().paths();
+    let paths = app.paths();
     let version = paths.game_version.as_deref();
-    if let Some(version) = version.filter(|_| crate::app().database_on("worksOn")) {
+    if let Some(version) = version.filter(|_| app.database_on("worksOn")) {
         match community::download_works_on(version, &community::works_on_file(data, version)) {
-            Ok(fresh) => *crate::app().works_on().writing() = fresh,
+            Ok(fresh) => *app.works_on().writing() = fresh,
             Err(why) => failed.push(why),
         }
     }
     // Read at the next start: nothing shown now depends on it.
-    if crate::app().database_on("replacements") {
+    if app.database_on("replacements") {
         failed.extend(replacements::download(&replacements::file_in(data)).err());
     }
-    if crate::app().database_on("names") {
+    if app.database_on("names") {
         match workshopdb::download(&workshopdb::file_in(data)) {
-            Ok(fresh) => *crate::app().workshop_names().writing() = fresh,
+            Ok(fresh) => *app.workshop_names().writing() = fresh,
             Err(why) => failed.push(why),
         }
     }
@@ -95,11 +94,15 @@ impl qobject::CommunityData {
         }
         self.as_mut().set_rules_busy(true);
         self.as_mut().set_rules_problem(QString::default());
-        crate::background::run(self.qt_thread(), download_all, |mut data, problem| {
-            data.as_mut().set_rules_current(problem.is_empty());
-            data.as_mut().set_rules_problem(QString::from(&problem));
-            data.as_mut().set_rules_busy(false);
-        });
+        crate::background::run(
+            self.qt_thread(),
+            || download_all(crate::app()),
+            |mut data, problem| {
+                data.as_mut().set_rules_current(problem.is_empty());
+                data.as_mut().set_rules_problem(QString::from(&problem));
+                data.as_mut().set_rules_busy(false);
+            },
+        );
     }
 
     /// Each database as `{ id, name, use, updated, on }`: `updated` in
@@ -138,13 +141,16 @@ impl qobject::CommunityData {
                 workshopdb::file_in(data),
             ),
         ];
-        let rows: Vec<Value> = all
+        let rows: Vec<crate::reports::Database> = all
             .iter()
-            .map(|(id, name, used, file)| {
-                let updated = rimstack_core::watch::changed_at(file) / 1000;
-                json!({ "id": id, "name": name, "use": used, "updated": updated, "on": crate::app().database_on(id) })
+            .map(|(id, name, used_for, file)| crate::reports::Database {
+                id,
+                name,
+                used_for,
+                updated: rimstack_core::base::watch::changed_at(file) / 1000,
+                on: crate::app().database_on(id),
             })
             .collect();
-        QString::from(&json!(rows).to_string())
+        crate::reports::said(&rows)
     }
 }

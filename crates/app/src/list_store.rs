@@ -98,12 +98,11 @@ pub mod qobject {
 use crate::backend::log_report::launches_file;
 use crate::backend::{lists_dir, now_secs, snapshots_dir};
 use cxx_qt_lib::QString;
-use rimstack_core::{journal, launches, lists, modsconfig, say};
-use serde_json::{json, Value};
+use rimstack_core::{kept::journal, kept::launches, kept::lists, rimworld::modsconfig, say};
 use std::path::PathBuf;
 
-fn journal_file() -> PathBuf {
-    crate::app().data_dir().join("journal.json")
+fn journal_file(app: &crate::App) -> PathBuf {
+    app.data_dir().join("journal.json")
 }
 
 #[derive(Default)]
@@ -111,12 +110,12 @@ pub struct KeptListsRust {}
 
 impl qobject::KeptLists {
     fn ids_in_text(&self, text: &QString) -> QString {
-        let ids = rimstack_core::share::ids_in(&text.to_string());
-        QString::from(&json!(ids).to_string())
+        let ids = rimstack_core::mods::share::ids_in(&text.to_string());
+        crate::reports::said(&ids)
     }
 
     fn snapshot(&self, name: &QString) {
-        let dir = snapshots_dir();
+        let dir = snapshots_dir(crate::app());
         let list = crate::app().session().current().to_vec();
         match lists::save(&dir, &name.to_string(), &list) {
             Ok(()) => lists::prune(&dir, 30),
@@ -127,7 +126,7 @@ impl qobject::KeptLists {
     /// Keeps the list as it is on disk among the snapshots; returns the
     /// name it was kept under, or nothing if it could not be.
     fn snapshot_saved(&self, name: &QString) -> QString {
-        let dir = snapshots_dir();
+        let dir = snapshots_dir(crate::app());
         let list = crate::app().session().saved().to_vec();
         match lists::save(&dir, &name.to_string(), &list) {
             Ok(()) => {
@@ -142,18 +141,14 @@ impl qobject::KeptLists {
     }
 
     fn snapshots(&self) -> QString {
-        let mut found = lists::all(&snapshots_dir());
+        let mut found = lists::all(&snapshots_dir(crate::app()));
         found.sort_by_key(|l| std::cmp::Reverse(l.modified));
-        let rows: Vec<Value> = found
-            .iter()
-            .map(|l| json!({ "name": l.name, "mods": l.mods, "modified": l.modified }))
-            .collect();
-        QString::from(&Value::Array(rows).to_string())
+        crate::reports::said(&found)
     }
 
     fn snapshot_list(&self, name: &QString) -> QString {
-        match lists::load(&snapshots_dir(), &name.to_string()) {
-            Ok(ids) => QString::from(&json!(ids).to_string()),
+        match lists::load(&snapshots_dir(crate::app()), &name.to_string()) {
+            Ok(ids) => crate::reports::said(&ids),
             Err(_) => QString::default(),
         }
     }
@@ -162,7 +157,7 @@ impl qobject::KeptLists {
         let Ok(ids) = serde_json::from_str::<Vec<String>>(&ids.to_string()) else {
             return QString::from(&say!("That is not a list of mods."));
         };
-        match lists::save(&lists_dir(), &name.to_string(), &ids) {
+        match lists::save(&lists_dir(crate::app()), &name.to_string(), &ids) {
             Ok(()) => QString::default(),
             Err(problem) => QString::from(&problem.to_string()),
         }
@@ -171,7 +166,7 @@ impl qobject::KeptLists {
     fn list_on_disk(&self) -> QString {
         let on_disk = crate::app().paths().mods_config();
         match on_disk.and_then(|path| modsconfig::read(&path).ok()) {
-            Some(config) => QString::from(&json!(config.active).to_string()),
+            Some(config) => crate::reports::said(&config.active),
             None => QString::default(),
         }
     }
@@ -182,37 +177,33 @@ impl qobject::KeptLists {
             .mods_config()
             .map(|c| c.with_file_name("ModsConfig.xml.rimstack-original"));
         match original.and_then(|path| modsconfig::read(&path).ok()) {
-            Some(config) => QString::from(&json!(config.active).to_string()),
+            Some(config) => crate::reports::said(&config.active),
             None => QString::default(),
         }
     }
 
     fn saved_lists(&self) -> QString {
-        let found = lists::all(&lists_dir());
-        let rows: Vec<Value> = found
-            .iter()
-            .map(|l| json!({ "name": l.name, "mods": l.mods, "modified": l.modified }))
-            .collect();
-        QString::from(&Value::Array(rows).to_string())
+        let found = lists::all(&lists_dir(crate::app()));
+        crate::reports::said(&found)
     }
 
     fn save_list_as(&self, name: &QString) -> QString {
         let list = crate::app().session().current().to_vec();
-        match lists::save(&lists_dir(), &name.to_string(), &list) {
+        match lists::save(&lists_dir(crate::app()), &name.to_string(), &list) {
             Ok(()) => QString::default(),
             Err(problem) => QString::from(&problem.to_string()),
         }
     }
 
     fn saved_list(&self, name: &QString) -> QString {
-        match lists::load(&lists_dir(), &name.to_string()) {
-            Ok(ids) => QString::from(&json!(ids).to_string()),
+        match lists::load(&lists_dir(crate::app()), &name.to_string()) {
+            Ok(ids) => crate::reports::said(&ids),
             Err(_) => QString::default(),
         }
     }
 
     fn delete_list(&self, name: &QString) {
-        if let Err(problem) = lists::delete(&lists_dir(), &name.to_string()) {
+        if let Err(problem) = lists::delete(&lists_dir(crate::app()), &name.to_string()) {
             rimstack_core::problem!("{problem}");
         }
     }
@@ -231,12 +222,12 @@ impl qobject::KeptLists {
         };
         let saved = crate::app().session().saved().to_vec();
         let on_disk = library.arrange(&saved).active;
-        let official = |m: &rimstack_core::list::Mod| {
-            let installed = m.installed.and_then(|i| library.installed.get(i));
-            installed.is_some_and(|i| i.source == rimstack_core::paths::Source::Official)
+        let official = |m: &rimstack_core::mods::list::Mod| {
+            let installed = m.installed.and_then(|i| library.get(i));
+            installed.is_some_and(|i| i.source == rimstack_core::rimworld::paths::Source::Official)
         };
         match on_disk.iter().all(official) && last.ids.len() > saved.len() {
-            true => QString::from(&json!(last.ids).to_string()),
+            true => crate::reports::said(&last.ids),
             false => QString::default(),
         }
     }
@@ -247,7 +238,7 @@ impl qobject::KeptLists {
             what: what.to_string(),
             revert: revert.to_string(),
         };
-        if let Err(problem) = journal::add(&journal_file(), entry) {
+        if let Err(problem) = journal::add(&journal_file(crate::app()), entry) {
             rimstack_core::problem!("{problem}");
         }
     }
@@ -255,7 +246,7 @@ impl qobject::KeptLists {
     /// The journal, newest first, as JSON: `{ time, what, revert }`, the
     /// last empty where the entry can no longer be taken back.
     fn journal(&self) -> QString {
-        let kept: Vec<String> = lists::all(&snapshots_dir())
+        let kept: Vec<String> = lists::all(&snapshots_dir(crate::app()))
             .into_iter()
             .map(|l| l.name)
             .collect();
@@ -263,18 +254,16 @@ impl qobject::KeptLists {
             Some(name) => kept.iter().any(|k| k == name),
             None => true,
         };
-        let rows: Vec<Value> = journal::read(&journal_file())
+        let kept = journal::read(&journal_file(crate::app()));
+        let rows: Vec<crate::reports::JournalRow> = kept
             .iter()
             .rev()
-            .map(|e| {
-                let revert = if still(&e.revert) {
-                    e.revert.as_str()
-                } else {
-                    ""
-                };
-                json!({ "time": e.time, "what": e.what, "revert": revert })
+            .map(|e| crate::reports::JournalRow {
+                time: e.time,
+                what: &e.what,
+                revert: if still(&e.revert) { &e.revert } else { "" },
             })
             .collect();
-        QString::from(&Value::Array(rows).to_string())
+        crate::reports::said(&rows)
     }
 }

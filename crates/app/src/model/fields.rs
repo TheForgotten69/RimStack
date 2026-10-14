@@ -9,7 +9,7 @@ pub(super) struct Preview {
     pub(super) moved_from: Vec<usize>,
     /// For each new position that moved: what its reason is filed under,
     /// and the reason.
-    pub(super) why: Vec<Option<rimstack_core::why::Why>>,
+    pub(super) why: Vec<Option<rimstack_core::mods::sort_reasons::Why>>,
 }
 
 pub struct ModListModelRust {
@@ -52,7 +52,7 @@ pub struct ModListModelRust {
     pub(super) troubles: Vec<Vec<Trouble>>,
     pub(super) version_ignored: Vec<bool>,
     /// The load order `troubles` was worked out for.
-    pub(super) checked_order: Vec<Option<usize>>,
+    pub(super) checked_order: Vec<Option<rimstack_core::mods::library::ModId>>,
     pub(super) list: GroupedList,
     /// Per mod of `list`, and its slowest load: worked out once per
     /// change, since every row on screen asks.

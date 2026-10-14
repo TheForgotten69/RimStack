@@ -127,9 +127,9 @@ use crate::backend::now_secs;
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
-use rimstack_core::locks::Shared;
-use rimstack_core::{keep, launches, say, workshop};
-use serde_json::{json, Value};
+use rimstack_core::base::error::Error;
+use rimstack_core::base::locks::Shared;
+use rimstack_core::{keep, kept::launches, rimworld::workshop, say};
 use std::path::PathBuf;
 
 #[path = "downloads/since_launch.rs"]
@@ -163,7 +163,7 @@ type Work = Box<dyn FnOnce() -> Ended + Send>;
 /// How a task ended, as worked out off the window's thread.
 struct Ended {
     /// What it did, or why it changed nothing.
-    note: Result<String, String>,
+    note: Result<String, Error>,
     /// It changed a mod's folder on disk.
     wrote: bool,
     /// The report `updates` then holds, where the task changed it.
@@ -171,7 +171,7 @@ struct Ended {
 }
 
 impl Ended {
-    fn told(note: Result<String, String>) -> Self {
+    fn told(note: Result<String, Error>) -> Self {
         Self {
             note,
             wrote: false,
@@ -180,7 +180,7 @@ impl Ended {
     }
 
     /// For a task that changes a mod's folder unless it fails.
-    fn of_a_write(note: Result<String, String>) -> Self {
+    fn of_a_write(note: Result<String, Error>) -> Self {
         Self {
             wrote: note.is_ok(),
             ..Self::told(note)
@@ -227,10 +227,10 @@ impl qobject::Downloads {
 
     /// How a task ended: what it did, or why it changed nothing.
     /// `taskNote` is set last: what listens to it reads the other two.
-    fn finish(mut self: Pin<&mut Self>, outcome: Result<String, String>) {
+    fn finish(mut self: Pin<&mut Self>, outcome: Result<String, Error>) {
         self.as_mut().set_task_failed(outcome.is_err());
         self.as_mut().set_task_running(false);
-        let note = outcome.unwrap_or_else(|problem| problem);
+        let note = outcome.unwrap_or_else(String::from);
         self.as_mut().set_task_note(QString::from(&note));
     }
 }

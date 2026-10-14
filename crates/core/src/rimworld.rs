@@ -1,0 +1,20 @@
+//! RimWorld's and Steam's own files and programs, read as they are: a
+//! mod's `About.xml`, the game's settings, logs and saves, its assemblies,
+//! and the Workshop.
+
+pub mod about;
+pub mod call_graph;
+pub mod code;
+pub mod dotnet;
+pub mod game;
+pub mod id;
+pub mod loadfolders;
+pub mod logs;
+pub mod modsconfig;
+pub mod paths;
+pub mod rimsaves;
+pub mod saves;
+pub mod startup;
+pub mod steamworks;
+pub mod workshop;
+pub mod workshopdb;

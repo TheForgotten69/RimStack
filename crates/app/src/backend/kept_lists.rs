@@ -5,7 +5,7 @@ use super::*;
 
 impl qobject::Backend {
     pub(super) fn import_rimsort_rules(&self) -> QString {
-        let said = match rimsort_rules() {
+        let said = match rimsort_rules(crate::app()) {
             Err(problem) => problem.into(),
             Ok(pairs) => {
                 let mut yours = crate::app().user_rules().writing();
@@ -30,14 +30,14 @@ impl qobject::Backend {
             rimstack_core::problem!("{problem}");
         }
         crate::app().mark_all_seen();
-        crate::downloads::since_launch::record_versions();
+        crate::downloads::since_launch::record_versions(crate::app());
     }
 
     pub(super) fn game_running(&self) -> bool {
         let paths = crate::app().paths();
         let game = paths.game.as_deref();
         game.is_some_and(|dir| {
-            rimstack_core::upkeep::game_running(std::path::Path::new("/proc"), dir)
+            rimstack_core::sources::maintenance::game_running(std::path::Path::new("/proc"), dir)
         })
     }
 
@@ -51,7 +51,7 @@ impl qobject::Backend {
             .get("launchArguments")
             .unwrap_or_default()
             .to_string();
-        match rimstack_core::upkeep::start_game(game, &arguments) {
+        match rimstack_core::sources::maintenance::start_game(game, &arguments) {
             Ok(()) => QString::default(),
             Err(problem) => QString::from(&problem.to_string()),
         }

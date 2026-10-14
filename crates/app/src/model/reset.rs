@@ -11,7 +11,7 @@ impl qobject::ModListModel {
     ) -> T {
         unsafe { self.as_mut().begin_reset_model() };
         let result = change(&mut self.as_mut().rust_mut().list);
-        let twins = rimstack_core::list::twins(self.list.mods());
+        let twins = rimstack_core::mods::list::twins(self.list.mods());
         let slowest = self.list.mods().iter().filter_map(|m| m.load_micros).max();
         self.as_mut().rust_mut().twins = twins;
         self.as_mut().rust_mut().slowest = slowest;
@@ -34,7 +34,7 @@ impl qobject::ModListModel {
     /// Finds the problems of the load order again, when its mods changed:
     /// not on a filter or a collapse.
     fn check_mods(mut self: Pin<&mut Self>) {
-        let now: Vec<Option<usize>> = self.list.mods().iter().map(|m| m.installed).collect();
+        let now: Vec<Option<ModId>> = self.list.mods().iter().map(|m| m.installed).collect();
         if !self.checked || now == self.checked_order {
             return;
         }
@@ -42,7 +42,7 @@ impl qobject::ModListModel {
         let Ok((library, _)) = &*loaded else {
             return;
         };
-        let (found, ignored) = troubles(library, self.list.mods());
+        let (found, ignored) = troubles(crate::app(), library, self.list.mods());
         self.as_mut().rust_mut().troubles = found;
         self.as_mut().rust_mut().version_ignored = ignored;
         self.as_mut().rust_mut().checked_order = now;

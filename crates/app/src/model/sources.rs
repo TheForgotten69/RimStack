@@ -2,23 +2,24 @@
 //! ordering, and what the mods' files say, read in the background.
 
 use super::*;
+use rimstack_core::kept::settings::Switch;
 
 /// What the listed mods' files say about each other, by position in the
 /// list. Uses what the background reading kept; a mod it has not read
 /// (one just activated) is read here, which takes a few milliseconds.
 /// Nothing until the first reading is done.
-pub(super) fn detected(library: &Library, mods: &[Mod]) -> Vec<infer::Inferred> {
+pub(super) fn detected(app: &crate::App, library: &Library, mods: &[Mod]) -> Vec<infer::Inferred> {
     // Asked several times for the same list (each click on a mod asks
     // twice), so the last answer is kept: the list it was for, the mods
     // whose files had been read, and the rules.
-    type Kept = (Vec<Option<usize>>, Vec<usize>, Vec<infer::Inferred>);
+    type Kept = (Vec<Option<ModId>>, Vec<ModId>, Vec<infer::Inferred>);
     static LAST: std::sync::Mutex<Option<Kept>> = std::sync::Mutex::new(None);
 
-    let known = crate::app().conflicts().reading();
+    let known = app.conflicts().reading();
     let Some(read) = known.as_ref() else {
         return Vec::new();
     };
-    let list: Vec<Option<usize>> = mods.iter().map(|m| m.installed).collect();
+    let list: Vec<Option<ModId>> = mods.iter().map(|m| m.installed).collect();
     let mut last = LAST.held();
     if let Some((for_list, for_read, rules)) = last.as_ref() {
         if *for_list == list && *for_read == read.members {
@@ -27,9 +28,9 @@ pub(super) fn detected(library: &Library, mods: &[Mod]) -> Vec<infer::Inferred> 
     }
     let active: std::collections::HashSet<String> = mods
         .iter()
-        .filter_map(|m| library.installed.get(m.installed?)?.key())
+        .filter_map(|m| library.get(m.installed?)?.key())
         .collect();
-    let installed = |m: &Mod| m.installed.and_then(|i| library.installed.get(i));
+    let installed = |m: &Mod| m.installed.and_then(|i| library.get(i));
     let nothing = infer::Scanned::default();
     // Only a few: reading a whole list here would freeze the window.
     let mut read_now: Vec<(usize, infer::Scanned)> = Vec::new();
@@ -56,7 +57,10 @@ pub(super) fn detected(library: &Library, mods: &[Mod]) -> Vec<infer::Inferred> 
     let names: Vec<String> = mods.iter().map(|m| m.name.clone()).collect();
     let official: Vec<bool> = mods
         .iter()
-        .map(|m| installed(m).is_some_and(|i| i.source == rimstack_core::paths::Source::Official))
+        .map(|m| {
+            installed(m)
+                .is_some_and(|i| i.source == rimstack_core::rimworld::paths::Source::Official)
+        })
         .collect();
     let roots: Vec<std::path::PathBuf> = mods
         .iter()
@@ -73,37 +77,45 @@ pub(super) fn detected(library: &Library, mods: &[Mod]) -> Vec<infer::Inferred> 
 
 /// Runs `with` on where this install's rules come from: your own, the
 /// community's if they are switched on, and what the mods' files say.
-fn with_sources<T>(from_files: &[infer::Inferred], with: impl FnOnce(Sources) -> T) -> T {
-    let yours = crate::app().user_rules().reading();
-    let community = crate::app().community().reading();
-    let use_community = crate::app().settings().is_on("communityRules");
+fn with_sources<T>(
+    app: &crate::App,
+    from_files: &[infer::Inferred],
+    with: impl FnOnce(Sources) -> T,
+) -> T {
+    let yours = app.user_rules().reading();
+    let community = app.community().reading();
+    let use_community = app.settings().switch(Switch::CommunityRules);
     with(Sources {
         yours: &yours,
         community: community.as_ref().filter(|_| use_community),
         from_files,
-        hints: crate::app().settings().get("fileHints") == Some("on"),
+        hints: app.settings().switch(Switch::FileHints),
     })
 }
 
-pub(super) fn all_rules(library: &Library, mods: &[Mod]) -> Vec<Rule> {
-    with_sources(&detected(library, mods), |sources| {
+pub(super) fn all_rules(app: &crate::App, library: &Library, mods: &[Mod]) -> Vec<Rule> {
+    with_sources(app, &detected(app, library, mods), |sources| {
         ordering::all_rules(library, mods, sources)
     })
 }
 
 /// Moves the mod just added at `at` to where its rules allow.
-pub(super) fn settle(list: &mut GroupedList, at: usize) {
-    let loaded = crate::app().library();
+pub(super) fn settle(app: &crate::App, list: &mut GroupedList, at: usize) {
+    let loaded = app.library();
     let Ok((library, _)) = &*loaded else {
         return;
     };
-    let found = all_rules(library, list.mods());
+    let found = all_rules(app, library, list.mods());
     let to = ordering::place(&found, at, list.mods().len());
     list.move_mod(at, to);
 }
 
-pub(super) fn sorted_by_category(library: &Library, mods: Vec<Mod>) -> (Vec<Mod>, sort::Sorted) {
-    with_sources(&detected(library, &mods), |sources| {
+pub(super) fn sorted_by_category(
+    app: &crate::App,
+    library: &Library,
+    mods: Vec<Mod>,
+) -> (Vec<Mod>, sort::Sorted) {
+    with_sources(app, &detected(app, library, &mods), |sources| {
         ordering::sorted_by_category(library, mods, sources)
     })
 }

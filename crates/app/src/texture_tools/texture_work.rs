@@ -9,9 +9,7 @@ impl qobject::TextureTools {
         let Ok((library, _)) = &*loaded else {
             return;
         };
-        let key = usize::try_from(mod_id)
-            .ok()
-            .and_then(|i| library.installed.get(i)?.key());
+        let key = ModId::from_qml(mod_id).and_then(|i| library.get(i)?.key());
         let Some(key) = key else {
             return;
         };
@@ -55,7 +53,7 @@ impl qobject::TextureTools {
 
     /// Converts (or, with `remove`, un-converts) the given mods on a
     /// background thread, then counts everything again.
-    pub(super) fn texture_work(self: Pin<&mut Self>, mods: Vec<usize>, remove: bool) {
+    pub(super) fn texture_work(self: Pin<&mut Self>, mods: Vec<ModId>, remove: bool) {
         let qt_thread = self.qt_thread();
         std::thread::spawn(move || {
             let loaded = crate::app().library();
@@ -65,7 +63,7 @@ impl qobject::TextureTools {
             };
             let roots: Vec<&std::path::Path> = mods
                 .iter()
-                .filter_map(|&i| library.installed.get(i))
+                .filter_map(|&i| library.get(i))
                 .map(|m| m.path.as_path())
                 .collect();
             let mut failed = 0;
@@ -110,13 +108,13 @@ impl qobject::TextureTools {
                     }
                 }
             }
-            let text = textures_report(crate::app(), library).to_string();
+            let text = crate::reports::said(&textures_report(crate::app(), library)).to_string();
             let note = match failed {
                 0 => String::new(),
-                1 => say!("1 texture could not be converted; it keeps using its PNG."),
-                n => say!(
-                    "{} textures could not be converted; they keep using their PNG.",
-                    n
+                n => say_n!(
+                    n,
+                    "{} texture could not be converted; it keeps using its PNG.",
+                    "{} textures could not be converted; they keep using their PNG."
                 ),
             };
             let _ = qt_thread.queue(move |mut backend| {
@@ -133,21 +131,25 @@ impl qobject::TextureTools {
         let Ok((library, _)) = &*loaded else {
             return QString::from("[]");
         };
-        let found: Vec<Value> = library
+        let found: Vec<crate::reports::DdsProblem> = library
             .installed
             .par_iter()
             .flat_map_iter(|m| {
-                let bad = rimstack_core::ddsaudit::audit(&m.path).into_iter();
-                bad.map(|b| json!({ "mod": m.display_name(), "file": b.file.to_string_lossy(), "why": b.why }))
+                let bad = rimstack_core::mods::ddsaudit::audit(&m.path).into_iter();
+                bad.map(|b| crate::reports::DdsProblem {
+                    of_mod: m.display_name(),
+                    file: b.file.to_string_lossy().into_owned(),
+                    why: b.why,
+                })
             })
             .collect();
-        QString::from(&json!(found).to_string())
+        crate::reports::said(&found)
     }
 
     pub(super) fn set_dds_aside(&self, files: &QString) -> i32 {
         let files: Vec<String> = serde_json::from_str(&files.to_string()).unwrap_or_default();
         let aside = |file: &&String| {
-            rimstack_core::ddsaudit::set_aside(std::path::Path::new(file)).is_err()
+            rimstack_core::mods::ddsaudit::set_aside(std::path::Path::new(file)).is_err()
         };
         files.iter().filter(aside).count() as i32
     }
@@ -157,48 +159,53 @@ impl qobject::TextureTools {
         let Ok((library, _)) = &*loaded else {
             return QString::default();
         };
-        let (Ok(a), Ok(b)) = (usize::try_from(earlier), usize::try_from(later)) else {
+        let (Some(a), Some(b)) = (ModId::from_qml(earlier), ModId::from_qml(later)) else {
             return QString::default();
         };
-        if a >= library.installed.len() || b >= library.installed.len() {
+        let (Some(one), Some(other)) = (library.get(a), library.get(b)) else {
             return QString::default();
-        }
-        let first = conflicts::files_with_hidden(&loaded_folders(library, a));
-        let second = conflicts::files_with_hidden(&loaded_folders(library, b));
+        };
+        let (earlier_name, later_name) = (one.display_name(), other.display_name());
+        let first = conflicts::files_with_hidden(&loaded_folders(crate::app(), library, a));
+        let second = conflicts::files_with_hidden(&loaded_folders(crate::app(), library, b));
         // The file to show: a hidden one sits under its renamed name.
         let on_disk = |(path, hidden): &(PathBuf, bool)| match hidden {
             true => format!(
                 "{}{}",
                 path.to_string_lossy(),
-                rimstack_core::hidden::SUFFIX
+                rimstack_core::mods::hidden::SUFFIX
             ),
             false => path.to_string_lossy().into_owned(),
         };
         let size = |file: &str| std::fs::metadata(file).map_or(0, |m| m.len());
-        let textures: Vec<Value> = first
+        let textures: Vec<crate::reports::SharedTexture> = first
             .iter()
             .filter_map(|(name, one)| {
                 let other = second.get(name)?;
-                Some(json!({
-                    "name": name,
-                    "earlier": one.0.to_string_lossy(),
-                    "later": other.0.to_string_lossy(),
-                                        "earlierShown": on_disk(one),
-                    "laterShown": on_disk(other),
-                    "earlierBytes": size(&on_disk(one)),
-                    "laterBytes": size(&on_disk(other)),
-                    // The later mod wins unless its file is hidden.
-                    "keepsEarlier": other.1 && !one.1,
-                    "yourChoice": one.1 || other.1,
-                }))
+                Some(crate::reports::SharedTexture {
+                    name: name.clone(),
+                    earlier: one.0.to_string_lossy().into_owned(),
+                    later: other.0.to_string_lossy().into_owned(),
+                    earlier_shown: on_disk(one),
+                    later_shown: on_disk(other),
+                    earlier_bytes: size(&on_disk(one)),
+                    later_bytes: size(&on_disk(other)),
+                    keeps_earlier: other.1 && !one.1,
+                    your_choice: one.1 || other.1,
+                })
             })
             .collect();
-        let report = json!({
-            "earlier": { "id": a, "name": library.installed[a].display_name() },
-            "later": { "id": b, "name": library.installed[b].display_name() },
-            "textures": textures,
-        });
-        QString::from(&report.to_string())
+        crate::reports::said(&crate::reports::Comparison {
+            earlier: crate::reports::Side {
+                id: a,
+                name: earlier_name,
+            },
+            later: crate::reports::Side {
+                id: b,
+                name: later_name,
+            },
+            textures,
+        })
     }
 
     pub(super) fn keep_texture(
@@ -207,7 +214,7 @@ impl qobject::TextureTools {
         later_file: &QString,
         keep_earlier: bool,
     ) -> QString {
-        let file = hidden_file();
+        let file = hidden_file(crate::app());
         let mut hidden = Hidden::read(&file);
         let earlier = PathBuf::from(earlier_file.to_string());
         let later = PathBuf::from(later_file.to_string());
@@ -236,13 +243,10 @@ impl qobject::TextureTools {
         let Ok((library, _)) = &*loaded else {
             return 0;
         };
-        let Some(m) = usize::try_from(mod_id)
-            .ok()
-            .and_then(|i| library.installed.get(i))
-        else {
+        let Some(m) = ModId::from_qml(mod_id).and_then(|i| library.get(i)) else {
             return 0;
         };
-        let hidden = Hidden::read(&hidden_file());
+        let hidden = Hidden::read(&hidden_file(crate::app()));
         let pngs = hidden
             .in_mod(&m.path)
             .into_iter()
@@ -255,13 +259,10 @@ impl qobject::TextureTools {
         let Ok((library, _)) = &*loaded else {
             return QString::default();
         };
-        let Some(m) = usize::try_from(mod_id)
-            .ok()
-            .and_then(|i| library.installed.get(i))
-        else {
+        let Some(m) = ModId::from_qml(mod_id).and_then(|i| library.get(i)) else {
             return QString::default();
         };
-        let file = hidden_file();
+        let file = hidden_file(crate::app());
         let mut hidden = Hidden::read(&file);
         let done = hidden.unhide_all(&m.path).and_then(|_| hidden.write(&file));
         crate::app().textures_changed();
@@ -288,12 +289,14 @@ impl qobject::TextureTools {
         (&earlier, &later).hash(&mut hasher);
         let file = dir.join(format!("difference-{:016x}.png", hasher.finish()));
         let (from, to) = (PathBuf::from(&earlier), PathBuf::from(&later));
-        let said = match rimstack_core::texdiff::write(&from, &to, &file) {
-            Ok((differing, total)) => {
-                json!({ "file": file.to_string_lossy(), "differing": differing, "total": total })
-            }
-            Err(problem) => json!({ "problem": problem }),
-        };
-        QString::from(&said.to_string())
+        let made =
+            rimstack_core::mods::texdiff::write(&from, &to, &file).map(|(differing, total)| {
+                crate::reports::Difference {
+                    file: file.to_string_lossy().into_owned(),
+                    differing,
+                    total,
+                }
+            });
+        crate::reports::said(&crate::reports::Answer::from(made))
     }
 }

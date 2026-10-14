@@ -2,6 +2,7 @@
 //! what comes back.
 
 use super::*;
+use rimstack_core::said;
 
 impl qobject::Downloads {
     pub(super) fn check_updates(mut self: Pin<&mut Self>) {
@@ -13,12 +14,13 @@ impl qobject::Downloads {
             Ok((library, _)) => {
                 let (kept, problem) = check(crate::app(), library);
                 let mut report = updates_report(crate::app(), library, &kept);
-                if let Some(problem) = problem {
-                    report["problem"] = json!(problem);
-                }
-                report.to_string()
+                report.problem = problem;
+                crate::reports::said(&report).to_string()
             }
-            Err(problem) => json!({ "problem": problem }).to_string(),
+            Err(problem) => {
+                let failed = Err::<crate::reports::Updates, _>(problem.clone());
+                crate::reports::said(&crate::reports::Answer::from(failed)).to_string()
+            }
         };
         crate::background::run(self.qt_thread(), asked, |mut downloads, report| {
             downloads.as_mut().set_updates(QString::from(&report));
@@ -34,8 +36,9 @@ impl qobject::Downloads {
             let kept = last_check(crate::app());
             let loaded = crate::app().library();
             let (library, _) = loaded.as_ref().as_ref().ok()?;
-            let checked_before = kept.as_object().is_some_and(|kept| !kept.is_empty());
-            checked_before.then(|| updates_report(crate::app(), library, &kept).to_string())
+            let checked_before = kept != rimstack_core::kept::updates::LastCheck::default();
+            let report = || updates_report(crate::app(), library, &kept);
+            checked_before.then(|| crate::reports::said(&report()).to_string())
         };
         crate::background::run(self.qt_thread(), kept_report, |mut downloads, report| {
             // A check started meanwhile is about to say more.
@@ -56,8 +59,7 @@ impl qobject::Downloads {
                 Ok((library, _)) => queue_report(crate::app(), library, &pasted),
                 Err(problem) => Err(problem.clone()),
             };
-            let report = report.unwrap_or_else(|problem| json!({ "problem": problem }));
-            report.to_string()
+            crate::reports::said(&crate::reports::Answer::from(report)).to_string()
         };
         crate::background::run(self.qt_thread(), looked_up, |mut downloads, report| {
             downloads.as_mut().set_queue(QString::from(&report));
@@ -74,21 +76,25 @@ impl qobject::Downloads {
                 let found = library.installed.iter().find(|m| m.path == folder);
                 found.map(|m| m.display_name().to_string())
             });
-            let updated = rimstack_core::git::update(&folder);
+            let updated = rimstack_core::sources::git::update(&folder);
             if updated.is_ok() {
                 checkout_updated(crate::app(), &folder);
             }
             Ended {
                 wrote: updated.is_ok(),
                 updates: library.map(|library| {
-                    updates_report(crate::app(), library, &last_check(crate::app())).to_string()
+                    let report = updates_report(crate::app(), library, &last_check(crate::app()));
+                    crate::reports::said(&report).to_string()
                 }),
                 note: match updated {
                     Ok(commit) => match name {
                         Some(name) => Ok(keep!("Updated {}: {}", name, commit)),
                         None => Ok(keep!("Now at {}", commit)),
                     },
-                    Err(problem) => Err(say!("Not updated: {}", problem)),
+                    Err(problem) => Err(Error::new(
+                        problem.kind(),
+                        said!("Not updated: {}", problem.within()),
+                    )),
                 },
             }
         });
@@ -108,9 +114,9 @@ impl qobject::Downloads {
                 false => std::env::current_exe(),
             };
             let ran = program.and_then(|program| {
-                rimstack_core::program::run(
+                rimstack_core::base::program::run(
                     std::process::Command::new(program).arg(&request),
-                    rimstack_core::program::NETWORK,
+                    rimstack_core::base::program::NETWORK,
                 )
             });
             Ended::told(match ran {
@@ -118,11 +124,11 @@ impl qobject::Downloads {
                     Ok(keep!("Steam was asked to update {}", ids.len()))
                 }
                 Ok(out) if out.status.success() => Ok(keep!("Steam was asked about {}", ids.len())),
-                Ok(out) => Err(say!(
+                Ok(out) => Err(Error::program(said!(
                     "Steam was not asked: {}",
                     String::from_utf8_lossy(&out.stderr).trim()
-                )),
-                Err(problem) => Err(say!("Steam was not asked: {}", problem)),
+                ))),
+                Err(problem) => Err(Error::program(said!("Steam was not asked: {}", problem))),
             })
         });
     }
@@ -132,11 +138,14 @@ impl qobject::Downloads {
         let mods = crate::app().paths().local_mods();
         self.task(&say!("Cloning {}…", link), move || {
             let Some(mods) = mods else {
-                return Ended::told(Err(say!("The game's folder is not known")));
+                return Ended::told(Err(Error::refused(said!("The game's folder is not known"))));
             };
-            Ended::of_a_write(match rimstack_core::git::clone(&link, &mods) {
+            Ended::of_a_write(match rimstack_core::sources::git::clone(&link, &mods) {
                 Ok(into) => Ok(keep!("Cloned {} into {}", link, into.display())),
-                Err(problem) => Err(say!("Not cloned: {}", problem)),
+                Err(problem) => Err(Error::new(
+                    problem.kind(),
+                    said!("Not cloned: {}", problem.within()),
+                )),
             })
         });
     }
@@ -144,9 +153,15 @@ impl qobject::Downloads {
     pub(super) fn install_steamcmd(self: Pin<&mut Self>) {
         self.task(&say!("Installing SteamCMD…"), || {
             Ended::told(
-                match rimstack_core::redownload::install(crate::app().data_dir()) {
-                    Ok(_) => Ok(keep!("SteamCMD installed")),
-                    Err(problem) => Err(say!("SteamCMD not installed: {}", problem)),
+                match rimstack_core::sources::redownload::install(crate::app().data_dir()) {
+                    Ok(_) => {
+                        crate::app().look_for_steamcmd();
+                        Ok(keep!("SteamCMD installed"))
+                    }
+                    Err(problem) => Err(Error::new(
+                        problem.kind(),
+                        said!("SteamCMD not installed: {}", problem.within()),
+                    )),
                 },
             )
         });
@@ -156,30 +171,39 @@ impl qobject::Downloads {
         let ids: Vec<String> = serde_json::from_str(&ids.to_string()).unwrap_or_default();
         let doing = say!("Downloading {} with SteamCMD…", ids.len());
         self.task(&doing, move || {
-            use rimstack_core::redownload;
+            use rimstack_core::sources::redownload;
             let data = crate::app().data_dir();
             let local = crate::app().paths().local_mods();
-            let (steamcmd, local) = match (redownload::steamcmd(data), local) {
+            let (steamcmd, local) = match (crate::app().steamcmd().as_ref().clone(), local) {
                 (Some(steamcmd), Some(local)) => (steamcmd, local),
-                (None, _) => return Ended::told(Err(say!("SteamCMD is not installed"))),
-                (_, None) => return Ended::told(Err(say!("The game's folder is not known"))),
+                (None, _) => {
+                    return Ended::told(Err(Error::refused(said!("SteamCMD is not installed"))))
+                }
+                (_, None) => {
+                    return Ended::told(Err(Error::refused(said!(
+                        "The game's folder is not known"
+                    ))))
+                }
             };
             let fetched = redownload::fetch_all(&steamcmd, &ids, &data.join("steamcmd-downloads"));
             let placed = fetched.into_iter().map(|(id, fresh)| {
                 fresh.and_then(|fresh| redownload::put_in_local(&fresh, &id, &local))
             });
-            let outcomes: Vec<rimstack_core::error::Result<PathBuf>> = placed.collect();
+            let outcomes: Vec<rimstack_core::base::error::Result<PathBuf>> = placed.collect();
             let failed: Vec<_> = outcomes.iter().filter_map(|o| o.as_ref().err()).collect();
             Ended {
                 wrote: failed.len() < outcomes.len(),
                 updates: None,
                 note: match failed.first() {
                     None => Ok(keep!("{} downloaded", outcomes.len())),
-                    Some(first) => Err(say!(
-                        "{} of {} not downloaded: {}",
-                        failed.len(),
-                        outcomes.len(),
-                        first
+                    Some(first) => Err(Error::new(
+                        first.kind(),
+                        said!(
+                            "{} of {} not downloaded: {}",
+                            failed.len(),
+                            outcomes.len(),
+                            first.within()
+                        ),
                     )),
                 },
             }
@@ -189,7 +213,7 @@ impl qobject::Downloads {
     pub(super) fn workshop_id_of(&self, name: &QString) -> QString {
         let name = name.to_string();
         let names = crate::app().workshop_names().reading();
-        let by_id = names.get(&rimstack_core::id::fold(&name));
+        let by_id = names.get(&rimstack_core::rimworld::id::fold(&name));
         let found = by_id.or_else(|| names.values().find(|item| item.name == name));
         QString::from(found.map_or("", |item| item.workshop_id.as_str()))
     }
@@ -197,17 +221,19 @@ impl qobject::Downloads {
     pub(super) fn redownload(self: Pin<&mut Self>, workshop_id: &QString, folder: &QString) {
         let (id, folder) = (workshop_id.to_string(), PathBuf::from(folder.to_string()));
         self.task(&say!("Downloading again with SteamCMD…"), move || {
-            use rimstack_core::redownload;
+            use rimstack_core::sources::redownload;
             let scratch = crate::app().data_dir().join("steamcmd");
-            let done = redownload::steamcmd(crate::app().data_dir())
-                .ok_or_else(|| {
-                    rimstack_core::error::Error::refused(say!("SteamCMD is not installed"))
-                })
+            let done = (*crate::app().steamcmd())
+                .clone()
+                .ok_or_else(|| Error::refused(said!("SteamCMD is not installed")))
                 .and_then(|steamcmd| redownload::fetch(&steamcmd, &id, &scratch))
                 .and_then(|fresh| redownload::replace(&folder, &fresh));
             Ended::of_a_write(match done {
                 Ok(()) => Ok(keep!("Downloaded again")),
-                Err(problem) => Err(say!("Not downloaded again: {}", problem)),
+                Err(problem) => Err(Error::new(
+                    problem.kind(),
+                    said!("Not downloaded again: {}", problem.within()),
+                )),
             })
         });
     }
@@ -218,12 +244,12 @@ impl qobject::Downloads {
             return QString::from("[]");
         };
         let active = crate::app().active_now(library);
-        let items = rimstack_core::downloads::items(library, &active);
-        let rows = rimstack_core::downloads::replaceable(
+        let items = rimstack_core::sources::downloads::items(library, &active);
+        let rows = rimstack_core::sources::downloads::replaceable(
             &items,
             crate::app().replacements(),
             &crate::app().replacements_ignored(),
         );
-        QString::from(&json!(rows).to_string())
+        crate::reports::said(&rows)
     }
 }
