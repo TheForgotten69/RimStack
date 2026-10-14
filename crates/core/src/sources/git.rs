@@ -59,7 +59,8 @@ pub fn links_in(text: &str) -> Vec<String> {
 
 /// Git, told not to run what a checkout's own settings name: a mod's
 /// `.git` folder may be a stranger's. This closes the ways that need no
-/// server; `in_checkout` refuses the rest.
+/// server, and keeps Git out of submodules, whose own settings
+/// `in_checkout` never reads; `in_checkout` refuses the rest.
 fn git() -> std::process::Command {
     let nowhere = if cfg!(windows) { "NUL" } else { "/dev/null" };
     let mut git = std::process::Command::new("git");
@@ -68,44 +69,56 @@ fn git() -> std::process::Command {
         .args(["-c", "core.sshCommand=ssh"])
         .args(["-c", "protocol.ext.allow=never"])
         .args(["-c", "log.showSignature=false"])
+        .args(["-c", "submodule.recurse=false"])
+        .args(["-c", "fetch.recurseSubmodules=false"])
         .env("GIT_TERMINAL_PROMPT", "0");
     git
 }
 
-/// Settings under which `fetch`, `pull`, `clone`, `log` or `switch` run
-/// a program, as `section.key` or `section.*.key`. The `gpg` ones run
-/// when a signature is checked.
-const RUN_PROGRAMS: [&str; 18] = [
-    "core.fsmonitor",
-    "core.sshcommand",
-    "core.askpass",
-    "core.gitproxy",
-    "core.hookspath",
-    "credential.helper",
-    "credential.*.helper",
-    "remote.*.uploadpack",
-    "remote.*.receivepack",
-    "filter.*.clean",
-    "filter.*.smudge",
-    "filter.*.process",
-    "url.*.insteadof",
-    "include.path",
-    "includeif.*.path",
-    "gpg.program",
-    "gpg.*.program",
-    "gpg.*.defaultkeycommand",
+/// The settings a checkout may hold, as `section.key` or
+/// `section.*.key`: those `git clone` writes (with submodules, a partial
+/// or shallow clone, another branch, SHA-256), and a few a person sets by
+/// hand that run nothing. Listed by Git 2.56 on its own clones. Any
+/// other setting may name a program, so a checkout holding one is
+/// refused rather than guessed about.
+const PLAIN_CLONE: [&str; 24] = [
+    "core.repositoryformatversion",
+    "core.filemode",
+    "core.bare",
+    "core.logallrefupdates",
+    "core.ignorecase",
+    "core.precomposeunicode",
+    "core.symlinks",
+    "core.worktree",
+    "core.autocrlf",
+    "extensions.objectformat",
+    "extensions.partialclone",
+    "remote.*.url",
+    "remote.*.fetch",
+    "remote.*.promisor",
+    "remote.*.partialclonefilter",
+    "branch.*.remote",
+    "branch.*.merge",
+    "branch.*.rebase",
+    "submodule.active",
+    "submodule.*.url",
+    "submodule.*.active",
+    "user.name",
+    "user.email",
+    "lfs.repositoryformatversion",
 ];
 
-/// `key` as `git config --name-only` prints it: `section.key`, or
-/// `section.subsection.key` where the subsection may hold dots.
-fn program_setting(key: &str) -> Option<String> {
+/// `key` as `git config --name-only` prints it (`section.key`, or
+/// `section.subsection.key` where the subsection may hold dots), when a
+/// plain clone does not write it.
+fn beyond_a_clone(key: &str) -> Option<String> {
     let key = key.trim().to_lowercase();
     let (section, rest) = key.split_once('.')?;
     let pattern = match rest.rsplit_once('.') {
         Some((_, name)) => format!("{section}.*.{name}"),
         None => key.clone(),
     };
-    RUN_PROGRAMS.contains(&pattern.as_str()).then_some(pattern)
+    (!PLAIN_CLONE.contains(&pattern.as_str())).then_some(key)
 }
 
 /// Where the checkout's repository is: `.git`, or where a `.git` file
@@ -122,7 +135,7 @@ fn repository_of(mod_root: &Path) -> std::path::PathBuf {
 }
 
 /// Git for the checkout at `mod_root`, once Git itself has listed its
-/// settings and none runs a program. The repository is named, so Git
+/// settings and each is one a plain clone writes. The repository is named, so Git
 /// never takes a folder above the mod's for it.
 fn in_checkout(mod_root: &Path) -> Result<std::process::Command> {
     let repository = repository_of(mod_root);
@@ -143,12 +156,12 @@ fn in_checkout(mod_root: &Path) -> Result<std::process::Command> {
     }
     let mut named: Vec<String> = String::from_utf8_lossy(&listed.stdout)
         .lines()
-        .filter_map(program_setting)
+        .filter_map(beyond_a_clone)
         .collect();
     named.dedup();
     if !named.is_empty() {
         return Err(Error::refused(said!(
-            "Its Git settings name programs to run ({}): RimStack does not run Git there",
+            "Its Git settings go beyond a plain clone's ({}): RimStack does not run Git there",
             named.join(", ")
         )));
     }
@@ -208,7 +221,8 @@ pub fn installed() -> Option<String> {
 /// remote. Uses the network.
 pub fn behind(mod_root: &Path) -> Result<usize> {
     let network = crate::base::program::NETWORK;
-    ran(in_checkout(mod_root)?.args(["fetch", "--quiet"]), network)?;
+    let fetch = ["fetch", "--quiet", "--no-recurse-submodules"];
+    ran(in_checkout(mod_root)?.args(fetch), network)?;
     let count = ran(
         in_checkout(mod_root)?.args(["rev-list", "--count", "HEAD..@{upstream}"]),
         network,
@@ -235,7 +249,7 @@ pub fn commits_since(mod_root: &Path, since: u64) -> Result<Vec<(u64, String)>> 
 /// Brings a checkout up to its remote, only by moving forward: local
 /// changes or commits stop it. Answers with the commit it is now at.
 pub fn update(mod_root: &Path) -> Result<String> {
-    let pull = ["pull", "--ff-only", "--quiet"];
+    let pull = ["pull", "--ff-only", "--quiet", "--no-recurse-submodules"];
     ran(
         in_checkout(mod_root)?.args(pull),
         crate::base::program::NETWORK,
@@ -342,7 +356,7 @@ mod tests {
     }
 
     #[test]
-    fn settings_that_name_a_program_are_found_whatever_their_case_or_subsection() {
+    fn settings_a_plain_clone_does_not_write_are_found_whatever_their_case_or_subsection() {
         let found: Vec<String> = [
             "core.bare",
             "core.fsmonitor",
@@ -352,18 +366,20 @@ mod tests {
             "includeif.gitdir:/x.path",
             "gpg.ssh.program",
             "user.name",
+            "remote.origin.vcs",
         ]
         .into_iter()
-        .filter_map(program_setting)
+        .filter_map(beyond_a_clone)
         .collect();
         assert_eq!(
             found,
             [
                 "core.fsmonitor",
-                "remote.*.uploadpack",
-                "filter.*.smudge",
-                "includeif.*.path",
-                "gpg.*.program"
+                "remote.my.fork.uploadpack",
+                "filter.lfs.smudge",
+                "includeif.gitdir:/x.path",
+                "gpg.ssh.program",
+                "remote.origin.vcs"
             ]
         );
     }
@@ -431,6 +447,80 @@ mod tests {
         std::fs::write(&hook, format!("#!/bin/sh\ntouch '{}'\n", ran.display())).unwrap();
         std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
         assert!(update(&clone).unwrap().ends_with("second"));
+        assert!(!ran.exists());
+    }
+
+    /// A clone with a submodule whose upstream moved one commit, and
+    /// `uploadpack` set to `program` in the submodule's own settings, where
+    /// `in_checkout` does not look: Git fetching into the submodule would
+    /// run it. Gives the clone.
+    #[cfg(unix)]
+    fn clone_with_a_hostile_submodule(tmp: &Path, program: &Path) -> std::path::PathBuf {
+        let local = ["-c", "protocol.file.allow=always"];
+        let (sub, upstream) = (tmp.join("sub"), tmp.join("upstream"));
+        for dir in [&sub, &upstream] {
+            std::fs::create_dir(dir).unwrap();
+            git(dir, &["init", "--quiet", "-b", "main"]);
+            git(dir, &["commit", "--quiet", "--allow-empty", "-m", "first"]);
+        }
+        let add = ["submodule", "add", "-q", sub.to_str().unwrap(), "sub"];
+        git(&upstream, &[&local[..], &add].concat());
+        git(&upstream, &["commit", "--quiet", "-m", "with sub"]);
+        let clone = tmp.join("clone");
+        let from = [upstream.to_str().unwrap(), clone.to_str().unwrap()];
+        git(
+            tmp,
+            &[&local[..], &["clone", "-q", "--recurse-submodules"], &from].concat(),
+        );
+        let in_sub = clone.join("sub");
+        git(
+            &in_sub,
+            &[
+                "config",
+                "remote.origin.uploadpack",
+                program.to_str().unwrap(),
+            ],
+        );
+        git(&in_sub, &["config", "protocol.file.allow", "always"]);
+        git(
+            &sub,
+            &["commit", "--quiet", "--allow-empty", "-m", "second"],
+        );
+        git(
+            &upstream.join("sub"),
+            &[&local[..], &["pull", "-q", "origin", "main"]].concat(),
+        );
+        git(&upstream, &["commit", "--quiet", "-am", "sub moved"]);
+        clone
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_program_named_in_a_submodule_s_settings_is_never_run() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let (program, ran) = (tmp.path().join("program"), tmp.path().join("ran"));
+        let script = format!(
+            "#!/bin/sh\ntouch '{}'\nexec git-upload-pack \"$@\"\n",
+            ran.display()
+        );
+        std::fs::write(&program, script).unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let clone = clone_with_a_hostile_submodule(tmp.path(), &program);
+        assert_eq!(behind(&clone), Ok(1));
+        assert!(update(&clone).unwrap().ends_with("sub moved"));
+        assert!(!ran.exists());
+
+        git(
+            &clone,
+            &[
+                "config",
+                "remote.origin.uploadpack",
+                program.to_str().unwrap(),
+            ],
+        );
+        let refused = behind(&clone).unwrap_err();
+        assert_eq!(refused.kind(), crate::base::error::Kind::Refused);
         assert!(!ran.exists());
     }
 

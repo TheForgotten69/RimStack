@@ -375,7 +375,7 @@
  "Into": "Do",
  "Into the game's own Mods folder, {}/Mods, without subscribing: Steam will not update these.": "Do własnego folderu Mods gry, {}/Mods, bez subskrypcji: Steam nie będzie ich aktualizować.",
  "It runs with a home folder of its own there, apart from Steam's settings.": "Działa tam z własnym folderem domowym, oddzielnym od ustawień Steam.",
- "Its Git settings name programs to run ({}): RimStack does not run Git there": "Jego ustawienia Git wskazują programy do uruchomienia ({}): RimStack nie uruchamia tam Gita",
+ "Its Git settings go beyond a plain clone's ({}): RimStack does not run Git there": "Jego ustawienia Git wykraczają poza zwykły klon ({}): RimStack nie uruchamia tam Gita",
  "Its load order": "Jego kolejność ładowania",
  "Its own colour": "Jego własny kolor",
  "Keep": "Zachowaj",
