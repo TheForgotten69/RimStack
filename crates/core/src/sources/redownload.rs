@@ -3,9 +3,8 @@
 //! the copy on disk, and mods never subscribed to put in the game's own
 //! `Mods` folder.
 
-use crate::base::error::{Error, Kind, Result};
+use crate::base::error::{Error, Kind, Result, Sentence};
 use crate::said;
-use crate::say;
 
 use std::path::{Path, PathBuf};
 
@@ -41,29 +40,26 @@ pub fn install(data_dir: &Path) -> Result<PathBuf> {
         }
     };
     let dir = data_dir.join("steamcmd");
-    let failed = |kind: Kind, what: String, e: &dyn std::fmt::Display| {
-        Error::new(kind, format!("{what}: {e}"))
-    };
     std::fs::create_dir_all(&dir)
-        .map_err(|e| failed(Kind::File, say!("its folder could not be made"), &e))?;
+        .map_err(|e| Error::caused(Kind::File, said!("its folder could not be made"), e))?;
     let agent = crate::base::web::agent(120);
     let url = format!("https://steamcdn-a.akamaihd.net/client/installer/{archive}");
     let mut response = agent
         .get(&url)
         .call()
-        .map_err(|e| failed(Kind::Network, say!("the download failed"), &e))?;
+        .map_err(|e| Error::caused(Kind::Network, said!("the download failed"), e))?;
     let bytes = response
         .body_mut()
         .read_to_vec()
-        .map_err(|e| failed(Kind::Network, say!("the download failed"), &e))?;
+        .map_err(|e| Error::caused(Kind::Network, said!("the download failed"), e))?;
     let packed = dir.join(archive);
     std::fs::write(&packed, bytes)
-        .map_err(|e| failed(Kind::File, say!("the download could not be kept"), &e))?;
+        .map_err(|e| Error::caused(Kind::File, said!("the download could not be kept"), e))?;
     let listed = crate::base::program::run(
         std::process::Command::new("tar").arg("-tf").arg(&packed),
         crate::base::program::LOCAL,
     )
-    .map_err(|e| failed(Kind::Program, say!("tar could not be run"), &e))?;
+    .map_err(|e| Error::caused(Kind::Program, said!("tar could not be run"), e))?;
     if let Err(problem) = only_inside(&String::from_utf8_lossy(&listed.stdout), program) {
         let _ = std::fs::remove_file(&packed);
         return Err(problem);
@@ -76,7 +72,7 @@ pub fn install(data_dir: &Path) -> Result<PathBuf> {
             .arg(&dir),
         crate::base::program::NETWORK,
     )
-    .map_err(|e| failed(Kind::Program, say!("tar could not be run"), &e))?
+    .map_err(|e| Error::caused(Kind::Program, said!("tar could not be run"), e))?
     .status;
     let _ = std::fs::remove_file(&packed);
     let program = dir.join(program);
@@ -165,10 +161,10 @@ pub fn fetch_all(
             return Ok(fresh);
         }
         let last = said.lines().rev().find(|l| !l.trim().is_empty());
-        Err(Error::program(said!(
-            "SteamCMD did not download it: {}",
-            last.map_or_else(|| say!("no reason given"), |line| line.trim().to_string())
-        )))
+        Err(Error::program(match last {
+            Some(line) => said!("SteamCMD did not download it: {}", line.trim()),
+            None => said!("SteamCMD did not download it"),
+        }))
     };
     let not_an_id = |id: &&String| ((*id).clone(), Err(not_an_id(id)));
     let mut all: Vec<_> = refused.iter().map(not_an_id).collect();
@@ -214,29 +210,29 @@ pub fn replace(installed: &Path, fresh: &Path) -> Result<()> {
     let mut aside = installed.as_os_str().to_os_string();
     aside.push(".rimstack-old");
     let aside = PathBuf::from(aside);
-    let failed = |what: &str, e: std::io::Error| Error::new(Kind::File, format!("{what}: {e}"));
+    let failed = |what: Sentence, e: std::io::Error| Error::caused(Kind::File, what, e);
     // Left by a run that could not finish deleting it: in the way of
     // this one, and a second copy of the mod to the game.
     if aside.is_dir() && installed.is_dir() {
         std::fs::remove_dir_all(&aside)
-            .map_err(|e| failed(&say!("the old copy could not be deleted"), e))?;
+            .map_err(|e| failed(said!("the old copy could not be deleted"), e))?;
     }
     std::fs::rename(installed, &aside)
-        .map_err(|e| failed(&say!("the mod's folder could not be moved aside"), e))?;
+        .map_err(|e| failed(said!("the mod's folder could not be moved aside"), e))?;
     let moved = std::fs::rename(fresh, installed).or_else(|_| copy_all(fresh, installed));
     if let Err(problem) = moved {
         let _ = std::fs::remove_dir_all(installed);
         let what = match std::fs::rename(&aside, installed) {
-            Ok(()) => say!("the new copy could not be put in place"),
-            Err(_) => say!(
+            Ok(()) => said!("the new copy could not be put in place"),
+            Err(_) => said!(
                 "the new copy could not be put in place, and the old one is now {}",
                 aside.display()
             ),
         };
-        return Err(failed(&what, problem));
+        return Err(failed(what, problem));
     }
     std::fs::remove_dir_all(&aside)
-        .map_err(|e| failed(&say!("the old copy could not be deleted"), e))
+        .map_err(|e| failed(said!("the old copy could not be deleted"), e))
 }
 
 /// Folders inside folders, as far as a mod goes; a link to a folder

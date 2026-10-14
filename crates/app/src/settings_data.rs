@@ -242,7 +242,11 @@ impl qobject::SettingsData {
         crate::jobs::run(
             "community download",
             self.qt_thread(),
-            move || app.download_databases().err().map(String::from),
+            move || {
+                app.download_databases()
+                    .err()
+                    .map(|problem| problem.to_string())
+            },
             |mut me, problem| {
                 me.as_mut().set_community_current(problem.is_none());
                 me.as_mut()

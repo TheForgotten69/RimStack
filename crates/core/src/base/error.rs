@@ -6,6 +6,7 @@
 
 use std::fmt::Display;
 use std::path::Path;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -113,23 +114,58 @@ macro_rules! said {
     };
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+type Cause = Arc<dyn std::error::Error + Send + Sync>;
+
+#[derive(Debug, Clone)]
 pub struct Error {
     kind: Kind,
     said: Sentence,
+    /// What failed underneath, as the system or a library gave it.
+    cause: Option<Cause>,
 }
+
+/// Two failures are the same when they say the same of the same kind.
+impl PartialEq for Error {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind && self.said == other.said
+    }
+}
+
+impl Eq for Error {}
 
 impl Error {
     pub fn new(kind: Kind, said: impl Into<Sentence>) -> Self {
         Self {
             kind,
             said: said.into(),
+            cause: None,
         }
     }
 
-    /// `path: why`, as the system worded the failure.
-    pub fn file(path: &Path, why: impl Display) -> Self {
-        Self::new(Kind::File, format!("{}: {why}", path.display()))
+    /// `said: cause`, the cause kept as this failure's source.
+    pub fn caused(
+        kind: Kind,
+        said: Sentence,
+        cause: impl std::error::Error + Send + Sync + 'static,
+    ) -> Self {
+        let said = Sentence::new(
+            "{}: {}",
+            vec![Part::Said(Box::new(said)), Part::from(&cause)],
+        );
+        Self {
+            kind,
+            said,
+            cause: Some(Arc::new(cause)),
+        }
+    }
+
+    /// `path: cause`, as the system worded the failure.
+    pub fn file(path: &Path, cause: impl std::error::Error + Send + Sync + 'static) -> Self {
+        Self {
+            kind: Kind::File,
+            said: Sentence::plain(format!("{}: {cause}", path.display())),
+            cause: Some(Arc::new(cause)),
+        }
     }
 
     pub fn format(said: impl Into<Sentence>) -> Self {
@@ -162,7 +198,7 @@ impl Error {
             ],
             translated: true,
         };
-        Self::new(self.kind, said)
+        Self { said, ..self }
     }
 
     /// This failure as a part of another one's sentence.
@@ -178,18 +214,17 @@ impl Display for Error {
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        let cause = self.cause.as_deref()?;
+        Some(cause)
+    }
+}
 
 /// As its sentence: what the interface is handed is what it shows.
 impl serde::Serialize for Error {
     fn serialize<S: serde::Serializer>(&self, to: S) -> std::result::Result<S::Ok, S::Error> {
         to.serialize_str(&self.said.put())
-    }
-}
-
-impl From<Error> for String {
-    fn from(error: Error) -> Self {
-        error.said.put()
     }
 }
 
@@ -225,14 +260,27 @@ mod tests {
     }
 
     #[test]
-    fn a_failure_keeps_its_kind_whatever_is_said_around_it() {
-        let denied = Error::file(Path::new("/a/notes.json"), "denied");
+    fn a_failure_keeps_its_kind_and_its_cause_whatever_is_said_around_it() {
+        use std::error::Error as _;
+        let denied = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
+        let denied = Error::file(Path::new("/a/notes.json"), denied);
         assert_eq!(denied.to_string(), "/a/notes.json: denied");
         let said = denied.of("the notes were not kept");
         assert_eq!(said.kind(), Kind::File);
         assert_eq!(
-            String::from(said),
+            said.to_string(),
             "the notes were not kept: /a/notes.json: denied"
         );
+        let cause = said
+            .source()
+            .and_then(|c| c.downcast_ref::<std::io::Error>());
+        assert_eq!(
+            cause.map(|c| c.kind()),
+            Some(std::io::ErrorKind::PermissionDenied)
+        );
+        let missing = std::io::Error::new(std::io::ErrorKind::NotFound, "gone");
+        let caused = Error::caused(Kind::File, said!("Not kept"), missing);
+        assert_eq!(caused.to_string(), "Not kept: gone");
+        assert!(caused.source().is_some());
     }
 }

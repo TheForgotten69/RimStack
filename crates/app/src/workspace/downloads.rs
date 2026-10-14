@@ -134,7 +134,7 @@ impl App {
                 kept.now = now.iter().map(|d| (d.id.clone(), d.updated)).collect();
                 None
             }
-            Err(problem) => Some(problem.into()),
+            Err(problem) => Some(problem.to_string()),
         };
         kept.checkouts = self.checkouts_asked(library);
         self.keep_check(&kept);
@@ -211,7 +211,7 @@ impl App {
                     },
                     Err(problem) => Remote {
                         behind: None,
-                        problem: Some(problem.into()),
+                        problem: Some(problem.to_string()),
                     },
                 };
                 (m.path.to_string_lossy().into_owned(), said)

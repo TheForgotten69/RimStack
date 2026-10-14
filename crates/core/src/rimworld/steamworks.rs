@@ -75,8 +75,19 @@ fn workshop_interface(
     })
 }
 
+/// What Steamworks reads to know which game is asking. A program sets
+/// them before it starts any thread: changing the environment while
+/// another thread may read it is unsound.
+pub fn environment() -> [(&'static str, String); 2] {
+    [
+        ("SteamAppId", GAME.to_string()),
+        ("SteamGameId", GAME.to_string()),
+    ]
+}
+
 /// Asks Steam, which must be running, to subscribe to, unsubscribe from
 /// or download these Workshop items. Steam then downloads or removes them.
+/// The process's environment holds `environment()`.
 pub fn act(library: &Path, action: Action, ids: &[u64]) -> Result<(), Error> {
     type Item = unsafe extern "C" fn(*mut std::ffi::c_void, u64) -> u64;
     // ISteamUGC::DownloadItem(id, high priority): true when Steam took it.
@@ -85,8 +96,6 @@ pub fn act(library: &Path, action: Action, ids: &[u64]) -> Result<(), Error> {
         Item(libloading::Symbol<'a, Item>),
         Fetch(libloading::Symbol<'a, Fetch>),
     }
-    std::env::set_var("SteamAppId", GAME);
-    std::env::set_var("SteamGameId", GAME);
     let missing = |what: &str| Error::program(said!("the game's Steam library has no {}", what));
     // SAFETY: the game's own Steamworks library, called as its flat C
     // interface is declared: Init before anything else, the Workshop

@@ -6,9 +6,8 @@
 //! only while they are still exactly what RimStack wrote. Nothing but the
 //! `.dds` itself is put in a mod's folder.
 
-use crate::base::error::Error;
+use crate::base::error::{Error, Kind};
 use crate::said;
-use crate::say;
 
 use image_dds::{ImageFormat, Mipmaps, Quality};
 use rayon::prelude::*;
@@ -294,8 +293,8 @@ pub fn convert(mod_root: &Path, manifest: &mut Manifest, step: &(dyn Fn() + Sync
 }
 
 fn convert_one(png: &Path) -> Result<Made, Error> {
-    let (source_len, source_modified) =
-        fingerprint(png).ok_or_else(|| Error::file(png, say!("cannot be read")))?;
+    let (source_len, source_modified) = fingerprint(png)
+        .ok_or_else(|| Error::new(Kind::File, said!("{} cannot be read", png.display())))?;
     let bytes = std::fs::read(png).map_err(|e| Error::file(png, e))?;
     let encoded = encode(&bytes)?;
     // Written whole under another name first: the game must never find

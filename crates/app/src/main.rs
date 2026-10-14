@@ -86,10 +86,16 @@ fn main() -> std::process::ExitCode {
         eprintln!("--check saves the load order: run tools/check-app.sh, which gives it a copy through RIMSTACK_CONFIG");
         return std::process::ExitCode::from(2);
     }
+    let steam_request =
+        std::env::args().find_map(|a| a.strip_prefix("--steamworks=").map(String::from));
+    // Before any thread is started, as changing the environment must be.
+    if steam_request.is_some() {
+        for (name, value) in rimstack_core::rimworld::steamworks::environment() {
+            std::env::set_var(name, value);
+        }
+    }
     let app = Arc::new(App::from_environment());
-    if let Some(request) =
-        std::env::args().find_map(|a| a.strip_prefix("--steamworks=").map(String::from))
-    {
+    if let Some(request) = steam_request {
         return steamworks(&app, &request);
     }
     STARTED.get_or_init(Instant::now);

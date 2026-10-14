@@ -401,14 +401,14 @@ impl App {
         let read = std::fs::read_to_string(&path).map_err(|e| Error::file(&path, e));
         let pairs = match read.and_then(|text| Ok(community::parse(&text)?.pairs())) {
             Ok(pairs) => pairs,
-            Err(problem) => return problem.into(),
+            Err(problem) => return problem.to_string(),
         };
         let mut yours = self.user_rules().writing();
         let added = yours.import(&pairs);
         let written = yours.write(&self.user_rules_file());
         drop(yours);
         match written {
-            Err(problem) => problem.into(),
+            Err(problem) => problem.to_string(),
             Ok(()) if pairs.is_empty() => say!("RimSort has no rules of your own."),
             Ok(()) => {
                 self.publish(Changes::RULES | Changes::PROBLEMS);
@@ -440,7 +440,7 @@ impl App {
                 "{} files moved to {}",
                 aside.display()
             ),
-            Err(problem) => problem.into(),
+            Err(problem) => problem.to_string(),
         }
     }
 }
@@ -469,7 +469,7 @@ pub fn newest_release() -> ReleaseSaid {
         }
         Ok(_) => ReleaseSaid::Latest {},
         Err(problem) => ReleaseSaid::Failed {
-            problem: problem.into(),
+            problem: problem.to_string(),
         },
     }
 }

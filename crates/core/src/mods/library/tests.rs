@@ -108,7 +108,7 @@ fn unreadable_mods_keep_their_reason() {
     let mods = scan(&roots);
     let reason = |f: &str| {
         let unread = mods.iter().find(|m| m.folder == f).unwrap();
-        unread.about.clone().map_err(String::from)
+        unread.about.clone().map_err(|problem| problem.to_string())
     };
     assert!(reason("broken").unwrap_err().starts_with("malformed XML"));
     assert_eq!(reason("empty").unwrap_err(), "no About.xml");

@@ -16,7 +16,7 @@ impl<T> From<Result<T, rimstack_core::base::error::Error>> for Answer<T> {
         match outcome {
             Ok(done) => Answer::Done(done),
             Err(problem) => Answer::Failed {
-                problem: problem.into(),
+                problem: problem.to_string(),
             },
         }
     }
