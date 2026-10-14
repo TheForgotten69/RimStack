@@ -11,6 +11,7 @@ Rectangle {
     property bool drawer: false
     color: Theme.panel
     Component.onCompleted: if (drawer) mirror.focusInput()
+    Shortcut { sequences: [StandardKey.Find]; enabled: pane.drawer; onActivated: mirror.focusInput() }
 
     ColumnLayout {
         anchors.fill: parent
@@ -68,6 +69,8 @@ Rectangle {
             Layout.leftMargin: Theme.gapLarge
             Layout.rightMargin: Theme.gapLarge
             Layout.bottomMargin: Theme.gap
+            icon: "funnel"
+            keys: Theme.say("Ctrl + F")
             chips: true
             placeholder: Theme.say("Filter active and inactive mods")
             found: Mods.filtered === "" ? "" : Theme.fill("{} active, {} inactive", Theme.count(Mods.active.matching), Theme.count(Mods.inactive.matching))

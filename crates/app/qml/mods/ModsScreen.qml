@@ -271,7 +271,8 @@ Rectangle {
         function onMenuRequested(item, x, y, entries) { rowMenu.openAt(item, x, y, entries) }
     }
 
-    Shortcut { sequences: [StandardKey.Find]; onActivated: Mods.filterFocusRequested() }
+    // Opened over the load order, the drawer's box answers it instead.
+    Shortcut { sequences: [StandardKey.Find]; enabled: !drawerLoader.active; onActivated: Mods.filterFocusRequested() }
     Shortcut { sequences: [StandardKey.Undo]; onActivated: Mods.undo() }
     Shortcut { sequences: [StandardKey.Redo]; onActivated: Mods.redo() }
     Shortcut { sequences: [StandardKey.Save]; onActivated: if (Hub.mods.dirty) Mods.save() }
