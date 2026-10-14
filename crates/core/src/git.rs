@@ -257,4 +257,24 @@ mod tests {
         assert!(update(&clone).is_err());
         assert!(update(tmp.path()).is_err());
     }
+
+    /// Clones Harmony's repository into RIMSTACK_SCRATCH, then asks its
+    /// remote and updates it: a few megabytes.
+    #[test]
+    #[ignore = "needs the network, git and RIMSTACK_SCRATCH: an empty folder"]
+    fn a_real_repository_is_cloned_asked_and_updated() {
+        let mods = std::path::PathBuf::from(std::env::var_os("RIMSTACK_SCRATCH").unwrap());
+        let link = links_in("see https://github.com/pardeike/HarmonyRimWorld.git").remove(0);
+        let into = clone(&link, &mods).unwrap();
+        assert!(into.join("About/About.xml").is_file());
+        assert_eq!(page(&into).as_deref(), Some(link.as_str()));
+        assert_eq!(
+            clone(&link, &mods).unwrap_err().kind(),
+            crate::error::Kind::Refused
+        );
+        assert_eq!(behind(&into), Ok(0));
+        let now_at = update(&into).unwrap();
+        println!("cloned {} at {now_at}", into.display());
+        assert!(!now_at.is_empty());
+    }
 }
