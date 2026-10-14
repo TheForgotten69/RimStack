@@ -8,7 +8,7 @@ default:
 
 # Build the release app
 build:
-    cargo build --release -p rimstack-app
+    cargo build --release -q -p rimstack-app
     tools/qml-import.sh
 
 # Build and open RimStack on the installed mods
@@ -25,14 +25,14 @@ fmt:
 
 # Clippy on every target, then qmllint on the QML
 lint: build
-    cargo clippy --all-targets
+    cargo clippy -q --all-targets
     tools/lint-qml.sh
     @# 21 are known (items reached through a Loader, a Repeater or `parent`, and the app's own types, which qmllint cannot see into): a new one is a mistake.
     @test "$(tools/lint-qml.sh 2>&1 | grep -c '^Warning')" -le 21 || { echo "qmllint: more warnings than the 21 known"; exit 1; }
 
 # Both crates' tests; `just test list::` runs those matching a name
 test *filter:
-    cargo test --workspace {{filter}}
+    cargo test --workspace -q {{filter}}
 
 # Known advisories against the crates in Cargo.lock
 audit:
