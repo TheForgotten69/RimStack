@@ -342,21 +342,6 @@ impl GroupedList {
         true
     }
 
-    /// Puts the mod in a sub-category of yours, or with an empty name
-    /// takes it out. Returns whether the list holds that mod.
-    pub fn set_sub(&mut self, installed: ModId, sub: &str) -> bool {
-        let Some(m) = self
-            .mods
-            .iter_mut()
-            .find(|m| m.installed == Some(installed))
-        else {
-            return false;
-        };
-        m.sub = sub.trim().to_string();
-        self.rebuild();
-        true
-    }
-
     /// Folds the sub-category of the mod at `first` away, or shows it again.
     pub fn toggle_sub(&mut self, first: usize) {
         let Some(m) = self.mods.get(first).filter(|m| !m.sub.is_empty()) else {

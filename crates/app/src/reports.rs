@@ -123,8 +123,22 @@ pub struct Database {
 /// The fields an answer has, as QML reads them, sorted.
 #[cfg(test)]
 pub(crate) fn fields<T: Serialize>(value: &T) -> Vec<String> {
+    use serde_json::Value;
+    let kind = |value: &Value| match value {
+        Value::Null => "nothing",
+        Value::Bool(_) => "bool",
+        Value::Number(_) => "number",
+        Value::String(_) => "text",
+        Value::Array(_) => "list",
+        Value::Object(_) => "object",
+    };
     let said = crate::qml::values::as_shown(&value);
-    let mut keys: Vec<String> = said.as_object().unwrap().keys().cloned().collect();
+    let mut keys: Vec<String> = said
+        .as_object()
+        .unwrap()
+        .iter()
+        .map(|(name, value)| format!("{name}: {}", kind(value)))
+        .collect();
     keys.sort();
     keys
 }
@@ -138,37 +152,37 @@ mod tests {
         assert_eq!(
             fields(&SettingsReport::default()),
             [
-                "backup",
-                "communityRules",
-                "config",
-                "dataFolder",
-                "diagnosticsFile",
-                "fileHints",
-                "font",
-                "game",
-                "gameVersion",
-                "git",
-                "gitForWorkshop",
-                "interfaceScale",
-                "language",
-                "launchArguments",
-                "launchDirectly",
-                "logsKept",
-                "logsKeptNow",
-                "modsConfig",
-                "replacementsIgnored",
-                "rimsortRules",
-                "selfCheck",
-                "setConfig",
-                "setGame",
-                "setWorkshop",
-                "settingsFile",
-                "setupDone",
-                "steamcmd",
-                "version",
-                "versionAsideFor",
-                "versionWarnings",
-                "workshop",
+                "backup: nothing",
+                "communityRules: bool",
+                "config: nothing",
+                "dataFolder: text",
+                "diagnosticsFile: text",
+                "fileHints: bool",
+                "font: nothing",
+                "game: nothing",
+                "gameVersion: nothing",
+                "git: nothing",
+                "gitForWorkshop: bool",
+                "interfaceScale: text",
+                "language: nothing",
+                "launchArguments: nothing",
+                "launchDirectly: bool",
+                "logsKept: number",
+                "logsKeptNow: number",
+                "modsConfig: nothing",
+                "replacementsIgnored: list",
+                "rimsortRules: bool",
+                "selfCheck: bool",
+                "setConfig: nothing",
+                "setGame: nothing",
+                "setWorkshop: nothing",
+                "settingsFile: text",
+                "setupDone: bool",
+                "steamcmd: bool",
+                "version: text",
+                "versionAsideFor: nothing",
+                "versionWarnings: bool",
+                "workshop: nothing",
             ]
         );
     }
@@ -182,15 +196,18 @@ mod tests {
         assert_eq!(
             fields(&summary),
             [
-                "folders",
-                "lastLaunch",
-                "replacements",
-                "rules",
-                "saves",
-                "snapshots"
+                "folders: number",
+                "lastLaunch: object",
+                "replacements: number",
+                "rules: number",
+                "saves: number",
+                "snapshots: number"
             ]
         );
-        assert_eq!(fields(&LastLaunch::default()), ["errors", "mods", "time"]);
+        assert_eq!(
+            fields(&LastLaunch::default()),
+            ["errors: nothing", "mods: number", "time: number"]
+        );
     }
 
     #[test]
@@ -201,25 +218,25 @@ mod tests {
             serde_json::json!({ "problem": "no" })
         );
         let done: Answer<Written> = Ok(Written { file: "/a".into() }).into();
-        assert_eq!(fields(&done), ["file"]);
+        assert_eq!(fields(&done), ["file: text"]);
     }
 
     #[test]
     fn appearance_answers_keep_their_fields() {
         assert_eq!(
             fields(&ShortContrast::default()),
-            ["found", "needed", "what"]
+            ["found: number", "needed: number", "what: text"]
         );
         let newer = ReleaseSaid::Newer {
             version: "1.1".into(),
             page: "p".into(),
         };
-        assert_eq!(fields(&newer), ["page", "version"]);
+        assert_eq!(fields(&newer), ["page: text", "version: text"]);
         assert!(fields(&ReleaseSaid::Latest {}).is_empty());
         let failed = ReleaseSaid::Failed {
             problem: "x".into(),
         };
-        assert_eq!(fields(&failed), ["problem"]);
+        assert_eq!(fields(&failed), ["problem: text"]);
     }
 
     #[test]
@@ -229,10 +246,19 @@ mod tests {
             mods: 0,
             modified: 0,
         };
-        assert_eq!(fields(&saved), ["modified", "mods", "name"]);
+        assert_eq!(
+            fields(&saved),
+            ["modified: number", "mods: number", "name: text"]
+        );
         assert_eq!(
             fields(&Database::default()),
-            ["id", "name", "on", "updated", "use"]
+            [
+                "id: text",
+                "name: text",
+                "on: bool",
+                "updated: number",
+                "use: text"
+            ]
         );
     }
 }

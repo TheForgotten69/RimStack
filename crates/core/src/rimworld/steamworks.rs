@@ -27,26 +27,18 @@ pub enum Action {
 /// 1.7; under Unity in `Plugins` of its data folder, or a folder below.
 pub fn library(game_dir: &Path) -> Option<PathBuf> {
     const NAMES: [&str; 3] = ["libsteam_api.so", "steam_api64.dll", "libsteam_api.dylib"];
-    fn search(dir: &Path, depth: usize) -> Option<PathBuf> {
-        let entries: Vec<PathBuf> = std::fs::read_dir(dir)
-            .ok()?
-            .flatten()
-            .map(|e| e.path())
-            .collect();
-        let is_it = |p: &&PathBuf| {
-            p.file_name()
-                .is_some_and(|n| NAMES.iter().any(|name| n == *name))
-        };
-        let here = entries.iter().find(is_it).cloned();
-        let below = || {
-            entries
-                .iter()
-                .filter(|p| p.is_dir())
-                .find_map(|p| search(p, depth - 1))
-        };
-        here.or_else(|| (depth > 0).then(below).flatten())
-    }
-    search(game_dir, 4)
+    // Near the top of the game's folder: the walk need not go further.
+    const DEEPEST: usize = 4;
+    let named = |entry: &crate::base::walk::Entry| {
+        let name = entry.path.file_name();
+        !entry.is_dir && name.is_some_and(|n| NAMES.iter().any(|name| n == *name))
+    };
+    let found = crate::base::walk::tree(game_dir, DEEPEST)
+        .into_iter()
+        .filter(named);
+    found
+        .min_by_key(|entry| entry.within.components().count())
+        .map(|entry| entry.path)
 }
 
 /// What a request string means: `subscribe:1,2,3`, `unsubscribe:4` or `download:5`.

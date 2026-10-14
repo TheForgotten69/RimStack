@@ -18,7 +18,7 @@ pub fn copy_to_local(mod_root: &Path, local_mods: &Path) -> Result<PathBuf> {
     if to.exists() {
         return Err(Error::refused(said!("{} is there already", to.display())));
     }
-    crate::sources::redownload::copy_all(mod_root, &to).map_err(|e| {
+    crate::base::walk::copy(mod_root, &to).map_err(|e| {
         let _ = std::fs::remove_dir_all(&to);
         Error::file(&to, e)
     })?;

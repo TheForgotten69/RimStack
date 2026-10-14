@@ -192,7 +192,7 @@ pub fn put_in_local(fresh: &Path, workshop_id: &str, local_mods: &Path) -> Resul
     match to.exists() {
         true => replace(&to, fresh)?,
         false => std::fs::rename(fresh, &to)
-            .or_else(|_| copy_all(fresh, &to))
+            .or_else(|_| crate::base::walk::copy(fresh, &to))
             .map_err(|e| Error::file(&to, e))?,
     }
     let noted = to.join("About").join("PublishedFileId.txt");
@@ -219,7 +219,8 @@ pub fn replace(installed: &Path, fresh: &Path) -> Result<()> {
     }
     std::fs::rename(installed, &aside)
         .map_err(|e| failed(said!("the mod's folder could not be moved aside"), e))?;
-    let moved = std::fs::rename(fresh, installed).or_else(|_| copy_all(fresh, installed));
+    let moved =
+        std::fs::rename(fresh, installed).or_else(|_| crate::base::walk::copy(fresh, installed));
     if let Err(problem) = moved {
         let _ = std::fs::remove_dir_all(installed);
         let what = match std::fs::rename(&aside, installed) {
@@ -233,35 +234,6 @@ pub fn replace(installed: &Path, fresh: &Path) -> Result<()> {
     }
     std::fs::remove_dir_all(&aside)
         .map_err(|e| failed(said!("the old copy could not be deleted"), e))
-}
-
-/// Folders inside folders, as far as a mod goes; a link to a folder
-/// above itself would otherwise be followed for ever.
-const DEEPEST: usize = 40;
-
-/// For a download on another disk, where a folder cannot be renamed
-/// across. What a link points at is copied in its place.
-pub(crate) fn copy_all(from: &Path, to: &Path) -> std::io::Result<()> {
-    copy_under(from, to, DEEPEST)
-}
-
-fn copy_under(from: &Path, to: &Path, deeper: usize) -> std::io::Result<()> {
-    let Some(deeper) = deeper.checked_sub(1) else {
-        return Err(std::io::Error::other(format!(
-            "{}: folders more than {DEEPEST} deep",
-            from.display()
-        )));
-    };
-    std::fs::create_dir_all(to)?;
-    for entry in std::fs::read_dir(from)? {
-        let entry = entry?;
-        let (source, target) = (entry.path(), to.join(entry.file_name()));
-        match source.is_dir() {
-            true => copy_under(&source, &target, deeper)?,
-            false => drop(std::fs::copy(&source, target)?),
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -350,27 +322,6 @@ mod tests {
         let put = put_in_local(&fresh, "../../escaped", &mods);
         assert_eq!(put.unwrap_err().kind(), Kind::Refused);
         assert!(!tmp.path().join("escaped").exists());
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_linked_folder_is_copied_as_what_it_points_at_and_a_loop_ends() {
-        let tmp = tempfile::tempdir().unwrap();
-        let (from, shared) = (tmp.path().join("mod"), tmp.path().join("shared"));
-        std::fs::create_dir_all(&from).unwrap();
-        std::fs::create_dir_all(&shared).unwrap();
-        std::fs::write(shared.join("a.png"), "png").unwrap();
-        std::os::unix::fs::symlink(&shared, from.join("Textures")).unwrap();
-        let to = tmp.path().join("copy");
-        copy_all(&from, &to).unwrap();
-        assert_eq!(
-            std::fs::read_to_string(to.join("Textures/a.png")).unwrap(),
-            "png"
-        );
-        assert!(!to.join("Textures").is_symlink());
-
-        std::os::unix::fs::symlink(&from, from.join("itself")).unwrap();
-        assert!(copy_all(&from, &tmp.path().join("again")).is_err());
     }
 
     #[test]

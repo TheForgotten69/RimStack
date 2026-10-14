@@ -97,9 +97,10 @@ fn neighbours_in_a_sub_category_of_yours_sit_under_its_row() {
         m.installed = Some(id(i));
     }
     let mut list = GroupedList::new(mods);
-    assert!(list.set_sub(id(1), " Genes "));
-    assert!(list.set_sub(id(2), "Genes"));
-    assert!(!list.set_sub(id(99), "Genes"));
+    let genes = ["Genes".to_string()];
+    assert!(list.set_tags(id(1), &genes));
+    assert!(list.set_tags(id(2), &genes));
+    assert!(!list.set_tags(id(99), &genes));
     let content = Row::Header {
         category: Category::Content,
         count: 4,
@@ -144,7 +145,7 @@ fn neighbours_in_a_sub_category_of_yours_sit_under_its_row() {
     assert_eq!(list.rows()[3], Row::Mod { index: 1 });
     list.toggle_sub(0);
     assert!(list.in_sub_of(0).is_empty());
-    assert!(list.set_sub(id(1), ""));
+    assert!(list.set_tags(id(1), &[]));
     assert_eq!(list.rows()[2], Row::Mod { index: 1 });
     assert_eq!(list.rows()[3], sub(2, 1, false));
 }
