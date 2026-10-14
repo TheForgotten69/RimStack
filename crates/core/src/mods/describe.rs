@@ -49,6 +49,11 @@ pub fn warned_for_version(own: &[Trouble]) -> bool {
 }
 
 impl Fix {
+    /// It gets a mod the load order needs and does not have active.
+    pub fn brings_a_mod(&self) -> bool {
+        matches!(self, Fix::Activate(_) | Fix::Subscribe(_) | Fix::Search(_))
+    }
+
     /// What the window is told to do, with `target` saying to what.
     pub fn action(&self) -> &'static str {
         match self {

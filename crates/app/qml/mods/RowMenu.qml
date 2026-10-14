@@ -41,16 +41,16 @@ QtObject {
                 steam.push({ text: Theme.say("Download again with SteamCMD…"), icon: "download", run: () => Notices.ask({
                     title: Theme.fill("Download {} again", (about.name || "")),
                     lines: [Theme.say("SteamCMD downloads the mod anew, and the fresh copy replaces this folder:"), about.path],
-                    label: Theme.say("Download"), run: () => Mods.downloads.redownload(about.folder, about.path) }) })
+                    label: Theme.say("Download"), run: () => Hub.downloads.redownload(row.modId) }) })
             if (!inActive)
-                steam.push({ text: Theme.say("Unsubscribe…"), icon: "minus", danger: true, run: () => Mods.unsubscribe(about.name || "", about.folder, about.path) })
+                steam.push({ text: Theme.say("Unsubscribe…"), icon: "minus", danger: true, run: () => Mods.unsubscribe(row.modId) })
             groups.push(steam)
         }
         if (about.repository)
             groups.push([
                 { title: Theme.say("Git") },
                 { text: Theme.say("Repository"), icon: "link", run: () => Qt.openUrlExternally(about.repository) },
-                { text: Theme.say("Update"), icon: "download", run: () => Mods.downloads.updateFromGit(about.path) },
+                { text: Theme.say("Update"), icon: "download", run: () => Hub.downloads.updateFromGit(row.modId) },
             ])
         // Its own other tags first, then the groups its neighbours are in.
         const filing = [{ title: Theme.say("Group under a tag") }]

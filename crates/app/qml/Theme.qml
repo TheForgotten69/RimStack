@@ -82,31 +82,6 @@ QtObject {
         let at = 0
         return say(text).replace(/\{\}/g, () => parts[at++])
     }
-    // Marks a text kept in English as it is written down, and put in the
-    // chosen language where it is shown: see `put`.
-    function kept(text) {
-        return text
-    }
-    // A sentence kept as data, in words: [english, part…], a part being a
-    // sentence itself; ["#", n, one, many, part…] for a count; [",", …] for a list.
-    function put(sentence) {
-        if (!Array.isArray(sentence))
-            return String(sentence)
-        const parts = sentence.slice(1).map(put)
-        if (sentence[0] === ",")
-            return parts.join(", ")
-        return sentence[0] === "#" ? plural(sentence[1], sentence[2], sentence[3], ...parts.slice(3)) : fill(sentence[0], ...parts)
-    }
-    // What a record says: a kept sentence, or the plain text an older record holds.
-    function said(record) {
-        if (record.charAt(0) !== "[")
-            return say(record)
-        try {
-            return put(JSON.parse(record))
-        } catch (problem) {
-            return record
-        }
-    }
     // `fill` with the count first, in the form the language uses for it:
     // the language file's "@plural" lists the counts that take the singular.
     // After a slash, the last digits that take a third form outside the

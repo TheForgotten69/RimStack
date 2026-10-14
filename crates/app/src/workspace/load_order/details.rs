@@ -166,6 +166,8 @@ pub struct Overview {
     /// What a mod can be filed under by hand: every category but the game's.
     categories: Vec<&'static str>,
     troubles: Vec<ProblemSaid>,
+    /// The problems solved by getting a mod the load order needs.
+    to_get: Vec<ProblemSaid>,
     /// The same problems by kind, the kinds with errors first.
     trouble_groups: Vec<ProblemGroup>,
     needed: Vec<String>,
@@ -403,6 +405,14 @@ impl LoadOrder {
             own.iter().map(|t| ProblemSaid::of(m, t)).collect()
         };
         let troubles: Vec<ProblemSaid> = each.clone().flat_map(said).collect();
+        let to_get = each
+            .clone()
+            .flat_map(|(m, own)| {
+                own.iter()
+                    .filter(|t| t.fix.brings_a_mod())
+                    .map(move |t| ProblemSaid::of(m, t))
+            })
+            .collect();
         let mut trouble_groups: Vec<ProblemGroup> =
             rimstack_core::base::grouped::by_key(each.flat_map(said), |t| t.group)
                 .into_iter()
@@ -443,6 +453,7 @@ impl LoadOrder {
                 .map(Category::label)
                 .collect(),
             troubles,
+            to_get,
             trouble_groups,
             needed: tally.needed,
             version_only: tally.version_only,
@@ -543,6 +554,7 @@ mod tests {
                 "otherWarnings",
                 "readMs",
                 "slowest",
+                "toGet",
                 "troubleGroups",
                 "troubles",
                 "trusted",

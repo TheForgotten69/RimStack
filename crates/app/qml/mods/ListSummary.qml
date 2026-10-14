@@ -11,7 +11,7 @@ Column {
     width: parent.width
     spacing: Theme.gapCard
     readonly property var facts: Hub.mods.summary || ({})
-    readonly property int changed: visible && Mods.downloads && !Theme.demo ? JSON.parse(Mods.downloads.sinceLaunch()).items.length : 0
+    readonly property int changed: (Hub.downloads.since || {}).count || 0
     readonly property var errors: Mods.troubles.filter(trouble => trouble.error)
     readonly property var slowest: Mods.overview.slowest || []
 
@@ -93,7 +93,7 @@ Column {
     }
 
     Card {
-        visible: Hub.mods.conflicts + Mods.behind + (summary.facts.replacements || 0) + summary.changed > 0
+        visible: Hub.mods.conflicts + Hub.downloads.behindActive + (summary.facts.replacements || 0) + summary.changed > 0
         title: Theme.say("To review")
         key: "overview-review"
         spacing: Theme.gap
@@ -110,8 +110,8 @@ Column {
             onActed: Mods.showUpdates()
         }
         Line {
-            visible: Mods.behind > 0
-            text: Theme.plural(Mods.behind, "{} update available", "{} updates available")
+            visible: Hub.downloads.behindActive > 0
+            text: Theme.plural(Hub.downloads.behindActive, "{} update available", "{} updates available")
             action: Theme.say("Show")
             onActed: Mods.showUpdates()
         }

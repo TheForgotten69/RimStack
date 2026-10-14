@@ -53,11 +53,6 @@ pub mod qobject {
         /// The load order as it was before RimStack first saved.
         #[qinvokable]
         fn original(self: &ListsData) -> QVariant;
-
-        /// A line in the history: a sentence `Theme.kept` wrote, and what
-        /// takes it back ("unhide <mod folder>"), if anything.
-        #[qinvokable]
-        fn record(self: &ListsData, what: &QString, revert: &QString);
     }
 
     unsafe extern "C++" {
@@ -152,9 +147,5 @@ impl qobject::ListsData {
 
     fn original(&self) -> QVariant {
         to_qml(&self.app().original_list())
-    }
-
-    fn record(&self, what: &QString, revert: &QString) {
-        self.app().note(what.to_string(), revert.to_string());
     }
 }

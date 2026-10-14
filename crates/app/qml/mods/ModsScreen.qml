@@ -314,7 +314,7 @@ Timer {
         Mods.tab = tab ? Number(tab.substring(6)) : 0
         // `--notes` asks for the picked mod's change notes, as its Fetch button does.
         if (Qt.application.arguments.indexOf("--notes") !== -1 && Mods.info.source === "Workshop")
-            Mods.downloads.fetchChangeNotes(JSON.stringify([[Mods.info.folder, 0]]))
+            Hub.downloads.fetchNotes(Mods.selectedId)
     }
 }
 

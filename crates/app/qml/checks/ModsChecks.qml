@@ -325,7 +325,6 @@ Item {
             Mods.showProblem(true)
             check("a step to a problem says its place among them", Mods.problemPlace >= 1 && Mods.problemPlace <= Mods.problemCount && Mods.selectedId === Mods.problemMod)
         }
-        check("a kept sentence is put in words", Theme.put([Theme.kept("Saved the load order: {}"), [",", ["{} moved", 2]]]) === Theme.fill("Saved the load order: {}", Theme.fill("{} moved", 2)) && Theme.said("An older record") === "An older record")
         Mods.filtered = "is:changed"
         check("is:changed shows only what changed", Mods.active.rows() >= 1 && Mods.active.rows() < every)
         Mods.filtered = ""

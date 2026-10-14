@@ -55,7 +55,7 @@ impl App {
             rimstack_core::problem!("{problem}");
         }
         self.mark_all_seen();
-        crate::downloads::since_launch::record_versions(self);
+        self.record_versions();
     }
 
     /// Starts the game's own program with the launch arguments from the

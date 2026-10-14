@@ -2,7 +2,7 @@ use rimstack_core::said;
 
 mod background;
 mod changes;
-mod downloads;
+mod downloads_data;
 mod game_data;
 mod hub;
 mod lists_data;

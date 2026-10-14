@@ -1,18 +1,7 @@
-//! Every answer the window is handed as JSON, each a type of its own.
-//! QML reads these fields by name: renaming one here renames what QML
-//! must read, so each type's test lists its fields, and the doc comment
-//! names who reads them.
+//! Answers the window reads field by field: renaming one here renames
+//! what QML must read, so each type's test lists its fields.
 
-use cxx_qt_lib::QString;
-use rimstack_core::mods::library::ModId;
-use rimstack_core::sources::changes::Note;
-use rimstack_core::sources::downloads::{Asked, Behind, Changed};
 use serde::Serialize;
-
-/// The answer as the window reads it.
-pub(crate) fn said<T: Serialize>(value: &T) -> QString {
-    QString::from(&serde_json::to_string(value).unwrap_or_else(|_| "{}".to_string()))
-}
 
 /// What was asked, done, or why not: `{ …what came of it }` or `{ problem }`.
 #[derive(Serialize)]
@@ -33,7 +22,7 @@ impl<T> From<Result<T, rimstack_core::base::error::Error>> for Answer<T> {
     }
 }
 
-/// `Backend.settings()`: Settings, FirstRun, Main and the Mods screen.
+/// `Hub.settings.report`: Settings, FirstRun, Main and the Mods screen.
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsReport {
@@ -70,7 +59,7 @@ pub struct SettingsReport {
     pub version: &'static str,
 }
 
-/// `Backend.summary()`: the Settings screen's counts.
+/// `Hub.mods.summary`: the counts beside the load order.
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Summary {
@@ -95,7 +84,7 @@ pub struct Written {
     pub file: String,
 }
 
-/// `Backend.shortContrast()`: the colour pairs that read too faintly.
+/// `Hub.settings.shortContrast()`: the colour pairs that read too faintly.
 #[derive(Serialize, Default)]
 pub struct ShortContrast {
     pub what: &'static str,
@@ -103,7 +92,7 @@ pub struct ShortContrast {
     pub needed: f64,
 }
 
-/// `Backend.release`: a newer RimStack, `{}` when there is none, or why
+/// `Hub.settings.release`: a newer RimStack, `{}` when there is none, or why
 /// GitHub could not be asked. Read by StatusBar and Settings.
 #[derive(Serialize)]
 #[serde(untagged)]
@@ -113,7 +102,7 @@ pub enum ReleaseSaid {
     Failed { problem: String },
 }
 
-/// `CommunityData.databases()`: Settings' list of community databases.
+/// `Hub.settings.databases`: Settings' list of community databases.
 #[derive(Serialize, Default)]
 pub struct Database {
     pub id: &'static str,
@@ -123,63 +112,6 @@ pub struct Database {
     pub updated: u64,
     pub on: bool,
 }
-
-/// `Downloads.updates`: the Downloads screen's updates.
-#[derive(Serialize, Default)]
-pub struct Updates {
-    pub checked: Option<u64>,
-    pub asked: Option<u64>,
-    pub answered: usize,
-    pub items: Vec<Behind>,
-    pub checkouts: Vec<Checkout>,
-    /// Why Steam was not asked this time; what it said before stands.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub problem: Option<String>,
-}
-
-/// A checkout whose updates come from Git, with what its remote said at
-/// the last check; `checked` is false for one not asked then.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Checkout {
-    pub mod_id: ModId,
-    pub name: String,
-    pub path: String,
-    pub workshop: bool,
-    pub checked: bool,
-    pub behind: Option<u64>,
-    pub problem: Option<String>,
-}
-
-/// `Downloads.queue`: what pasted links are.
-#[derive(Serialize, Default)]
-pub struct Queue {
-    pub items: Vec<Asked>,
-    pub repositories: Vec<rimstack_core::sources::downloads::Repository>,
-    /// Said when nothing in the text was a Workshop link.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub note: Option<String>,
-}
-
-/// `Downloads.sinceLaunch()`: what changed since the game last started.
-#[derive(Serialize, Default)]
-pub struct SinceLaunch {
-    pub time: u64,
-    pub items: Vec<Changed>,
-}
-
-/// `Downloads.changeNotesState`: how far fetching change notes got;
-/// `resume` is when it goes on after Steam asked it to wait.
-#[derive(Serialize, Default)]
-pub struct NotesState {
-    pub done: usize,
-    pub asked: usize,
-    pub resume: u64,
-    pub refused: bool,
-}
-
-/// `Downloads.changeNotes`: per Workshop id, the notes fetched so far.
-pub(crate) type ChangeNotes = std::collections::BTreeMap<String, Vec<Note>>;
 
 /// The fields an answer has, as QML reads them, sorted.
 #[cfg(test)]
@@ -193,10 +125,6 @@ pub(crate) fn fields<T: Serialize>(value: &T) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn id() -> ModId {
-        ModId::new(0, 1)
-    }
 
     #[test]
     fn settings_keep_their_fields() {
@@ -298,38 +226,6 @@ mod tests {
         assert_eq!(
             fields(&Database::default()),
             ["id", "name", "on", "updated", "use"]
-        );
-    }
-
-    #[test]
-    fn download_answers_keep_their_fields() {
-        assert_eq!(
-            fields(&Updates::default()),
-            ["answered", "asked", "checked", "checkouts", "items"]
-        );
-        let failed_once = Updates {
-            problem: Some("x".into()),
-            ..Updates::default()
-        };
-        assert!(fields(&failed_once).contains(&"problem".to_string()));
-        let checkout = Checkout {
-            mod_id: id(),
-            name: String::new(),
-            path: String::new(),
-            workshop: false,
-            checked: false,
-            behind: None,
-            problem: None,
-        };
-        assert_eq!(
-            fields(&checkout),
-            ["behind", "checked", "modId", "name", "path", "problem", "workshop"]
-        );
-        assert_eq!(fields(&Queue::default()), ["items", "repositories"]);
-        assert_eq!(fields(&SinceLaunch::default()), ["items", "time"]);
-        assert_eq!(
-            fields(&NotesState::default()),
-            ["asked", "done", "refused", "resume"]
         );
     }
 }

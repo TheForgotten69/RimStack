@@ -78,7 +78,6 @@ Item {
             select(next, model.active)
     }
 
-    property Downloads downloads
 
     function compareWith(otherId) {
         const pair = Hub.mods.inLoadOrder(selectedId, otherId)
@@ -250,11 +249,12 @@ Item {
     }
 
     // Asks first, naming the folder Steam will delete.
-    function unsubscribe(name, workshopId, folder) {
+    function unsubscribe(modId) {
+        const mod = about(modId)
         Notices.ask({
-            title: Theme.fill("Unsubscribe from {}", name),
-            lines: [Theme.say("Steam, which must be running, unsubscribes and then deletes the mod's folder:"), folder],
-            label: Theme.say("Unsubscribe"), danger: true, run: () => downloads.askSteam("unsubscribe", JSON.stringify([workshopId])) })
+            title: Theme.fill("Unsubscribe from {}", mod.name || ""),
+            lines: [Theme.say("Steam, which must be running, unsubscribes and then deletes the mod's folder:"), mod.path || ""],
+            label: Theme.say("Unsubscribe"), danger: true, run: () => Hub.downloads.unsubscribe(modId) })
     }
 
     function openFolder(modId) {
@@ -364,9 +364,6 @@ Item {
         select(-1, false)
     }
 
-    // How many active Workshop mods are behind their Workshop version, once
-    // Downloads has asked Steam; and the request to go and see them.
-    property int behind: 0
     signal showUpdates()
     // The search for the broken mod: asked for from Problems and before Play.
     signal findBrokenRequested()

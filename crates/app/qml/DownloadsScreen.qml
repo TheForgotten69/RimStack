@@ -12,43 +12,21 @@ Item {
     id: screen
     Appear { of: screen }
 
-    required property Downloads downloads
+    readonly property DownloadsData downloads: Hub.downloads
     signal showMod(int modId)
 
-    readonly property var report: downloads.updates ? JSON.parse(downloads.updates) : ({})
-    readonly property var updates: report.items || []
-    readonly property var found: downloads.queue ? JSON.parse(downloads.queue) : ({})
+    readonly property var report: downloads.updates || ({})
+    readonly property var found: downloads.queue || ({})
     readonly property var queue: found.items || []
     readonly property var repositories: found.repositories || []
-    // Read again whenever a task ends: installing SteamCMD is one.
-    readonly property bool steamcmd: {
-        // Asked again whenever a task ends: one of them installs it.
-        void downloads.taskNote
-        return !!Hub.settings.report.steamcmd
-    }
-    // The mods the load order needs and does not have active.
-    readonly property var needed: Mods.troubles.filter(t => ["activate", "subscribe", "search"].indexOf(t.fix.action) >= 0)
+    readonly property var wanted: found.wanted || []
+    readonly property bool steamcmd: downloads.steamcmd
+    readonly property var needed: Mods.overview.toGet || []
     readonly property var info: Hub.settings.report
-    // The mods that changed since the game was last seen starting;
-    // read again when the screen shows and when the mod folders were.
-    readonly property var since: {
-        if (!visible || Theme.demo)
-            return ({ time: 0, items: [] })
-        // Read again after a check and after the mods are.
-        void downloads.updates
-        void Hub.mods.libraryVersion
-        return JSON.parse(downloads.sinceLaunch())
-    }
-    // Per Workshop id, the entries Steam's site gave: { time, text }.
-    readonly property var notes: downloads.changeNotes ? JSON.parse(downloads.changeNotes) : ({})
-
+    readonly property var since: downloads.since || ({ time: 0, count: 0, active: 0, rows: [], workshop: 0 })
 
     property bool sinceOpen: false
-    // "" for all the changed mods, "active" or "inactive" for those alone.
-    property string sinceOnly: ""
-    // By the day of the change, newest first; within a day active before inactive.
-    readonly property var changedMods: since.items.slice().sort((a, b) => day(b.now).localeCompare(day(a.now)) || Number(b.active) - Number(a.active) || b.now - a.now)
-    readonly property var changedShown: sinceOnly === "" ? changedMods : changedMods.filter(item => item.active === (sinceOnly === "active"))
+    readonly property var changedShown: since.rows
     function day(seconds) {
         return seconds ? Theme.day(seconds) : ""
     }
@@ -61,32 +39,13 @@ Item {
         return !n ? "" : n < 10 ? Theme.fill("{} MB", n.toFixed(1)) : Theme.fill("{} MB", Theme.count(Math.round(n)))
     }
 
-    readonly property var activeUpdates: updates.filter(item => item.active)
-    readonly property var inactiveUpdates: updates.filter(item => !item.active)
+    readonly property var activeUpdates: report.active || []
+    readonly property var inactiveUpdates: report.inactive || []
     property bool inactiveOpen: false
-    // The Workshop ids Steam was asked to download, until they are no longer behind.
-    property var asked: []
     readonly property var checkouts: report.checkouts || []
-    readonly property var checkoutsBehind: checkouts.filter(c => c.behind > 0 || !!c.problem || !c.checked)
+    readonly property var checkoutsBehind: report.checkoutsBehind || []
     property bool checkoutsOpen: false
-    // The checkout being brought up to its remote, by its folder.
-    property string updating: ""
-    Connections {
-        target: screen.downloads
-        function onTaskNoteChanged() {
-            if (!screen.downloads.taskRunning)
-                screen.updating = ""
-        }
-    }
-
-    // The Workshop ids of the mods whose suggested replacement is set aside.
-    property var ignoredReplacements: Hub.settings.report.replacementsIgnored || []
-    property int replacementsRead: 0
-    function ignoreReplacements(ids) {
-        Hub.settings.keep("replacementsIgnored", ids.join(","))
-        ignoredReplacements = ids
-        replacementsRead += 1
-    }
+    readonly property int ignoredReplacements: (Hub.settings.report.replacementsIgnored || []).length
 
     component UpdateRow: RowLayout {
         id: row
@@ -95,7 +54,7 @@ Item {
         height: Theme.sized(30)
         spacing: Theme.gapLarge
         Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: row.modelData.name }
-        Chip { visible: screen.asked.indexOf(row.modelData.id) !== -1; tone: Theme.ok; icon: "check"; text: Theme.say("Asked of Steam") }
+        Chip { visible: row.modelData.asked; tone: Theme.ok; icon: "check"; text: Theme.say("Asked of Steam") }
         Chip { tone: Theme.moved; text: screen.day(row.modelData.have) + " → " + screen.day(row.modelData.now); tip: Theme.fill("Published {}", Theme.ago(row.modelData.now)) }
         Btn { text: Theme.say("Show"); spoken: Theme.fill("Show {}", row.modelData.name); onClicked: screen.showMod(row.modelData.modId) }
         Btn { text: Theme.say("What changed"); spoken: Theme.fill("What changed in {}", row.modelData.name); tip: Theme.say("The mod's change notes on the Workshop."); onClicked: Theme.openChangeNotes(row.modelData.id) }
@@ -158,17 +117,13 @@ Item {
                     : Theme.fill("{} for active mods, checked {}", screen.activeUpdates.length, Theme.ago(screen.report.checked))
                 actions: [
                     Btn {
-                        visible: screen.updates.length > 0
+                        visible: (screen.report.count || 0) > 0
                         primary: screen.activeUpdates.length > 0
                         enabled: !screen.downloads.taskRunning
                         icon: "download"
                         text: Theme.say("Update in Steam")
                         tip: Theme.say("Steam, which must be running, downloads the newer version of each now. Left alone it does so the next time it starts.")
-                        onClicked: {
-                            const ids = screen.updates.map(item => item.id)
-                            screen.asked = ids
-                            screen.downloads.askSteam("download", JSON.stringify(ids))
-                        }
+                        onClicked: screen.downloads.updateInSteam()
                     }
                 ]
                 Rectangle {
@@ -187,7 +142,7 @@ Item {
                     }
                 }
                 Text { visible: !!screen.report.problem; width: parent.width; wrapMode: Text.WordWrap; color: Theme.err; font.pixelSize: Theme.body; text: Theme.fill("Steam not reached: {}", (screen.report.problem || "")) }
-                Text { visible: !screen.report.problem && screen.updates.length === 0 && !!screen.report.checked; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say("All Workshop mods are current") }
+                Text { visible: !screen.report.problem && screen.report.count === 0 && !!screen.report.checked; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say("All Workshop mods are current") }
                 Repeater {
                     model: screen.activeUpdates
                     UpdateRow {}
@@ -219,7 +174,7 @@ Item {
                     RowLayout {
                         id: checkout
                         required property var modelData
-                        readonly property bool updating: screen.updating === modelData.path
+                        readonly property bool updating: screen.downloads.updating === modelData.modId
                         width: page.width
                         height: Theme.sized(30)
                         spacing: Theme.gapLarge
@@ -235,15 +190,12 @@ Item {
                         Btn { text: Theme.say("Show"); spoken: Theme.fill("Show {}", checkout.modelData.name); onClicked: screen.showMod(checkout.modelData.modId) }
                         Btn {
                             visible: !checkout.modelData.workshop && checkout.modelData.behind > 0
-                            enabled: screen.updating === ""
+                            enabled: screen.downloads.updating < 0
                             primary: !checkout.updating
                             text: checkout.updating ? Theme.say("Updating…") : Theme.say("Update")
                             spoken: Theme.fill("Update {}", checkout.modelData.name)
                             tip: Theme.say("Moves forward to the remote; stops if the folder has changes of its own.")
-                            onClicked: {
-                                screen.updating = checkout.modelData.path
-                                screen.downloads.updateFromGit(checkout.modelData.path)
-                            }
+                            onClicked: screen.downloads.updateFromGit(checkout.modelData.modId)
                         }
                     }
                 }
@@ -259,26 +211,24 @@ Item {
             }
 
             Card {
-                visible: screen.since.items.length > 0
+                visible: screen.since.count > 0
                 title: Theme.say("Changed since the game last started")
-                note: Theme.fill("{}, since {}", screen.since.items.length, screen.when(screen.since.time))
+                note: Theme.fill("{}, since {}", screen.since.count, screen.when(screen.since.time))
                 key: "downloads-changed"
                 actions: [
                     Choice {
-                        readonly property int active: screen.since.items.filter(item => item.active).length
-                        visible: active > 0 && active < screen.since.items.length
+                        readonly property int active: screen.since.active
+                        visible: active > 0 && active < screen.since.count
                         title: Theme.say("Changed mods shown")
-                        options: [Theme.say("All"), Theme.fill("Active {}", active), Theme.fill("Inactive {}", screen.since.items.length - active)]
-                        current: ["", "active", "inactive"].indexOf(screen.sinceOnly)
-                        onPicked: index => screen.sinceOnly = ["", "active", "inactive"][index]
+                        options: [Theme.say("All"), Theme.fill("Active {}", active), Theme.fill("Inactive {}", screen.since.count - active)]
+                        current: ["", "active", "inactive"].indexOf(screen.downloads.sinceOnly)
+                        onPicked: index => Hub.downloads.sinceOnly = ["", "active", "inactive"][index]
                     },
                     AskSteam {
-                    readonly property var asked: screen.since.items.filter(item => item.kind === "workshop").map(item => [item.id, item.was])
-                    visible: asked.length > 0
-                    downloads: screen.downloads
+                    visible: screen.since.workshop > 0
                     idle: Theme.say("Fetch change notes")
                     tip: Theme.say("Reads each mod's change notes from its Workshop page. Only the Workshop ids are sent.")
-                    onClicked: screen.downloads.fetchChangeNotes(JSON.stringify(asked))
+                    onClicked: screen.downloads.fetchSinceNotes()
                     }
                 ]
                 spacing: Theme.gapLarge
@@ -322,8 +272,8 @@ Item {
                         required property var modelData
                         required property int index
                         readonly property string day: screen.day(modelData.now)
-                        readonly property bool opensDay: index === 0 || screen.day(screen.changedShown[index - 1].now) !== day
-                        readonly property var said: modelData.kind === "git" ? modelData.notes : (screen.notes[modelData.id] || [])
+                        readonly property bool opensDay: modelData.opensDay
+                        readonly property var said: modelData.said
                         width: page.width
                         spacing: Theme.gapTiny
                         Text {
@@ -333,7 +283,7 @@ Item {
                             color: Theme.ink2
                             font.pixelSize: Theme.small
                             font.weight: Font.DemiBold
-                            text: changed.day + "  " + Theme.plural(screen.changedShown.filter(item => screen.day(item.now) === changed.day).length, "{} mod", "{} mods")
+                            text: changed.day + "  " + Theme.plural(changed.modelData.dayCount, "{} mod", "{} mods")
                         }
                         RowLayout {
                             width: parent.width
@@ -346,7 +296,7 @@ Item {
                                 visible: changed.modelData.kind !== "git"
                                 color: Theme.ink3
                                 font.pixelSize: Theme.small
-                                text: screen.day(changed.modelData.was) === changed.day ? Theme.clock(changed.modelData.was) + " → " + Theme.clock(changed.modelData.now)
+                                text: changed.modelData.sameDay ? Theme.clock(changed.modelData.was) + " → " + Theme.clock(changed.modelData.now)
                                     : screen.day(changed.modelData.was) + " → " + (changed.day === screen.day(Date.now() / 1000) ? Theme.say("today") : changed.day)
                             }
                             Btn { activeFocusOnTab: false; text: Theme.say("Show"); spoken: Theme.fill("Show {}", changed.modelData.name); tip: Theme.say("Enter"); onClicked: screen.showMod(changed.modelData.modId) }
@@ -390,23 +340,21 @@ Item {
                 note: screen.queue.length + screen.repositories.length > 0 ? screen.queue.length + screen.repositories.length : ""
                 actions: [
                     Btn {
-                        readonly property var wanted: screen.queue.filter(item => !!item.title && !item.installed).map(item => item.id)
-                        visible: wanted.length > 0
+                        visible: screen.wanted.length > 0
                         icon: "plus"
                         text: Theme.say("Subscribe in Steam")
                         tip: Theme.say("Steam, which must be running, subscribes to each and downloads it; it keeps them up to date afterwards.")
-                        onClicked: screen.downloads.askSteam("subscribe", JSON.stringify(wanted))
+                        onClicked: screen.downloads.subscribeWanted()
                     },
                     Btn {
-                        readonly property var wanted: screen.queue.filter(item => !!item.title && !item.installed).map(item => item.id)
-                        visible: wanted.length > 0 && screen.steamcmd
+                        visible: screen.wanted.length > 0 && screen.steamcmd
                         icon: "download"
                         text: Theme.say("Download with SteamCMD…")
                         tip: Theme.fill("Into the game's own Mods folder, {}/Mods, without subscribing: Steam will not update these.", (screen.info.game || ""))
                         onClicked: Notices.ask({
-                            title: Theme.plural(wanted.length, "Download {} mod with SteamCMD", "Download {} mods with SteamCMD"),
+                            title: Theme.plural(screen.wanted.length, "Download {} mod with SteamCMD", "Download {} mods with SteamCMD"),
                             lines: [Theme.say("Each is downloaded and copied into the game's own Mods folder:"), (screen.info.game || "") + "/Mods", Theme.say("Steam does not update mods installed this way.")],
-                            label: Theme.say("Download"), run: () => screen.downloads.downloadWithSteamcmd(JSON.stringify(wanted)) })
+                            label: Theme.say("Download"), run: () => screen.downloads.downloadWanted() })
                     }
                 ]
                 Text { visible: screen.queue.length === 0 && !!(screen.found.problem || screen.found.note); width: parent.width; wrapMode: Text.WordWrap; color: screen.found.problem ? Theme.err : Theme.ink2; font.pixelSize: Theme.body; text: screen.found.problem || screen.found.note || "" }
@@ -415,6 +363,7 @@ Item {
                     RowLayout {
                         id: repository
                         required property var modelData
+                        required property int index
                         width: page.width
                         height: Theme.sized(32)
                         spacing: Theme.gapLarge
@@ -431,7 +380,7 @@ Item {
                             onClicked: Notices.ask({
                                 title: Theme.fill("Clone {}", repository.modelData.name),
                                 lines: [Theme.say("git clone, from"), repository.modelData.link, Theme.say("Into"), repository.modelData.into],
-                                label: Theme.say("Clone"), run: () => screen.downloads.cloneMod(repository.modelData.link) })
+                                label: Theme.say("Clone"), run: () => screen.downloads.cloneRepository(repository.index) })
                         }
                     }
                 }
@@ -473,23 +422,23 @@ Item {
             }
 
             Card {
-                visible: replaced.count > 0 || screen.ignoredReplacements.length > 0
+                visible: replaced.count > 0 || screen.ignoredReplacements > 0
                 title: Theme.say("Replacements suggested")
                 note: Theme.fill("{}, from the Use This Instead list", replaced.count)
                 key: "downloads-replaced"
                 actions: [
                     Chip {
-                        visible: screen.ignoredReplacements.length > 0
+                        visible: screen.ignoredReplacements > 0
                         pressable: true
                         icon: "eye-off"
-                        text: Theme.fill("{} ignored", screen.ignoredReplacements.length)
+                        text: Theme.fill("{} ignored", screen.ignoredReplacements)
                         tip: Theme.say("Suggest them again")
-                        onClicked: screen.ignoreReplacements([])
+                        onClicked: screen.downloads.suggestReplacementsAgain()
                     }
                 ]
                 Repeater {
                     id: replaced
-                    model: screen.visible && screen.replacementsRead >= 0 && Hub.mods.libraryVersion >= 0 ? JSON.parse(screen.downloads.replacements()) : []
+                    model: screen.downloads.replacements || []
                     RowLayout {
                         id: old
                         required property var modelData
@@ -518,13 +467,13 @@ Item {
                         }
                         Btn { text: Theme.say("Show old mod"); spoken: Theme.fill("Show {}", old.modelData.name); tip: Theme.say("The installed mod the list would replace"); onClicked: screen.showMod(old.modelData.modId) }
                         Btn { visible: !old.modelData.haveNew; icon: "external-link"; text: Theme.say("Replacement"); tip: Theme.say("Workshop page of the replacement"); onClicked: Theme.openWorkshop(old.modelData.newId) }
-                        Btn { icon: "eye-off"; text: Theme.say("Ignore"); spoken: Theme.fill("Ignore the replacement of {}", old.modelData.name); tip: Theme.say("No replacement is suggested for this mod again"); onClicked: screen.ignoreReplacements(screen.ignoredReplacements.concat([old.modelData.id])) }
+                        Btn { icon: "eye-off"; text: Theme.say("Ignore"); spoken: Theme.fill("Ignore the replacement of {}", old.modelData.name); tip: Theme.say("No replacement is suggested for this mod again"); onClicked: screen.downloads.ignoreReplacement(old.modelData.modId) }
                         Btn {
                             danger: true
                             text: Theme.say("Unsubscribe…")
                             spoken: Theme.fill("Unsubscribe from {}", old.modelData.name)
                             tip: Theme.say("Lets the replaced mod go: Steam unsubscribes and deletes its folder")
-                            onClicked: { const about = Mods.about(old.modelData.modId); Mods.unsubscribe(old.modelData.name, about.folder, about.path) }
+                            onClicked: Mods.unsubscribe(old.modelData.modId)
                         }
                     }
                 }

@@ -14,6 +14,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock, RwLockReadGuard};
 use std::time::{Duration, Instant};
 
+pub mod changed;
+pub mod downloads;
+pub mod fetch;
 mod game;
 pub mod lists;
 pub mod load_order;

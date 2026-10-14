@@ -224,8 +224,7 @@ Column {
         // checkout's commits, read from its folder.
         readonly property bool workshop: Mods.info.source === "Workshop"
         readonly property bool git: !workshop && !!Mods.info.repository
-        readonly property var fetched: Mods.downloads && Mods.downloads.changeNotes ? JSON.parse(Mods.downloads.changeNotes) : ({})
-        readonly property var notes: workshop ? (fetched[Mods.info.folder] || []) : git && Mods.downloads ? JSON.parse(Mods.downloads.gitNotes(Mods.info.path || "")) : []
+        readonly property var notes: workshop ? ((Hub.downloads.notes || {})[Mods.info.folder] || []) : git ? Hub.downloads.commitsOf(Mods.selectedId) || [] : []
         visible: !Theme.demo && (workshop || git)
         title: Theme.say("Latest changes")
         key: "about-changes"
@@ -233,10 +232,9 @@ Column {
         actions: [
             AskSteam {
                 visible: latest.workshop
-                downloads: Mods.downloads
                 idle: latest.notes.length > 0 ? Theme.say("Fetch again") : Theme.say("Fetch")
                 tip: Theme.say("Reads this mod's change notes from its Workshop page. Only its Workshop id is sent.")
-                onClicked: Mods.downloads.fetchChangeNotes(JSON.stringify([[Mods.info.folder, 0]]))
+                onClicked: Hub.downloads.fetchNotes(Mods.selectedId)
             },
             Btn { visible: latest.workshop; icon: "external-link"; spoken: Theme.fill("Change notes of {}", Mods.info.name || ""); tip: Theme.say("The mod's change notes on the Workshop."); onClicked: Theme.openChangeNotes(Mods.info.folder) }
         ]

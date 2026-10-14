@@ -67,13 +67,15 @@ fn git() -> std::process::Command {
         .args(["-c", &format!("core.hooksPath={nowhere}")])
         .args(["-c", "core.sshCommand=ssh"])
         .args(["-c", "protocol.ext.allow=never"])
+        .args(["-c", "log.showSignature=false"])
         .env("GIT_TERMINAL_PROMPT", "0");
     git
 }
 
-/// Settings under which `fetch`, `pull`, `clone` or `switch` run a
-/// program, as `section.key` or `section.*.key`.
-const RUN_PROGRAMS: [&str; 15] = [
+/// Settings under which `fetch`, `pull`, `clone`, `log` or `switch` run
+/// a program, as `section.key` or `section.*.key`. The `gpg` ones run
+/// when a signature is checked.
+const RUN_PROGRAMS: [&str; 18] = [
     "core.fsmonitor",
     "core.sshcommand",
     "core.askpass",
@@ -89,6 +91,9 @@ const RUN_PROGRAMS: [&str; 15] = [
     "url.*.insteadof",
     "include.path",
     "includeif.*.path",
+    "gpg.program",
+    "gpg.*.program",
+    "gpg.*.defaultkeycommand",
 ];
 
 /// `key` as `git config --name-only` prints it: `section.key`, or
@@ -213,6 +218,25 @@ pub fn behind(mod_root: &Path) -> Result<usize> {
         .map_err(|_| Error::format(said!("git said {}", count)))
 }
 
+/// The commits a checkout gained since `since` (seconds since 1970),
+/// newest first, at most thirty: each one's time and first line.
+/// Nothing where Git cannot be run there.
+pub fn commits_since(mod_root: &Path, since: u64) -> Vec<(u64, String)> {
+    let Ok(mut git) = in_checkout(mod_root) else {
+        return Vec::new();
+    };
+    git.args(["log", "-n", "30", "--pretty=%ct%x09%s"])
+        .arg(format!("--since=@{since}"));
+    let Ok(said) = ran(&mut git, crate::base::program::LOCAL) else {
+        return Vec::new();
+    };
+    let commit = |line: &str| {
+        let (time, text) = line.split_once('\t')?;
+        Some((time.parse().ok()?, text.to_string()))
+    };
+    said.lines().filter_map(commit).collect()
+}
+
 /// Brings a checkout up to its remote, only by moving forward: local
 /// changes or commits stop it. Answers with the commit it is now at.
 pub fn update(mod_root: &Path) -> Result<String> {
@@ -305,6 +329,10 @@ mod tests {
         git(&origin, &["commit", "--quiet", "-am", "second"]);
         assert_eq!(behind(&clone), Ok(1));
         assert!(update(&clone).unwrap().ends_with("second"));
+        let commits = commits_since(&clone, 0);
+        assert_eq!(commits.len(), 2);
+        assert_eq!(commits[0].1, "second");
+        assert!(commits_since(tmp.path(), 0).is_empty());
         assert_eq!(behind(&clone), Ok(0));
         assert!(behind(tmp.path()).is_err());
         assert_eq!(std::fs::read_to_string(clone.join("a")).unwrap(), "2");
@@ -327,6 +355,7 @@ mod tests {
             "remote.my.fork.uploadpack",
             "filter.lfs.Smudge",
             "includeif.gitdir:/x.path",
+            "gpg.ssh.program",
             "user.name",
         ]
         .into_iter()
@@ -338,7 +367,8 @@ mod tests {
                 "core.fsmonitor",
                 "remote.*.uploadpack",
                 "filter.*.smudge",
-                "includeif.*.path"
+                "includeif.*.path",
+                "gpg.*.program"
             ]
         );
     }
@@ -351,6 +381,7 @@ mod tests {
             "[credential] helper = store\n",
             "[remote \"origin\"] uploadpack = git-upload-pack\n\turl = /nowhere\n",
             "[include] path = elsewhere.cfg\n",
+            "[gpg] program = touch\n[log] showSignature = true\n",
         ] {
             let tmp = checkout(config);
             let refused = behind(tmp.path()).unwrap_err();

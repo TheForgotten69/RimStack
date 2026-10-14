@@ -22,8 +22,8 @@ Item {
             entries.push({ text: Theme.plural(warningsShown, "{} warning", "{} warnings"), icon: "funnel", run: () => toggleTerm("is:warning") })
         if (Hub.mods.conflicts > 0)
             entries.push({ text: Theme.fill("{} share textures", Hub.mods.conflicts), icon: "image", run: () => toggleTerm("is:conflict") })
-        if (Mods.behind > 0)
-            entries.push({ text: Theme.plural(Mods.behind, "{} update", "{} updates"), icon: "download", run: () => Mods.showUpdates() })
+        if (Hub.downloads.behindActive > 0)
+            entries.push({ text: Theme.plural(Hub.downloads.behindActive, "{} update", "{} updates"), icon: "download", run: () => Mods.showUpdates() })
         if (entries.length > 0)
             entries.push({ line: true })
         entries.push({ text: Theme.say("Undo (Ctrl + Z)"), icon: "undo-2", off: !Hub.mods.canUndo || Hub.mods.previewing, run: () => Mods.undo() })
@@ -105,9 +105,9 @@ Item {
             }
             Item { Layout.fillWidth: true }
             Btn {
-                visible: Mods.behind > 0 && !activePane.tight
-                text: Theme.plural(Mods.behind, "{} update", "{} updates")
-                tip: Theme.plural(Mods.behind, "{} active Workshop mod is older than its Workshop version", "{} active Workshop mods are older than their Workshop version")
+                visible: Hub.downloads.behindActive > 0 && !activePane.tight
+                text: Theme.plural(Hub.downloads.behindActive, "{} update", "{} updates")
+                tip: Theme.plural(Hub.downloads.behindActive, "{} active Workshop mod is older than its Workshop version", "{} active Workshop mods are older than their Workshop version")
                 onClicked: Mods.showUpdates()
             }
             Row {
@@ -296,7 +296,7 @@ Item {
                             ["is:conflict", Theme.plural(Hub.mods.conflicts, "{} mod sharing textures", "{} mods sharing textures")],
                             ["is:changed", Theme.say("moved or activated since the last save")],
                             ["is:new", Theme.say("installed since the game was last started")],
-                            ["is:updated", Mods.behind > 0 ? Theme.fill("{} with an update", Mods.behind) : Theme.say("after checking for updates")],
+                            ["is:updated", Hub.downloads.behindActive > 0 ? Theme.fill("{} with an update", Hub.downloads.behindActive) : Theme.say("after checking for updates")],
                             ["is:local", Theme.say("not from the Workshop")],
                             ["is:notinsave", Theme.say("active, and not in the newest save")],
                             ["is:recent", Theme.say("updated by Steam in the last week")],

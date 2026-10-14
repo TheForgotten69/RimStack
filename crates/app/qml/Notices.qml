@@ -39,13 +39,4 @@ QtObject {
     function dismiss(key) {
         shown = shown.filter(notice => notice.key !== key)
     }
-    // A line for the history that outlives this run; `sentence` as
-    // `Theme.put` reads it, `revert` as `Hub.lists.record` takes it.
-    function keep(sentence, revert) {
-        record(JSON.stringify(sentence), revert)
-    }
-    function record(what, revert) {
-        if (!Theme.demo)
-            Hub.lists.record(what, revert || "")
-    }
 }

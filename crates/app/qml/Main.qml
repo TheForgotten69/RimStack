@@ -62,12 +62,6 @@ ApplicationWindow {
             play()
     }
 
-        Downloads { id: appDownloads }
-
-    readonly property var behindItems: appDownloads.updates ? (JSON.parse(appDownloads.updates).items || []) : []
-    readonly property int behind: behindItems.length
-    // What the game would load: the count the window shows.
-    readonly property int behindActive: behindItems.filter(item => item.active).length
     // The font chosen in Settings, for every text at once.
     function useFont(name) {
         const from = Qt.application.font.family
@@ -94,26 +88,23 @@ ApplicationWindow {
             Theme.stored.textScale = Math.round(Theme.stored.textScale * size * 20) / 20
             Hub.settings.keep("interfaceScale", "")
         }
-        if (!Theme.demo)
-            appDownloads.restoreUpdates()
     }
 
-    Binding { target: Mods; property: "downloads"; value: appDownloads }
-    // What a background task says when it ends becomes a notice; the
-    // tray shows it while it runs.
     Connections {
-        target: appDownloads
-        function onTaskNoteChanged() {
-            const note = appDownloads.taskNote
-            if (note === "" || appDownloads.taskRunning)
-                return
-            const failed = appDownloads.taskFailed
-            Notices.say(Theme.said(note), failed ? "err" : "ok")
-            if (!failed)
-                Notices.record(note, "")
+        target: Hub.downloads
+        function onEnded(note, failed) { Notices.say(note, failed ? "err" : "ok") }
+        function onNotesStateChanged() {
+            const state = Hub.downloads.notesState || {}
+            if (state.refused)
+                Notices.say(Theme.plural(state.asked, "Steam's site still refuses: {} mod asked, change notes of {} read", "Steam's site still refuses: {} mods asked, change notes of {} read", state.done), "err")
         }
-        function onModsWrittenChanged() {
-            Hub.mods.rescan()
+    }
+    Connections {
+        target: Hub.settings
+        function onReleaseChanged() {
+            const found = Hub.settings.release || ({})
+            if (found.version)
+                Notices.offer(Theme.fill("RimStack {} is published; this is {}", found.version, Hub.settings.report.version), Theme.say("Open its page"), () => Qt.openUrlExternally(found.page))
         }
     }
     // What runs in the background now: { text, cancel }.
@@ -121,22 +112,15 @@ ApplicationWindow {
         Hub.mods.rescanning ? { text: Theme.say("Reading the mod folders…") } : null,
         !Hub.mods.filesRead && Mods.active.count > 0 && !Theme.demo ? { text: Theme.say("Reading the active mods' files…") } : null,
         Hub.textures.busy ? { text: Hub.textures.progress || Theme.say("Counting textures…"), cancel: () => Hub.textures.cancel() } : null,
-        appDownloads.updatesBusy ? { text: Theme.say("Asking Steam for updates…") } : null,
+        Hub.downloads.updatesBusy ? { text: Theme.say("Asking Steam for updates…") } : null,
         Hub.settings.communityBusy ? { text: Theme.say("Downloading community data…") } : null,
-        appDownloads.taskRunning ? { text: appDownloads.taskNote } : null,
+        Hub.downloads.taskRunning ? { text: Hub.downloads.taskNote } : null,
     ].filter(task => task !== null)
-    Binding { target: Mods; property: "behind"; value: window.behindActive }
     Connections {
         target: Mods
         function onShowUpdates() { window.section = 1 }
         function onFindBrokenRequested() { window.findBroken() }
         function onShowLogs() { window.section = 4 }
-        function onRescanned() {
-            // What Downloads lists names mods by their place in the last
-            // reading of the folders: asked again, not emptied.
-            if (!Theme.demo)
-                appDownloads.restoreUpdates()
-        }
     }
 
     function showMod(modId) {
@@ -174,7 +158,7 @@ ApplicationWindow {
                 id: topBar
                 Layout.fillWidth: true
                 section: window.section
-                behind: window.behindActive
+                behind: Hub.downloads.behindActive
                 gameRunning: Hub.game.running
                 inTheWay: window.inTheWay
                 onGo: section => window.section = section
@@ -202,7 +186,6 @@ ApplicationWindow {
                 Loader {
                     active: window.section === 1 || item !== null
                     sourceComponent: DownloadsScreen {
-                        downloads: appDownloads
                         onShowMod: modId => window.showMod(modId)
                     }
                 }
@@ -229,7 +212,6 @@ ApplicationWindow {
                     id: settingsLoader
                     active: window.section === 5 || item !== null
                     sourceComponent: SettingsScreen {
-                        downloads: appDownloads
                         overview: Mods.overview
                         onUseList: ids => window.useList(ids)
                         onTrust: (modId, yes) => Mods.trust(modId, yes)
@@ -283,22 +265,6 @@ ApplicationWindow {
     // A newer RimStack is looked for once the window is up, unless Settings says not to, and said once.
     Timer { interval: 4000; running: !Theme.demo && window.shotPath === "" && Mods.checkMode === ""; onTriggered: if (Hub.settings.report.selfCheck) Hub.settings.checkRelease() }
     // Steam's site refused past the last wait: said once, with how far the asking got.
-    Connections {
-        target: appDownloads
-        function onChangeNotesStateChanged() {
-            const state = appDownloads.changeNotesState ? JSON.parse(appDownloads.changeNotesState) : ({})
-            if (state.refused)
-                Notices.say(Theme.plural(state.asked, "Steam's site still refuses: {} mod asked, change notes of {} read", "Steam's site still refuses: {} mods asked, change notes of {} read", state.done), "err")
-        }
-    }
-    Connections {
-        target: Hub.settings
-        function onReleaseChanged() {
-            const found = Hub.settings.release || ({})
-            if (found.version)
-                Notices.offer(Theme.fill("RimStack {} is published; this is {}", found.version, Hub.settings.report.version), Theme.say("Open its page"), () => Qt.openUrlExternally(found.page))
-        }
-    }
 
     Commands {
         id: commands
@@ -347,13 +313,13 @@ ApplicationWindow {
                 { name: Theme.say("Mods with errors"), group: Theme.say("Filter"), run: () => filter("is:error"), when: Mods.errors > 0 },
                 { name: Theme.say("Mods with warnings"), group: Theme.say("Filter"), run: () => filter("is:warning"), when: Hub.mods.warnings > 0 },
                 { name: Theme.say("Mods sharing textures"), group: Theme.say("Filter"), run: () => filter("is:conflict"), when: Hub.mods.conflicts > 0 },
-                { name: Theme.say("Mods with an update"), group: Theme.say("Filter"), run: () => filter("is:updated"), when: window.behind > 0 },
+                { name: Theme.say("Mods with an update"), group: Theme.say("Filter"), run: () => filter("is:updated"), when: (Hub.downloads.updates || {}).count > 0 },
                 { name: Theme.say("Mods with code"), group: Theme.say("Filter"), run: () => filter("has:code") },
                 { name: Theme.say("Local mods"), group: Theme.say("Filter"), run: () => filter("is:local") },
                 { name: Theme.say("Clear filter"), group: Theme.say("Filter"), run: () => filter("") },
 
                 { name: Theme.say("Read the mod folders again"), group: Theme.say("Mods"), run: () => Hub.mods.rescan(), when: !Theme.demo },
-                { name: Theme.say("Check for updates"), group: Theme.say("Downloads"), run: () => { window.section = 1; appDownloads.checkUpdates() }, when: !Theme.demo },
+                { name: Theme.say("Check for updates"), group: Theme.say("Downloads"), run: () => { window.section = 1; Hub.downloads.checkUpdates() }, when: !Theme.demo },
                 { name: Theme.say("Update community rules"), group: Theme.say("Sorting"), run: () => Hub.settings.downloadCommunity(), when: !Theme.demo && !Hub.settings.communityCurrent },
                 { name: Theme.say("Read the saves again"), group: Theme.say("Saves"), run: () => { window.section = 3; Hub.saves.reread() }, when: !Theme.demo },
                 { name: Theme.say("Read the log again"), group: Theme.say("Logs"), run: () => { window.section = 4; Qt.callLater(() => logsLoader.item.load()) }, when: !Theme.demo },

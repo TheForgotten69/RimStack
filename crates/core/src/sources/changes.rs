@@ -196,26 +196,11 @@ pub fn fetch_steam_notes(workshop_id: &str) -> Result<Vec<Note>, NotesProblem> {
 /// The commits a Git checkout gained since `since`, newest first, at
 /// most thirty: what `git log` says of each on one line.
 pub fn git_notes(checkout: &Path, since: u64) -> Vec<Note> {
-    let ran = crate::base::program::run(
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(checkout)
-            .args(["log", "-n", "30", "--pretty=%ct%x09%s"])
-            .arg(format!("--since=@{since}")),
-        crate::base::program::LOCAL,
-    );
-    let Ok(ran) = ran else {
-        return Vec::new();
-    };
-    let said = String::from_utf8_lossy(&ran.stdout);
-    let note = |line: &str| {
-        let (time, text) = line.split_once('\t')?;
-        Some(Note {
-            time: time.parse().ok()?,
-            text: text.to_string(),
-        })
-    };
-    said.lines().filter_map(note).collect()
+    let commits = crate::sources::git::commits_since(checkout, since);
+    commits
+        .into_iter()
+        .map(|(time, text)| Note { time, text })
+        .collect()
 }
 
 /// How far fetching change notes has got, as `fetch_notes` tells it.

@@ -10,7 +10,6 @@ Item {
     id: screen
     Appear { of: screen }
 
-    required property Downloads downloads
     signal useList(var ids)
     signal trust(int modId, bool yes)
     signal font(string family)
@@ -296,11 +295,11 @@ Item {
                     title: Theme.say("Git for Workshop mods")
                     tip: Theme.say("Check now asks Steam about a Workshop mod, and Git about a checkout in the game's Mods folder. On: a Workshop mod that is a Git checkout is asked through Git as well, which fetches into its folder.")
                     changed: !!screen.info.gitForWorkshop
-                    onReset: { screen.keep("gitForWorkshop", "off"); screen.downloads.restoreUpdates() }
+                    onReset: screen.keep("gitForWorkshop", "off")
                     Toggle {
                         title: Theme.say("Git for Workshop mods")
                         on: !!screen.info.gitForWorkshop
-                        onFlipped: on => { screen.keep("gitForWorkshop", on ? "on" : "off"); screen.downloads.restoreUpdates() }
+                        onFlipped: on => screen.keep("gitForWorkshop", on ? "on" : "off")
                     }
                     Item { Layout.fillWidth: true }
                 }

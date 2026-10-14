@@ -36,7 +36,7 @@ for path in sorted(glob.glob(os.path.join(root, "qml", "**", "*.qml"), recursive
     wrapped = "\n".join(line for line in lines if not commented(line))
     # Theme.qml calls its own functions without the name.
     own = r"(?:Theme\.|(?<![.\w]))" if path.endswith("Theme.qml") else r"Theme\."
-    words.update(json.loads(f'"{t}"') for t in re.findall(own + r"(?:say|fill|kept)\(" + literal, wrapped))
+    words.update(json.loads(f'"{t}"') for t in re.findall(own + r"(?:say|fill)\(" + literal, wrapped))
     # A sentence chosen between two: Theme.fill(shown ? "{} of {}, in {}" : "{} of {}", …).
     for pair in re.findall(r"Theme\.fill\([^\"\n(),]*\?\s*" + literal + r"\s*:\s*" + literal, wrapped):
         words.update(json.loads(f'"{t}"') for t in pair)

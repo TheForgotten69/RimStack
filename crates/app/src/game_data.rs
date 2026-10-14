@@ -143,7 +143,7 @@ impl qobject::GameData {
             // Whoever started it: what it loads now is what later changes are counted from.
             if running {
                 let app = app.clone();
-                std::thread::spawn(move || crate::downloads::since_launch::record_versions(&app));
+                std::thread::spawn(move || app.record_versions());
             }
         }
         let Some(stamps) = stamps else {
