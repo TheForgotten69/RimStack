@@ -5,7 +5,7 @@ use super::{id, ids, qobject};
 use crate::qml::values::{from_qml, to_qml};
 use crate::workspace::load_order::{LoadOrder, Side};
 use core::pin::Pin;
-use cxx_qt::CxxQtType;
+use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QVariant};
 use rimstack_core::mods::columns;
 use rimstack_core::mods::library::ModId;
@@ -243,6 +243,13 @@ impl qobject::ModsData {
     pub(super) fn mark_ready(&self) {
         if let Some(started) = crate::STARTED.get() {
             rimstack_core::note!("startup_ms={}", started.elapsed().as_millis());
+        }
+        // The plain and restore checks are one script, run in one go: the
+        // watch would only see the whole; their steps are timed in QML.
+        let check = crate::hub::value("--check");
+        let scripted = matches!(check.as_deref(), Some("" | "restore"));
+        if (check.is_some() && !scripted) || crate::hub::given("--selftest") {
+            crate::jobs::watch_stalls(self.qt_thread());
         }
     }
 }

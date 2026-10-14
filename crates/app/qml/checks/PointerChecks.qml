@@ -9,7 +9,7 @@ import RimStack.Ui
 
 Item {
     id: checks
-    property Item screen
+    property ModsScreen screen
     property ListView activeList
     property ListView inactiveList
     property Item details
@@ -125,10 +125,10 @@ Item {
 
             const taken = Mods.inactive.at(2).name
             checks.drag(checks.inactiveList, 13 + 26 * 2, checks.activeList, row(5))
-            check("a mod dragged from the inactive list is activated where it was dropped", Mods.active.count === count + 1 && checks.nameAt(5) === taken)
+            checks.check("a mod dragged from the inactive list is activated where it was dropped", Mods.active.count === count + 1 && checks.nameAt(5) === taken)
 
             events.mouseClick(checks.activeList, 120, row(3), Qt.RightButton, Qt.NoModifier, -1)
-            check("the right mouse button selects the mod and opens its menu", Mods.info.name === checks.nameAt(3) && checks.screen.menuOpen)
+            checks.check("the right mouse button selects the mod and opens its menu", Mods.info.name === checks.nameAt(3) && checks.screen.menuOpen)
 
             const before = checks.inactiveList.contentY
             events.mouseWheel(checks.inactiveList, 120, 200, Qt.NoButton, Qt.NoModifier, 0, -120, -1)
@@ -142,7 +142,7 @@ Item {
         interval: 400
         onTriggered: {
             const moved = checks.inactiveList.contentY - before
-            checks.check("one notch of the wheel scrolls the system's lines, not more", Math.abs(moved - Qt.styleHints.wheelScrollLines * 40) < 2)
+            checks.check("one notch of the wheel scrolls the system's lines, not more", Math.abs(moved - Application.styleHints.wheelScrollLines * 40) < 2)
             comparing.start()
         }
     }
@@ -158,12 +158,24 @@ Item {
             if (Hub.mods.conflicts === 0 && tries < 20)
                 return
             stop()
-            for (let at = 0; at < Mods.active.count && Mods.comparing === null; at++) {
-                Mods.select(Mods.nthMod(Mods.active, at), true)
+            seeking.start()
+        }
+    }
+    // One mod selected a turn, as clicks come.
+    Timer {
+        id: seeking
+        property int at: 0
+        interval: 1
+        repeat: true
+        onTriggered: {
+            if (at < Mods.active.count && Mods.comparing === null) {
+                Mods.select(Mods.nthMod(Mods.active, at++), true)
                 const other = (Mods.info.losesTo || []).concat(Mods.info.winsOver || [])[0]
                 if (other)
                     Mods.compareWith(other.modId)
+                return
             }
+            stop()
             if (Mods.comparing === null) {
                 checks.keys()
                 Qt.exit(checks.failed > 0 ? 1 : 0)

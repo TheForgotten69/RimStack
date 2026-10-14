@@ -101,11 +101,13 @@ Item {
     // must never be run on real mods, since it renames a file.
     property int textureFailures: 0
     function textureCheck(what, ok) {
+        checks.timed(what)
         console.log("check " + (ok ? "ok   " : "FAIL ") + what)
         if (!ok)
             textureFailures += 1
     }
     function checkTextures() {
+        checks.stepBegan = Date.now()
         const a = Mods.nthMod(Mods.active, 0), b = Mods.nthMod(Mods.active, 1)
         Mods.select(a, true)
         textureCheck("two mods that share a texture are in conflict", ((Mods.info.losesTo || [])[0] || {}).modId === b)
@@ -131,6 +133,7 @@ Item {
         id: afterRecheck
         interval: 1200
         onTriggered: {
+            checks.stepBegan = Date.now()
             const a = Mods.nthMod(Mods.active, 0), b = Mods.nthMod(Mods.active, 1)
             Mods.select(a, true)
             checks.textureCheck("the conflict is gone once the later file is hidden", (Mods.info.losesTo || []).length === 0)
@@ -142,9 +145,25 @@ Item {
             Qt.exit(checks.textureFailures > 0 ? 1 : 0)
         }
     }
+    // A script runs in one go, so the stall watch cannot tell its steps
+    // apart: each is timed from the check before it in the same run.
+    property double stepBegan: 0
+    function timed(what) {
+        const now = Date.now()
+        if (checks.stepBegan > 0 && now - checks.stepBegan >= 50)
+            console.log("step_ms=" + (now - checks.stepBegan) + " " + what)
+        checks.stepBegan = now
+        Qt.callLater(checks.runEnded)
+    }
+    function runEnded() {
+        checks.stepBegan = 0
+    }
+
     function runChecks() {
         let failed = 0
+        checks.stepBegan = Date.now()
         const check = (what, ok) => {
+            checks.timed(what)
             console.log("check " + (ok ? "ok   " : "FAIL ") + what)
             if (!ok)
                 failed += 1

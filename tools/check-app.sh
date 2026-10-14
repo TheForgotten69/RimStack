@@ -32,8 +32,16 @@ sound() {
     errors=$(grep -E 'TypeError|ReferenceError|is not a function|is not defined|Cannot read property|panicked' "$1" | head -3 || true)
     [ -z "$errors" ] || fail "errors in $2:
 $errors"
+    # The window's thread kept busy: by one check's actions (step_ms, timed
+    # in QML) or between them (stall_ms, timed from another thread). On
+    # 2,000 mods the steps take 61 ms at most, and one-off waits that come
+    # back on no later run reached 360 ms; half a second is a freeze.
+    local slow
+    slow=$(grep -oE '(step|stall)_ms=[0-9]+.*' "$1" | awk -F'[= ]' '$2 >= 500' | head -3 || true)
+    [ -z "$slow" ] || fail "the window's thread was kept busy in $2:
+$slow"
 }
-shown() { grep -E '^qml: check' "$1" | sed 's/^qml: //' || true; }
+shown() { grep -E '^qml: (check|step_ms=)|^stall_ms=' "$1" | sed 's/^qml: //' || true; }
 run() {
     local log="$tmp/run.log" status=0
     RIMSTACK_CONFIG="$tmp/config" XDG_DATA_HOME="$tmp/data" XDG_CONFIG_HOME="$tmp/settings" \
@@ -105,7 +113,7 @@ printf '<ModMetaData><name>fourth</name><packageId>check.fourth</packageId><supp
 sleep 4
 sed -i '/check.second/d' "$tmp/config3/Config/ModsConfig.xml"
 wait "$shown" && ok=0 || ok=$?
-grep -E '^qml: check (ok|FAIL)' "$live" | sed 's/^qml: //'
+shown "$live"
 sound "$live" "--check=live"
 [ -f "$game/Mods/900001/About/About.xml" ] || fail "the copied mod is not in the game's own Mods folder"
 rm -rf "$game/Mods/fourth" "$game/Mods/900001"

@@ -137,7 +137,7 @@ pub fn use_window_icon() {
 }
 
 /// What the command line gives for `flag`: "" for the flag alone.
-fn value(flag: &str) -> Option<String> {
+pub(crate) fn value(flag: &str) -> Option<String> {
     value_among(std::env::args(), flag)
 }
 
@@ -163,7 +163,7 @@ impl qobject::Hub {
     }
 }
 
-fn given(flag: &str) -> bool {
+pub(crate) fn given(flag: &str) -> bool {
     value(flag).is_some()
 }
 
