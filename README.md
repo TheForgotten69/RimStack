@@ -63,11 +63,7 @@ To correct a language for everyone, edit `crates/app/assets/languages/<Language>
 | Document | What it is |
 |---|---|
 | [`docs/specs/2026-10-11-rimstack-design.md`](docs/specs/2026-10-11-rimstack-design.md) | What RimStack is and does. The source of truth for behaviour. |
-| [`docs/mockups/all-screens.html`](docs/mockups/all-screens.html) | The agreed interface. Open it in a browser; the toolbar is clickable. |
-| [`docs/plans/2026-10-11-roadmap.md`](docs/plans/2026-10-11-roadmap.md) | Every milestone, in order, with what each needs and how it is accepted. |
-| [`docs/plans/2026-10-11-m0-bridge-test.md`](docs/plans/2026-10-11-m0-bridge-test.md) | Step-by-step plan for the first milestone. |
-| [`docs/plans/2026-10-11-m0-results.md`](docs/plans/2026-10-11-m0-results.md) | What the first milestone found. |
-| [`docs/plans/2026-10-11-m1-core.md`](docs/plans/2026-10-11-m1-core.md) | Plan for milestone 1 (finding and reading mods), with what the real install showed. |
+| [`docs/specs/2026-10-14-architecture.md`](docs/specs/2026-10-14-architecture.md) | How it is built: the Hub, its adapters, the `Changes` bus, what QML may do. |
 
 ## Licence
 
