@@ -16,9 +16,11 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
         // The buttons take a line of their own when the title's does not hold them.
+        // Measured against the pane: on one line the head's own width is pushed
+        // past the pane by its contents, and would keep them on one line.
         GridLayout {
             id: head
-            readonly property bool stacked: named.implicitWidth + acts.implicitWidth + columnSpacing > width
+            readonly property bool stacked: named.implicitWidth + acts.implicitWidth + columnSpacing > pane.width - Layout.leftMargin - Layout.rightMargin
             Layout.fillWidth: true
             Layout.leftMargin: Theme.gapCard
             Layout.rightMargin: Theme.gapLarge

@@ -26,11 +26,14 @@ Popup {
     }
     onOpened: { at = -1; contentItem.forceActiveFocus() }
 
+    // Bound to the size the entries give once laid out, which they are not
+    // yet when `openAt` runs: clamped then, a menu opened low ran off the window.
+    property point wanted
+    x: Math.max(4, Math.min(wanted.x, parent.width - width - 4))
+    y: Math.max(4, Math.min(wanted.y, parent.height - height - 4))
     function openAt(item, x, y, entries) {
         menu.entries = entries
-        const at = item.mapToItem(parent, x, y)
-        menu.x = Math.max(4, Math.min(at.x, parent.width - implicitWidth - 4))
-        menu.y = Math.max(4, Math.min(at.y, parent.height - implicitHeight - 4))
+        wanted = item.mapToItem(parent, x, y)
         open()
     }
 
