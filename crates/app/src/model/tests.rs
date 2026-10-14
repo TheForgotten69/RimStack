@@ -1,7 +1,7 @@
 //! What the model gathers from an `App`, on a made-up install.
 
 use super::*;
-use crate::state::tests::installed;
+use crate::workspace::tests::installed;
 use rimstack_core::mods::list::Category;
 
 fn library_of(app: &crate::App) -> std::sync::Arc<crate::Loaded> {

@@ -409,7 +409,7 @@ Item {
                     GroupTitle { text: Theme.say("Backups") }
                     Text { width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink; font.pixelSize: Theme.body; text: Theme.say("The newest save is copied before each launch; the last 5 are kept") }
                     Item { width: 1; height: 6 }
-                    Btn { text: Theme.say("Open the backups folder"); onClicked: Qt.openUrlExternally(Theme.fileUrl(JSON.parse(screen.backend.settings()).dataFolder + "/save-backups")) }
+                    Btn { text: Theme.say("Open the backups folder"); onClicked: Qt.openUrlExternally(Theme.fileUrl(Hub.settings.report.dataFolder + "/save-backups")) }
                 }
             }
         }

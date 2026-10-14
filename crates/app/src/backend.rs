@@ -2,11 +2,10 @@
 //! background thread and handed to QML as JSON text in a property.
 
 use rimstack_core::base::locks::Shared;
-use rimstack_core::kept::settings::Switch;
+use rimstack_core::say;
 use rimstack_core::{
     kept::launches,
     kept::lists,
-    kept::owntheme,
     mods::library::{Library, ModId},
     rimworld::id,
     rimworld::loadfolders,
@@ -16,8 +15,6 @@ use rimstack_core::{
     rimworld::saves,
     rimworld::workshop,
 };
-use rimstack_core::{say, say_n};
-use serde_json::{json, Value};
 use std::collections::HashMap;
 
 #[cxx_qt::bridge]
@@ -29,15 +26,11 @@ pub mod qobject {
         include!("rimstack-app/src/application.h");
         #[rust_name = "set_window_icon"]
         fn setWindowIcon(resource: &QString);
-        #[rust_name = "set_font_family"]
-        fn setFontFamily(family: &QString) -> QString;
     }
 
     extern "RustQt" {
         #[qobject]
         #[qml_element]
-        #[qproperty(QString, release)]
-        #[qproperty(bool, release_busy, cxx_name = "releaseBusy")]
         type Backend = super::BackendRust;
     }
 
@@ -65,75 +58,6 @@ pub mod qobject {
         #[qsignal]
         fn copied(self: Pin<&mut Backend>, problem: QString);
 
-        /// Moves the settings every mod keeps out of the game's `Config`
-        /// folder into a dated folder of RimStack's. Returns a sentence
-        /// saying what happened.
-        #[qinvokable]
-        #[cxx_name = "setModSettingsAside"]
-        fn set_mod_settings_aside(self: &Backend) -> QString;
-
-        /// The languages there are files for, as a JSON array of names.
-        #[qinvokable]
-        fn languages(self: &Backend) -> QString;
-
-        /// A language's texts, as a JSON object from English to it;
-        /// "{}" for English or a file that is not one.
-        #[qinvokable]
-        #[cxx_name = "languageWords"]
-        fn language_words(self: &Backend, name: &QString) -> QString;
-
-        /// Writes `languages/<name>.json` listing every text of the
-        /// interface, unless it is there. Returns `{ file }`, or
-        /// `{ problem }`.
-        #[qinvokable]
-        #[cxx_name = "startLanguage"]
-        fn start_language(self: &Backend, name: &QString) -> QString;
-
-        /// The colours the user's `theme.json` gives for this theme, as
-        /// a JSON object; "{}" when it gives none.
-        #[qinvokable]
-        #[cxx_name = "ownTheme"]
-        fn own_theme(self: &Backend, theme: &QString) -> QString;
-
-        /// Of the colours on show, given as a JSON object of name to
-        /// `#rrggbb`, the pairs under the contrast they need: a JSON
-        /// array of { what, found, needed }.
-        #[qinvokable]
-        #[cxx_name = "shortContrast"]
-        fn short_contrast(self: &Backend, colours: &QString) -> QString;
-
-        /// Writes `theme.json` with these colours for this theme, or adds
-        /// them to a file that has none for it. Returns `{ file }`, or
-        /// `{ problem }`.
-        #[qinvokable]
-        #[cxx_name = "startOwnTheme"]
-        fn start_own_theme(self: &Backend, theme: &QString, colours: &QString) -> QString;
-
-        /// The folders RimStack uses and its own settings, as JSON.
-        #[qinvokable]
-        fn settings(self: &Backend) -> QString;
-
-        /// One setting as it is kept; empty when it was never set.
-        #[qinvokable]
-        fn setting(self: &Backend, name: &QString) -> QString;
-
-        /// Returns what went wrong, or nothing.
-        #[qinvokable]
-        #[cxx_name = "setSetting"]
-        fn set_setting(self: &Backend, name: &QString, value: &QString) -> QString;
-
-        /// Copy your own rules from RimSort, if it is installed. Returns a
-        /// sentence saying what happened.
-        #[qinvokable]
-        #[cxx_name = "importRimSortRules"]
-        fn import_rimsort_rules(self: &Backend) -> QString;
-
-        /// Ask GitHub whether a newer RimStack is published; fills
-        /// `release`. Uses the network.
-        #[qinvokable]
-        #[cxx_name = "checkRelease"]
-        fn check_release(self: Pin<&mut Backend>);
-
         /// Small facts for the summary on the Mods screen, as a JSON
         /// object: the last launch, and how many saves, snapshots,
         /// replacements and rules of your own there are.
@@ -153,13 +77,6 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "lastStart"]
         fn last_start(self: &Backend, log_written: i64, previous: bool, errors: i32) -> QString;
-
-        /// New texts take this font family from now on; empty for the
-        /// system's own. Returns the family in use, for `Theme.refont`
-        /// to give the texts already on screen.
-        #[qinvokable]
-        #[cxx_name = "useFont"]
-        fn use_font(self: &Backend, family: &QString) -> QString;
 
         /// The chosen columns ("author,version,load") without this one,
         /// or with it last.
@@ -209,14 +126,8 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use std::path::PathBuf;
 
-/// Asked once: the program does not appear or leave while RimStack runs.
-static GIT: std::sync::LazyLock<Option<String>> =
-    std::sync::LazyLock::new(rimstack_core::sources::git::installed);
-
 mod appearance;
 mod columns;
-pub use appearance::speak;
-mod databases;
 pub(crate) mod download_report;
 mod kept_lists;
 pub(crate) mod log_report;
@@ -226,45 +137,11 @@ use log_report::*;
 
 #[derive(Default)]
 pub struct BackendRust {
-    /// A newer RimStack, as `{ version, page }`; `{}` once asked and
-    /// none is; `{ problem }` where GitHub could not be asked.
-    release: QString,
-    release_busy: bool,
     watcher: rimstack_core::base::watch::Watcher,
-}
-
-fn languages_dir(app: &crate::App) -> PathBuf {
-    app.settings_file().with_file_name("languages")
 }
 
 pub fn use_window_icon() {
     qobject::set_window_icon(&QString::from(":/qt/qml/RimStack/Ui/assets/rimstack.svg"));
-}
-
-/// Call on the window's thread only.
-pub fn use_font(family: &str) -> String {
-    qobject::set_font_family(&QString::from(family)).to_string()
-}
-
-fn theme_file(app: &crate::App) -> PathBuf {
-    app.settings_file().with_file_name("theme.json")
-}
-
-/// RimSort's file of your own rules: beside RimStack's data folder.
-fn rimsort_rules_file(app: &crate::App) -> PathBuf {
-    app.data_dir()
-        .with_file_name("RimSort")
-        .join("dbs")
-        .join("userRules.json")
-}
-
-fn rimsort_rules(
-    app: &crate::App,
-) -> Result<Vec<(String, String)>, rimstack_core::base::error::Error> {
-    let path = rimsort_rules_file(app);
-    let text = std::fs::read_to_string(&path)
-        .map_err(|e| rimstack_core::base::error::Error::file(&path, e))?;
-    Ok(rimstack_core::mods::community::parse(&text)?.pairs())
 }
 
 pub(crate) fn hidden_file(app: &crate::App) -> PathBuf {
@@ -292,54 +169,6 @@ pub(crate) fn snapshots_dir(app: &crate::App) -> PathBuf {
 
 pub(crate) fn lists_dir(app: &crate::App) -> PathBuf {
     app.data_dir().join("lists")
-}
-
-/// Every folder and setting RimStack uses, as Settings shows them.
-fn settings_report(app: &crate::App) -> crate::reports::SettingsReport {
-    let paths = app.paths();
-    let shown = |p: &Option<PathBuf>| p.as_ref().map(|p| p.to_string_lossy().into_owned());
-    let settings = app.settings();
-    let owned = |name: &str| settings.get(name).map(String::from);
-    let config = paths.mods_config();
-    let backup = config
-        .as_ref()
-        .map(|c| c.with_file_name("ModsConfig.xml.rimstack-backup"));
-    crate::reports::SettingsReport {
-        game: shown(&paths.game),
-        config: shown(&paths.config),
-        workshop: shown(&paths.workshop),
-        game_version: paths.game_version.clone(),
-        mods_config: shown(&config),
-        backup: shown(&backup.filter(|b| b.exists())),
-        set_game: owned("game"),
-        set_config: owned("config"),
-        set_workshop: owned("workshop"),
-        launch_arguments: owned("launchArguments"),
-        launch_directly: settings.launch_directly(),
-        language: owned("language"),
-        steamcmd: app.steamcmd().is_some(),
-        interface_scale: settings.get("interfaceScale").unwrap_or("1").to_string(),
-        font: owned("font"),
-        community_rules: settings.switch(Switch::CommunityRules),
-        version_warnings: settings.switch(Switch::VersionWarnings),
-        version_aside_for: owned("versionAsideFor"),
-        file_hints: settings.switch(Switch::FileHints),
-        git_for_workshop: settings.switch(Switch::GitForWorkshop),
-        git: GIT.clone(),
-        self_check: settings.switch(Switch::SelfCheck),
-        logs_kept: log_report::logs_kept_limit(app),
-        logs_kept_now: logs::kept(&log_report::kept_logs_dir(app)).len(),
-        replacements_ignored: settings
-            .listed("replacementsIgnored")
-            .map(String::from)
-            .collect(),
-        setup_done: settings.get("setupDone").is_some(),
-        rimsort_rules: rimsort_rules_file(app).is_file(),
-        data_folder: app.data_dir().to_string_lossy().into_owned(),
-        settings_file: app.settings_file().to_string_lossy().into_owned(),
-        diagnostics_file: app.diagnostics_file().to_string_lossy().into_owned(),
-        version: env!("CARGO_PKG_VERSION"),
-    }
 }
 
 /// The counts Settings shows beside its sections.
@@ -425,44 +254,6 @@ impl qobject::Backend {
             },
             |backend, problem| backend.copied(QString::from(&problem)),
         );
-    }
-
-    fn set_mod_settings_aside(&self) -> QString {
-        let paths = crate::app().paths();
-        let Some(config) = paths.config.as_ref() else {
-            return QString::from(&say!("The game's settings folder is not known"));
-        };
-        let aside = crate::app()
-            .data_dir()
-            .join(format!("mod-settings-{}", now_secs()));
-        let said = match rimstack_core::sources::maintenance::set_mod_settings_aside(config, &aside)
-        {
-            Ok(0) => say!("No mod has settings"),
-            Ok(count) => say_n!(
-                count,
-                "{} file moved to {}",
-                "{} files moved to {}",
-                aside.display()
-            ),
-            Err(problem) => problem.into(),
-        };
-        QString::from(&said)
-    }
-
-    fn settings(&self) -> QString {
-        crate::reports::said(&settings_report(crate::app()))
-    }
-
-    fn setting(&self, name: &QString) -> QString {
-        let kept = crate::app().settings();
-        QString::from(kept.get(&name.to_string()).unwrap_or_default())
-    }
-
-    fn set_setting(&self, name: &QString, value: &QString) -> QString {
-        match crate::app().set_setting(&name.to_string(), &value.to_string()) {
-            Ok(()) => QString::default(),
-            Err(problem) => QString::from(&problem.to_string()),
-        }
     }
 
     fn summary(&self) -> QString {

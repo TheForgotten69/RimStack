@@ -86,8 +86,9 @@ fn main() {
         "src/downloads.rs",
         "src/list_store.rs",
         "src/broken_mod_search.rs",
-        "src/community_data.rs",
         "src/mod_edits.rs",
+        "src/hub.rs",
+        "src/settings_data.rs",
     ]);
     // SAFETY: one more source for the same compiler, nothing set that the generated code relies on.
     let builder = unsafe {

@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn an_error_naming_an_active_mod_is_counted_against_it_and_the_launch_noted() {
-        let (tmp, app) = crate::state::tests::installed();
+        let (tmp, app) = crate::workspace::tests::installed();
         let config = tmp.path().join("config");
         std::fs::write(
             config.join("Config/ModsConfig.xml"),
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn without_a_log_the_report_says_so() {
-        let (_tmp, app) = crate::state::tests::installed();
+        let (_tmp, app) = crate::workspace::tests::installed();
         let loaded = app.library();
         let (library, _) = loaded.as_ref().as_ref().unwrap();
         let problem = logs_report(&app, library, false, None).err().unwrap();

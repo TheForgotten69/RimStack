@@ -14,7 +14,16 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock, RwLockReadGuard};
 use std::time::{Duration, Instant};
 
+mod settings;
+pub use settings::{newest_release, short_contrast};
+
 pub static STARTED: OnceLock<Instant> = OnceLock::new();
+
+pub fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
 
 /// The language a setting names; none chosen is English, as before it had a file.
 pub fn language_name(chosen: &str) -> &str {
@@ -80,22 +89,38 @@ pub struct App {
     /// When ModsConfig.xml was last looked at, and whether it then held
     /// another load order than the one saved here.
     list_on_disk: Mutex<(u64, bool)>,
+    /// What `git --version` said: the program does not appear or leave
+    /// while RimStack runs.
+    git: OnceLock<Option<String>>,
+    bus: crate::changes::Bus,
 }
 
-static SHARED: OnceLock<App> = OnceLock::new();
+static SHARED: OnceLock<Arc<App>> = OnceLock::new();
 
-/// The one the running program uses, with the folders its system and
-/// its environment give.
+fn handle() -> &'static Arc<App> {
+    SHARED.get_or_init(|| Arc::new(App::from_environment()))
+}
+
+/// The one the running program uses. Until every part of the window is
+/// handed its `App` by the Hub, the parts not yet moved reach it here.
 pub fn app() -> &'static App {
-    SHARED.get_or_init(|| {
-        let env = &paths::from_environment;
-        let home = paths::home(env);
-        let (settings, data) = paths::app_dirs(paths::Os::running(), &home, env);
-        App::new(home, &settings, &data, paths::Overrides::from_env())
-    })
+    handle()
+}
+
+/// The same `App` as `app()`, for the Hub to hand out.
+pub fn shared() -> Arc<App> {
+    handle().clone()
 }
 
 impl App {
+    /// With the folders this system and environment give.
+    pub fn from_environment() -> Self {
+        let env = &paths::from_environment;
+        let home = paths::home(env);
+        let (settings, data) = paths::app_dirs(paths::Os::running(), &home, env);
+        Self::new(home, &settings, &data, paths::Overrides::from_env())
+    }
+
     /// `settings_root` and `data_root` are the folders programs keep
     /// theirs in; RimStack's own are made inside each.
     pub fn new(
@@ -129,7 +154,18 @@ impl App {
             behind: RwLock::new(None),
             texture_counts: Mutex::new(BTreeMap::new()),
             list_on_disk: Mutex::new((0, false)),
+            git: OnceLock::new(),
+            bus: crate::changes::Bus::default(),
         }
+    }
+
+    /// Tells every listener what changed.
+    pub fn publish(&self, changes: crate::changes::Changes) {
+        self.bus.publish(changes);
+    }
+
+    pub fn listen(&self, listener: impl Fn(crate::changes::Changes) + Send + Sync + 'static) {
+        self.bus.listen(listener);
     }
 
     /// `$XDG_DATA_HOME/RimStack` on Linux, the system's own place for a
@@ -146,6 +182,14 @@ impl App {
 
     pub fn diagnostics_file(&self) -> PathBuf {
         self.data_dir.join("diagnostics.log")
+    }
+
+    pub fn kept_logs_dir(&self) -> PathBuf {
+        self.data_dir.join("logs")
+    }
+
+    pub fn git(&self) -> &Option<String> {
+        self.git.get_or_init(rimstack_core::sources::git::installed)
     }
 
     pub fn notes_file(&self) -> PathBuf {
@@ -296,6 +340,7 @@ impl App {
             None => drop(self.library.set(RwLock::new(fresh))),
         }
         self.textures_changed();
+        self.publish(crate::changes::Changes::LIBRARY);
     }
 
     /// A texture was hidden, shown again or read anew: what was worked

@@ -45,7 +45,7 @@ Item {
     function checkLive() {
         const folder = (Qt.application.arguments.find(a => a.startsWith("--live-folder=")) || "").substring(14)
         liveTotal = Mods.active.count + Mods.inactive.count
-        Mods.backend.setSetting("workshop", folder)
+        Hub.settings.keep("workshop", folder)
         Mods.active.rereadFolders()
         liveWatch.start()
     }
@@ -59,7 +59,7 @@ Item {
             checks.liveWaited += 1
             const late = checks.liveWaited > 50
             if (checks.liveStep === 0 && (late || (!Mods.active.rescanning && total === checks.liveTotal + 1))) {
-                checks.textureCheck("a Workshop folder changed in Settings is read at once", total === checks.liveTotal + 1 && JSON.parse(Mods.backend.settings()).workshop.endsWith("workshop-b"))
+                checks.textureCheck("a Workshop folder changed in Settings is read at once", total === checks.liveTotal + 1 && Hub.settings.report.workshop.endsWith("workshop-b"))
                 checks.liveStep = 1
                 const third = Mods.inactive.packageMod("check.third")
                 Mods.copyToLocal(third >= 0 ? Mods.about(third).path : "")

@@ -25,11 +25,11 @@ Item {
     readonly property bool steamcmd: {
         // Asked again whenever a task ends: one of them installs it.
         void downloads.taskNote
-        return JSON.parse(backend.settings()).steamcmd
+        return !!Hub.settings.report.steamcmd
     }
     // The mods the load order needs and does not have active.
     readonly property var needed: Mods.troubles.filter(t => ["activate", "subscribe", "search"].indexOf(t.fix.action) >= 0)
-    readonly property var info: visible ? JSON.parse(backend.settings()) : ({})
+    readonly property var info: Hub.settings.report
     // The mods that changed since the game was last seen starting;
     // read again when the screen shows and when the mod folders were.
     readonly property var since: {
@@ -81,10 +81,10 @@ Item {
     }
 
     // The Workshop ids of the mods whose suggested replacement is set aside.
-    property var ignoredReplacements: JSON.parse(backend.settings()).replacementsIgnored || []
+    property var ignoredReplacements: Hub.settings.report.replacementsIgnored || []
     property int replacementsRead: 0
     function ignoreReplacements(ids) {
-        backend.setSetting("replacementsIgnored", ids.join(","))
+        Hub.settings.keep("replacementsIgnored", ids.join(","))
         ignoredReplacements = ids
         replacementsRead += 1
         Mods.tick++

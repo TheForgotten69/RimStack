@@ -30,7 +30,7 @@ ApplicationWindow {
     // data, and not when taking a picture of a screen.
     // `--first` shows the set-up card whatever the settings say; for screenshots.
     property bool firstRun: Qt.application.arguments.indexOf("--first") !== -1
-        || (!Theme.demo && shotPath === "" && Mods.checkMode === "" && appBackend.setting("setupDone") === "")
+        || (!Theme.demo && shotPath === "" && Mods.checkMode === "" && !Hub.settings.report.setupDone)
 
     // What a careful player would settle before starting the game.
     readonly property var inTheWay: [
@@ -76,7 +76,6 @@ ApplicationWindow {
 
         Backend { id: appBackend }
         ModEdits { id: appEdits }
-        CommunityData { id: appCommunity }
         BrokenModSearch { id: appHunt }
         KeptLists { id: appLists }
         Downloads { id: appDownloads }
@@ -109,10 +108,8 @@ ApplicationWindow {
         const noticed = JSON.parse(appBackend.look(gameRunning, inTheWay))
         if (noticed.mods)
             Mods.active.rescan()
-        if (noticed.theme)
-            readOwnColours()
-        if (noticed.language)
-            Theme.words = JSON.parse(appBackend.languageWords(appBackend.setting("language")))
+        if (noticed.theme || noticed.language)
+            Hub.settings.filesChanged()
         if (noticed.saves && section === 3)
             appSaves.loadSaves()
         if (noticed.log) {
@@ -139,18 +136,11 @@ ApplicationWindow {
     // The font chosen in Settings, for every text at once.
     function useFont(name) {
         const from = Qt.application.font.family
-        const to = appBackend.useFont(name)
+        const to = Hub.settings.useFont(name)
         Theme.refont(window.contentItem, from, to)
         Theme.refont(Overlay.overlay, from, to)
     }
 
-    function readOwnColours() {
-        Theme.custom = JSON.parse(appBackend.ownTheme(Theme.name))
-    }
-    Connections {
-        target: Theme
-        function onNameChanged() { window.readOwnColours() }
-    }
     Component.onCompleted: {
         if (shotPath === "") {
             width = Math.max(minimumWidth, Theme.stored.windowWidth)
@@ -163,19 +153,16 @@ ApplicationWindow {
                 height = Number(given[1])
             }
         }
-        const kept = JSON.parse(appBackend.settings())
         // The interface size of earlier versions: now part of the text size.
-        const size = Number(kept.interfaceScale || 1)
+        const size = Number(Hub.settings.report.interfaceScale || 1)
         if (size !== 1 && size > 0) {
             Theme.stored.textScale = Math.round(Theme.stored.textScale * size * 20) / 20
-            appBackend.setSetting("interfaceScale", "")
+            Hub.settings.keep("interfaceScale", "")
         }
-        readOwnColours()
         if (!Theme.demo) {
             appDownloads.restoreUpdates()
             appLogs.keepLogs()
         }
-        Theme.words = JSON.parse(appBackend.languageWords(kept.language || ""))
         readLastLaunch()
     }
     Connections {
@@ -185,11 +172,10 @@ ApplicationWindow {
 
     Binding { target: Mods; property: "backend"; value: appBackend }
     Binding { target: Mods; property: "edits"; value: appEdits }
-    Binding { target: Mods; property: "communityData"; value: appCommunity }
     Connections {
-        target: appCommunity
-        function onRulesBusyChanged() {
-            if (appCommunity.rulesBusy)
+        target: Hub.settings
+        function onCommunityBusyChanged() {
+            if (Hub.settings.communityBusy)
                 return
             Mods.active.communityChanged()
             Mods.overview = JSON.parse(Mods.active.overview())
@@ -223,7 +209,7 @@ ApplicationWindow {
         !Mods.active.filesRead && Mods.active.count > 0 && !Theme.demo ? { text: Theme.say("Reading the active mods' files…") } : null,
         appTextures.texturesBusy ? { text: appTextures.texturesProgress || Theme.say("Counting textures…"), cancel: () => appTextures.cancelTextures() } : null,
         appDownloads.updatesBusy ? { text: Theme.say("Asking Steam for updates…") } : null,
-        appCommunity.rulesBusy ? { text: Theme.say("Downloading community data…") } : null,
+        Hub.settings.communityBusy ? { text: Theme.say("Downloading community data…") } : null,
         appDownloads.taskRunning ? { text: appDownloads.taskNote } : null,
     ].filter(task => task !== null)
     Binding { target: Mods; property: "behind"; value: window.behindActive }
@@ -266,7 +252,7 @@ ApplicationWindow {
             appBackend.recordLaunch()
             readLastLaunch()
         }
-        const how = JSON.parse(appBackend.settings())
+        const how = Hub.settings.report
         if (how.launchDirectly) {
             const failed = appBackend.startGameDirectly()
             if (failed !== "")
@@ -356,10 +342,8 @@ ApplicationWindow {
                     id: settingsLoader
                     active: window.section === 5 || item !== null
                     sourceComponent: SettingsScreen {
-                        communityData: appCommunity
                         downloads: appDownloads
                         keptLists: appLists
-                        backend: appBackend
                         reader: appLogs
                                                 rules: Mods.active
                         overview: Mods.overview
@@ -415,7 +399,7 @@ ApplicationWindow {
     }
 
     // A newer RimStack is looked for once the window is up, unless Settings says not to, and said once.
-    Timer { interval: 4000; running: !Theme.demo && window.shotPath === "" && Mods.checkMode === ""; onTriggered: if (JSON.parse(appBackend.settings()).selfCheck) appBackend.checkRelease() }
+    Timer { interval: 4000; running: !Theme.demo && window.shotPath === "" && Mods.checkMode === ""; onTriggered: if (Hub.settings.report.selfCheck) Hub.settings.checkRelease() }
     // Steam's site refused past the last wait: said once, with how far the asking got.
     Connections {
         target: appDownloads
@@ -426,11 +410,11 @@ ApplicationWindow {
         }
     }
     Connections {
-        target: appBackend
+        target: Hub.settings
         function onReleaseChanged() {
-            const found = appBackend.release ? JSON.parse(appBackend.release) : ({})
+            const found = Hub.settings.release || ({})
             if (found.version)
-                Notices.offer(Theme.fill("RimStack {} is published; this is {}", found.version, JSON.parse(appBackend.settings()).version), Theme.say("Open its page"), () => Qt.openUrlExternally(found.page))
+                Notices.offer(Theme.fill("RimStack {} is published; this is {}", found.version, Hub.settings.report.version), Theme.say("Open its page"), () => Qt.openUrlExternally(found.page))
         }
     }
 
@@ -441,7 +425,7 @@ ApplicationWindow {
         findMods: text => JSON.parse(Mods.active.findMods(text, 12)).map(m => ({
             name: m.name, group: m.active ? Theme.say("Active mod") : Theme.say("Inactive mod"), run: () => window.showMod(m.modId) }))
         commands: {
-            const folders = Theme.demo ? ({}) : JSON.parse(appBackend.settings())
+            const folders = Theme.demo ? ({}) : Hub.settings.report
             const open = path => Qt.openUrlExternally(Theme.fileUrl(path))
             const mod = Mods.selectedId >= 0 && Mods.selectedCount === 1 ? Mods.info : null
             const filter = text => { window.section = 0; Mods.filterBy(text) }
@@ -488,7 +472,7 @@ ApplicationWindow {
 
                 { name: Theme.say("Read the mod folders again"), group: Theme.say("Mods"), run: () => Mods.active.rescan(), when: !Theme.demo },
                 { name: Theme.say("Check for updates"), group: Theme.say("Downloads"), run: () => { window.section = 1; appDownloads.checkUpdates() }, when: !Theme.demo },
-                { name: Theme.say("Update community rules"), group: Theme.say("Sorting"), run: () => appCommunity.downloadRules(), when: !Theme.demo && !appCommunity.rulesCurrent },
+                { name: Theme.say("Update community rules"), group: Theme.say("Sorting"), run: () => Hub.settings.downloadCommunity(), when: !Theme.demo && !Hub.settings.communityCurrent },
                 { name: Theme.say("Read the saves again"), group: Theme.say("Saves"), run: () => { window.section = 3; appSaves.loadSaves() }, when: !Theme.demo },
                 { name: Theme.say("Read the log again"), group: Theme.say("Logs"), run: () => { window.section = 4; Qt.callLater(() => logsLoader.item.load()) }, when: !Theme.demo },
                 { name: Theme.say("Back up the newest save"), group: Theme.say("Saves"), run: () => appSaves.backUpNewestSave(), when: !Theme.demo },
@@ -581,24 +565,15 @@ ApplicationWindow {
         anchors.fill: parent
         active: window.firstRun
         sourceComponent: FirstRun {
-            info: JSON.parse(appBackend.settings())
-            databases: JSON.parse(appCommunity.databases())
-            languages: JSON.parse(appBackend.languages())
-            onSettingPicked: (name, value) => appBackend.setSetting(name, value)
-            onLanguagePicked: name => {
-                appBackend.setSetting("language", name)
-                Theme.words = JSON.parse(appBackend.languageWords(name))
-                Mods.active.rescan()
-            }
             activeCount: Mods.active.count
             inactiveCount: Mods.inactive.count
             problem: Mods.active.problem
                         onStart: (withData, withRimSort) => {
-                appBackend.setSetting("setupDone", "yes")
+                Hub.settings.keep("setupDone", "yes")
                 if (withData && (!Mods.overview.communityMods || !Mods.overview.worksOn))
-                    appCommunity.downloadRules()
+                    Hub.settings.downloadCommunity()
                 if (withRimSort)
-                    appBackend.importRimSortRules()
+                    Hub.settings.importRimSortRules()
                 window.firstRun = false
                 Mods.startHints()
             }

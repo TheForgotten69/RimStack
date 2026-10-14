@@ -3,18 +3,21 @@ use rimstack_core::said;
 mod backend;
 mod background;
 mod broken_mod_search;
-mod community_data;
+mod changes;
 mod downloads;
+mod hub;
 mod list_store;
 mod log_reader;
 mod mod_edits;
 mod model;
+mod qml;
 mod reports;
 mod save_reader;
-mod state;
+mod settings_data;
 mod texture_tools;
+mod workspace;
 
-pub use state::*;
+pub use workspace::*;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 use std::time::Instant;
@@ -98,7 +101,7 @@ fn main() -> std::process::ExitCode {
         std::env::consts::OS
     );
     // Before the mods are read: their problems are put in words as they are.
-    backend::speak(app(), app().settings().get("language").unwrap_or_default());
+    app().speak();
     if !std::env::args().any(|a| a == "--demo" || a == "--selftest") {
         std::thread::spawn(|| {
             app().community();
@@ -113,7 +116,7 @@ fn main() -> std::process::ExitCode {
     backend::use_window_icon();
     let font = app().settings().get("font").map(String::from);
     if let Some(family) = font {
-        backend::use_font(&family);
+        settings_data::qobject::set_font_family(&QString::from(&family));
     }
     // Names the file the window's own settings (pane widths) are kept in.
     if let Some(qt) = qt.as_mut() {

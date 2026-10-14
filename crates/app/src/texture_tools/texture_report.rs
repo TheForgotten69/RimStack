@@ -42,7 +42,7 @@ mod tests {
 
     #[test]
     fn a_mod_with_textures_is_listed_until_you_ask_to_skip_it() {
-        let (tmp, app) = crate::state::tests::installed();
+        let (tmp, app) = crate::workspace::tests::installed();
         let textures = tmp.path().join("game/Mods/roads/Textures");
         std::fs::create_dir_all(&textures).unwrap();
         std::fs::write(textures.join("road.png"), [0u8; 16]).unwrap();

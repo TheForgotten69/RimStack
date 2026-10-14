@@ -2,6 +2,7 @@
 // The colours follow the theme chosen in Settings.
 pragma Singleton
 import QtQuick
+import RimStack.Ui
 
 QtObject {
     id: theme
@@ -12,7 +13,8 @@ QtObject {
     readonly property bool light: palette.bright === true
     // The colours `theme.json` gives for the chosen theme, by the names
     // below; each stands over the built-in one.
-    property var custom: ({})
+    readonly property var custom: Hub.settings.ownColours || ({})
+    readonly property Binding themeName: Binding { target: Hub.settings; property: "theme"; value: theme.name }
     readonly property var colourNames: ["win", "panel", "bar", "ctl", "ctlHi", "line", "edge", "well", "seg", "chip", "hover", "ink", "ink2", "ink3", "brand", "fieldLine", "accent", "accentHi", "focus", "accentInk", "err", "warn", "ok", "moved", "banner", "dangerBg", "scrim"]
 
     // Type: five sizes, the lists in `body`.
@@ -71,7 +73,7 @@ QtObject {
 
     // The chosen language: each English text of the interface with what
     // stands for it. A text it does not have is shown in English.
-    property var words: ({})
+    readonly property var words: Hub.settings.words || ({})
     function say(text) {
         return words[text] || text
     }

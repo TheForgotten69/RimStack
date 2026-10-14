@@ -171,12 +171,12 @@ Column {
             }
         }
         Text {
-            visible: Mods.communityData.rulesProblem !== ""
+            visible: Hub.settings.communityProblem !== ""
             width: parent.width
             wrapMode: Text.WordWrap
             color: Theme.err
             font.pixelSize: Theme.body
-            text: Theme.fill("Community rules not updated: {}", Mods.communityData.rulesProblem)
+            text: Theme.fill("Community rules not updated: {}", Hub.settings.communityProblem)
         }
     }
 }

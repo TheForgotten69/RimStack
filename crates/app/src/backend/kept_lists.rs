@@ -4,26 +4,6 @@
 use super::*;
 
 impl qobject::Backend {
-    pub(super) fn import_rimsort_rules(&self) -> QString {
-        let said = match rimsort_rules(crate::app()) {
-            Err(problem) => problem.into(),
-            Ok(pairs) => {
-                let mut yours = crate::app().user_rules().writing();
-                let added = yours.import(&pairs);
-                match yours.write(&crate::app().user_rules_file()) {
-                    Err(problem) => problem.into(),
-                    Ok(()) if pairs.is_empty() => say!("RimSort has no rules of your own."),
-                    Ok(()) => say!(
-                        "{} of RimSort's {} rules were new and are now yours here.",
-                        added,
-                        pairs.len()
-                    ),
-                }
-            }
-        };
-        QString::from(&said)
-    }
-
     pub(super) fn record_launch(&self) {
         let list = crate::app().session().current().to_vec();
         if let Err(problem) = launches::record(&launches_file(crate::app()), &list, now_secs()) {

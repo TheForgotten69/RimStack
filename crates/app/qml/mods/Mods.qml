@@ -111,7 +111,6 @@ Item {
 
     property Backend backend
     property ModEdits edits
-    property CommunityData communityData
     property BrokenModSearch hunter
     property KeptLists keptLists
     property Downloads downloads
@@ -211,8 +210,8 @@ Item {
     // No warning about the game version while the game stays on `version`;
     // "" brings the warnings back.
     function setVersionAside(version) {
-        const before = backend.setting("versionAsideFor")
-        backend.setSetting("versionAsideFor", version)
+        const before = Hub.settings.report.versionAsideFor || ""
+        Hub.settings.keep("versionAsideFor", version)
         keepingScroll(() => activeModel.recheck())
         inactiveModel.recheck()
         refresh()

@@ -8,27 +8,18 @@ import RimStack.Ui
 Rectangle {
     id: page
 
-    required property var info
+    readonly property var info: Hub.settings.report
     required property int activeCount
     required property int inactiveCount
     required property string problem
-    // The community databases, as `Backend.databases` gives them, and the
-    // languages on offer beside English.
-    required property var databases
-    required property var languages
-    property string language: info.language || ""
-    signal languagePicked(string name)
-    // A setting kept in RimStack's own file, by its name.
-    signal settingPicked(string name, string value)
-    // The databases left out, by id; and what Sort follows.
-    property var databasesOff: databases.filter(database => !database.on).map(database => database.id)
-    property bool communityRules: !!info.communityRules
-    property bool fileHints: !!info.fileHints
+    readonly property var databases: Hub.settings.databases
+    readonly property var languages: Hub.settings.languages
+    readonly property string language: info.language || ""
     // Start was pressed; `withData` says whether to fetch the community
     // data now, `withRimSort` whether to copy your rules from RimSort.
     signal start(bool withData, bool withRimSort)
 
-    readonly property bool withData: databasesOff.length < databases.length
+    readonly property bool withData: databases.some(database => database.on)
     property bool withRimSort: true
     color: Theme.win
 
@@ -240,10 +231,9 @@ Rectangle {
                         last: index === page.databases.length - 1
                         text: modelData.name
                         detail: Theme.say(modelData.use) + (modelData.updated ? ", " + Theme.fill("downloaded {}", Theme.day(modelData.updated)) : "")
-                        on: page.databasesOff.indexOf(modelData.id) < 0
+                        on: modelData.on
                         onToggled: {
-                            page.databasesOff = on ? page.databasesOff.concat([modelData.id]) : page.databasesOff.filter(id => id !== modelData.id)
-                            page.settingPicked("databasesOff", page.databasesOff.join(","))
+                            Hub.settings.useDatabase(modelData.id, !modelData.on)
                         }
                     }
                 }
@@ -255,15 +245,15 @@ Rectangle {
                 Tick {
                     text: Theme.say("Community rules")
                     detail: Theme.say("load-order rules kept by players, for mods whose files do not say enough")
-                    on: page.communityRules
-                    onToggled: { page.communityRules = !page.communityRules; page.settingPicked("communityRules", page.communityRules ? "on" : "off") }
+                    on: !!page.info.communityRules
+                    onToggled: Hub.settings.keep("communityRules", page.info.communityRules ? "off" : "on")
                 }
                 Tick {
                     last: true
                     text: Theme.say("Patch and def hints")
                     detail: Theme.say("a patch is placed after what it patches, read from the files")
-                    on: page.fileHints
-                    onToggled: { page.fileHints = !page.fileHints; page.settingPicked("fileHints", page.fileHints ? "on" : "off") }
+                    on: !!page.info.fileHints
+                    onToggled: Hub.settings.keep("fileHints", page.info.fileHints ? "off" : "on")
                 }
             }
             Block {
@@ -334,7 +324,7 @@ Rectangle {
                             required property string modelData
                             primary: (page.language || "English") === modelData
                             text: modelData
-                            onClicked: { page.language = modelData; page.languagePicked(modelData) }
+                            onClicked: Hub.settings.useLanguage(modelData)
                         }
                     }
                 }

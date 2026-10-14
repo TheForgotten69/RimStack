@@ -20,7 +20,7 @@ pub(crate) fn said<T: Serialize>(value: &T) -> QString {
 /// What was asked, done, or why not: `{ …what came of it }` or `{ problem }`.
 #[derive(Serialize)]
 #[serde(untagged)]
-pub(crate) enum Answer<T> {
+pub enum Answer<T> {
     Done(T),
     Failed { problem: String },
 }
@@ -39,7 +39,7 @@ impl<T> From<Result<T, rimstack_core::base::error::Error>> for Answer<T> {
 /// `Backend.settings()`: Settings, FirstRun, Main and the Mods screen.
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct SettingsReport {
+pub struct SettingsReport {
     pub game: Option<String>,
     pub config: Option<String>,
     pub workshop: Option<String>,
@@ -76,7 +76,7 @@ pub(crate) struct SettingsReport {
 /// `Backend.summary()`: the Settings screen's counts.
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct Summary {
+pub struct Summary {
     pub saves: usize,
     pub folders: usize,
     pub snapshots: usize,
@@ -86,7 +86,7 @@ pub(crate) struct Summary {
 }
 
 #[derive(Serialize, Default)]
-pub(crate) struct LastLaunch {
+pub struct LastLaunch {
     pub time: u64,
     pub errors: Option<usize>,
     pub mods: usize,
@@ -95,7 +95,7 @@ pub(crate) struct LastLaunch {
 /// `ModListModel.findMods()`: the Ctrl+K finder.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct FoundMod<'a> {
+pub struct FoundMod<'a> {
     pub name: &'a str,
     pub mod_id: ModId,
     pub active: bool,
@@ -103,14 +103,14 @@ pub(crate) struct FoundMod<'a> {
 
 /// `ModListModel.sortMoves()`: SortMoves, and the count kept in the history.
 #[derive(Serialize, Default)]
-pub(crate) struct SortGroup {
+pub struct SortGroup {
     pub name: &'static str,
     pub moves: Vec<SortMove>,
 }
 
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct SortMove {
+pub struct SortMove {
     pub name: String,
     pub from: usize,
     pub to: usize,
@@ -121,13 +121,13 @@ pub(crate) struct SortMove {
 
 /// A file written on request: Settings' languages and own colours.
 #[derive(Serialize)]
-pub(crate) struct Written {
+pub struct Written {
     pub file: String,
 }
 
 /// `Backend.shortContrast()`: the colour pairs that read too faintly.
 #[derive(Serialize, Default)]
-pub(crate) struct ShortContrast {
+pub struct ShortContrast {
     pub what: &'static str,
     pub found: f64,
     pub needed: f64,
@@ -137,7 +137,7 @@ pub(crate) struct ShortContrast {
 /// GitHub could not be asked. Read by StatusBar and Settings.
 #[derive(Serialize)]
 #[serde(untagged)]
-pub(crate) enum ReleaseSaid {
+pub enum ReleaseSaid {
     Newer { version: String, page: String },
     Latest {},
     Failed { problem: String },
@@ -146,7 +146,7 @@ pub(crate) enum ReleaseSaid {
 /// `SaveReader.saves`: the Saves screen.
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct SavesReport {
+pub struct SavesReport {
     pub saves: Vec<saves::Row>,
     pub all_from: Option<String>,
     pub rimsaves: bool,
@@ -156,7 +156,7 @@ pub(crate) struct SavesReport {
 
 /// `BrokenModSearch.huntState()`: HuntBar and the search's dialog.
 #[derive(Serialize, Default)]
-pub(crate) struct HuntState {
+pub struct HuntState {
     pub active: bool,
     #[serde(flatten)]
     pub search: Option<HuntSearch>,
@@ -166,7 +166,7 @@ pub(crate) struct HuntState {
 /// suspect is left; `stuck` names suspects that need each other.
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct HuntSearch {
+pub struct HuntSearch {
     pub suspects: usize,
     pub rounds: u32,
     pub list: Vec<String>,
@@ -178,7 +178,7 @@ pub(crate) struct HuntSearch {
 
 /// `TextureTools.ddsAudit()`: the Textures screen's check of DDS files.
 #[derive(Serialize, Default)]
-pub(crate) struct DdsProblem<'a> {
+pub struct DdsProblem<'a> {
     #[serde(rename = "mod")]
     pub of_mod: &'a str,
     pub file: String,
@@ -187,21 +187,21 @@ pub(crate) struct DdsProblem<'a> {
 
 /// `TextureTools.compare()`: CompareView.
 #[derive(Serialize)]
-pub(crate) struct Comparison<'a> {
+pub struct Comparison<'a> {
     pub earlier: Side<'a>,
     pub later: Side<'a>,
     pub textures: Vec<SharedTexture>,
 }
 
 #[derive(Serialize)]
-pub(crate) struct Side<'a> {
+pub struct Side<'a> {
     pub id: ModId,
     pub name: &'a str,
 }
 
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct SharedTexture {
+pub struct SharedTexture {
     pub name: String,
     pub earlier: String,
     pub later: String,
@@ -216,7 +216,7 @@ pub(crate) struct SharedTexture {
 
 /// `TextureTools.textureDifference()`: the picture of where two differ.
 #[derive(Serialize, Default)]
-pub(crate) struct Difference {
+pub struct Difference {
     pub file: String,
     pub differing: u64,
     pub total: u64,
@@ -224,7 +224,7 @@ pub(crate) struct Difference {
 
 /// `CommunityData.databases()`: Settings' list of community databases.
 #[derive(Serialize, Default)]
-pub(crate) struct Database {
+pub struct Database {
     pub id: &'static str,
     pub name: &'static str,
     #[serde(rename = "use")]
@@ -236,7 +236,7 @@ pub(crate) struct Database {
 /// `KeptLists.journal()`: HistoryMenu. `revert` is empty where the
 /// entry can no longer be taken back.
 #[derive(Serialize, Default)]
-pub(crate) struct JournalRow<'a> {
+pub struct JournalRow<'a> {
     pub time: u64,
     pub what: &'a str,
     pub revert: &'a str,
@@ -244,7 +244,7 @@ pub(crate) struct JournalRow<'a> {
 
 /// `Downloads.updates`: the Downloads screen's updates.
 #[derive(Serialize, Default)]
-pub(crate) struct Updates {
+pub struct Updates {
     pub checked: Option<u64>,
     pub asked: Option<u64>,
     pub answered: usize,
@@ -259,7 +259,7 @@ pub(crate) struct Updates {
 /// the last check; `checked` is false for one not asked then.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct Checkout {
+pub struct Checkout {
     pub mod_id: ModId,
     pub name: String,
     pub path: String,
@@ -271,7 +271,7 @@ pub(crate) struct Checkout {
 
 /// `Downloads.queue`: what pasted links are.
 #[derive(Serialize, Default)]
-pub(crate) struct Queue {
+pub struct Queue {
     pub items: Vec<Asked>,
     pub repositories: Vec<rimstack_core::sources::downloads::Repository>,
     /// Said when nothing in the text was a Workshop link.
@@ -281,7 +281,7 @@ pub(crate) struct Queue {
 
 /// `Downloads.sinceLaunch()`: what changed since the game last started.
 #[derive(Serialize, Default)]
-pub(crate) struct SinceLaunch {
+pub struct SinceLaunch {
     pub time: u64,
     pub items: Vec<Changed>,
 }
@@ -289,7 +289,7 @@ pub(crate) struct SinceLaunch {
 /// `Downloads.changeNotesState`: how far fetching change notes got;
 /// `resume` is when it goes on after Steam asked it to wait.
 #[derive(Serialize, Default)]
-pub(crate) struct NotesState {
+pub struct NotesState {
     pub done: usize,
     pub asked: usize,
     pub resume: u64,
@@ -302,7 +302,7 @@ pub(crate) type ChangeNotes = std::collections::BTreeMap<String, Vec<Note>>;
 /// `LogReader.logs`: the Logs screen.
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct LogsReport {
+pub struct LogsReport {
     pub previous: bool,
     pub has_other: bool,
     pub path: String,

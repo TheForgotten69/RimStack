@@ -10,8 +10,6 @@ Item {
     id: screen
     Appear { of: screen }
 
-    required property Backend backend
-    required property CommunityData communityData
     required property KeptLists keptLists
     required property Downloads downloads
     required property LogReader reader
@@ -22,22 +20,12 @@ Item {
     signal font(string family)
     property var overview: ({})
 
-    property var info: ({})
-    property string problem
-
-    function reload() {
-        info = JSON.parse(backend.settings())
-    }
+    readonly property var info: Hub.settings.report
+    readonly property string problem: Hub.settings.problem
 
     function keep(name, value) {
-        problem = backend.setSetting(name, value)
-        reload()
+        Hub.settings.keep(name, value)
     }
-
-    onVisibleChanged: if (visible) reload()
-    // The folders found are shown once the mods there have been read.
-    readonly property Timer settled: Timer { interval: 400; repeat: true; onTriggered: if (!screen.rules.rescanning) { stop(); screen.reload() } }
-    Component.onCompleted: reload()
 
     // What is typed in the search box; with it every page's settings
     // are searched and only those that match show.
@@ -138,7 +126,6 @@ Item {
                     onClicked: {
                         screen.keep(folder.name, box.text)
                         Mods.active.rereadFolders()
-                        screen.settled.restart()
                     }
                 }
                 Btn { enabled: folder.inUse !== ""; icon: "folder-open"; tip: Theme.say("Open folder"); onClicked: Qt.openUrlExternally(Theme.fileUrl(folder.inUse)) }
@@ -345,8 +332,7 @@ Item {
                     id: language
                     property string said
                     function use(name) {
-                        screen.keep("language", name)
-                        Theme.words = JSON.parse(screen.backend.languageWords(name))
+                        Hub.settings.useLanguage(name)
                         // What the mods' own lines say is written anew in it.
                         if (!Theme.demo)
                             Mods.active.rescan()
@@ -356,7 +342,7 @@ Item {
                     readonly property int translated: Object.keys(Theme.words).filter(text => Theme.words[text] !== "").length
                     // The language's file, written with every text when it is not there yet.
                     function file(name) {
-                        const made = JSON.parse(screen.backend.startLanguage(name))
+                        const made = Hub.settings.startLanguage(name)
                         language.said = made.problem || ""
                         return made.file || ""
                     }
@@ -365,9 +351,8 @@ Item {
                         menu: true
                         text: screen.info.language || "English"
                         onClicked: {
-                            const names = JSON.parse(screen.backend.languages())
                             Mods.menuRequested(languageButton, 0, languageButton.height + 2,
-                                names.map(name => ({ text: name, run: () => language.use(name) })))
+                                Hub.settings.languages.map(name => ({ text: name, run: () => language.use(name) })))
                         }
                     }
                     Chip {
@@ -403,7 +388,7 @@ Item {
                             const shown = {}
                             for (const name of ["win", "panel", "bar", "ink", "ink2", "ink3", "accent", "accentInk", "focus", "fieldLine", "warn", "err", "ok"])
                                 shown[name] = Theme.colour(name)
-                            return JSON.parse(screen.backend.shortContrast(JSON.stringify(shown)))
+                            return Hub.settings.shortContrast(shown)
                         }
                         visible: Theme.ownInUse && short.length > 0
                         tone: Theme.warn
@@ -419,13 +404,10 @@ Item {
                             const now = {}
                             for (const name of Theme.colourNames)
                                 now[name] = "" + Theme[name]
-                            const made = JSON.parse(screen.backend.startOwnTheme(Theme.name, JSON.stringify(now)))
-                            const file = made.file || ""
+                            const made = Hub.settings.startOwnTheme(now)
                             ownTheme.said = made.problem || ""
-                            if (ownTheme.said === "") {
-                                Theme.custom = JSON.parse(screen.backend.ownTheme(Theme.name))
-                                Qt.openUrlExternally(Theme.fileUrl(file))
-                            }
+                            if (ownTheme.said === "")
+                                Qt.openUrlExternally(Theme.fileUrl(made.file))
                         }
                     }
                     Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.err; font.pixelSize: Theme.body; text: ownTheme.said }
@@ -433,7 +415,7 @@ Item {
                 Line {
                     title: Theme.say("Font")
                     changed: (screen.info.font || "") !== ""
-                    onReset: { screen.keep("font", ""); screen.font("") }
+                    onReset: screen.font("")
                     Btn {
                         id: fontButton
                         menu: true
@@ -484,7 +466,6 @@ Item {
                                     HoverHandler { id: familyHover }
                                     TapHandler {
                                         onTapped: {
-                                            screen.keep("font", family.system ? "" : family.modelData)
                                             screen.font(family.system ? "" : family.modelData)
                                             fontPicker.close()
                                         }
@@ -597,15 +578,15 @@ Item {
                             : Theme.say("No")
                     }
                     Btn {
-                        enabled: !screen.communityData.rulesBusy && !screen.communityData.rulesCurrent
-                        icon: screen.communityData.rulesCurrent ? "check" : "download"
-                        text: screen.communityData.rulesBusy ? Theme.say("Downloading…") : screen.communityData.rulesCurrent ? Theme.say("Up to date") : screen.overview.communityMods ? Theme.say("Update") : Theme.say("Download")
-                        onClicked: screen.communityData.downloadRules()
+                        enabled: !Hub.settings.communityBusy && !Hub.settings.communityCurrent
+                        icon: Hub.settings.communityCurrent ? "check" : "download"
+                        text: Hub.settings.communityBusy ? Theme.say("Downloading…") : Hub.settings.communityCurrent ? Theme.say("Up to date") : screen.overview.communityMods ? Theme.say("Update") : Theme.say("Download")
+                        onClicked: Hub.settings.downloadCommunity()
                     }
                     Item { Layout.fillWidth: true }
                 }
                 Repeater {
-                    model: (screen.communityData.rulesBusy, screen.overview, screen.info, JSON.parse(screen.communityData.databases()))
+                    model: Hub.settings.databases
                     Line {
                         id: database
                         required property var modelData
@@ -613,23 +594,20 @@ Item {
                         Toggle {
                             title: database.modelData.name
                             on: database.modelData.on
-                            onFlipped: on => {
-                                const off = JSON.parse(screen.communityData.databases()).filter(other => other.id === database.modelData.id ? !on : !other.on).map(other => other.id)
-                                screen.keep("databasesOff", off.join(","))
-                            }
+                            onFlipped: on => Hub.settings.useDatabase(database.modelData.id, on)
                         }
                         Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.ink; font.pixelSize: Theme.body; text: Theme.say(database.modelData.use) }
                         Text { color: database.modelData.updated ? Theme.ink2 : Theme.ink3; font.pixelSize: Theme.small; text: database.modelData.updated ? Theme.day(database.modelData.updated) : Theme.say("Not downloaded") }
                     }
                 }
                 Text {
-                    visible: screen.communityData.rulesProblem !== ""
+                    visible: Hub.settings.communityProblem !== ""
                     x: 198
                     width: parent.width - 200
                     wrapMode: Text.WordWrap
                     color: Theme.err
                     font.pixelSize: Theme.body
-                    text: Theme.fill("Not updated: {}", screen.communityData.rulesProblem)
+                    text: Theme.fill("Not updated: {}", Hub.settings.communityProblem)
                 }
 
                 GroupTitle { visible: rimsort.visible && screen.finding === ""; text: Theme.say("RimSort") }
@@ -639,7 +617,7 @@ Item {
                     visible: !!screen.info.rimsortRules
                     title: Theme.say("Your rules in RimSort")
                     tip: Theme.say("Copies the rules you made in RimSort into RimStack. RimSort's file is only read.")
-                    Btn { icon: "download"; text: Theme.say("Import"); onClicked: rimsort.said = screen.backend.importRimSortRules() }
+                    Btn { icon: "download"; text: Theme.say("Import"); onClicked: rimsort.said = Hub.settings.importRimSortRules() }
                     Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; text: rimsort.said }
                 }
 
@@ -652,9 +630,10 @@ Item {
                     changed: !screen.info.versionWarnings || aside
                     onReset: version(0)
                     function version(choice) {
-                        screen.keep("versionWarnings", choice === 2 ? "off" : "on")
-                        Mods.setVersionAside(choice === 1 ? game : "")
-                        screen.reload()
+                        Hub.settings.versionWarnings(choice)
+                        Mods.active.recheck()
+                        Mods.inactive.recheck()
+                        Mods.refresh()
                     }
                     tip: Theme.say("A mod that does not list the installed game version. For this version: the warnings return when the game is updated. One mod can be excused from its menu.")
                     Choice {
@@ -698,7 +677,7 @@ Item {
                         onClicked: Notices.ask({
                             title: Theme.say("Set the mods' settings aside"),
                             lines: [Theme.say("Every Mod_*.xml is moved out of"), (screen.info.config || "") + "/Config", Theme.say("into a new folder, named mod-settings and the time, in"), screen.info.dataFolder || "", Theme.say("Mods start from their defaults. Moving the files back restores them.")],
-                            label: Theme.say("Set aside"), run: () => modSettings.said = screen.backend.setModSettingsAside() })
+                            label: Theme.say("Set aside"), run: () => modSettings.said = Hub.settings.setModSettingsAside() })
                     }
                     Text { Layout.fillWidth: true; elide: Text.ElideMiddle; color: Theme.ink2; font.pixelSize: Theme.body; text: modSettings.said }
                 }
@@ -753,10 +732,10 @@ Item {
                 GroupTitle { visible: screen.finding === ""; text: Theme.say("About") }
                 Line {
                     id: newer
-                    readonly property var found: screen.backend.release ? JSON.parse(screen.backend.release) : null
+                    readonly property var found: Hub.settings.release || null
                     title: Theme.say("Version")
                     CopyText { text: screen.info.version || "" }
-                    Btn { enabled: !screen.backend.releaseBusy; text: screen.backend.releaseBusy ? Theme.say("Asking GitHub…") : Theme.say("Look now"); onClicked: screen.backend.checkRelease() }
+                    Btn { enabled: !Hub.settings.releaseBusy; text: Hub.settings.releaseBusy ? Theme.say("Asking GitHub…") : Theme.say("Look now"); onClicked: Hub.settings.checkRelease() }
                     Btn { visible: !!newer.found && !!newer.found.version; primary: true; icon: "external-link"; text: newer.found && newer.found.version ? Theme.fill("Get {}", newer.found.version) : ""; onClicked: Qt.openUrlExternally(newer.found.page) }
                     Text { Layout.fillWidth: true; elide: Text.ElideRight; color: newer.found && newer.found.problem ? Theme.err : Theme.ink2; font.pixelSize: Theme.small; text: !newer.found ? "" : newer.found.problem ? newer.found.problem : newer.found.version ? "" : Theme.say("No newer version is published") }
                 }
