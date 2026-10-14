@@ -5,8 +5,8 @@
 use std::path::{Path, PathBuf};
 
 /// The most there may be; lower them as QML loses some, never raise them.
-const MOST_FUNCTIONS: usize = 189;
-const MOST_TIMERS: usize = 19;
+const MOST_FUNCTIONS: usize = 179;
+const MOST_TIMERS: usize = 11;
 
 fn qml_files(dir: &Path, into: &mut Vec<PathBuf>) {
     for entry in std::fs::read_dir(dir).unwrap().flatten() {
@@ -61,7 +61,10 @@ fn the_qml_hands_over_no_json_and_reads_no_command_line() {
 
 #[test]
 fn the_qml_s_functions_and_timers_only_grow_fewer() {
-    let lines = code_lines(&every_qml());
+    // The checks under `qml/checks` are test code that drives the window.
+    let mut shown = every_qml();
+    shown.retain(|(path, _)| !path.parent().is_some_and(|dir| dir.ends_with("checks")));
+    let lines = code_lines(&shown);
     let count = |word: &str| {
         lines
             .iter()

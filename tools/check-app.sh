@@ -25,11 +25,12 @@ cp "$tmp/config/Config/ModsConfig.xml" "$tmp/original.xml"
 cp "${XDG_DATA_HOME:-$HOME/.local/share}/RimStack/communityRules.json" "$tmp/data/RimStack/" 2>/dev/null || true
 
 fail() { echo "check FAIL $1"; exit 1; }
-# A QML error does not stop the app, so a check can pass over a broken binding.
+# A QML error or a panic off the window's thread does not stop the app,
+# so a check can pass over either.
 sound() {
     local errors
-    errors=$(grep -E 'TypeError|ReferenceError|is not a function|is not defined|Cannot read property' "$1" | head -3 || true)
-    [ -z "$errors" ] || fail "QML errors in $2:
+    errors=$(grep -E 'TypeError|ReferenceError|is not a function|is not defined|Cannot read property|panicked' "$1" | head -3 || true)
+    [ -z "$errors" ] || fail "errors in $2:
 $errors"
 }
 shown() { grep -E '^qml: check' "$1" | sed 's/^qml: //' || true; }
@@ -109,3 +110,37 @@ sound "$live" "--check=live"
 [ -f "$game/Mods/900001/About/About.xml" ] || fail "the copied mod is not in the game's own Mods folder"
 rm -rf "$game/Mods/fourth" "$game/Mods/900001"
 [ "$ok" = 0 ] || fail "the live changes"
+
+# Closing the window as a person does, while work runs, and starting with
+# something missing or broken: each must end with 0, no panic, no QML error.
+closes() {
+    local what="$1" log="$tmp/close.log" status=0
+    shift
+    env "$@" QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 timeout 60 "$app" --check=close >| "$log" 2>&1 || status=$?
+    shown "$log"
+    sound "$log" "$what"
+    [ "$status" = 0 ] || fail "$what: ended with $status"
+    echo "check ok    $what: closed, ended with 0"
+}
+closes "closed while a rescan and a texture audit run" RIMSTACK_CONFIG="$tmp/config" XDG_DATA_HOME="$tmp/data" XDG_CONFIG_HOME="$tmp/settings"
+cmp -s "$real/Config/ModsConfig.xml" "$tmp/original.xml" || fail "THE REAL FILE CHANGED"
+
+for n in 4 5 6; do mkdir -p "$tmp/settings$n/RimStack" "$tmp/data$n"; done
+printf '{ "language": "%s" }' "$language" > "$tmp/settings4/RimStack/settings.json"
+printf '{ "language": ' > "$tmp/settings5/RimStack/settings.json"
+printf '{ "language": "%s" }' "$language" > "$tmp/settings6/RimStack/settings.json"
+closes "no game folder" RIMSTACK_GAME="$tmp/nowhere" RIMSTACK_WORKSHOP="$tmp/empty-workshop" RIMSTACK_CONFIG="$tmp/config2" XDG_DATA_HOME="$tmp/data4" XDG_CONFIG_HOME="$tmp/settings4"
+grep -qE '^qml: check state [1-9][0-9]* active, [1-9][0-9]* errors' "$tmp/close.log" || fail "no game folder: the window did not say its mods are missing"
+closes "a damaged settings.json" RIMSTACK_GAME="$game" RIMSTACK_WORKSHOP="$tmp/empty-workshop" RIMSTACK_CONFIG="$tmp/config2" XDG_DATA_HOME="$tmp/data5" XDG_CONFIG_HOME="$tmp/settings5"
+chmod 500 "$tmp/data6"
+closes "a data folder that cannot be written" RIMSTACK_GAME="$game" RIMSTACK_WORKSHOP="$tmp/empty-workshop" RIMSTACK_CONFIG="$tmp/config2" XDG_DATA_HOME="$tmp/data6" XDG_CONFIG_HOME="$tmp/settings6"
+chmod 700 "$tmp/data6"
+
+# --check saves a load order: without a copy of the settings it must refuse.
+mkdir -p "$tmp/home"
+status=0
+env -u RIMSTACK_CONFIG HOME="$tmp/home" XDG_DATA_HOME="$tmp/home/data" XDG_CONFIG_HOME="$tmp/home/settings" \
+    QT_QPA_PLATFORM=offscreen timeout 60 "$app" --check >| "$tmp/refused.log" 2>&1 || status=$?
+[ "$status" = 2 ] || fail "--check without a copy of the settings ended with $status, not 2"
+[ -z "$(find "$tmp/home" -type f)" ] || fail "--check without a copy of the settings wrote files"
+echo "check ok    --check without a copy of the settings is refused before anything is written"

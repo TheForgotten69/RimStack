@@ -27,11 +27,28 @@ Item {
         repeat: true
         running: Mods.checkMode !== ""
         onTriggered: {
-            if (Mods.active.count === 0 || !Hub.mods.filesRead)
+            if (Mods.active.count === 0 || Hub.mods.rescanning)
+                return
+            if (Mods.checkMode === "close") {
+                stop()
+                checks.closeWhileBusy()
+                return
+            }
+            if (!Hub.mods.filesRead)
                 return
             stop()
             Mods.checkMode === "textures" ? checks.checkTextures() : Mods.checkMode === "live" ? checks.checkLive() : checks.runChecks()
         }
+    }
+
+    // `--check=close`: the window closed as a person closes it once the
+    // lists are shown, with the files still read, a rescan and a texture
+    // audit under way.
+    function closeWhileBusy() {
+        console.log("check state " + Mods.active.count + " active, " + Mods.errors + " errors, files read: " + Hub.mods.filesRead)
+        Hub.mods.rescan()
+        Hub.textures.audit()
+        checks.Window.window.close()
     }
 
     // `--check=live`: what changes on disk shows without being asked.
