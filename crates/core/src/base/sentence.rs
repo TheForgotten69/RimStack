@@ -2,7 +2,7 @@
 //! language only where it is shown. `core` holds no language's words:
 //! whoever shows a sentence gives the language, and `Display` is English.
 
-use crate::base::translate::form_for;
+use crate::base::translate::Counting;
 use serde::ser::SerializeMap;
 use serde_json::Value;
 use std::borrow::Cow;
@@ -36,8 +36,8 @@ pub enum Sentence {
 pub trait Language {
     /// A text in this language; its English where it has none.
     fn word<'a>(&'a self, english: &'a str) -> &'a str;
-    /// Which counts take the singular: see `translate::PLURAL_RULE`.
-    fn plural_rule(&self) -> &str;
+    /// Which form a count takes.
+    fn counting(&self) -> &Counting;
 }
 
 pub struct English;
@@ -47,8 +47,10 @@ impl Language for English {
         english
     }
 
-    fn plural_rule(&self) -> &str {
-        "1"
+    fn counting(&self) -> &Counting {
+        static ENGLISH: std::sync::LazyLock<Counting> =
+            std::sync::LazyLock::new(|| Counting::of("en"));
+        &ENGLISH
     }
 }
 
@@ -132,7 +134,7 @@ impl Sentence {
                 parts,
             } => {
                 let (one, many) = (language.word(one), language.word(many));
-                let form = form_for(language.plural_rule(), *n, one, many);
+                let form = language.counting().pick(*n, one, many);
                 let mut with_count = vec![n.to_string()];
                 with_count.extend(all(parts));
                 fill(form, &with_count)
@@ -320,25 +322,28 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
-    struct French(HashMap<&'static str, &'static str>);
+    struct French(HashMap<&'static str, &'static str>, Counting);
 
     impl Language for French {
         fn word<'a>(&'a self, english: &'a str) -> &'a str {
             self.0.get(english).copied().unwrap_or(english)
         }
 
-        fn plural_rule(&self) -> &str {
-            "0 1"
+        fn counting(&self) -> &Counting {
+            &self.1
         }
     }
 
     fn french() -> French {
-        French(HashMap::from([
-            ("Needs {}, which is {}.", "Requiert {}, qui est {}."),
-            ("switched off", "désactivé"),
-            ("{} mod", "{} mod"),
-            ("{} mods", "{} mods"),
-        ]))
+        French(
+            HashMap::from([
+                ("Needs {}, which is {}.", "Requiert {}, qui est {}."),
+                ("switched off", "désactivé"),
+                ("{} mod", "{} mod"),
+                ("{} mods", "{} mods"),
+            ]),
+            Counting::of("fr"),
+        )
     }
 
     #[test]

@@ -8,7 +8,7 @@ use crate::reports::{Database, LastLaunch, ReleaseSaid, SettingsReport, ShortCon
 use rimstack_core::base::error::Error;
 use rimstack_core::base::locks::Shared;
 use rimstack_core::base::sentence::Sentence;
-use rimstack_core::base::translate::named;
+use rimstack_core::base::translate::{detected, named, LOCALE};
 use rimstack_core::kept::{owntheme, settings::Switch};
 use rimstack_core::mods::community;
 use rimstack_core::rimworld::workshopdb;
@@ -123,6 +123,7 @@ impl App {
             launch_arguments: owned("launchArguments"),
             launch_directly: settings.launch_directly(),
             language: owned("language"),
+            language_in_use: self.language_in_use(),
             steamcmd: self.steamcmd().is_some(),
             interface_scale: settings.get("interfaceScale").unwrap_or("1").to_string(),
             font: owned("font"),
@@ -216,20 +217,54 @@ impl App {
     /// A language's texts: those it ships with, under those of the file
     /// of its name in the settings folder.
     pub fn language_table(&self, name: &str) -> Map<String, Value> {
-        let name = super::language_name(name);
         let file = self.languages_dir().join(format!("{name}.json"));
         let own = std::fs::read_to_string(file).unwrap_or_default();
         rimstack_core::base::translate::table(shipped(name).unwrap_or_default(), &own)
     }
 
-    /// The chosen language's table.
-    pub fn speak(&self) -> Map<String, Value> {
+    /// The language chosen in Settings; where there is none, the first of
+    /// the system's that RimStack has a file for, or English.
+    pub fn language_in_use(&self) -> String {
         let chosen = self
             .settings()
             .get("language")
-            .unwrap_or_default()
-            .to_string();
-        self.language_table(&chosen)
+            .map(str::trim)
+            .map(String::from);
+        if let Some(chosen) = chosen.filter(|chosen| !chosen.is_empty()) {
+            return chosen;
+        }
+        let dir = self.languages_dir();
+        let detect = || {
+            let names = self.languages();
+            let tables: Vec<(&str, Map<String, Value>)> = names
+                .iter()
+                .map(|name| (name.as_str(), self.language_table(name)))
+                .collect();
+            let offered: Vec<(&str, &str)> = tables
+                .iter()
+                .map(|(name, table)| {
+                    (
+                        *name,
+                        table
+                            .get(LOCALE)
+                            .and_then(Value::as_str)
+                            .unwrap_or_default(),
+                    )
+                })
+                .collect();
+            detected(&self.system_languages, &offered)
+                .unwrap_or("English")
+                .to_string()
+        };
+        let found = self
+            .detected_language
+            .get(rimstack_core::base::watch::changed_at(&dir), detect);
+        found.as_ref().clone()
+    }
+
+    /// The table of the language in use.
+    pub fn speak(&self) -> Map<String, Value> {
+        self.language_table(&self.language_in_use())
     }
 
     /// Writes `languages/<name>.json` listing every text of the interface,
@@ -536,6 +571,31 @@ mod tests {
         assert_eq!(names.first().map(String::as_str), Some("English"));
         assert_eq!(names.last().map(String::as_str), Some("Klingon"));
         assert_eq!(app.language_table("Klingon")["Save"], "Pol");
+    }
+
+    #[test]
+    fn with_no_language_chosen_the_system_s_first_one_offered_is_used() {
+        let (_tmp, app) = installed();
+        let app = app.speaking(vec!["ja-JP".into(), "fr-CA".into(), "en-US".into()]);
+        assert_eq!(app.language_in_use(), "Français");
+        assert_eq!(app.speak()["Save"], "Enregistrer");
+        assert_eq!(app.settings_report().language, None);
+
+        let file = app.start_language("Nihongo").unwrap();
+        std::fs::write(&file, r#"{"@locale": "ja", "Save": "Hozon"}"#).unwrap();
+        assert_eq!(
+            app.language_in_use(),
+            "Nihongo",
+            "a language file added is offered"
+        );
+
+        app.set_setting("language", "Polski").unwrap();
+        assert_eq!(app.language_in_use(), "Polski");
+        app.set_setting("language", "").unwrap();
+        assert_eq!(app.language_in_use(), "Nihongo");
+
+        let (_tmp, app) = installed();
+        assert_eq!(app.speaking(vec!["xx".into()]).language_in_use(), "English");
     }
 
     #[test]

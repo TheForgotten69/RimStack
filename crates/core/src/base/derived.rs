@@ -49,6 +49,9 @@ mod tests {
         assert_eq!(*derived.get(1, || unreachable!("made twice")), "first");
         assert_eq!(*derived.get(2, || "second".into()), "second");
         derived.put(3, "given".into());
-        assert_eq!(*derived.get(3, || unreachable!("made though given")), "given");
+        assert_eq!(
+            *derived.get(3, || unreachable!("made though given")),
+            "given"
+        );
     }
 }

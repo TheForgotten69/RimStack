@@ -2,7 +2,7 @@
 //! of its English. Their sense is not checked here: five of them were
 //! translated by machine.
 
-use rimstack_core::base::translate::{misfit, PLURAL_RULE};
+use rimstack_core::base::translate::{misfit, Counting, LOCALE};
 use serde_json::{Map, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,21 +23,24 @@ fn every_language_has_every_text_and_each_wording_fits_its_english() {
         let name = file.file_stem().unwrap().to_string_lossy().into_owned();
         let words = read(&file);
         languages += 1;
-        let rule = words.get(PLURAL_RULE).and_then(Value::as_str);
-        let third = rule.is_some_and(|rule| rule.contains('/'));
-        if rule.is_none_or(|rule| rule.trim().is_empty()) {
-            faults.push(format!("{name}: no {PLURAL_RULE}"));
+        let locale = words
+            .get(LOCALE)
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if locale.trim().is_empty() {
+            faults.push(format!("{name}: no {LOCALE}"));
         }
+        let forms = Counting::of(locale).plural_forms();
         for text in english.keys().filter(|text| !words.contains_key(*text)) {
             faults.push(format!("{name}: lacks {text:?}"));
         }
-        for (text, said) in words.iter().filter(|(text, _)| *text != PLURAL_RULE) {
+        for (text, said) in words.iter().filter(|(text, _)| *text != LOCALE) {
             let said = said.as_str().unwrap_or_default();
             if !english.contains_key(text) {
                 faults.push(format!("{name}: {text:?} is no longer a text"));
             } else if said.is_empty() {
                 faults.push(format!("{name}: {text:?} has no wording"));
-            } else if let Some(why) = misfit(text, said, third) {
+            } else if let Some(why) = misfit(text, said, forms) {
                 faults.push(format!("{name}: {text:?} as {said:?}: {why:?}"));
             }
         }

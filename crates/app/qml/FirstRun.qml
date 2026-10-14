@@ -14,7 +14,7 @@ Rectangle {
     required property string problem
     readonly property var databases: Hub.settings.databases
     readonly property var languages: Hub.settings.languages
-    readonly property string language: info.language || ""
+    readonly property string language: info.languageInUse || ""
     // Start was pressed; `withData` says whether to fetch the community
     // data now, `withRimSort` whether to copy your rules from RimSort.
     signal start(bool withData, bool withRimSort)
@@ -321,7 +321,7 @@ Rectangle {
                         model: page.languages
                         Btn {
                             required property string modelData
-                            primary: (page.language || "English") === modelData
+                            primary: page.language === modelData
                             text: modelData
                             onClicked: Hub.settings.useLanguage(modelData)
                         }

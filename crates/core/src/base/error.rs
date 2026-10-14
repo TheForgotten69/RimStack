@@ -153,8 +153,8 @@ mod tests {
                     other => other,
                 }
             }
-            fn plural_rule(&self) -> &str {
-                "0 1"
+            fn counting(&self) -> &crate::base::translate::Counting {
+                crate::base::sentence::English.counting()
             }
         }
         let inner = Error::refused(said!("Inside the error test"));

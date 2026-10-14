@@ -40,15 +40,6 @@ pub fn now_secs() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-/// The language a setting names; none chosen is English, as before it had a file.
-pub fn language_name(chosen: &str) -> &str {
-    if chosen.trim().is_empty() {
-        "English"
-    } else {
-        chosen
-    }
-}
-
 /// What reading the active mods' files found: which provide the same
 /// textures, and which point at each other. Worked out in the background
 /// whenever the set of active mods changes.
@@ -87,6 +78,11 @@ pub struct App {
     /// Folders set in the environment: they win over those set in
     /// Settings, which win over what detection finds.
     given: paths::Overrides,
+    /// The languages the system is set to, most wanted first, as
+    /// "fr-FR": where none is chosen, the first offered is used.
+    system_languages: Vec<String>,
+    /// That language, found again once a language file comes or goes.
+    detected_language: Derived<u64, String>,
     settings: RwLock<Settings>,
     install: Reread<install::Install>,
     session: OnceLock<Mutex<Session>>,
@@ -120,6 +116,14 @@ impl App {
         let home = paths::home(env);
         let (settings, data) = paths::app_dirs(paths::Os::running(), &home, env);
         Self::new(home, &settings, &data, paths::Overrides::from_env())
+            .speaking(sys_locale::get_locales().collect())
+    }
+
+    pub fn speaking(self, system_languages: Vec<String>) -> Self {
+        Self {
+            system_languages,
+            ..self
+        }
     }
 
     /// `settings_root` and `data_root` are the folders programs keep
@@ -137,6 +141,8 @@ impl App {
             settings_dir,
             data_dir: data_root.join("RimStack"),
             given,
+            system_languages: Vec::new(),
+            detected_language: Derived::default(),
             install: Reread::new(),
             session: OnceLock::new(),
             notes: OnceLock::new(),
@@ -397,11 +403,10 @@ impl App {
             Err(_) => Vec::new(),
         };
         let saves = paths.config.as_ref().map(|c| c.join("Saves"));
-        let language = self.settings().get("language").map(|name| {
-            self.settings_file()
-                .with_file_name("languages")
-                .join(format!("{}.json", language_name(name)))
-        });
+        let language = Some(
+            self.languages_dir()
+                .join(format!("{}.json", self.language_in_use())),
+        );
         let one = |path: Option<PathBuf>| path.map_or(0, |p| changed_at(&p));
         rimstack_core::base::watch::Stamps {
             mods: newest(mods.iter().flatten().chain(&inside).map(PathBuf::as_path)),

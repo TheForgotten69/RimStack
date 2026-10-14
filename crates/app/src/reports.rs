@@ -39,7 +39,9 @@ pub struct SettingsReport {
     pub set_workshop: Option<String>,
     pub launch_arguments: Option<String>,
     pub launch_directly: bool,
+    /// The language chosen in Settings, if one is.
     pub language: Option<String>,
+    pub language_in_use: String,
     pub steamcmd: bool,
     pub interface_scale: String,
     pub font: Option<String>,

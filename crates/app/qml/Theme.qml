@@ -79,20 +79,13 @@ QtObject {
         let at = 0
         return say(text).replace(/\{\}/g, () => parts[at++])
     }
-    // `fill` with the count first, in the form the language uses for it:
-    // the language file's "@plural" lists the counts that take the singular.
-    // After a slash, the last digits that take a third form outside the
-    // teens ("1 / 2 3 4" in Polish), written before the plural's with a bar.
+    // `fill` with the count first, in the form the language's plural rules
+    // give it. The locale is passed so a binding follows a change of language.
     function plural(n, one, many, ...parts) {
-        const rule = (words["@plural"] || "1").split("/").map(side => side.trim().split(" "))
-        let forms = say(many).split("|")
-        if (rule[0].indexOf(String(n)) !== -1)
-            forms = [say(one)]
-        else if (forms.length > 1 && !(rule[1] && rule[1].indexOf(String(n % 10)) !== -1 && (n % 100 < 11 || n % 100 > 19)))
-            forms = [forms[1]]
+        const form = Hub.settings.counted(n, say(one), say(many), words["@locale"] || "")
         let at = 0
         const all = [count(n), ...parts]
-        return forms[0].replace(/\{\}/g, () => all[at++])
+        return form.replace(/\{\}/g, () => all[at++])
     }
 
     // Each theme's colours by name; `high` stands over them when Contrast

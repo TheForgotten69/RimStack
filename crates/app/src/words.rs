@@ -5,16 +5,22 @@
 use cxx_qt_lib::QString;
 use rimstack_core::base::error::Error;
 use rimstack_core::base::sentence::{Language, Sentence};
-use rimstack_core::base::translate::PLURAL_RULE;
+use rimstack_core::base::translate::{Counting, LOCALE};
 use serde_json::{Map, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-#[derive(Default)]
 pub struct Words {
     table: HashMap<String, String>,
-    rule: String,
+    locale: String,
+    counting: Counting,
+}
+
+impl Default for Words {
+    fn default() -> Self {
+        Self::of(&Map::new())
+    }
 }
 
 impl Words {
@@ -25,8 +31,10 @@ impl Words {
             Some((english.clone(), said.to_string()))
         };
         let table: HashMap<String, String> = table.iter().filter_map(said).collect();
+        let locale = table.get(LOCALE).cloned().unwrap_or_default();
         Self {
-            rule: table.get(PLURAL_RULE).cloned().unwrap_or_default(),
+            counting: Counting::of(&locale),
+            locale,
             table,
         }
     }
@@ -37,11 +45,8 @@ impl Language for Words {
         self.table.get(english).map_or(english, String::as_str)
     }
 
-    fn plural_rule(&self) -> &str {
-        match self.rule.is_empty() {
-            true => "1",
-            false => &self.rule,
-        }
+    fn counting(&self) -> &Counting {
+        &self.counting
     }
 }
 
@@ -57,6 +62,16 @@ pub fn show_in(words: Words) {
 pub fn put(sentence: &Sentence) -> String {
     let words = ON_SCREEN.with(|on_screen| on_screen.borrow().clone());
     sentence.put(words.as_ref())
+}
+
+/// Of a counted text's two, already in words, the one `n` takes in the
+/// language of `locale`: that on screen, or one QML asks of before it is.
+pub fn counted(n: usize, one: &str, many: &str, locale: &str) -> String {
+    let words = ON_SCREEN.with(|on_screen| on_screen.borrow().clone());
+    if words.locale == locale {
+        return words.counting.pick(n, one, many).to_string();
+    }
+    Counting::of(locale).pick(n, one, many).to_string()
 }
 
 pub fn said(sentence: &Sentence) -> QString {
@@ -82,7 +97,7 @@ mod tests {
     fn a_sentence_is_shown_in_the_words_set_and_english_before_any() {
         let counted = say_n!(0, "{} mod", "{} mods");
         assert_eq!(put(&counted), "0 mods");
-        let table = serde_json::json!({ "@plural": "0 1", "{} mod": "{} mod", "{} mods": "{} mods", "Play": "" });
+        let table = serde_json::json!({ "@locale": "fr", "{} mod": "{} mod", "{} mods": "{} mods", "Play": "" });
         let words = Words::of(table.as_object().unwrap());
         assert_eq!(
             words.word("Play"),

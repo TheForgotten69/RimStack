@@ -608,6 +608,7 @@ settings.report: object
   gitForWorkshop: bool
   interfaceScale: text
   language: text
+  languageInUse: text
   launchArguments: text
   launchDirectly: bool
   logsKept: number

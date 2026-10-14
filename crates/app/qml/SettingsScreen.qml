@@ -342,14 +342,15 @@ Item {
                     Btn {
                         id: languageButton
                         menu: true
-                        text: screen.info.language || "English"
+                        text: screen.info.language ? screen.info.languageInUse : Theme.fill("{} (system)", screen.info.languageInUse)
                         onClicked: {
                             Mods.menuRequested(languageButton, 0, languageButton.height + 2,
-                                Hub.settings.languages.map(name => ({ text: name, run: () => language.use(name) })))
+                                [{ text: Theme.say("System language"), run: () => language.use("") }].concat(
+                                    Hub.settings.languages.map(name => ({ text: name, run: () => language.use(name) }))))
                         }
                     }
                     Chip {
-                        visible: (screen.info.language || "English") !== "English"
+                        visible: screen.info.languageInUse !== "English"
                         tone: language.translated > 0 ? Theme.ink2 : Theme.warn
                         text: language.translated > 0 ? Theme.fill("{} texts translated", Theme.count(language.translated)) : Theme.say("Not translated yet")
                     }
@@ -357,7 +358,7 @@ Item {
                         icon: "external-link"
                         text: Theme.say("Edit translations")
                         tip: Theme.say("Opens your corrections to this language: a wording saved there replaces RimStack's at once")
-                        onClicked: { const found = language.file(screen.info.language || "English"); if (found !== "") Qt.openUrlExternally(Theme.fileUrl(found)) }
+                        onClicked: { const found = language.file(screen.info.languageInUse); if (found !== "") Qt.openUrlExternally(Theme.fileUrl(found)) }
                     }
                     Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.err; font.pixelSize: Theme.body; text: language.said }
                 }

@@ -60,6 +60,17 @@ pub mod qobject {
         #[cxx_name = "useLanguage"]
         fn use_language(self: Pin<&mut SettingsData>, name: &QString);
 
+        /// Of a counted text's two, already in words, the one `n` takes in
+        /// the language of `locale`.
+        #[qinvokable]
+        fn counted(
+            self: &SettingsData,
+            n: i32,
+            one: &QString,
+            many: &QString,
+            locale: &QString,
+        ) -> QString;
+
         /// `{ file }` of the language's own file, written when it is not
         /// there, or `{ problem }`.
         #[qinvokable]
@@ -200,6 +211,12 @@ impl qobject::SettingsData {
     fn version_warnings(mut self: Pin<&mut Self>, choice: i32) {
         let kept = self.app().version_warnings(choice);
         self.as_mut().set_problem(crate::words::why_not(&kept));
+    }
+
+    fn counted(&self, n: i32, one: &QString, many: &QString, locale: &QString) -> QString {
+        let n = usize::try_from(n).unwrap_or_default();
+        let (one, many) = (one.to_string(), many.to_string());
+        QString::from(&crate::words::counted(n, &one, &many, &locale.to_string()))
     }
 
     fn use_language(self: Pin<&mut Self>, name: &QString) {

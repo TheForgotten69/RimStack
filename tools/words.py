@@ -81,14 +81,15 @@ for path in sorted(glob.glob(os.path.join(root, "qml", "**", "*.qml"), recursive
 if split:
     raise SystemExit("texts must start on the line of their call: " + ", ".join(split))
 
-# The counts that take the singular, for a language to set: "0 1" in French.
-words.add("@plural")
+# The language's locale, for its plural rules and to be found from the
+# system's settings: "fr", "pt-BR".
+words.add("@locale")
 out = os.path.join(root, "assets", "words.json")
 json.dump({w: "" for w in sorted(words)}, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 # English is a language like the others: each text beside itself, unless
 # its file already words it differently.
 english = os.path.join(root, "assets", "languages", "English.json")
 kept = json.load(open(english, encoding="utf-8")) if os.path.exists(english) else {}
-said = {w: kept.get(w) or ("1" if w == "@plural" else w) for w in sorted(words)}
+said = {w: kept.get(w) or ("en" if w == "@locale" else w) for w in sorted(words)}
 json.dump(said, open(english, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 print(len(words), "texts")

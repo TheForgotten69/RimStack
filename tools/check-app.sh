@@ -5,7 +5,8 @@
 #
 #   cargo build -p rimstack-app --release && tools/check-app.sh
 #
-# RIMSTACK_LANGUAGE=Français runs them with that language chosen.
+# RIMSTACK_LANGUAGE=Français runs them with that language chosen; English
+# is chosen otherwise, whatever the system is set to.
 set -euo pipefail
 
 real="${RIMSTACK_CONFIG:-$HOME/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios}"
@@ -14,7 +15,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 mkdir -p "$tmp/config/Config" "$tmp/data/RimStack"
-language="${RIMSTACK_LANGUAGE:-}"
+language="${RIMSTACK_LANGUAGE:-English}"
 for settings in settings settings2; do
     mkdir -p "$tmp/$settings/RimStack"
     printf '{ "language": "%s" }' "$language" > "$tmp/$settings/RimStack/settings.json"

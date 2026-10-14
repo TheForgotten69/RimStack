@@ -20,6 +20,8 @@ rayon = "1"
 trash = "5"
 # Local time for the names of kept lists; already built for cxx-qt-lib.
 chrono = "0.4"
+# The languages the system is set to, to start in one of them (MIT/Apache-2.0).
+sys-locale = "0.3"
 
 [build-dependencies]
 cxx-qt-build = { version = "0.10", features = ["link_qt_object_files"] }
