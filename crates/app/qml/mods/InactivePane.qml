@@ -52,7 +52,7 @@ Rectangle {
                 text: Mods.prefs.inactiveByName ? Theme.say("Name") : Theme.say("Category")
                 spoken: Mods.prefs.inactiveByName ? Theme.say("Order the inactive mods by category") : Theme.say("Order the inactive mods by name")
                 tip: spoken
-                onClicked: Mods.keepingScroll(() => Mods.prefs.inactiveByName = !Mods.prefs.inactiveByName)
+                onClicked: Mods.prefs.inactiveByName = !Mods.prefs.inactiveByName
             }
             Btn { visible: !pane.drawer; text: Theme.say("Hide"); tip: Theme.say("To a rail at the left edge; its button opens the list over the load order"); onClicked: Mods.prefs.inactiveHidden = true }
             Btn { visible: pane.drawer; text: Theme.say("Pin"); tip: Theme.say("Beside the load order, always open"); onClicked: Mods.prefs.inactiveHidden = false }
@@ -82,7 +82,7 @@ Rectangle {
             Layout.rightMargin: Theme.gapLarge
             Layout.bottomMargin: Theme.gap
             spacing: Theme.gap
-            Btn { primary: true; enabled: !Mods.active.previewing; text: Theme.fill("Activate all {}", Mods.fresh.length); tip: Theme.say("Each goes where its rules put it in the load order. One Undo takes them all back."); onClicked: { Mods.activateFresh(); Mods.filterBy("") } }
+            Btn { primary: true; enabled: !Hub.mods.previewing; text: Theme.fill("Activate all {}", Mods.fresh.length); tip: Theme.say("Each goes where its rules put it in the load order. One Undo takes them all back."); onClicked: { Mods.activateFresh(); Mods.filterBy("") } }
             Item { Layout.fillWidth: true }
         }
             ModList {

@@ -1,6 +1,6 @@
-// The state of the Mods screen and everything that changes it: the two
-// lists, the selection, a drag, a sort on show. Views read it and call it;
-// it knows nothing of them and tells them what to do through signals.
+// The Mods screen's view state: the selection, a drag, the menus, a
+// comparison, the hints. What the lists hold and every change to them is
+// `Hub.mods`; this only asks it and tells the views what to show.
 pragma Singleton
 pragma ComponentBehavior: Bound
 import QtQuick
@@ -9,10 +9,6 @@ import RimStack.Ui
 Item {
     id: mods
 
-    // ---- what the views are told ----
-    // A change is about to reset both lists, and has: a list keeps its place.
-    signal changing()
-    signal changed()
     signal reveal(var model, int row, bool centre)
     signal focusList(var model)
     signal filterRequested(string text)
@@ -23,77 +19,50 @@ Item {
     signal menuRequested(Item item, real x, real y, var entries)
     signal firstFrameShown()
 
-    readonly property ModListModel active: activeModel
-    readonly property ModListModel inactive: inactiveModel
+    readonly property ModRows active: Hub.mods.active
+    readonly property ModRows inactive: Hub.mods.inactive
     readonly property ModsPrefs prefs: ModsPrefs {}
 
-    readonly property int activeCount: activeModel.count
-    readonly property int inactiveCount: inactiveModel.count
+    readonly property int activeCount: active.count
+    readonly property int inactiveCount: inactive.count
     signal rescanned()
-    // Goes up with every change to the lists or the mods on disk: what is worked out from them is asked for again.
-    property int tick: 0
     // "after" or "before" while choosing the other mod for a rule of your
     // own about the selected mod; empty otherwise.
     property string picking
 
     function pick(otherId) {
         if (picking === "after")
-            edits.addRule(otherId, selectedId)
+            Hub.mods.addRule(otherId, selectedId)
         else
-            edits.addRule(selectedId, otherId)
+            Hub.mods.addRule(selectedId, otherId)
         picking = ""
     }
 
-    readonly property bool dirty: activeModel.dirty
-    readonly property int errors: activeModel.errors
+    readonly property bool dirty: Hub.mods.dirty
+    readonly property int errors: Hub.mods.errors
     // For the selected mod: the library ids of the mods it shares
     // textures with, each "+" if the selected mod wins or "-" if it loses.
     readonly property var conflictMarks: info.conflictMarks || ({})
-    readonly property ModListModel loadOrder: activeModel
-    property string saveProblem
+    readonly property string saveProblem: Hub.mods.saveProblem
 
-    function undo() {
-        keepingScroll(() => { activeModel.undo(); inactiveModel.sync() })
-        refresh()
-    }
-
-    function redo() {
-        keepingScroll(() => { activeModel.redo(); inactiveModel.sync() })
-        refresh()
-    }
-
-    function discardChanges() {
-        keepingScroll(() => { activeModel.discardChanges(); inactiveModel.sync() })
-        done(Theme.say("Back to the saved list"))
-        refresh()
-    }
-
-    function save() {
-        if (activeModel.previewing)
-            endSort(true)
-        const changes = JSON.parse(activeModel.unsavedKept())
-        const before = backend && !Theme.demo && checkMode === "" ? keptLists.snapshotSaved(keptName("@saving")) : ""
-        saveProblem = activeModel.save()
-        if (saveProblem === "" && checkMode === "") {
-            Notices.keep([Theme.kept("Saved the load order: {}"), changes], before === "" ? "" : "list " + before)
-        }
-        return saveProblem === ""
-    }
+    function undo() { Hub.mods.undo() }
+    function redo() { Hub.mods.redo() }
+    function discardChanges() { Hub.mods.discardChanges() }
+    function save() { return Hub.mods.save() }
 
     function idAt(model, row) {
         return model.modIdAt(row)
     }
 
-    // Everything known about one installed mod; see `details` in the model.
     function about(modId) {
-        return JSON.parse(activeModel.details(modId))
+        return Hub.mods.detailsOf(modId) || ({})
     }
 
     function step(model, by) {
-        const row = model.stepFrom(selectedId, by)
+        const row = Hub.mods.stepFrom(model.active, selectedId, by)
         if (row < 0)
             return
-        select(idAt(model, row), model === activeModel)
+        select(idAt(model, row), model.active)
         reveal(model, row, false)
     }
 
@@ -101,23 +70,21 @@ Item {
     // that was next to it so the keyboard stays in this list.
     function activateSelected(model) {
         const position = selectedId >= 0 ? model.indexOf(selectedId) : -1
-        if (position < 0 || activeModel.previewing)
+        if (position < 0 || Hub.mods.previewing)
             return
-        const next = model.besideMod(selectedId)
+        const next = Hub.mods.besideMod(model.active, selectedId)
         moveAcross(model, position, selectedId)
         if (next >= 0)
-            select(next, model === activeModel)
+            select(next, model.active)
     }
 
-    property Backend backend
-    property ModEdits edits
     property BrokenModSearch hunter
     property KeptLists keptLists
     property Downloads downloads
     property TextureTools textureTools
 
     function compareWith(otherId) {
-        const pair = JSON.parse(activeModel.inLoadOrder(selectedId, otherId))
+        const pair = Hub.mods.inLoadOrder(selectedId, otherId)
         if (pair)
             comparing = { earlier: pair[0], later: pair[1] }
     }
@@ -126,6 +93,7 @@ Item {
     // When the game was last started and how that went, as far as known:
     // { time, errors }. The same wherever it is said.
     property var lastStart: null
+    readonly property var overview: Hub.mods.overview || ({})
     // Every problem of every active mod, each with what solves it.
     readonly property var troubles: overview.troubles || []
     // The needed mods that are installed and only switched off, by package id.
@@ -140,7 +108,7 @@ Item {
     function restoreLeftOff() {
         // Not for a picture of a screen, unless `--resume` asks for it.
         const picture = Qt.application.arguments.some(a => a.startsWith("--shot=")) && Qt.application.arguments.indexOf("--resume") === -1
-        if (leftOffRestored || Theme.demo || checkMode !== "" || picture || activeModel.count === 0)
+        if (leftOffRestored || Theme.demo || checkMode !== "" || picture || active.count === 0)
             return
         leftOffRestored = true
         // Nothing is unsaved at the start, so "is:changed" is not put back.
@@ -148,8 +116,8 @@ Item {
         if (kept !== "")
             filterBy(kept)
         const key = prefs.lastMod
-        const here = key === "" ? -1 : activeModel.packageMod(key)
-        const there = key === "" || here >= 0 ? -1 : inactiveModel.packageMod(key)
+        const here = key === "" ? -1 : Hub.mods.packageMod(true, key)
+        const there = key === "" || here >= 0 ? -1 : Hub.mods.packageMod(false, key)
         if (here >= 0 || there >= 0) {
             showMod(here >= 0 ? here : there)
             tab = prefs.lastTab
@@ -170,169 +138,94 @@ Item {
         Theme.stored.hintsSeen = true
     }
 
-    // `fix` is { action, target, label }, as a problem carries it.
+    // `fix` is { action, target, label, page }, as a problem carries it.
     function applyFix(modId, fix) {
-        if (fix.action === "activate" && !activeModel.previewing) {
-            const needed = inactiveModel.packageMod(fix.target)
-            if (needed >= 0)
-                moveAcross(inactiveModel, inactiveModel.indexOf(needed), needed)
-        } else if (fix.action === "deactivate" && !activeModel.previewing) {
-            moveAcross(activeModel, Number(fix.target), -1)
-        } else if (fix.action === "subscribe") {
-            Theme.openWorkshop(fix.target)
-        } else if (fix.page) {
-            Qt.openUrlExternally(fix.page)
-        } else if (fix.action === "trust") {
-            trust(modId, true)
-        }
-    }
-
-    function fixAll() {
-        if (activeModel.previewing)
+        if (Hub.mods.fix(modId, fix.action, fix.target))
             return
-        const ids = JSON.parse(inactiveModel.packageMods(JSON.stringify(needed)))
-        keepingScroll(() => activeModel.takeAllFrom(inactiveModel, JSON.stringify(ids)))
-        done(Theme.say("Activated the needed mods"))
-        refresh()
+        if (fix.page)
+            Qt.openUrlExternally(fix.page)
+        else
+            Theme.openWorkshop(fix.target)
     }
 
-    function winAll(otherId) {
-        edits.addRule(otherId, selectedId)
-        const to = activeModel.placeBelow(selectedId, otherId)
-        if (to >= 0)
-            keepingScroll(() => activeModel.moveMod(activeModel.indexOf(selectedId), to))
-        refresh()
-    }
-
-    // New update results: the is:updated filter must hear of them.
-    onBehindChanged: if (!Theme.demo) activeModel.recheck()
+    function fixAll() { Hub.mods.fixAll() }
+    function winAll(otherId) { Hub.mods.winOver(selectedId, otherId) }
 
     // No warning about the game version while the game stays on `version`;
     // "" brings the warnings back.
     function setVersionAside(version) {
         const before = Hub.settings.report.versionAsideFor || ""
         Hub.settings.keep("versionAsideFor", version)
-        keepingScroll(() => activeModel.recheck())
-        inactiveModel.recheck()
-        refresh()
         if (version !== "")
             Notices.offer(Theme.fill("Game version warnings are ignored for RimWorld {}", version), Theme.say("Undo"), () => setVersionAside(before))
     }
 
     // The selected mods that are warned about for the game version they list.
-    // Read again when the problems change, though they are not passed.
-    readonly property var versionWarned: selectedCount < 2 || troubles === null ? [] : JSON.parse(activeModel.versionWarned(JSON.stringify(selectedIds)))
+    readonly property var versionWarned: selectedCount < 2 || !Hub.mods.overview ? [] : Hub.mods.versionWarned(selectedIds)
     function trustSelected(yes) {
-        const ids = yes ? versionWarned : selectedIds
-        keepingScroll(() => {
-            for (const id of ids)
-                edits.setVersionOk(id, yes)
-            activeModel.recheck()
-        })
-        inactiveModel.recheck()
-        refresh()
-        overview = JSON.parse(activeModel.overview())
+        Hub.mods.trust(yes ? versionWarned : selectedIds, yes)
     }
-
     function trust(modId, yes) {
-        keepingScroll(() => { edits.setVersionOk(modId, yes); activeModel.recheck() })
-        inactiveModel.recheck()
-        refresh()
-        // Settings lists the mods marked.
-        overview = JSON.parse(activeModel.overview())
+        Hub.mods.trust([modId], yes)
     }
 
-    function putInSub(modId, name) {
-        keepingScroll(() => {
-            edits.setSub(modId, name)
-            activeModel.sync()
-            inactiveModel.sync()
-        })
-        refresh()
-    }
-    // The sub-category goes; its mods stay in the category.
-    function removeSub(model, row) {
-        keepingScroll(() => {
-            model.removeSub(row)
-            activeModel.sync()
-            inactiveModel.sync()
-        })
-        refresh()
-    }
+    function putInSub(modId, name) { Hub.mods.group([modId], name) }
+    // The group goes; its mods stay in the category.
+    function removeSub(model, row) { Hub.mods.removeSub(model.active, row) }
     signal subNameRequested(int modId)
     // "tag" or "sub": ask for the word to give every selected mod.
     signal bulkRequested(string what)
     readonly property var selectedIds: selectedId < 0 ? [] : [selectedId].concat(Object.keys(also).map(Number))
 
-    function tagSelected(tag) {
-        const model = selectedActive ? activeModel : inactiveModel
-        const ids = selectedIds
-        keepingScroll(() => {
-            for (const id of ids) {
-                edits.addTag(id, tag)
-                model.tagsChanged(id)
-            }
-        })
-        Notices.say(Theme.plural(ids.length, "Tagged {} mod: {}", "Tagged {} mods: {}", tag), "ok")
-    }
-
-    function subSelected(name) {
-        const ids = selectedIds
-        keepingScroll(() => {
-            for (const id of ids)
-                edits.setSub(id, name)
-            activeModel.sync()
-            inactiveModel.sync()
-        })
-    }
-
+    function tagSelected(tag) { Hub.mods.addTag(selectedIds, tag) }
+    function subSelected(name) { Hub.mods.group(selectedIds, name) }
     // Each selected mod to the top or bottom of its category's stretch,
     // keeping their order among themselves. One step for Undo.
-    function selectedToEdge(top) {
-        const ids = selectedIds
-        keepingScroll(() => activeModel.moveAllToEdge(JSON.stringify(ids), top))
-        done(Theme.plural(ids.length, "Moved {} mod", "Moved {} mods"))
-    }
+    function selectedToEdge(top) { Hub.mods.toEdge(selectedIds, top) }
 
     // T and N on a row: type the selected mod's tags or its note.
     signal editRequested(string what)
 
     // How many mods Sort would move now; counted a moment after the
     // list last changed, not on every change.
-    property int sortPending: 0
-    property Timer sortCount: Timer {
-        interval: 400
-        onTriggered: mods.sortPending = mods.active.filesRead && !mods.active.previewing ? mods.active.sortPending() : 0
-    }
-    onChanged: { tick++; sortCount.restart(); countFresh(); overview = JSON.parse(activeModel.overview()) }
+    readonly property int sortPending: Hub.mods.sortPending
+    property Timer sortCount: Timer { interval: 400; onTriggered: Hub.mods.countSortPending() }
     property Connections sortWatch: Connections {
-        target: mods.active
+        target: Hub.mods
+        function onUnsavedChanged() { mods.sortCount.restart() }
         function onFilesReadChanged() { mods.sortCount.restart() }
         function onPreviewingChanged() { mods.sortCount.restart() }
-    }
-    signal binRequested(string name, string folder)
-
-    // Why the last copy or removal of a mod did not work; empty when it did.
-    property string upkeepProblem
-    function copyToLocal(folder) { backend.copyToLocal(folder) }
-    property Connections copies: Connections {
-        target: mods.backend
-        function onCopied(problem) {
-            mods.upkeepProblem = problem
-            if (problem === "")
-                activeModel.rescan()
+        function onLibraryVersionChanged() {
+            mods.select(-1, false)
+            mods.rescanned()
+        }
+        function onDone(said) {
+            Notices.offer(said, Theme.say("Undo"), () => Hub.mods.undo())
+        }
+        function onTold(said, tone) {
+            Notices.say(said, tone)
         }
     }
-    function binMod(folder) {
-        upkeepProblem = backend.binMod(folder)
-        if (upkeepProblem === "")
-            activeModel.rescan()
+    property Connections countWatch: Connections {
+        target: Hub.mods.active
+        function onCountChanged() { Qt.callLater(mods.restoreLeftOff) }
     }
+    property Binding filterHeld: Binding { target: Hub.mods; property: "filter"; value: mods.filtered }
+    property Binding headingsHeld: Binding { target: Hub.mods; property: "headings"; value: mods.prefs.headings !== 0 }
+    property Binding byNameHeld: Binding { target: Hub.mods; property: "byName"; value: mods.prefs.inactiveByName }
+    property Binding selectedHeld: Binding { target: Hub.mods; property: "selected"; value: mods.selectedId }
+
+    signal binRequested(string name, string folder, int modId)
+
+    // Why the last copy or removal of a mod did not work; empty when it did.
+    readonly property string upkeepProblem: Hub.mods.upkeepProblem
+    function copyToLocal(modId) { Hub.mods.copyToLocal(modId) }
+    function binMod(modId) { Hub.mods.bin(modId) }
 
     readonly property Columns columns: Columns {
         prefs: mods.prefs
         loadTimes: mods.overview.loadTimes === true
-        onShownByAsked: mods.keepingScroll(() => activeModel.showBy(shownBy, descending))
+        onShownByAsked: Hub.mods.showBy(shownBy, descending)
     }
     // The colours a category's mark can take, at this place in an item.
     function categoryMenu(item, x, y, category) {
@@ -345,14 +238,7 @@ Item {
         menuRequested(item, x, y, entries)
     }
 
-    function fileUnder(modId, label) {
-        keepingScroll(() => {
-            edits.setCategory(modId, label)
-            activeModel.sync()
-            inactiveModel.sync()
-        })
-        refresh()
-    }
+    function fileUnder(modId, label) { Hub.mods.fileUnder(modId, label) }
 
     function categoryChoices(modId) {
         const chosen = about(modId).categoryChosen || ""
@@ -395,45 +281,28 @@ Item {
     // Alt + Up and Alt + Down: the selected mod one place up or down.
     function nudge(model, by) {
         const at = model.indexOf(selectedId)
-        const to = model.nudgeTo(selectedId, by)
-        if (to < 0 || activeModel.previewing || (model === activeModel && columns.shownBy !== ""))
+        const to = Hub.mods.nudgeTo(model.active, selectedId, by)
+        if (to < 0 || Hub.mods.previewing || (model.active && columns.shownBy !== ""))
             return
         slide(selectedId, -by)
-        keepingScroll(() => model.moveMod(at, to))
+        Hub.mods.moveMod(model.active, at, to)
         reveal(model, model.rowOf(to), false)
-        refresh()
     }
 
     // The inactive mods installed since the game was last started from here.
-    property var fresh: []
-    function countFresh() {
-        fresh = Theme.demo ? [] : JSON.parse(inactiveModel.freshIds())
-    }
-    onRescanned: { tick++; countFresh() }
-    function activateFresh() {
-        const ids = fresh
-        keepingScroll(() => activeModel.takeAllFrom(inactiveModel, JSON.stringify(ids)))
-        done(Theme.fill("Activated {} new mods", ids.length))
-        countFresh()
-        refresh()
-    }
+    readonly property var fresh: Theme.demo ? [] : (Hub.mods.fresh || [])
+    function activateFresh() { Hub.mods.activateFresh() }
 
-    function keepNote(tags, note) {
-        keepingScroll(() => {
-            edits.setNote(selectedId, tags, note)
-            ;(selectedActive ? activeModel : inactiveModel).tagsChanged(selectedId)
-        })
-        refresh()
-    }
+    function keepNote(tags, note) { Hub.mods.keepNote(selectedId, tags, note) }
 
     function showMod(modId) {
-        const at = activeModel.indexOf(modId)
+        const at = active.indexOf(modId)
         select(modId, at >= 0)
         if (at >= 0)
-            reveal(activeModel, activeModel.rowOf(at), true)
-        else if (inactiveModel.indexOf(modId) >= 0) {
+            reveal(active, active.rowOf(at), true)
+        else if (inactive.indexOf(modId) >= 0) {
             prefs.inactiveHidden = false
-            reveal(inactiveModel, inactiveModel.rowOf(inactiveModel.indexOf(modId)), true)
+            reveal(inactive, inactive.rowOf(inactive.indexOf(modId)), true)
         }
     }
 
@@ -443,29 +312,19 @@ Item {
 
     // `quiet` for a list that is one step of something larger: no
     // snapshot, no line in the history, no notice.
-    function useList(ids, quiet) {
-        const before = quiet ? "" : snapshot("@list")
-        keepingScroll(() => { activeModel.useList(JSON.stringify(ids)); inactiveModel.sync() })
-        if (!quiet) {
-            Notices.keep(["#", ids.length, Theme.kept("Another list taken: {} mod"), Theme.kept("Another list taken: {} mods")], before === "" ? "" : "list " + before)
-            done(Theme.plural(ids.length, "Using a list of {} mod", "Using a list of {} mods"))
-        }
-        refresh()
-    }
+    function useList(ids, quiet) { Hub.mods.useList(ids, !!quiet) }
 
     // The selected mod, by its id in the library; -1 for none.
     property int selectedId: -1
     property bool selectedActive: false
-    property var info: ({})
+    readonly property var info: Hub.mods.details || ({})
     // What the Files tab lists, read from the mod's folder while that tab shows.
-    readonly property var files: tab === 2 && selectedId >= 0 && info ? JSON.parse(activeModel.files(selectedId)) : ({})
-    property var overview: ({})
+    readonly property var files: tab === 2 && selectedId >= 0 ? (Hub.mods.filesOf(selectedId) || ({})) : ({})
 
     function select(modId, inActive) {
         selectedId = modId
         selectedActive = inActive
         also = ({})
-        info = modId >= 0 ? about(modId) : ({})
         if (leftOffRestored)
             prefs.lastMod = modId >= 0 ? String(info.packageId || "").toLowerCase() : ""
     }
@@ -495,8 +354,7 @@ Item {
     function selectThrough(modId, inActive) {
         if (selectedId < 0 || inActive !== selectedActive)
             return select(modId, inActive)
-        const model = inActive ? activeModel : inactiveModel
-        const others = JSON.parse(model.othersThrough(selectedId, modId))
+        const others = Hub.mods.othersThrough(inActive, selectedId, modId)
         if (!others)
             return
         const next = {}
@@ -506,19 +364,8 @@ Item {
     }
 
     function moveSelected() {
-        const from = selectedActive ? activeModel : inactiveModel
-        const to = from === activeModel ? inactiveModel : activeModel
-        const ids = selectedIds
-        keepingScroll(() => to.takeAllFrom(from, JSON.stringify(ids)))
-        done(from === activeModel ? Theme.plural(ids.length, "Deactivated {} mod", "Deactivated {} mods") : Theme.plural(ids.length, "Activated {} mod", "Activated {} mods"))
+        Hub.mods.takeAll(selectedActive, selectedIds)
         select(-1, false)
-    }
-
-    // Reads the selected mod's details again; the others selected with it stay.
-    function refresh() {
-        const others = also
-        select(selectedId, selectedActive)
-        also = others
     }
 
     // How many active Workshop mods are behind their Workshop version, once
@@ -533,33 +380,32 @@ Item {
     property int problemRow: -1
     property int problemPlace: 0
     property int problemMod: -1
-    readonly property int problemCount: errors + activeModel.warnings >= 0 && overview ? activeModel.problemCount() : 0
+    readonly property int problemCount: Hub.mods.troubled
     function showNextProblem() {
         showProblem(true)
     }
     function showProblem(forward) {
-        problemRow = activeModel.nextProblem(problemRow, forward)
-        problemPlace = activeModel.problemPlace(problemRow)
+        problemRow = Hub.mods.nextProblem(problemRow, forward)
+        problemPlace = Hub.mods.problemPlace(problemRow)
         if (problemRow < 0)
             return
-        reveal(activeModel, problemRow, false)
-        select(activeModel.modIdAt(problemRow), true)
+        reveal(active, problemRow, false)
+        select(active.modIdAt(problemRow), true)
         problemMod = selectedId
     }
 
     function previewSort() {
-        if (activeModel.previewing || !activeModel.filesRead)
+        if (Hub.mods.previewing || !Hub.mods.filesRead)
             return
         sorting = true
         slideEnd.restart()
-        keepingScroll(() => activeModel.previewSort())
+        Hub.mods.previewSort()
         // Once the list has laid its new rows out: before that it has no place to go to.
         Qt.callLater(() => {
-            const row = activeModel.firstMoved()
+            const row = Hub.mods.firstMoved()
             if (row >= 0)
-                reveal(activeModel, row, true)
+                reveal(active, row, true)
         })
-        refresh()
     }
 
     // Keeps the load order as it is now among the snapshots (Lists menu),
@@ -569,59 +415,26 @@ Item {
         return kind + " " + Theme.moment(Date.now() / 1000).replace(":", ".") + "." + String(new Date().getSeconds()).padStart(2, "0")
     }
     function snapshot(kind) {
-        if (!backend || Theme.demo || checkMode !== "")
+        if (!keptLists || Theme.demo || checkMode !== "")
             return ""
         const name = keptName(kind)
         keptLists.snapshot(name)
         return name
     }
-    // Something was done that Undo takes back: say so, with the button.
-    function done(text) {
-        if (checkMode === "")
-            Notices.offer(text, Theme.say("Undo"), () => undo())
-    }
 
-    function endSort(keep) {
-        const applies = keep && activeModel.previewing
-        const before = applies ? snapshot("@sorting") : ""
-        const moves = applies ? activeModel.sortMoveCount() : 0
-        keepingScroll(() => keep ? activeModel.applySort() : activeModel.discardSort())
-        if (applies) {
-            const sorted = ["#", moves, Theme.kept("Sorted: {} mod moved"), Theme.kept("Sorted: {} mods moved")]
-            Notices.keep(sorted, before === "" ? "" : "list " + before)
-            done(Theme.put(sorted))
-        }
-        refresh()
-    }
-
-    // A change resets both lists; the lists put themselves back where
-    // they were.
-    function keepingScroll(change) {
-        changing()
-        change()
-        changed()
-    }
+    function endSort(keep) { Hub.mods.endSort(keep) }
 
     function moveAcross(fromModel, modIndex, modId) {
-        const to = fromModel === activeModel ? inactiveModel : activeModel
-        const name = modId >= 0 ? activeModel.nameOf(modId) : ""
-        keepingScroll(() => to.takeFrom(fromModel, modIndex))
+        Hub.mods.take(fromModel.active, modIndex, -1)
         if (modId >= 0 && modId === selectedId)
-            selectedActive = to === activeModel
-        done(Theme.fill(to === activeModel ? "Activated {}" : "Deactivated {}", name))
-        refresh()
+            selectedActive = !fromModel.active
     }
 
     function toggleSelected() {
-        const from = selectedActive ? activeModel : inactiveModel
+        const from = selectedActive ? active : inactive
         const index = from.indexOf(selectedId)
         if (index >= 0)
             moveAcross(from, index, selectedId)
-    }
-
-    property Connections rulesWatch: Connections {
-        target: mods.edits
-        function onRulesVersionChanged() { mods.refresh() }
     }
 
     readonly property Dragging drag: Dragging {
@@ -633,44 +446,19 @@ Item {
             const place = Math.min(to.modIndex, to.model.count - 1)
             if (from.modIndex !== place) {
                 slide(from.modId, from.modIndex - place)
-                keepingScroll(() => to.model.moveMod(from.modIndex, place))
+                Hub.mods.moveMod(to.model.active, from.modIndex, place)
             }
         } else {
-            keepingScroll(() => to.model.takeFromAt(from.model, from.modIndex, to.modIndex))
+            Hub.mods.take(from.model.active, from.modIndex, to.modIndex)
             if (from.modId >= 0 && from.modId === selectedId)
-                selectedActive = to.model === activeModel
+                selectedActive = to.model.active
         }
-        refresh()
     }
 
     // The two mods being compared, { earlier, later } by library id; null
     // when the lists are showing.
     property var comparing: null
     property var compareView: null
-
-    ModListModel {
-        id: inactiveModel
-        demoCount: 300
-        byName: prefs.inactiveByName
-        onByNameChanged: reshape()
-        Component.onCompleted: Theme.demo ? reload() : loadInstalled(false)
-    }
-    ModListModel {
-        id: activeModel
-        demoCount: 2000
-        headings: prefs.headings
-        onHeadingsChanged: reshape()
-        Component.onCompleted: Theme.demo ? reload() : loadInstalled(true)
-        onStatusChanged: mods.overview = JSON.parse(overview())
-        onCountChanged: Qt.callLater(mods.restoreLeftOff)
-        onConflictsVersionChanged: mods.refresh()
-        onLibraryVersionChanged: {
-            // The mod folders were read again: ids from before are stale.
-            mods.select(-1, false)
-            inactiveModel.loadInstalled(false)
-            mods.rescanned()
-        }
-    }
 
     function nthMod(model, position) {
         const row = model.rowOf(position)
@@ -682,7 +470,7 @@ Item {
     }
 
     function firstFrame() {
-        activeModel.markReady()
+        Hub.mods.markReady()
         firstFrameShown()
     }
 }

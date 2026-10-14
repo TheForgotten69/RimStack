@@ -1,0 +1,429 @@
+//! What QML asks of the Mods screen: each change made, kept on record
+//! where it can be taken back, and shown.
+
+use super::{id, ids, qobject};
+use crate::workspace::load_order::Side;
+use core::pin::Pin;
+use cxx_qt::{CxxQtType, Threading};
+use cxx_qt_lib::{QString, QVariant};
+use rimstack_core::base::translate::{kept, named};
+use rimstack_core::mods::library::ModId;
+use rimstack_core::{say, say_n};
+use serde_json::json;
+
+impl qobject::ModsData {
+    fn done_said(mut self: Pin<&mut Self>, said: String) {
+        if self.records {
+            self.as_mut().done(QString::from(&said));
+        }
+    }
+
+    fn order_mut(self: Pin<&mut Self>) -> &mut crate::workspace::load_order::LoadOrder {
+        &mut self.rust_mut().get_mut().order
+    }
+
+    pub(super) fn move_mod(mut self: Pin<&mut Self>, active: bool, from: i32, to: i32) {
+        let (Ok(from), Ok(to)) = (usize::try_from(from), usize::try_from(to)) else {
+            return;
+        };
+        let app = self.app();
+        self.as_mut()
+            .order_mut()
+            .move_mod(&app, Side::of(active), from, to);
+        self.changed();
+    }
+
+    pub(super) fn take(mut self: Pin<&mut Self>, from_active: bool, index: i32, to: i32) {
+        let Ok(index) = usize::try_from(index) else {
+            return;
+        };
+        let from = Side::of(from_active);
+        let name = self
+            .order
+            .list(from)
+            .mods()
+            .get(index)
+            .map(|m| m.name.clone());
+        let Some(name) = name else {
+            return;
+        };
+        let app = self.app();
+        let to = usize::try_from(to).ok();
+        self.as_mut().order_mut().take(&app, from, index, to);
+        self.as_mut().changed();
+        let said = match from {
+            Side::Inactive => say!("Activated {}", name),
+            Side::Active => say!("Deactivated {}", name),
+        };
+        self.done_said(said);
+    }
+
+    pub(super) fn take_all(mut self: Pin<&mut Self>, from_active: bool, given: &QVariant) {
+        let ids = ids(given);
+        if ids.is_empty() {
+            return;
+        }
+        let from = Side::of(from_active);
+        let app = self.app();
+        self.as_mut().order_mut().take_all(&app, from, &ids);
+        self.as_mut().changed();
+        let said = match from {
+            Side::Inactive => say_n!(ids.len(), "Activated {} mod", "Activated {} mods"),
+            Side::Active => say_n!(ids.len(), "Deactivated {} mod", "Deactivated {} mods"),
+        };
+        self.done_said(said);
+    }
+
+    pub(super) fn to_edge(mut self: Pin<&mut Self>, given: &QVariant, top: bool) {
+        let ids = ids(given);
+        let app = self.app();
+        self.as_mut().order_mut().to_edge(&app, &ids, top);
+        self.as_mut().changed();
+        self.done_said(say_n!(ids.len(), "Moved {} mod", "Moved {} mods"));
+    }
+
+    pub(super) fn toggle_category(mut self: Pin<&mut Self>, active: bool, category: i32) {
+        let found = usize::try_from(category).ok();
+        let Some(&category) = found.and_then(|at| rimstack_core::mods::list::Category::ALL.get(at))
+        else {
+            return;
+        };
+        let app = self.app();
+        self.as_mut()
+            .order_mut()
+            .toggle_category(&app, Side::of(active), category);
+        self.show();
+    }
+
+    pub(super) fn toggle_sub(mut self: Pin<&mut Self>, active: bool, row: i32) {
+        let Ok(row) = usize::try_from(row) else {
+            return;
+        };
+        let app = self.app();
+        self.as_mut()
+            .order_mut()
+            .toggle_sub(&app, Side::of(active), row);
+        self.show();
+    }
+
+    pub(super) fn remove_sub(mut self: Pin<&mut Self>, active: bool, row: i32) {
+        let group = usize::try_from(row)
+            .ok()
+            .and_then(|row| self.order.group_on(Side::of(active), row));
+        let Some((tag, ids)) = group else {
+            return;
+        };
+        let app = self.app();
+        app.remove_tag(&ids, &tag);
+        self.as_mut().order_mut().sync(&app);
+        self.show();
+    }
+
+    pub(super) fn show_by(mut self: Pin<&mut Self>, column: &QString, descending: bool) {
+        self.as_mut()
+            .order_mut()
+            .show_by(&column.to_string(), descending);
+        self.show();
+    }
+
+    pub(super) fn undo(mut self: Pin<&mut Self>) {
+        let app = self.app();
+        if self.as_mut().order_mut().undo(&app) {
+            self.changed();
+        }
+    }
+
+    pub(super) fn redo(mut self: Pin<&mut Self>) {
+        let app = self.app();
+        if self.as_mut().order_mut().redo(&app) {
+            self.changed();
+        }
+    }
+
+    pub(super) fn discard_changes(mut self: Pin<&mut Self>) {
+        let app = self.app();
+        self.as_mut().order_mut().discard_changes(&app);
+        self.as_mut().changed();
+        self.done_said(say!("Back to the saved list"));
+    }
+
+    pub(super) fn use_list(mut self: Pin<&mut Self>, given: &QVariant, quiet: bool) {
+        let ids: Vec<String> = crate::qml::values::from_qml(given).unwrap_or_default();
+        let app = self.app();
+        let keep = self.records && !quiet;
+        let before = keep
+            .then(|| app.snapshot("@list", app.session().current()))
+            .flatten();
+        let count = ids.len();
+        self.as_mut().order_mut().use_list(&app, ids);
+        self.as_mut().changed();
+        if keep {
+            let taken = json!([
+                "#",
+                count,
+                named("Another list taken: {} mod"),
+                named("Another list taken: {} mods")
+            ]);
+            app.note_change(taken.to_string(), before.as_deref());
+            let said = say_n!(count, "Using a list of {} mod", "Using a list of {} mods");
+            self.done_said(said);
+        }
+    }
+
+    pub(super) fn save(mut self: Pin<&mut Self>) -> bool {
+        if self.order.previewing() {
+            self.as_mut().end_sort(true);
+        }
+        let app = self.app();
+        let records = self.records;
+        let changes = app.session().changes().kept();
+        let before = records
+            .then(|| app.snapshot("@saving", app.session().saved()))
+            .flatten();
+        let saved = self.as_mut().order_mut().save(&app);
+        let problem = saved
+            .as_ref()
+            .err()
+            .map(ToString::to_string)
+            .unwrap_or_default();
+        self.as_mut().set_save_problem(QString::from(&problem));
+        if saved.is_ok() && records {
+            let changes: serde_json::Value = serde_json::from_str(&changes).unwrap_or_default();
+            app.note_change(
+                kept(named("Saved the load order: {}"), &[changes]),
+                before.as_deref(),
+            );
+        }
+        self.changed();
+        saved.is_ok()
+    }
+
+    pub(super) fn preview_sort(mut self: Pin<&mut Self>) {
+        if !self.files_read {
+            return;
+        }
+        let app = self.app();
+        self.as_mut().order_mut().preview_sort(&app);
+        self.show();
+    }
+
+    pub(super) fn end_sort(mut self: Pin<&mut Self>, keep: bool) {
+        let app = self.app();
+        if !keep {
+            self.as_mut().order_mut().drop_sort(&app);
+            return self.show();
+        }
+        if !self.order.previewing() {
+            return;
+        }
+        let moves = self.order.sort_move_count();
+        let before = self
+            .records
+            .then(|| app.snapshot("@sorting", app.session().current()))
+            .flatten();
+        self.as_mut().order_mut().keep_sort(&app);
+        self.as_mut().changed();
+        if self.records {
+            let sorted = json!([
+                "#",
+                moves,
+                named("Sorted: {} mod moved"),
+                named("Sorted: {} mods moved")
+            ]);
+            app.note_change(sorted.to_string(), before.as_deref());
+            self.done_said(say_n!(
+                moves,
+                "Sorted: {} mod moved",
+                "Sorted: {} mods moved"
+            ));
+        }
+    }
+
+    pub(super) fn count_sort_pending(mut self: Pin<&mut Self>) {
+        let app = self.app();
+        let pending = match self.files_read && !self.order.previewing() {
+            true => self.as_mut().order_mut().sort_pending(&app) as i32,
+            false => 0,
+        };
+        self.set_sort_pending(pending);
+    }
+
+    pub(super) fn rescan(mut self: Pin<&mut Self>) {
+        if self.rescanning || self.demo {
+            return;
+        }
+        self.as_mut().set_rescanning(true);
+        let app = self.app();
+        crate::background::run(self.qt_thread(), move || app.rescan(), |_, ()| {});
+    }
+
+    pub(super) fn trust(mut self: Pin<&mut Self>, given: &QVariant, yes: bool) {
+        let app = self.app();
+        app.set_version_ok(&ids(given), yes);
+        self.as_mut().order_mut().recheck(&app);
+        self.show();
+    }
+
+    pub(super) fn keep_note(mut self: Pin<&mut Self>, mod_id: i32, tags: &QString, note: &QString) {
+        let Some(id) = id(mod_id) else {
+            return;
+        };
+        let app = self.app();
+        app.set_note(id, &tags.to_string(), &note.to_string());
+        self.as_mut().order_mut().sync(&app);
+        self.show();
+    }
+
+    pub(super) fn add_tag(mut self: Pin<&mut Self>, given: &QVariant, tag: &QString) {
+        let ids = ids(given);
+        let (app, tag) = (self.app(), tag.to_string());
+        app.add_tag(&ids, &tag);
+        self.as_mut().order_mut().sync(&app);
+        self.as_mut().show();
+        let said = say_n!(ids.len(), "Tagged {} mod: {}", "Tagged {} mods: {}", tag);
+        self.told(QString::from(&said), QString::from("ok"));
+    }
+
+    pub(super) fn group(mut self: Pin<&mut Self>, given: &QVariant, name: &QString) {
+        let app = self.app();
+        app.set_group(&ids(given), &name.to_string());
+        self.as_mut().order_mut().sync(&app);
+        self.show();
+    }
+
+    pub(super) fn file_under(mut self: Pin<&mut Self>, mod_id: i32, label: &QString) {
+        let Some(id) = id(mod_id) else {
+            return;
+        };
+        let app = self.app();
+        app.set_category(id, &label.to_string());
+        self.as_mut().order_mut().sync(&app);
+        self.show();
+    }
+
+    pub(super) fn add_rule(self: Pin<&mut Self>, first: i32, then: i32) {
+        self.change_rule(first, then, true);
+    }
+
+    pub(super) fn remove_rule(self: Pin<&mut Self>, first: i32, then: i32) {
+        self.change_rule(first, then, false);
+    }
+
+    fn change_rule(self: Pin<&mut Self>, first: i32, then: i32, add: bool) {
+        if let (Some(first), Some(then)) = (id(first), id(then)) {
+            self.app().change_rule(first, then, add);
+            self.show();
+        }
+    }
+
+    pub(super) fn win_over(mut self: Pin<&mut Self>, mod_id: i32, other: i32) {
+        let (Some(id), Some(other)) = (id(mod_id), id(other)) else {
+            return;
+        };
+        let app = self.app();
+        app.change_rule(other, id, true);
+        if let Some((from, to)) = self.order.list(Side::Active).below(id, other) {
+            self.as_mut()
+                .order_mut()
+                .move_mod(&app, Side::Active, from, to);
+        }
+        self.changed();
+    }
+
+    pub(super) fn fix(
+        mut self: Pin<&mut Self>,
+        mod_id: i32,
+        action: &QString,
+        target: &QString,
+    ) -> bool {
+        if self.order.previewing() {
+            return true;
+        }
+        let target = target.to_string();
+        match action.to_string().as_str() {
+            "activate" => {
+                let found = self.package_mod(false, &QString::from(&target));
+                if let Some(at) =
+                    id(found).and_then(|i| self.order.list(Side::Inactive).position_of(i))
+                {
+                    self.take(false, at as i32, -1);
+                }
+                true
+            }
+            "deactivate" => {
+                let at = target.parse::<i32>().unwrap_or(-1);
+                self.take(true, at, -1);
+                true
+            }
+            "trust" => {
+                self.as_mut()
+                    .trust(&crate::qml::values::to_qml(&[mod_id]), true);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub(super) fn fix_all(mut self: Pin<&mut Self>) {
+        if self.order.previewing() {
+            return;
+        }
+        let needed = self.order.needed();
+        let ids = self.needed_ids(&needed);
+        let app = self.app();
+        self.as_mut()
+            .order_mut()
+            .take_all(&app, Side::Inactive, &ids);
+        self.as_mut().changed();
+        self.done_said(say!("Activated the needed mods"));
+    }
+
+    pub(super) fn activate_fresh(mut self: Pin<&mut Self>) {
+        let app = self.app();
+        let fresh: Vec<ModId> = self.order.fresh(&app, Side::Inactive);
+        if fresh.is_empty() || self.order.previewing() {
+            return;
+        }
+        self.as_mut()
+            .order_mut()
+            .take_all(&app, Side::Inactive, &fresh);
+        self.as_mut().changed();
+        self.done_said(say_n!(
+            fresh.len(),
+            "Activated {} new mod",
+            "Activated {} new mods"
+        ));
+    }
+
+    pub(super) fn bin(mut self: Pin<&mut Self>, mod_id: i32) {
+        let Some(id) = id(mod_id) else {
+            return;
+        };
+        let binned = self.app().bin_mod(id);
+        let problem = binned
+            .as_ref()
+            .err()
+            .map(ToString::to_string)
+            .unwrap_or_default();
+        self.as_mut().set_upkeep_problem(QString::from(&problem));
+        if binned.is_ok() {
+            self.rescan();
+        }
+    }
+
+    pub(super) fn copy_to_local(mut self: Pin<&mut Self>, mod_id: i32) {
+        let Some(id) = id(mod_id) else {
+            return;
+        };
+        self.as_mut().set_upkeep_problem(QString::default());
+        let app = self.app();
+        crate::background::run(
+            self.qt_thread(),
+            move || app.copy_to_local(id).err().map(|e| e.to_string()),
+            |mut me, problem| match problem {
+                Some(problem) => me.set_upkeep_problem(QString::from(&problem)),
+                None => me.as_mut().rescan(),
+            },
+        );
+    }
+}

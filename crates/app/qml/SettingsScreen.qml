@@ -13,8 +13,6 @@ Item {
     required property KeptLists keptLists
     required property Downloads downloads
     required property LogReader reader
-    // The Mods screen's load-order model: it owns the community rules download.
-    required property ModListModel rules
     signal useList(var ids)
     signal trust(int modId, bool yes)
     signal font(string family)
@@ -125,7 +123,6 @@ Item {
                     Accessible.name: Theme.fill("Use this folder for {}", folder.title)
                     onClicked: {
                         screen.keep(folder.name, box.text)
-                        Mods.active.rereadFolders()
                     }
                 }
                 Btn { enabled: folder.inUse !== ""; icon: "folder-open"; tip: Theme.say("Open folder"); onClicked: Qt.openUrlExternally(Theme.fileUrl(folder.inUse)) }
@@ -335,7 +332,7 @@ Item {
                         Hub.settings.useLanguage(name)
                         // What the mods' own lines say is written anew in it.
                         if (!Theme.demo)
-                            Mods.active.rescan()
+                            Hub.mods.rescan()
                     }
                     title: Theme.say("Language")
                     tip: Theme.say("A file of the same name beside the settings stands over a language, text by text; one left empty there stays as it is.")
@@ -631,9 +628,6 @@ Item {
                     onReset: version(0)
                     function version(choice) {
                         Hub.settings.versionWarnings(choice)
-                        Mods.active.recheck()
-                        Mods.inactive.recheck()
-                        Mods.refresh()
                     }
                     tip: Theme.say("A mod that does not list the installed game version. For this version: the warnings return when the game is updated. One mod can be excused from its menu.")
                     Choice {

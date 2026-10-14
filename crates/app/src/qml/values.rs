@@ -49,6 +49,16 @@ fn from_value(value: &Value) -> QVariant {
     }
 }
 
+/// JavaScript has only one kind of number: an id QML holds is a double.
+fn whole_or_not(n: f64) -> Value {
+    const EXACT: f64 = 9_007_199_254_740_992.0;
+    if n.fract() == 0.0 && n.abs() <= EXACT {
+        Value::from(n as i64)
+    } else {
+        Number::from_f64(n).map_or(Value::Null, Value::Number)
+    }
+}
+
 fn to_value(given: &QVariant) -> Value {
     let number = |n: Option<Number>| n.map_or(Value::Null, Value::Number);
     match given.type_id() {
@@ -61,7 +71,7 @@ fn to_value(given: &QVariant) -> Value {
         QMetaTypeType::UShort | QMetaTypeType::ULong | QMetaTypeType::ULongLong => {
             Value::from(given.value_or_default::<u64>())
         }
-        QMetaTypeType::Double => number(Number::from_f64(given.value_or_default::<f64>())),
+        QMetaTypeType::Double => whole_or_not(given.value_or_default::<f64>()),
         QMetaTypeType::Float => number(Number::from_f64(given.value_or_default::<f32>().into())),
         QMetaTypeType::QString => Value::String(given.value_or_default::<QString>().to_string()),
         QMetaTypeType::QStringList => {
@@ -138,5 +148,17 @@ mod tests {
             Some(3_000_000_000)
         );
         assert_eq!(from_qml::<i32>(&QVariant::from(&5_i32)), Some(5));
+    }
+
+    #[test]
+    fn ids_held_by_javascript_as_doubles_read_as_whole_numbers() {
+        let mut list = QList::<QVariant>::default();
+        list.append(QVariant::from(&3.0_f64));
+        list.append(QVariant::from(&7.0_f64));
+        assert_eq!(
+            from_qml::<Vec<i32>>(&QVariant::from(&list)),
+            Some(vec![3, 7])
+        );
+        assert_eq!(from_qml::<f64>(&QVariant::from(&0.5_f64)), Some(0.5));
     }
 }

@@ -31,7 +31,7 @@ Column {
             Btn {
                 icon: "x"
                 tip: Theme.say("Remove this rule")
-                onClicked: own.modelData.how === "after" ? Mods.edits.removeRule(own.modelData.modId, Mods.selectedId) : Mods.edits.removeRule(Mods.selectedId, own.modelData.modId)
+                onClicked: own.modelData.how === "after" ? Hub.mods.removeRule(own.modelData.modId, Mods.selectedId) : Hub.mods.removeRule(Mods.selectedId, own.modelData.modId)
             }
         }
     }

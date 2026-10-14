@@ -51,7 +51,6 @@ Column {
                     Mods.textureTools.unhideIn(folder)
                     if (Mods.compareView)
                         Mods.compareView.reload()
-                    Mods.active.recheck()
                 })
             }
         }

@@ -1,17 +1,24 @@
 //! What the details panel and the summary show: everything known about
-//! one mod, and about the whole install. Both go to QML as JSON.
+//! one mod, and about the whole install.
 
-use super::*;
+use super::{rules, LoadOrder};
+use crate::App;
+use rimstack_core::base::locks::Shared;
+use rimstack_core::mods::describe::{self, Trouble};
 use rimstack_core::mods::details::{self, Clash, Named, OwnRule, Slow};
 use rimstack_core::mods::library::ModId;
+use rimstack_core::mods::list::{Category, Mod};
+use rimstack_core::mods::tree::folder_tree;
+use rimstack_core::rimworld::loadfolders;
 use rimstack_core::rimworld::paths::Source;
+use rimstack_core::say;
 use serde::Serialize;
 
 /// How many patched methods the details list before saying how many more.
 const MOST_PATCHES: usize = 200;
 
 #[derive(Serialize)]
-pub(crate) struct FixSaid {
+pub struct FixSaid {
     action: &'static str,
     target: String,
     label: &'static str,
@@ -32,7 +39,7 @@ impl FixSaid {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ProblemSaid {
+pub struct ProblemSaid {
     /// -1 for a mod that is not installed.
     mod_id: i64,
     name: String,
@@ -58,7 +65,7 @@ impl ProblemSaid {
 }
 
 #[derive(Serialize)]
-pub(crate) struct Detected {
+pub struct Detected {
     name: String,
     why: String,
     /// Compiled code says so; otherwise it is a hint the game does not need.
@@ -66,27 +73,27 @@ pub(crate) struct Detected {
 }
 
 #[derive(Serialize)]
-struct Branch {
+pub struct Branch {
     folder: String,
     files: usize,
 }
 
 /// What the Files tab lists: read from the mod's folder when it shows.
 #[derive(Serialize, Default)]
-struct Files {
+pub struct Files {
     tree: Vec<Branch>,
     assemblies: String,
 }
 
 #[derive(Serialize)]
-struct Patched {
+pub struct Patched {
     method: String,
     note: String,
 }
 
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
-struct Details {
+pub struct Details {
     name: String,
     source: &'static str,
     contains: String,
@@ -133,11 +140,20 @@ struct Details {
     /// The mods of `loads_after` that `requires` already lists.
     required_above: usize,
     placement: Option<String>,
+    /// One of its problems is only the game version it lists.
+    offer_trust: bool,
+    /// Neither the game's own nor in the load order: it may go to the bin.
+    can_bin: bool,
+    /// The tags it can be grouped under: its own, then the groups beside
+    /// it in its category; not the one it is in.
+    group_choices: Vec<String>,
+    workshop_page: Option<String>,
+    steam_page: Option<String>,
 }
 
 /// The problems that one kind of fix solves.
 #[derive(Serialize)]
-struct ProblemGroup {
+pub struct ProblemGroup {
     name: &'static str,
     error: bool,
     lines: Vec<ProblemSaid>,
@@ -145,7 +161,7 @@ struct ProblemGroup {
 
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
-struct Overview {
+pub struct Overview {
     game_version: String,
     /// What a mod can be filed under by hand: every category but the game's.
     categories: Vec<&'static str>,
@@ -167,32 +183,23 @@ struct Overview {
     community_time: Option<i64>,
 }
 
-fn installed(
-    loaded: &crate::Loaded,
-    mod_id: i32,
-) -> Option<&rimstack_core::mods::library::Installed> {
-    let (library, _) = loaded.as_ref().ok()?;
-    library.get(ModId::from_qml(mod_id)?)
-}
-
-impl qobject::ModListModel {
-    pub(crate) fn details(&self, mod_id: i32) -> QString {
-        let loaded = crate::app().library();
+impl LoadOrder {
+    /// Everything known about one installed mod; the defaults for an id
+    /// from an earlier reading of the folders.
+    pub fn details(&mut self, app: &App, id: ModId) -> Details {
+        let loaded = app.library();
         let Ok((library, _)) = &*loaded else {
-            return crate::reports::said(&Details::default());
+            return Details::default();
         };
-        let Some((id, m)) = ModId::from_qml(mod_id).and_then(|i| Some((i, library.get(i)?))) else {
-            return crate::reports::said(&Details::default());
+        let Some(m) = library.get(id) else {
+            return Details::default();
         };
         let workshop = m.source == Source::Workshop;
-        let note = m.key().and_then(|k| {
-            let notes = crate::app().notes().reading();
-            notes.get(&k).cloned()
-        });
+        let note = m.key().and_then(|k| app.notes().reading().get(&k).cloned());
         let note = note.unwrap_or_default();
-        let replacements = crate::app().replacements();
+        let replacements = app.replacements();
         let replaced = replacements.get(&m.folder).filter(|_| workshop);
-        let steam_record = crate::app().steam_record();
+        let steam_record = app.steam_record();
         let (times, sizes) = &*steam_record;
         let mut said = Details {
             name: m.display_name().to_string(),
@@ -212,11 +219,9 @@ impl qobject::ModListModel {
                 .get(&m.folder)
                 .filter(|_| workshop)
                 .map(|bytes| *bytes as f64 / 1_048_576.0),
-            texture_count: crate::app().texture_count(&m.path),
-            dds_made: rimstack_core::mods::textures::Manifest::read(
-                &crate::texture_tools::manifest_file(crate::app()),
-            )
-            .made_in(&m.path),
+            texture_count: app.texture_count(&m.path),
+            dds_made: rimstack_core::mods::textures::Manifest::read(&app.texture_manifest_file())
+                .made_in(&m.path),
             requires: details::required(library.requirements(m)),
             load_folders: self.load_folders(library, m),
             code: describe::code(&m.code.facts),
@@ -231,10 +236,8 @@ impl qobject::ModListModel {
                 said.description = about.description.clone().unwrap_or_default();
                 said.description_rich = rimstack_core::base::markup::rich(&said.description);
                 said.url = about.url.clone().unwrap_or_default();
-                said.load_time = rimstack_core::rimworld::startup::in_words(
-                    &crate::app().startup(),
-                    &about.package_id,
-                );
+                said.load_time =
+                    rimstack_core::rimworld::startup::in_words(&app.startup(), &about.package_id);
                 said.made_for = details::made_for(&about.supported_versions, &library.game_version);
             }
             Err(reason) => said.unreadable = Some(reason.to_string()),
@@ -243,10 +246,29 @@ impl qobject::ModListModel {
         said.category = chosen.or(library.category_of(id)).map(Category::label);
         said.note = note.text;
         said.category_chosen = chosen.map_or("", Category::label).to_string();
-        let listed = self.list.mods().iter().find(|x| x.installed == Some(id));
-        said.sub = listed.map(|x| x.sub.clone()).unwrap_or_default();
-        let active = library.arrange(crate::app().session().current()).active;
-        let others: Vec<(&str, &[rimstack_core::rimworld::code::Aim])> = active
+        let listed = [&self.active, &self.inactive]
+            .into_iter()
+            .find_map(|list| Some((list, list.mods().iter().find(|x| x.installed == Some(id))?)));
+        said.sub = listed.map(|(_, x)| x.sub.clone()).unwrap_or_default();
+        let beside = listed
+            .map(|(list, x)| list.subs(x.category))
+            .unwrap_or_default();
+        let mut choices: Vec<String> = note.tags.iter().cloned().chain(beside).collect();
+        choices.dedup();
+        let mut seen = std::collections::HashSet::new();
+        choices.retain(|tag| *tag != said.sub && seen.insert(tag.clone()));
+        said.group_choices = choices;
+        said.can_bin = m.source != Source::Official && self.active.position_of(id).is_none();
+        if workshop {
+            said.workshop_page = Some(format!(
+                "https://steamcommunity.com/sharedfiles/filedetails/?id={}",
+                m.folder
+            ));
+            said.steam_page = Some(format!("steam://url/CommunityFilePage/{}", m.folder));
+        }
+        let others: Vec<(&str, &[rimstack_core::rimworld::code::Aim])> = self
+            .active
+            .mods()
             .iter()
             .filter_map(|other| other.installed.filter(|&i| i != id))
             .filter_map(|i| library.get(i))
@@ -257,16 +279,14 @@ impl qobject::ModListModel {
             .into_iter()
             .map(|(method, note)| Patched { method, note })
             .collect();
-        if let Ok(at) = usize::try_from(self.index_of(mod_id)) {
-            let listed = &self.list.mods()[at];
+        if let Some(at) = self.active.position_of(id) {
+            let listed = &self.active.mods()[at];
             said.category = Some(listed.category.label());
             let own = self.troubles.get(at).map(Vec::as_slice).unwrap_or_default();
             said.problems = own.iter().map(|t| ProblemSaid::of(listed, t)).collect();
-            let near = details::neighbours(
-                &all_rules(crate::app(), library, self.list.mods()),
-                at,
-                self.list.mods(),
-            );
+            said.offer_trust = own.iter().any(|t| t.fix == describe::Fix::Trust);
+            let found = rules::all_rules(app, &mut self.detected, library, self.active.mods());
+            let near = details::neighbours(&found, at, self.active.mods());
             // What Requires lists is counted under "Loads after", not listed again.
             let required = |n: &Named| said.requires.iter().any(|r| r.name == n.name);
             let (above, others): (Vec<Named>, Vec<Named>) =
@@ -274,61 +294,42 @@ impl qobject::ModListModel {
             said.required_above = above.len();
             said.loads_after = others;
             said.loads_before = near.before;
-            said.your_rules = self.own_rules(library, at);
-            said.detected = self.detected(library, at);
-            let clashes = self.texture_conflicts(id);
+            said.your_rules = self.own_rules(app, library, at);
+            said.detected = self.detected_about(app, library, at);
+            let clashes = self.texture_conflicts(app, id);
             said.loses_to = clashes.loses;
             said.wins_over = clashes.wins;
             said.conflict_marks = clashes.marks;
             said.placement = near.bottom.then(|| say!("The community rules keep this mod near the bottom of the list, below everything that does not have to follow it."));
         }
-        crate::reports::said(&said)
+        said
     }
 
-    pub(crate) fn files(&self, mod_id: i32) -> QString {
-        let loaded = crate::app().library();
-        let Some(m) = installed(&loaded, mod_id) else {
-            return crate::reports::said(&Files::default());
+    /// The folders of a mod with how many files each holds, and its
+    /// assemblies. Walks the mod's folder.
+    pub fn files(app: &App, id: ModId) -> Files {
+        let loaded = app.library();
+        let Some(m) = loaded.as_ref().as_ref().ok().and_then(|(l, _)| l.get(id)) else {
+            return Files::default();
         };
-        crate::reports::said(&Files {
+        Files {
             tree: folder_tree(&m.path)
                 .into_iter()
                 .map(|(folder, files)| Branch { folder, files })
                 .collect(),
             assemblies: m.assemblies().join(", "),
-        })
-    }
-
-    pub(crate) fn name_of(&self, mod_id: i32) -> QString {
-        let loaded = crate::app().library();
-        QString::from(installed(&loaded, mod_id).map_or("", |m| m.display_name()))
-    }
-
-    /// The library id of the installed mod with this folded package id
-    /// that is in this list; -1 for none.
-    pub(crate) fn package_mod(&self, key: &QString) -> i32 {
-        let key = key.to_string();
-        let loaded = crate::app().library();
-        let Ok((library, _)) = &*loaded else {
-            return -1;
-        };
-        let has = |m: &&Mod| {
-            let installed = m.installed.and_then(|i| library.get(i));
-            installed.and_then(|i| i.key()).is_some_and(|k| k == key)
-        };
-        let found = self.list.mods().iter().find(has);
-        found.and_then(|m| m.installed).map_or(-1, ModId::to_qml)
+        }
     }
 
     /// The folders of a mod that the game loads from with this load
     /// order, relative to the mod; "(the mod's own folder)" for its root.
-    pub(crate) fn load_folders(
+    fn load_folders(
         &self,
-        library: &Library,
+        library: &rimstack_core::mods::library::Library,
         m: &rimstack_core::mods::library::Installed,
     ) -> Vec<String> {
         let active: std::collections::HashSet<String> = self
-            .list
+            .active
             .mods()
             .iter()
             .filter_map(|x| library.get(x.installed?)?.key())
@@ -346,9 +347,15 @@ impl qobject::ModListModel {
     }
 
     /// What the files of the mod at `at` say about other active mods.
-    pub(crate) fn detected(&self, library: &Library, at: usize) -> Vec<Detected> {
-        let mods = self.list.mods();
-        detected(crate::app(), library, mods)
+    fn detected_about(
+        &mut self,
+        app: &App,
+        library: &rimstack_core::mods::library::Library,
+        at: usize,
+    ) -> Vec<Detected> {
+        let mods = self.active.mods();
+        let found = self.detected.of(app, library, mods);
+        found
             .iter()
             .filter(|d| d.then == at)
             .map(|d| Detected {
@@ -360,31 +367,37 @@ impl qobject::ModListModel {
     }
 
     /// Your own rules about the mod at `at`, each naming the other mod.
-    pub(crate) fn own_rules(&self, library: &Library, at: usize) -> Vec<OwnRule> {
-        let mods = self.list.mods();
-        let yours = crate::app().user_rules().reading();
+    fn own_rules(
+        &self,
+        app: &App,
+        library: &rimstack_core::mods::library::Library,
+        at: usize,
+    ) -> Vec<OwnRule> {
+        let mods = self.active.mods();
+        let yours = app.user_rules().reading();
         details::own_rules(&yours.rules(&library.abouts(mods)), at, mods)
     }
 
     /// The mods that provide some of the same textures as this one.
-    pub(crate) fn texture_conflicts(&self, mod_id: ModId) -> details::Clashes {
-        let known = crate::app().conflicts().reading();
+    fn texture_conflicts(&self, app: &App, id: ModId) -> details::Clashes {
+        let known = app.conflicts().reading();
         let Some(known) = known.as_ref() else {
             return Default::default();
         };
         let listed = |id: ModId| {
-            let at = self.position_of(id)?;
-            Some((at, self.list.mods()[at].name.clone()))
+            let at = self.active.position_of(id)?;
+            Some((at, self.active.mods()[at].name.clone()))
         };
-        details::clashes(&known.members, &known.overlaps, mod_id, &listed)
+        details::clashes(&known.members, &known.overlaps, id, &listed)
     }
 
-    pub(crate) fn overview(&self) -> QString {
-        let loaded = crate::app().library();
+    /// Facts about the whole install, once the lists have arrived.
+    pub fn overview(&self, app: &App) -> Overview {
+        let loaded = app.library();
         let Ok((library, took)) = &*loaded else {
-            return crate::reports::said(&Overview::default());
+            return Overview::default();
         };
-        let mods = self.list.mods();
+        let mods = self.active.mods();
         let each = mods.iter().zip(&self.troubles);
         let said = |(m, own): (&Mod, &Vec<Trouble>)| -> Vec<ProblemSaid> {
             own.iter().map(|t| ProblemSaid::of(m, t)).collect()
@@ -400,8 +413,9 @@ impl qobject::ModListModel {
                 })
                 .collect();
         trouble_groups.sort_by_key(|group| !group.error);
-        let notes = crate::app().notes().reading();
-        let trusted = notes
+        let trusted = app
+            .notes()
+            .reading()
             .version_ok()
             .map(|key| {
                 let found = library
@@ -419,10 +433,9 @@ impl qobject::ModListModel {
                 }
             })
             .collect();
-        drop(notes);
-        let community = crate::app().community().reading();
+        let community = app.community().reading();
         let tally = describe::tally(&self.troubles);
-        crate::reports::said(&Overview {
+        Overview {
             game_version: library.game_version.clone(),
             categories: Category::ALL
                 .into_iter()
@@ -440,11 +453,11 @@ impl qobject::ModListModel {
             missing: library.missing,
             unreadable: library.unreadable,
             read_ms: took.as_millis(),
-            works_on: crate::app().works_on().reading().len(),
+            works_on: app.works_on().reading().len(),
             trusted,
             community_mods: community.as_ref().map(|c| c.len()),
             community_time: community.as_ref().and_then(|c| c.timestamp),
-        })
+        }
     }
 }
 
@@ -460,6 +473,7 @@ mod tests {
             fields(&Details::default()),
             [
                 "author",
+                "canBin",
                 "category",
                 "categoryChosen",
                 "code",
@@ -471,6 +485,7 @@ mod tests {
                 "detected",
                 "folder",
                 "gameVersions",
+                "groupChoices",
                 "loadFolders",
                 "loadTime",
                 "loadsAfter",
@@ -480,6 +495,7 @@ mod tests {
                 "megabytes",
                 "name",
                 "note",
+                "offerTrust",
                 "packageId",
                 "patches",
                 "path",
@@ -493,6 +509,7 @@ mod tests {
                 "requiredAbove",
                 "requires",
                 "source",
+                "steamPage",
                 "sub",
                 "tags",
                 "textureCount",
@@ -502,6 +519,7 @@ mod tests {
                 "version",
                 "versionOk",
                 "winsOver",
+                "workshopPage",
                 "yourRules",
             ]
         );

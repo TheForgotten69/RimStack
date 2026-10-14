@@ -145,7 +145,7 @@ Popup {
         Flow {
             width: parent.width
             spacing: Theme.gapSmall
-            Btn { icon: "copy"; text: Theme.say("Copy the load order"); tip: Theme.say("The active mods as text, one a line"); onClicked: { Theme.copy(Mods.active.listing()); listsMenu.close() } }
+            Btn { icon: "copy"; text: Theme.say("Copy the load order"); tip: Theme.say("The active mods as text, one a line"); onClicked: { Theme.copy(Hub.mods.listing()); listsMenu.close() } }
             Btn {
                 text: Theme.say("Use the copied list")
                 tip: Theme.say("A list of mods copied as text or as links becomes the load order. Save writes it.")

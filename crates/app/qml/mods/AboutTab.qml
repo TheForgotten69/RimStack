@@ -37,7 +37,7 @@ Column {
         // The banner's action, for when the banner is not there.
         Btn {
             readonly property int alike: Mods.overview.versionOnly || 0
-            visible: alike > 1 && side.problems.some(p => p.fix.action === "trust") && !Mods.active.previewing
+            visible: alike > 1 && side.problems.some(p => p.fix.action === "trust") && !Hub.mods.previewing
             text: Theme.fill("Ignore all {} for RimWorld {}", alike, (Mods.overview.gameVersion || ""))
             tip: Theme.say("No warning about the game version while RimWorld stays on this version.")
             onClicked: Mods.setVersionAside(Mods.overview.gameVersion || "")
@@ -92,7 +92,7 @@ Column {
                 Row {
                     spacing: Theme.gapSmall
                     Btn { text: Theme.say("Compare"); tip: Theme.say("Both mods' versions of each shared texture, side by side"); onClicked: Mods.compareWith(clash.other.modId) }
-                    Btn { visible: clash.loses; enabled: !Mods.active.previewing; text: Theme.say("Win all"); tip: Theme.say("Adds an own rule: this mod loads after the other."); onClicked: Mods.winAll(clash.other.modId) }
+                    Btn { visible: clash.loses; enabled: !Hub.mods.previewing; text: Theme.say("Win all"); tip: Theme.say("Adds an own rule: this mod loads after the other."); onClicked: Mods.winAll(clash.other.modId) }
                 }
             }
         }
@@ -109,7 +109,7 @@ Column {
         }
         Row {
             spacing: Theme.gapSmall
-            Btn { visible: Mods.selectedActive && !Mods.active.previewing; icon: "minus"; text: Theme.say("Deactivate this one"); onClicked: Mods.toggleSelected() }
+            Btn { visible: Mods.selectedActive && !Hub.mods.previewing; icon: "minus"; text: Theme.say("Deactivate this one"); onClicked: Mods.toggleSelected() }
             Btn { visible: Mods.info.source === "Workshop"; danger: true; text: Theme.say("Unsubscribe…"); onClicked: Mods.unsubscribe(Mods.info.name || "", Mods.info.folder, Mods.info.path) }
         }
     }
@@ -224,8 +224,8 @@ Column {
         // checkout's commits, read from its folder.
         readonly property bool workshop: Mods.info.source === "Workshop"
         readonly property bool git: !workshop && !!Mods.info.repository
-        readonly property var fetched: Mods.backend && Mods.downloads.changeNotes ? JSON.parse(Mods.downloads.changeNotes) : ({})
-        readonly property var notes: workshop ? (fetched[Mods.info.folder] || []) : git && Mods.backend ? JSON.parse(Mods.downloads.gitNotes(Mods.info.path || "")) : []
+        readonly property var fetched: Mods.downloads && Mods.downloads.changeNotes ? JSON.parse(Mods.downloads.changeNotes) : ({})
+        readonly property var notes: workshop ? (fetched[Mods.info.folder] || []) : git && Mods.downloads ? JSON.parse(Mods.downloads.gitNotes(Mods.info.path || "")) : []
         visible: !Theme.demo && (workshop || git)
         title: Theme.say("Latest changes")
         key: "about-changes"

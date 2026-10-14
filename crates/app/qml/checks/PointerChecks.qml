@@ -35,7 +35,7 @@ Item {
     }
 
     function nameAt(row) {
-        return Mods.active.data(Mods.active.index(row, 0), 258)
+        return Mods.active.at(row).name
     }
 
     function drag(from, fromY, to, toY) {
@@ -43,6 +43,8 @@ Item {
         // is laid out only when the window is next drawn.
         from.parent.ensurePolished()
         to.parent.ensurePolished()
+        from.forceLayout()
+        to.forceLayout()
         const a = from.mapToItem(screen, 120, fromY), b = to.mapToItem(screen, 120, toY)
         events.mousePress(from, 120, fromY, Qt.LeftButton, Qt.NoModifier, -1)
         for (let i = 1; i <= 12; i++)
@@ -108,7 +110,7 @@ Item {
         repeat: true
         running: true
         onTriggered: {
-            if (Mods.active.count === 0 || !Mods.active.filesRead)
+            if (Mods.active.count === 0 || !Hub.mods.filesRead)
                 return
             stop()
             checks.divider()
@@ -119,9 +121,9 @@ Item {
 
             checks.drag(checks.activeList, row(8), checks.activeList, row(12))
             checks.check("a mod dragged down the load order lands where it was dropped", checks.nameAt(12) === moved && checks.nameAt(8) !== moved)
-            checks.check("and the list has unsaved changes", Mods.active.dirty && Mods.active.count === count)
+            checks.check("and the list has unsaved changes", Hub.mods.dirty && Mods.active.count === count)
 
-            const taken = Mods.inactive.data(Mods.inactive.index(2, 0), 258)
+            const taken = Mods.inactive.at(2).name
             checks.drag(checks.inactiveList, 13 + 26 * 2, checks.activeList, row(5))
             check("a mod dragged from the inactive list is activated where it was dropped", Mods.active.count === count + 1 && checks.nameAt(5) === taken)
 
@@ -153,7 +155,7 @@ Item {
         repeat: true
         onTriggered: {
             tries += 1
-            if (Mods.active.conflicts === 0 && tries < 20)
+            if (Hub.mods.conflicts === 0 && tries < 20)
                 return
             stop()
             for (let at = 0; at < Mods.active.count && Mods.comparing === null; at++) {
@@ -174,10 +176,10 @@ Item {
         interval: 600
         onTriggered: {
             const view = Mods.compareView, choice = view.zoomChoice
-            const saved = !Mods.active.dirty
+            const saved = !Hub.mods.dirty
             events.mouseClick(choice, choice.width - 16, choice.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
             checks.check("a click on the last zoom makes the picture eight times its fitted size", view.zoom === 8)
-            checks.check("and reaches nothing under the comparison", !Mods.active.dirty === saved && !Mods.active.previewing)
+            checks.check("and reaches nothing under the comparison", !Hub.mods.dirty === saved && !Hub.mods.previewing)
             const before = view.chosen
             events.keyClick(Qt.Key_Down, Qt.NoModifier, -1)
             checks.check("the down key shows the next shared texture", view.textures.length < 2 || view.chosen === before + 1)

@@ -32,7 +32,7 @@ Rectangle {
             visible: text !== ""
             color: Mods.dirty ? Theme.warn : Theme.ink2
             font.pixelSize: Theme.small
-            text: Theme.demo ? Theme.say("Demo data") : Mods.dirty ? Theme.fill("Not saved: {}", Mods.active.unsaved) : ""
+            text: Theme.demo ? Theme.say("Demo data") : Mods.dirty ? Theme.fill("Not saved: {}", Hub.mods.unsaved) : ""
         }
         // What the pointer is on, said at once; otherwise the facts.
         Text {

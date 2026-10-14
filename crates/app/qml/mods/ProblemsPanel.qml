@@ -8,7 +8,7 @@ import RimStack.Ui
 Column {
     id: panel
     width: parent.width
-    visible: Mods.problemsOpen && Mods.comparing === null && !Mods.active.previewing
+    visible: Mods.problemsOpen && Mods.comparing === null && !Hub.mods.previewing
     spacing: Theme.gapLarge
     readonly property var groups: Mods.overview.troubleGroups || []
 
@@ -17,7 +17,7 @@ Column {
         Column {
             Layout.fillWidth: true
             Text { color: Theme.ink; font.pixelSize: Theme.heading; font.weight: Font.DemiBold; text: Theme.say("Problems") }
-            Text { topPadding: Theme.gapHair; color: Theme.ink2; font.pixelSize: Theme.body; text: Mods.troubles.length === 0 ? Theme.say("None") : Theme.fill("{} with errors, {} with warnings", Mods.active.errors, Mods.active.warnings) }
+            Text { topPadding: Theme.gapHair; color: Theme.ink2; font.pixelSize: Theme.body; text: Mods.troubles.length === 0 ? Theme.say("None") : Theme.fill("{} with errors, {} with warnings", Hub.mods.errors, Hub.mods.warnings) }
         }
         Btn { icon: "x"; tip: Theme.say("Close (Esc)"); onClicked: Mods.problemsOpen = false }
     }

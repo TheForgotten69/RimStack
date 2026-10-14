@@ -92,33 +92,6 @@ pub struct LastLaunch {
     pub mods: usize,
 }
 
-/// `ModListModel.findMods()`: the Ctrl+K finder.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FoundMod<'a> {
-    pub name: &'a str,
-    pub mod_id: ModId,
-    pub active: bool,
-}
-
-/// `ModListModel.sortMoves()`: SortMoves, and the count kept in the history.
-#[derive(Serialize, Default)]
-pub struct SortGroup {
-    pub name: &'static str,
-    pub moves: Vec<SortMove>,
-}
-
-#[derive(Serialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct SortMove {
-    pub name: String,
-    pub from: usize,
-    pub to: usize,
-    /// -1 for a mod that is not installed.
-    pub mod_id: i32,
-    pub why: String,
-}
-
 /// A file written on request: Settings' languages and own colours.
 #[derive(Serialize)]
 pub struct Written {
@@ -391,21 +364,6 @@ mod tests {
             ]
         );
         assert_eq!(fields(&LastLaunch::default()), ["errors", "mods", "time"]);
-    }
-
-    #[test]
-    fn the_mods_screen_answers_keep_their_fields() {
-        let found = FoundMod {
-            name: "Roads",
-            mod_id: id(),
-            active: true,
-        };
-        assert_eq!(fields(&found), ["active", "modId", "name"]);
-        assert_eq!(fields(&SortGroup::default()), ["moves", "name"]);
-        assert_eq!(
-            fields(&SortMove::default()),
-            ["from", "modId", "name", "to", "why"]
-        );
     }
 
     #[test]

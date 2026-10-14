@@ -363,7 +363,7 @@ Item {
         id: quick
         readonly property bool hovered: toggleHover.hovered || folderHover.hovered || moreHover.hovered
         readonly property bool chosen: row.current && Mods.selectedCount === 1
-        visible: (hover.hovered || chosen) && !row.isHeader && row.modId >= 0 && Mods.drag.held === null && !Mods.active.previewing && Mods.picking === ""
+        visible: (hover.hovered || chosen) && !row.isHeader && row.modId >= 0 && Mods.drag.held === null && !Hub.mods.previewing && Mods.picking === ""
         anchors.right: parent.right
         anchors.rightMargin: Theme.gapCard
         anchors.verticalCenter: parent.verticalCenter
@@ -433,7 +433,7 @@ Item {
                 Mods.select(row.modId, row.ownModel === Mods.active)
             row.listView.forceActiveFocus()
         }
-        onDoubleTapped: if (!row.isHeader && !quick.hovered && !Mods.active.previewing) Mods.moveAcross(row.ownModel, row.modIndex, row.modId)
+        onDoubleTapped: if (!row.isHeader && !quick.hovered && !Hub.mods.previewing) Mods.moveAcross(row.ownModel, row.modIndex, row.modId)
     }
 
     TapHandler {
@@ -453,7 +453,7 @@ Item {
 
     DragHandler {
         id: dragger
-        enabled: !row.isHeader && !Mods.active.previewing && (!row.columns || Mods.columns.shownBy === "")
+        enabled: !row.isHeader && !Hub.mods.previewing && (!row.columns || Mods.columns.shownBy === "")
         target: null
         onActiveChanged: {
             if (dragger.active)

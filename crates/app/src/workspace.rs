@@ -14,7 +14,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock, RwLockReadGuard};
 use std::time::{Duration, Instant};
 
+pub mod load_order;
+mod notes;
+mod records;
 mod settings;
+mod upkeep;
 pub use settings::{newest_release, short_contrast};
 
 pub static STARTED: OnceLock<Instant> = OnceLock::new();
@@ -184,6 +188,15 @@ impl App {
         self.data_dir.join("diagnostics.log")
     }
 
+    /// RimStack's record of the DDS files it made.
+    pub fn texture_manifest_file(&self) -> PathBuf {
+        self.data_dir.join("textures.json")
+    }
+
+    pub fn launches_file(&self) -> PathBuf {
+        self.data_dir.join("launches.json")
+    }
+
     pub fn kept_logs_dir(&self) -> PathBuf {
         self.data_dir.join("logs")
     }
@@ -348,6 +361,7 @@ impl App {
     pub fn textures_changed(&self) {
         *self.conflicts.writing() = None;
         self.texture_counts.held().clear();
+        self.publish(crate::changes::Changes::TEXTURES);
     }
 
     /// The folders were changed in Settings: finds them again, reads the

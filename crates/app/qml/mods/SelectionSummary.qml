@@ -21,13 +21,13 @@ Column {
             const row = position < 0 ? -1 : model.rowOf(position)
             if (row < 0)
                 continue
-            const at = model.index(row, 0)
+            const shown = model.at(row)
             found.push({
                 position: position,
-                name: model.data(at, 258),
-                colour: Theme.categoryColours[model.data(at, 264)] || Theme.ink3,
-                load: model.data(at, 274) || "",
-                trouble: model.data(at, 268),
+                name: shown.name,
+                colour: Theme.categoryColours[shown.category] || Theme.ink3,
+                load: shown.loadTime || "",
+                trouble: shown.trouble,
             })
         }
         return found.sort((a, b) => a.position - b.position)

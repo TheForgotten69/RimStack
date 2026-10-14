@@ -72,7 +72,7 @@ Column {
         width: parent.width
         topPadding: Theme.gapLarge
         spacing: Theme.gapSmall
-        Btn { visible: !Mods.active.previewing; primary: !Mods.selectedActive; icon: Mods.selectedActive ? "minus" : "plus"; text: Mods.selectedActive ? Theme.say("Deactivate") : Theme.say("Activate"); onClicked: Mods.toggleSelected() }
+        Btn { visible: !Hub.mods.previewing; primary: !Mods.selectedActive; icon: Mods.selectedActive ? "minus" : "plus"; text: Mods.selectedActive ? Theme.say("Deactivate") : Theme.say("Activate"); onClicked: Mods.toggleSelected() }
         Btn { compact: acts.narrow; icon: "folder-open"; text: Theme.say("Open folder"); onClicked: Qt.openUrlExternally(Theme.fileUrl(Mods.info.path)) }
         Btn {
             visible: Mods.info.source === "Workshop"

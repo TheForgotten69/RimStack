@@ -27,7 +27,7 @@ Item {
         repeat: true
         running: Mods.checkMode !== ""
         onTriggered: {
-            if (Mods.active.count === 0 || !Mods.active.filesRead)
+            if (Mods.active.count === 0 || !Hub.mods.filesRead)
                 return
             stop()
             Mods.checkMode === "textures" ? checks.checkTextures() : Mods.checkMode === "live" ? checks.checkLive() : checks.runChecks()
@@ -46,7 +46,6 @@ Item {
         const folder = (Qt.application.arguments.find(a => a.startsWith("--live-folder=")) || "").substring(14)
         liveTotal = Mods.active.count + Mods.inactive.count
         Hub.settings.keep("workshop", folder)
-        Mods.active.rereadFolders()
         liveWatch.start()
     }
     Timer {
@@ -58,12 +57,12 @@ Item {
             const offer = Notices.shown.find(notice => !!notice.run)
             checks.liveWaited += 1
             const late = checks.liveWaited > 50
-            if (checks.liveStep === 0 && (late || (!Mods.active.rescanning && total === checks.liveTotal + 1))) {
+            if (checks.liveStep === 0 && (late || (!Hub.mods.rescanning && total === checks.liveTotal + 1))) {
                 checks.textureCheck("a Workshop folder changed in Settings is read at once", total === checks.liveTotal + 1 && Hub.settings.report.workshop.endsWith("workshop-b"))
                 checks.liveStep = 1
-                const third = Mods.inactive.packageMod("check.third")
-                Mods.copyToLocal(third >= 0 ? Mods.about(third).path : "")
-            } else if (checks.liveStep === 1 && (late || (!Mods.active.rescanning && total === checks.liveTotal + 2))) {
+                const third = Hub.mods.packageMod(false, "check.third")
+                Mods.copyToLocal(third)
+            } else if (checks.liveStep === 1 && (late || (!Hub.mods.rescanning && total === checks.liveTotal + 2))) {
                 checks.textureCheck("a Workshop mod copied to the game's own Mods folder shows once copied", total === checks.liveTotal + 2 && Mods.upkeepProblem === "")
                 checks.liveStep = 2
                 console.log("check live-ready")
@@ -74,7 +73,7 @@ Item {
                 checks.textureCheck("a ModsConfig.xml written outside is offered, not taken", !!offer && Mods.active.count === 2)
                 if (offer)
                     offer.run()
-                checks.textureCheck("and used when asked for", Mods.active.count === 1 && !Mods.active.dirty)
+                checks.textureCheck("and used when asked for", Mods.active.count === 1 && !Hub.mods.dirty)
                 Qt.exit(checks.textureFailures > 0 ? 1 : 0)
             }
         }
@@ -108,7 +107,6 @@ Item {
         textureCheck("the hidden picture can still be shown", picture.status === Image.Ready && picture.sourceSize.width > 0)
         picture.destroy()
         textureCheck("the later mod has one hidden texture", Mods.textureTools.hiddenIn(b) === 1 && Mods.textureTools.hiddenIn(a) === 0)
-        Mods.active.recheck()
         afterRecheck.start()
     }
     Timer {
@@ -133,46 +131,46 @@ Item {
         }
         const order = () => { const ids = []; for (let i = 0; i < Mods.active.count; i++) ids.push(Mods.nthMod(Mods.active, i)); return ids.join(",") }
         if (Mods.checkMode === "restore") {
-            Mods.active.moveMod(3, 0)
-            check("moved back and saved", Mods.save() && !Mods.active.dirty)
+            Hub.mods.moveMod(true, 3, 0)
+            check("moved back and saved", Mods.save() && !Hub.mods.dirty)
             return Qt.exit(failed > 0 ? 1 : 0)
         }
         const start = order()
         const counts = [Mods.active.count, Mods.inactive.count]
-        const shownNames = () => { const names = []; for (let r = 0; r < Mods.inactive.rows() && names.length < 40; r++) if (Mods.idAt(Mods.inactive, r) >= 0) names.push(Mods.inactive.data(Mods.inactive.index(r, 0), 258).toLowerCase()); return names }
+        const shownNames = () => { const names = []; for (let r = 0; r < Mods.inactive.rows() && names.length < 40; r++) if (Mods.idAt(Mods.inactive, r) >= 0) names.push(Mods.inactive.at(r).name.toLowerCase()); return names }
         const byName = () => { const names = shownNames(); return names.every((n, i) => i === 0 || names[i - 1].localeCompare(n) <= 0 || names[i - 1] <= n) }
         const wasByName = Mods.prefs.inactiveByName, hadHeadings = Mods.prefs.headings
         Mods.prefs.inactiveByName = true
         check("the inactive mods are in name order", byName() && Mods.inactive.rows() === Mods.inactive.count)
-        check("lists are filled and clean", Mods.active.count > 4 && Mods.inactive.count > 0 && !Mods.active.dirty && !Mods.active.canUndo)
+        check("lists are filled and clean", Mods.active.count > 4 && Mods.inactive.count > 0 && !Hub.mods.dirty && !Hub.mods.canUndo)
 
         // Sort first: it waits for the mods' files to be read, which they
         // are now and are not for a moment after a mod comes or goes.
         Mods.previewSort()
-        const moving = Mods.active.previewing
-        check("sort gives a preview or says there is nothing to do", Mods.active.sortNote !== "")
+        const moving = Hub.mods.previewing
+        check("sort gives a preview or says there is nothing to do", Hub.mods.sortNote !== "")
         if (moving) {
             Mods.endSort(false)
-            check("discard restores the order", order() === start && !Mods.active.previewing && !Mods.active.dirty)
+            check("discard restores the order", order() === start && !Hub.mods.previewing && !Hub.mods.dirty)
             Mods.previewSort()
             Mods.endSort(true)
-            check("apply keeps the sorted order", order() !== start && Mods.active.dirty && !Mods.active.previewing)
+            check("apply keeps the sorted order", order() !== start && Hub.mods.dirty && !Hub.mods.previewing)
             Mods.previewSort()
-            check("sorting a sorted list moves nothing", !Mods.active.previewing)
-            Mods.active.sortNote = ""
+            check("sorting a sorted list moves nothing", !Hub.mods.previewing)
+            Hub.mods.sortNote = ""
             Mods.undo()
             check("undo takes the sort back", order() === start)
         }
 
 
-                Mods.active.moveMod(0, 3)
-        check("a move makes the list dirty", Mods.active.dirty && Mods.active.canUndo && order() !== start)
+        Hub.mods.moveMod(true, 0, 3)
+        check("a move makes the list dirty", Hub.mods.dirty && Hub.mods.canUndo && order() !== start)
         Mods.undo()
-        check("undo puts it back", !Mods.active.dirty && order() === start && Mods.active.canRedo)
+        check("undo puts it back", !Hub.mods.dirty && order() === start && Hub.mods.canRedo)
         check("and the inactive mods are still in name order", byName() && Mods.inactive.rows() === Mods.inactive.count)
         Mods.prefs.headings = 0
         check("one numbered list has no headings", Mods.active.rows() === Mods.active.count)
-        Mods.active.moveMod(0, 3)
+        Hub.mods.moveMod(true, 0, 3)
         Mods.undo()
         check("and stays one list after undo", Mods.active.rows() === Mods.active.count)
         Mods.prefs.headings = 1
@@ -182,17 +180,17 @@ Item {
         check("by category, the inactive mods sit under headings", Mods.inactive.rows() > Mods.inactive.count)
         Mods.prefs.inactiveByName = true
         Mods.redo()
-        check("redo moves it again", Mods.active.dirty && order() !== start)
+        check("redo moves it again", Hub.mods.dirty && order() !== start)
         Mods.undo()
 
         const second = Mods.nthMod(Mods.active, 1)
-        Mods.inactive.takeFrom(Mods.active, 1)
+        Hub.mods.take(true, 1, -1)
         check("deactivating moves a mod across", Mods.active.count === counts[0] - 1 && Mods.inactive.count === counts[1] + 1)
-        Mods.active.takeFrom(Mods.inactive, Mods.inactive.indexOf(second))
+        Hub.mods.take(false, Mods.inactive.indexOf(second), -1)
         check("activating brings it back", Mods.active.count === counts[0] && Mods.active.indexOf(second) >= 0)
-        while (Mods.active.canUndo)
+        while (Hub.mods.canUndo)
             Mods.undo()
-        check("undo all the way is the saved list", !Mods.active.dirty && order() === start)
+        check("undo all the way is the saved list", !Hub.mods.dirty && order() === start)
 
         Mods.select(Mods.nthMod(Mods.active, 0), true)
         Mods.selectThrough(Mods.nthMod(Mods.active, 2), true)
@@ -202,7 +200,7 @@ Item {
         Mods.moveSelected()
         check("the selected mods move together", Mods.active.count === counts[0] - 2 && Mods.selectedCount === 0)
         Mods.undo()
-        check("and come back with one undo", Mods.active.count === counts[0] && order() === start && !Mods.active.canUndo)
+        check("and come back with one undo", Mods.active.count === counts[0] && order() === start && !Hub.mods.canUndo)
 
         const warned = [...new Set(Mods.troubles.filter(t => t.fix.action === "trust").map(t => t.modId))].slice(0, 3)
         if (warned.length === 3) {
@@ -223,7 +221,7 @@ Item {
         Mods.picking = "before"
         Mods.pick(a)
         check("a rule of your own is added", (Mods.info.yourRules || []).some(rule => rule.how === "before") && Mods.picking === "")
-        Mods.edits.removeRule(b, a)
+        Hub.mods.removeRule(b, a)
         check("and removed", (Mods.info.yourRules || []).length === 0)
         const worked = Mods.about(b).category
         const byHand = worked === "Textures" ? "Patches" : "Textures"
@@ -255,7 +253,7 @@ Item {
         check("and one undo puts it back", order() === start)
         Mods.select(Mods.nthMod(Mods.active, 0), true)
 
-        const nameOn = r => Mods.active.data(Mods.active.index(r, 0), 258).toLowerCase()
+        const nameOn = r => Mods.active.at(r).name.toLowerCase()
         const orderBefore = order()
         Mods.columns.showBy("name")
         check("a click on Name shows the load order by name", Mods.active.rows() === Mods.active.count && nameOn(0) <= nameOn(1) && nameOn(1) <= nameOn(2) && order() === orderBefore)
@@ -277,61 +275,59 @@ Item {
         const listed = Mods.columns.menu()
         check("the column menu lists every column, the shown ones marked", listed.length === 3 && listed[0].text.startsWith("✓"))
 
-        const subRows = () => { let n = 0; for (let r = 0; r < Mods.active.rows(); r++) if (Mods.active.data(Mods.active.index(r, 0), 273) === true) n += 1; return n }
+        const subRows = () => { let n = 0; for (let r = 0; r < Mods.active.rows(); r++) if (Mods.active.at(r).isSub === true) n += 1; return n }
         const before = subRows()
         Mods.putInSub(Mods.selectedId, "check-sub")
         check("a mod grouped under a new tag sits under its row", subRows() === before + 1 && Mods.info.sub === "check-sub")
         Mods.putInSub(Mods.selectedId, "")
         check("and taken out again", subRows() === before && !Mods.info.sub)
         Mods.putInSub(Mods.selectedId, "check-sub")
-        const subRow = () => { for (let r = 0; r < Mods.active.rows(); r++) if (Mods.active.data(Mods.active.index(r, 0), 273) === true && Mods.active.data(Mods.active.index(r, 0), 258) === "check-sub") return r; return -1 }
+        const subRow = () => { for (let r = 0; r < Mods.active.rows(); r++) if (Mods.active.at(r).isSub === true && Mods.active.at(r).name === "check-sub") return r; return -1 }
         const rowsOpen = Mods.active.rows()
-        Mods.active.toggleSub(subRow())
+        Hub.mods.toggleSub(true, subRow())
         check("a group folds its mod away and keeps its row", Mods.active.rows() === rowsOpen - 1 && subRow() >= 0)
-        Mods.active.toggleSub(subRow())
+        Hub.mods.toggleSub(true, subRow())
         check("and shows it again", Mods.active.rows() === rowsOpen)
         Mods.removeSub(Mods.active, subRow())
         check("a group taken off leaves its mod in the list", subRows() === before && Mods.active.rows() === rowsOpen - 1 && !Mods.info.sub)
         const tagged = Mods.selectedId
-        Mods.edits.setNote(tagged, "check-tag, other", ""); Mods.active.tagsChanged(tagged)
-        Mods.refresh()
+        Hub.mods.keepNote(tagged, "check-tag, other", "")
         check("a mod's first tag is the group it sits under", subRows() === before + 1 && Mods.info.sub === "check-tag")
         Mods.putInSub(tagged, "other")
         check("grouping under another of its tags moves that tag first", Mods.info.sub === "other" && Mods.info.tags === "other, check-tag")
-        Mods.edits.setNote(tagged, "", ""); Mods.active.tagsChanged(tagged)
-        Mods.refresh()
+        Hub.mods.keepNote(tagged, "", "")
         check("and without tags it is in no group", subRows() === before && !Mods.info.sub)
 
         Mods.keepNote("check-tag, second", "a note")
-        check("tags and a note are kept", Mods.info.tags === "check-tag, second" && Mods.info.note === "a note" && Mods.active.data(Mods.active.index(Mods.active.rowOf(0), 0), 269) === "check-tag, second")
-        Mods.active.setFilter("tag:check")
+        check("tags and a note are kept", Mods.info.tags === "check-tag, second" && Mods.info.note === "a note" && Mods.active.at(Mods.active.rowOf(0)).tags === "check-tag, second")
+        Mods.filtered = "tag:check"
         // Rows that are mods, not headings: the list may be grouped.
         const shown = () => { let n = 0; for (let r = 0; r < Mods.active.rows(); r++) if (Mods.idAt(Mods.active, r) >= 0) n += 1; return n }
         check("tag: narrows the list to the tagged mod", shown() === 1)
-        Mods.active.setFilter("author:zzzz-nobody")
+        Mods.filtered = "author:zzzz-nobody"
         check("author: with no match shows nothing", Mods.active.rows() === 0)
-        Mods.active.setFilter("")
+        Mods.filtered = ""
         Mods.keepNote("", "")
         check("and forgotten", !Mods.info.tags && !Mods.info.note && shown() === counts[0])
         Mods.select(-1, false)
 
-                Mods.prefs.inactiveByName = wasByName
-        Mods.active.moveMod(0, 3)
+        Mods.prefs.inactiveByName = wasByName
+        Hub.mods.moveMod(true, 0, 3)
         // What this batch of the interface added, on the same list.
         const asItWas = order(), every = Mods.active.rows()
-        Mods.active.moveMod(2, 6)
+        Hub.mods.moveMod(true, 2, 6)
         const changedOrder = order()
-        check("what changed since the save is put in words", Mods.active.unsaved !== "" && Mods.active.dirty)
+        check("what changed since the save is put in words", Hub.mods.unsaved !== "" && Hub.mods.dirty)
         if (Mods.problemCount > 0) {
             Mods.showProblem(true)
             check("a step to a problem says its place among them", Mods.problemPlace >= 1 && Mods.problemPlace <= Mods.problemCount && Mods.selectedId === Mods.problemMod)
         }
         check("a kept sentence is put in words", Theme.put([Theme.kept("Saved the load order: {}"), [",", ["{} moved", 2]]]) === Theme.fill("Saved the load order: {}", Theme.fill("{} moved", 2)) && Theme.said("An older record") === "An older record")
-        Mods.active.setFilter("is:changed")
+        Mods.filtered = "is:changed"
         check("is:changed shows only what changed", Mods.active.rows() >= 1 && Mods.active.rows() < every)
-        Mods.active.setFilter("")
+        Mods.filtered = ""
         Mods.discardChanges()
-        check("discarding goes back to the saved list, and Undo brings the change back", order() !== changedOrder && Mods.active.canUndo)
+        check("discarding goes back to the saved list, and Undo brings the change back", order() !== changedOrder && Hub.mods.canUndo)
         Mods.undo()
         check("undo after a discard restores the change", order() === changedOrder)
         Mods.undo()
@@ -344,10 +340,10 @@ Item {
         Notices.shown[0].run()
         Notices.dismiss(Notices.shown[0].key)
         check("an offer runs and goes", undone && Notices.shown.length === 1 && Notices.earlier.length === 3)
-        check("every problem has its words and its fix", Mods.troubles.every(t => t.words !== "" && t.group !== "") && Mods.troubles.length >= Mods.active.errors)
+        check("every problem has its words and its fix", Mods.troubles.every(t => t.words !== "" && t.group !== "") && Mods.troubles.length >= Hub.mods.errors)
         Mods.previewSort()
-        const sortLines = JSON.parse(Mods.active.sortMoves())
-        check("each move of a sort has a reason", !Mods.active.previewing || sortLines.every(group => group.name !== "" && group.moves.every(m => m.why !== "")))
+        const sortLines = Hub.mods.sortMoves()
+        check("each move of a sort has a reason", !Hub.mods.previewing || sortLines.every(group => group.name !== "" && group.moves.every(m => m.why !== "")))
         Mods.endSort(false)
         Mods.leftOffRestored = true
         const one = Mods.nthMod(Mods.active, 3), other = Mods.nthMod(Mods.active, 7)
@@ -376,7 +372,7 @@ Item {
         Mods.undo()
         check("which one Undo takes back", order() === unmoved)
         Mods.select(-1, false)
-        check("the changed list is saved", Mods.save() && !Mods.active.dirty && Mods.saveProblem === "")
+        check("the changed list is saved", Mods.save() && !Hub.mods.dirty && Mods.saveProblem === "")
         Qt.exit(failed > 0 ? 1 : 0)
     }
 
@@ -428,24 +424,22 @@ Item {
         onTriggered: {
             const rows = () => "active=" + Mods.active.rows() + " inactive=" + Mods.inactive.rows()
             console.log("selftest start " + rows())
-            Mods.active.toggleCategory(3)
+            Hub.mods.toggleCategory(true, 3)
             console.log("selftest collapsed-content " + rows())
-            Mods.active.toggleCategory(3)
+            Hub.mods.toggleCategory(true, 3)
             console.log("selftest expanded-content " + rows())
             Mods.filterBy("hygiene")
             console.log("selftest filtered " + rows())
             Mods.filterBy("")
             console.log("selftest cleared " + rows())
-            Mods.active.moveMod(5, 900)
+            Hub.mods.moveMod(true, 5, 900)
             console.log("selftest moved " + rows())
-            Mods.active.takeFrom(Mods.inactive, 0)
+            Hub.mods.take(false, 0, -1)
             console.log("selftest took-one " + rows())
-            Mods.active.takeFromAt(Mods.inactive, 0, 1000)
+            Hub.mods.take(false, 0, 1000)
             console.log("selftest took-at " + rows())
-            Mods.inactive.takeFrom(Mods.active, 1000)
+            Hub.mods.take(true, 1000, -1)
             console.log("selftest gave-back " + rows())
-            Mods.active.takeFrom(Mods.active, 0)
-            console.log("selftest self-take-ignored " + rows())
             scripted.start()
         }
     }

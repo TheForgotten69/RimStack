@@ -28,7 +28,7 @@ RowLayout {
     }
     Btn {
         Layout.alignment: Qt.AlignTop
-        visible: !!line.fix.action && !Mods.active.previewing
+        visible: !!line.fix.action && !Hub.mods.previewing
         text: Theme.say(line.fix.label || "")
         onClicked: Mods.applyFix(line.modId, line.fix)
     }

@@ -23,7 +23,7 @@ Item {
     Rectangle {
         id: rail
         z: 2
-        visible: Mods.prefs.inactiveHidden && Mods.active.problem === "" && Mods.comparing === null
+        visible: Mods.prefs.inactiveHidden && Hub.mods.problem === "" && Mods.comparing === null
         width: visible ? Theme.sized(44) : 0
         height: parent.height - bulk.height
         color: Theme.panel
@@ -105,7 +105,7 @@ Item {
             SplitView.preferredWidth: Mods.prefs.inactive
             SplitView.minimumWidth: 200
             onWidthChanged: if (panes.resizing) Mods.prefs.inactive = width
-            visible: Mods.active.problem === "" && !Mods.prefs.inactiveHidden
+            visible: Hub.mods.problem === "" && !Mods.prefs.inactiveHidden
         }
         ActivePane {
             id: activePane
@@ -118,7 +118,7 @@ Item {
             SplitView.preferredWidth: Mods.prefs.details
             SplitView.minimumWidth: 260
             onWidthChanged: if (panes.resizing) Mods.prefs.details = width
-            visible: Mods.active.problem === ""
+            visible: Hub.mods.problem === ""
         }
     }
 
@@ -168,8 +168,6 @@ Item {
             Mods.comparing = null
             Mods.focusList(Mods.active)
         }
-        // What the game loads changed: count the conflicts again.
-        onChanged: Mods.active.recheck()
     }
 }
 
@@ -254,19 +252,20 @@ Rectangle {
         id: binPrompt
         property string name
         property string folder
+        property int modId: -1
         title: Theme.fill("Move to the bin: {}", binPrompt.name)
         Text { width: parent.width; wrapMode: Text.WrapAnywhere; color: Theme.ink2; font.pixelSize: Theme.small; text: binPrompt.folder }
         Text { width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say("Steam downloads a Workshop mod again while you stay subscribed to it.") }
         buttons: [
             Btn { text: Theme.say("Cancel"); onClicked: binPrompt.close() },
-            Btn { danger: true; text: Theme.say("Move to the bin"); onClicked: { Mods.binMod(binPrompt.folder); binPrompt.close() } }
+            Btn { danger: true; text: Theme.say("Move to the bin"); onClicked: { Mods.binMod(binPrompt.modId); binPrompt.close() } }
         ]
     }
     Connections {
         target: Mods
         function onSubNameRequested(modId) { subPrompt.modId = modId; subPrompt.open() }
         function onBulkRequested(what) { bulkPrompt.what = what; bulkPrompt.open() }
-        function onBinRequested(name, folder) { binPrompt.name = name; binPrompt.folder = folder; binPrompt.open() }
+        function onBinRequested(name, folder, modId) { binPrompt.name = name; binPrompt.folder = folder; binPrompt.modId = modId; binPrompt.open() }
     }
     Connections {
         target: Mods
@@ -276,7 +275,7 @@ Rectangle {
     Shortcut { sequences: [StandardKey.Find]; onActivated: Mods.filterFocusRequested() }
     Shortcut { sequences: [StandardKey.Undo]; onActivated: Mods.undo() }
     Shortcut { sequences: [StandardKey.Redo]; onActivated: Mods.redo() }
-    Shortcut { sequences: [StandardKey.Save]; onActivated: if (Mods.active.dirty) Mods.save() }
+    Shortcut { sequences: [StandardKey.Save]; onActivated: if (Hub.mods.dirty) Mods.save() }
     Shortcut { sequence: "Escape"; enabled: Mods.comparing === null && !subPrompt.opened; onActivated: screen.drawerOpen ? screen.drawerOpen = false : Mods.picking !== "" ? Mods.picking = "" : Mods.select(-1, false) }
 
 // `--sorting` shows the sort preview and `--comparing` the first pair of
@@ -289,7 +288,7 @@ Timer {
     repeat: true
     running: sorting || comparing
     onTriggered: {
-        if (!Mods.active.filesRead)
+        if (!Hub.mods.filesRead)
             return
         stop()
         if (sorting)

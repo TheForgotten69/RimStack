@@ -27,7 +27,6 @@ Popup {
         } else if (what === "unhide") {
             const problem = textureTools.unhideIn(about)
             Notices.say(problem !== "" ? problem : Theme.say("Textures brought back"), problem !== "" ? "err" : "ok")
-            Mods.active.recheck()
         }
         close()
     }

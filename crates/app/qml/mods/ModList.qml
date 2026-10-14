@@ -73,13 +73,13 @@ ListView {
     property int tick: 0
     readonly property int topCategory: {
         const drawn = tick
-        if (drawn < 0 || count === 0 || !model.data(model.index(0, 0), 257))
+        if (drawn < 0 || count === 0 || !model.at(0).isHeader)
             return -1
         const top = indexAt(10, contentY + 1)
         if (top < 0)
             return -1
-        const at = model.index(top, 0)
-        return model.data(at, 257) && !model.data(at, 273) ? -1 : model.data(at, 264)
+        const row = model.at(top)
+        return row.isHeader && !row.isSub ? -1 : row.category
     }
     Rectangle {
         parent: list
@@ -123,14 +123,14 @@ ListView {
         }
     }
     Connections {
+        target: list.model
+        function onRowsInserted() { list.tick++ }
+        function onRowsRemoved() { list.tick++ }
+        function onRowsMoved() { list.tick++ }
+        function onDataChanged() { list.tick++ }
+    }
+    Connections {
         target: Mods
-        function onChanging() { list.kept = list.contentY }
-        function onChanged() {
-            list.contentY = list.kept
-            // A shorter list must not stay scrolled past its end.
-            list.returnToBounds()
-            list.tick++
-        }
         function onReveal(model, row, centre) {
             if (model !== list.model)
                 return

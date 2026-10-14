@@ -28,13 +28,13 @@ Rectangle {
             SelectionSummary { visible: Mods.selectedCount > 1 && Mods.comparing === null && !problems.visible }
             Column {
                 width: parent.width
-                visible: Mods.selectedCount === 1 && Mods.comparing === null && !problems.visible && !Mods.active.previewing
+                visible: Mods.selectedCount === 1 && Mods.comparing === null && !problems.visible && !Hub.mods.previewing
                 ModHeader {}
                 AboutTab {}
                 LoadOrderTab {}
                 FilesTab {}
             }
-            ListSummary { visible: Mods.selectedId < 0 && Mods.comparing === null && !problems.visible && !Mods.active.previewing }
+            ListSummary { visible: Mods.selectedId < 0 && Mods.comparing === null && !problems.visible && !Hub.mods.previewing }
         }
     }
 }

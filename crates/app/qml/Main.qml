@@ -75,7 +75,6 @@ ApplicationWindow {
     }
 
         Backend { id: appBackend }
-        ModEdits { id: appEdits }
         BrokenModSearch { id: appHunt }
         KeptLists { id: appLists }
         Downloads { id: appDownloads }
@@ -104,10 +103,10 @@ ApplicationWindow {
         // `--live` keeps looking while a picture is taken; for checking this.
         if (Theme.demo || (Mods.checkMode !== "" && Mods.checkMode !== "live") || (shotPath !== "" && Qt.application.arguments.indexOf("--live") === -1))
             return
-        const inTheWay = Mods.active.rescanning || Mods.active.previewing || Mods.drag.held !== null || Mods.comparing !== null
+        const inTheWay = Hub.mods.rescanning || Hub.mods.previewing || Mods.drag.held !== null || Mods.comparing !== null
         const noticed = JSON.parse(appBackend.look(gameRunning, inTheWay))
         if (noticed.mods)
-            Mods.active.rescan()
+            Hub.mods.rescan()
         if (noticed.theme || noticed.language)
             Hub.settings.filesChanged()
         if (noticed.saves && section === 3)
@@ -170,17 +169,6 @@ ApplicationWindow {
         function onLogsChanged() { window.readLastLaunch() }
     }
 
-    Binding { target: Mods; property: "backend"; value: appBackend }
-    Binding { target: Mods; property: "edits"; value: appEdits }
-    Connections {
-        target: Hub.settings
-        function onCommunityBusyChanged() {
-            if (Hub.settings.communityBusy)
-                return
-            Mods.active.communityChanged()
-            Mods.overview = JSON.parse(Mods.active.overview())
-        }
-    }
     Binding { target: Mods; property: "hunter"; value: appHunt }
     Binding { target: Mods; property: "keptLists"; value: appLists }
     Binding { target: Mods; property: "downloads"; value: appDownloads }
@@ -200,13 +188,13 @@ ApplicationWindow {
                 Notices.record(note, "")
         }
         function onModsWrittenChanged() {
-            Mods.active.rescan()
+            Hub.mods.rescan()
         }
     }
     // What runs in the background now: { text, cancel }.
     readonly property var tasks: [
-        Mods.active.rescanning ? { text: Theme.say("Reading the mod folders…") } : null,
-        !Mods.active.filesRead && Mods.active.count > 0 && !Theme.demo ? { text: Theme.say("Reading the active mods' files…") } : null,
+        Hub.mods.rescanning ? { text: Theme.say("Reading the mod folders…") } : null,
+        !Hub.mods.filesRead && Mods.active.count > 0 && !Theme.demo ? { text: Theme.say("Reading the active mods' files…") } : null,
         appTextures.texturesBusy ? { text: appTextures.texturesProgress || Theme.say("Counting textures…"), cancel: () => appTextures.cancelTextures() } : null,
         appDownloads.updatesBusy ? { text: Theme.say("Asking Steam for updates…") } : null,
         Hub.settings.communityBusy ? { text: Theme.say("Downloading community data…") } : null,
@@ -345,7 +333,6 @@ ApplicationWindow {
                         downloads: appDownloads
                         keptLists: appLists
                         reader: appLogs
-                                                rules: Mods.active
                         overview: Mods.overview
                         onUseList: ids => window.useList(ids)
                         onTrust: (modId, yes) => Mods.trust(modId, yes)
@@ -422,7 +409,7 @@ ApplicationWindow {
         id: commands
         x: Math.round((window.width - width) / 2)
         y: 90
-        findMods: text => JSON.parse(Mods.active.findMods(text, 12)).map(m => ({
+        findMods: text => Hub.mods.findMods(text, 12).map(m => ({
             name: m.name, group: m.active ? Theme.say("Active mod") : Theme.say("Inactive mod"), run: () => window.showMod(m.modId) }))
         commands: {
             const folders = Theme.demo ? ({}) : Hub.settings.report
@@ -447,30 +434,30 @@ ApplicationWindow {
                 { name: Theme.say("What RimStack changed"), group: Theme.say("Help"), run: () => statusBar.historyMenu.open(), when: !Theme.demo },
                 { name: Theme.say("Sort"), group: Theme.say("Load order"), run: () => { window.section = 0; Mods.previewSort() }, when: !Theme.demo },
                 { name: Theme.say("Save"), group: Theme.say("Load order"), keys: Theme.say("Ctrl + S"), run: () => Mods.save(), when: Mods.dirty },
-                { name: Theme.say("Undo"), group: Theme.say("Load order"), keys: Theme.say("Ctrl + Z"), run: () => Mods.undo(), when: Mods.active.canUndo },
-                { name: Theme.say("Redo"), group: Theme.say("Load order"), keys: Theme.say("Ctrl + Shift + Z"), run: () => Mods.redo(), when: Mods.active.canRedo },
+                { name: Theme.say("Undo"), group: Theme.say("Load order"), keys: Theme.say("Ctrl + Z"), run: () => Mods.undo(), when: Hub.mods.canUndo },
+                { name: Theme.say("Redo"), group: Theme.say("Load order"), keys: Theme.say("Ctrl + Shift + Z"), run: () => Mods.redo(), when: Hub.mods.canRedo },
                 { name: Theme.say("Play"), group: Theme.say("Game"), run: () => window.pressPlay() },
-                { name: Theme.say("Next problem"), group: Theme.say("Load order"), run: () => { window.section = 0; Mods.showNextProblem() }, when: Mods.errors + Mods.active.warnings > 0 },
+                { name: Theme.say("Next problem"), group: Theme.say("Load order"), run: () => { window.section = 0; Mods.showNextProblem() }, when: Mods.errors + Hub.mods.warnings > 0 },
                 { name: Theme.say("Saved lists"), group: Theme.say("Load order"), run: () => topBar.listsMenu.open(), when: !Theme.demo },
                 { name: Theme.say("Use the list from before RimStack"), group: Theme.say("Load order"), run: () => { const ids = appLists.originalList(); if (ids !== "") window.useList(JSON.parse(ids)) }, when: !!folders.backup },
 
-                { name: Theme.fill(Mods.selectedActive ? "Deactivate {}" : "Activate {}", mod ? mod.name : ""), group: Theme.say("Selected mod"), run: () => Mods.toggleSelected(), when: !!mod && !Mods.active.previewing },
+                { name: Theme.fill(Mods.selectedActive ? "Deactivate {}" : "Activate {}", mod ? mod.name : ""), group: Theme.say("Selected mod"), run: () => Mods.toggleSelected(), when: !!mod && !Hub.mods.previewing },
                 { name: Theme.fill("Open folder of {}", (mod ? mod.name : "")), group: Theme.say("Selected mod"), run: () => open(mod.path), when: !!mod && !!mod.path },
                 { name: Theme.fill("Workshop page of {}", (mod ? mod.name : "")), group: Theme.say("Selected mod"), run: () => Theme.openWorkshop(mod.folder), when: !!mod && mod.source === "Workshop" },
                 { name: Theme.fill("Copy package id of {}", (mod ? mod.name : "")), group: Theme.say("Selected mod"), run: () => Theme.copy(mod.packageId), when: !!mod && !!mod.packageId },
                 { name: Theme.say("Clear selection"), group: Theme.say("Selected mod"), keys: Theme.say("Esc"), run: () => Mods.select(-1, false), when: Mods.selectedId >= 0 },
 
                 { name: Theme.say("Use the list on the clipboard"), group: Theme.say("Load order"), run: () => { const ids = JSON.parse(appLists.idsInText(Theme.pasted())); if (ids.length > 0) window.useList(ids) }, when: !Theme.demo },
-                { name: Theme.say("Copy the load order as text"), group: Theme.say("Load order"), run: () => Theme.copy(Mods.active.listing()) },
+                { name: Theme.say("Copy the load order as text"), group: Theme.say("Load order"), run: () => Theme.copy(Hub.mods.listing()) },
                 { name: Theme.say("Mods with errors"), group: Theme.say("Filter"), run: () => filter("is:error"), when: Mods.errors > 0 },
-                { name: Theme.say("Mods with warnings"), group: Theme.say("Filter"), run: () => filter("is:warning"), when: Mods.active.warnings > 0 },
-                { name: Theme.say("Mods sharing textures"), group: Theme.say("Filter"), run: () => filter("is:conflict"), when: Mods.active.conflicts > 0 },
+                { name: Theme.say("Mods with warnings"), group: Theme.say("Filter"), run: () => filter("is:warning"), when: Hub.mods.warnings > 0 },
+                { name: Theme.say("Mods sharing textures"), group: Theme.say("Filter"), run: () => filter("is:conflict"), when: Hub.mods.conflicts > 0 },
                 { name: Theme.say("Mods with an update"), group: Theme.say("Filter"), run: () => filter("is:updated"), when: window.behind > 0 },
                 { name: Theme.say("Mods with code"), group: Theme.say("Filter"), run: () => filter("has:code") },
                 { name: Theme.say("Local mods"), group: Theme.say("Filter"), run: () => filter("is:local") },
                 { name: Theme.say("Clear filter"), group: Theme.say("Filter"), run: () => filter("") },
 
-                { name: Theme.say("Read the mod folders again"), group: Theme.say("Mods"), run: () => Mods.active.rescan(), when: !Theme.demo },
+                { name: Theme.say("Read the mod folders again"), group: Theme.say("Mods"), run: () => Hub.mods.rescan(), when: !Theme.demo },
                 { name: Theme.say("Check for updates"), group: Theme.say("Downloads"), run: () => { window.section = 1; appDownloads.checkUpdates() }, when: !Theme.demo },
                 { name: Theme.say("Update community rules"), group: Theme.say("Sorting"), run: () => Hub.settings.downloadCommunity(), when: !Theme.demo && !Hub.settings.communityCurrent },
                 { name: Theme.say("Read the saves again"), group: Theme.say("Saves"), run: () => { window.section = 3; appSaves.loadSaves() }, when: !Theme.demo },
@@ -567,7 +554,7 @@ ApplicationWindow {
         sourceComponent: FirstRun {
             activeCount: Mods.active.count
             inactiveCount: Mods.inactive.count
-            problem: Mods.active.problem
+            problem: Hub.mods.problem
                         onStart: (withData, withRimSort) => {
                 Hub.settings.keep("setupDone", "yes")
                 if (withData && (!Mods.overview.communityMods || !Mods.overview.worksOn))

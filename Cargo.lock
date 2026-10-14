@@ -1087,6 +1087,7 @@ dependencies = [
 name = "rimstack-app"
 version = "1.0.0"
 dependencies = [
+ "chrono",
  "cxx",
  "cxx-qt",
  "cxx-qt-build",

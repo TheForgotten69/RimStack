@@ -4,7 +4,7 @@
 
 use super::App;
 use crate::changes::Changes;
-use crate::reports::{Database, ReleaseSaid, SettingsReport, ShortContrast};
+use crate::reports::{Database, LastLaunch, ReleaseSaid, SettingsReport, ShortContrast, Summary};
 use rimstack_core::base::error::Error;
 use rimstack_core::base::locks::Shared;
 use rimstack_core::base::translate::named;
@@ -144,6 +144,50 @@ impl App {
             settings_file: self.settings_file().to_string_lossy().into_owned(),
             diagnostics_file: self.diagnostics_file().to_string_lossy().into_owned(),
             version: env!("CARGO_PKG_VERSION"),
+        }
+    }
+
+    /// The counts shown beside the load order: saves, snapshots, suggested
+    /// replacements, rules of your own, and the last launch.
+    pub fn summary(&self) -> Summary {
+        let config = self.paths().config.clone();
+        let saves = config
+            .as_ref()
+            .and_then(|config| std::fs::read_dir(config.join("Saves")).ok())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .is_some_and(|x| x.eq_ignore_ascii_case("rws"))
+            })
+            .count();
+        let kept = config
+            .as_deref()
+            .and_then(rimstack_core::rimworld::rimsaves::settings);
+        let last = rimstack_core::kept::launches::read(&self.launches_file()).pop();
+        let ignored = self.replacements_ignored();
+        let replacements = match &*self.library() {
+            Ok((library, _)) => {
+                let known = self.replacements();
+                let mods = library.workshop_mods();
+                let offered = mods.keys().filter(|id| known.contains_key(**id));
+                offered.filter(|id| !ignored.contains(**id)).count()
+            }
+            Err(_) => 0,
+        };
+        Summary {
+            saves,
+            folders: kept.map_or(1, |s| s.folders.len()),
+            snapshots: rimstack_core::kept::lists::count(&self.snapshots_dir()),
+            replacements,
+            rules: self.user_rules().reading().len(),
+            last_launch: last.map(|l| LastLaunch {
+                time: l.time,
+                errors: l.errors,
+                mods: l.ids.len(),
+            }),
         }
     }
 

@@ -7,10 +7,10 @@ import RimStack.Ui
 Column {
     id: moves
     width: parent.width
-    visible: Mods.active.previewing && Mods.comparing === null
+    visible: Hub.mods.previewing && Mods.comparing === null
     spacing: Theme.gapHair
     // { name, moves } per kind of reason; each move { name, from, to, modId, why }.
-    readonly property var groups: visible ? JSON.parse(Mods.active.sortMoves()) : []
+    readonly property var groups: visible ? Hub.mods.sortMoves() : []
     readonly property int moved: groups.reduce((sum, group) => sum + group.moves.length, 0)
 
     Text { color: Theme.ink; font.pixelSize: Theme.heading; font.weight: Font.DemiBold; text: Theme.say("Sort preview") }

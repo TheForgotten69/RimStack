@@ -11,10 +11,10 @@ QtObject {
         const about = Mods.about(row.modId)
         const many = Mods.selectedCount > 1
         const workshop = about.source === "Workshop"
-        const page = "https://steamcommunity.com/sharedfiles/filedetails/?id=" + about.folder
+        const page = about.workshopPage || ""
         const groups = []
         groups.push([
-            { text: many ? (inActive ? Theme.plural(Mods.selectedCount, "Deactivate {} mod", "Deactivate {} mods") : Theme.plural(Mods.selectedCount, "Activate {} mod", "Activate {} mods")) : inActive ? Theme.say("Deactivate") : Theme.say("Activate"), icon: inActive ? "minus" : "plus", off: Mods.active.previewing,
+            { text: many ? (inActive ? Theme.plural(Mods.selectedCount, "Deactivate {} mod", "Deactivate {} mods") : Theme.plural(Mods.selectedCount, "Activate {} mod", "Activate {} mods")) : inActive ? Theme.say("Deactivate") : Theme.say("Activate"), icon: inActive ? "minus" : "plus", off: Hub.mods.previewing,
               run: () => many ? Mods.moveSelected() : Mods.moveAcross(row.ownModel, row.ownModel.indexOf(row.modId), row.modId) },
         ])
         const open = []
@@ -29,13 +29,13 @@ QtObject {
         if (workshop) {
             const steam = [
                 { title: Theme.say("Steam Workshop") },
-                { text: Theme.say("Page in Steam"), icon: "external-link", run: () => Qt.openUrlExternally("steam://url/CommunityFilePage/" + about.folder) },
+                { text: Theme.say("Page in Steam"), icon: "external-link", run: () => Qt.openUrlExternally(about.steamPage) },
                 { text: Theme.say("Page in the browser"), icon: "external-link", run: () => Qt.openUrlExternally(page) },
                 { text: Theme.say("Copy link"), icon: "copy", run: () => Theme.copy(page) },
                 { text: Theme.say("Copy to the game's Mods folder…"), icon: "copy", run: () => Notices.ask({
                     title: Theme.fill("Copy {} to the game's Mods folder", (about.name || "")),
                     lines: [Theme.say("From"), about.path, Theme.say("Into"), (Hub.settings.report.game || "") + "/Mods", Theme.say("The Workshop copy stays where it is; Steam keeps updating that one, not this.")],
-                    label: Theme.say("Copy"), run: () => Mods.copyToLocal(about.path) }) },
+                    label: Theme.say("Copy"), run: () => Mods.copyToLocal(row.modId) }) },
             ]
             if (Hub.settings.report.steamcmd)
                 steam.push({ text: Theme.say("Download again with SteamCMD…"), icon: "download", run: () => Notices.ask({
@@ -54,10 +54,7 @@ QtObject {
             ])
         // Its own other tags first, then the groups its neighbours are in.
         const filing = [{ title: Theme.say("Group under a tag") }]
-        const own = (about.tags || "").split(",").map(tag => tag.trim()).filter(tag => tag !== "")
-        const beside = row.ownModel.subsBeside(row.modId).split("\n").filter(name => name !== "")
-        const offered = [...new Set(own.concat(beside))].filter(name => name !== about.sub)
-        for (const tag of offered)
+        for (const tag of about.groupChoices || [])
             filing.push({ text: Theme.fill("Group under {}", tag), run: () => Mods.putInSub(row.modId, tag) })
         filing.push({ text: Theme.say("A new tag…"), icon: "plus", run: () => Mods.subNameRequested(row.modId) })
         if (about.sub)
@@ -72,8 +69,8 @@ QtObject {
             last.push({ text: Theme.say("Warn about its game version again"), run: () => Mods.trust(row.modId, false) })
         else if ((about.problems || []).some(p => p.fix.action === "trust"))
             last.push({ text: Theme.say("Ignore the game version mismatch"), icon: "check", run: () => Mods.trust(row.modId, true) })
-        if (about.source !== "Official" && about.path && !inActive)
-            last.push({ text: Theme.say("Move to the bin…"), icon: "trash-2", danger: true, run: () => Mods.binRequested(about.name || "", about.path) })
+        if (about.canBin)
+            last.push({ text: Theme.say("Move to the bin…"), icon: "trash-2", danger: true, run: () => Mods.binRequested(about.name || "", about.path, row.modId) })
         groups.push(last)
         const entries = []
         for (const group of groups.filter(group => group.length > 0)) {

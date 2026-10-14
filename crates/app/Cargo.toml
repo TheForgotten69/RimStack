@@ -18,6 +18,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rayon = "1"
 trash = "5"
+# Local time for the names of kept lists; already built for cxx-qt-lib.
+chrono = "0.4"
 
 [build-dependencies]
 cxx-qt-build = { version = "0.10", features = ["link_qt_object_files"] }

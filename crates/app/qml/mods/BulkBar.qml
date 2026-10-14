@@ -7,7 +7,7 @@ import RimStack.Ui
 
 Rectangle {
     id: bar
-    readonly property bool wanted: Mods.selectedCount > 1 && Mods.comparing === null && !Mods.active.previewing
+    readonly property bool wanted: Mods.selectedCount > 1 && Mods.comparing === null && !Hub.mods.previewing
     visible: height > 0
     height: wanted ? Theme.header : 0
     clip: true

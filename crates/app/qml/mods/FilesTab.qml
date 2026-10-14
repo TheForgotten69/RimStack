@@ -58,7 +58,7 @@ Column {
     Column {
         id: hiddenHere
         // Counted again whenever the details are refreshed.
-        readonly property int count: Mods.info && Mods.selectedId >= 0 && Mods.backend ? Mods.textureTools.hiddenIn(Mods.selectedId) : 0
+        readonly property int count: Mods.info && Mods.selectedId >= 0 && Mods.textureTools ? Mods.textureTools.hiddenIn(Mods.selectedId) : 0
         property string problem
         visible: count > 0
         width: parent.width
@@ -76,8 +76,6 @@ Column {
             text: Theme.say("Bring back all")
             onClicked: {
                 hiddenHere.problem = Mods.textureTools.unhideAll(Mods.selectedId)
-                Mods.active.recheck()
-                Mods.refresh()
             }
         }
         Text { visible: hiddenHere.problem !== ""; width: parent.width; wrapMode: Text.WordWrap; color: Theme.err; font.pixelSize: Theme.body; text: hiddenHere.problem }

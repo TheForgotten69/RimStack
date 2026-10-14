@@ -11,8 +11,8 @@ Column {
     width: parent.width
     spacing: Theme.gapCard
     // Counted again each time this panel shows, and when the lists change.
-    readonly property var facts: visible && Mods.backend && !Theme.demo && Mods.active.count >= 0 && Mods.tick >= 0 && Notices.journalled >= 0 ? JSON.parse(Mods.backend.summary()) : ({})
-    readonly property int changed: visible && Mods.backend && !Theme.demo ? JSON.parse(Mods.downloads.sinceLaunch()).items.length : 0
+    readonly property var facts: visible && !Theme.demo && Mods.active.count >= 0 && Hub.mods.unsaved !== undefined && Notices.journalled >= 0 ? Hub.mods.summary() : ({})
+    readonly property int changed: visible && Mods.downloads && !Theme.demo ? JSON.parse(Mods.downloads.sinceLaunch()).items.length : 0
     readonly property var errors: Mods.troubles.filter(trouble => trouble.error)
     readonly property var slowest: Mods.overview.slowest || []
 
@@ -46,10 +46,10 @@ Column {
         id: verdict
         visible: !Theme.demo
         // Green is kept for a list with nothing to say about it.
-        readonly property bool playable: summary.errors.length === 0 && !Mods.active.dirty
+        readonly property bool playable: summary.errors.length === 0 && !Hub.mods.dirty
         readonly property int versionOnly: Mods.overview.versionOnly || 0
-        title: !playable ? Theme.say("Before you play") : Mods.active.warnings === 0 ? Theme.say("Ready to play") : Theme.plural(Mods.active.warnings, "Playable, {} warning", "Playable, {} warnings")
-        tone: summary.errors.length > 0 ? Theme.err : Mods.active.dirty ? Theme.warn : Mods.active.warnings > 0 ? Theme.ink : Theme.ok
+        title: !playable ? Theme.say("Before you play") : Hub.mods.warnings === 0 ? Theme.say("Ready to play") : Theme.plural(Hub.mods.warnings, "Playable, {} warning", "Playable, {} warnings")
+        tone: summary.errors.length > 0 ? Theme.err : Hub.mods.dirty ? Theme.warn : Hub.mods.warnings > 0 ? Theme.ink : Theme.ok
         note: summary.errors.length > 0 ? summary.errors.length : ""
         spacing: Theme.gap
         Repeater {
@@ -65,7 +65,7 @@ Column {
         }
         Line {
             visible: Mods.troubles.length > 0
-            text: summary.errors.length > 4 ? Theme.plural(summary.errors.length - 4, "{} more problem", "{} more problems") : Mods.active.warnings === 0 ? "" : verdict.versionOnly === Mods.active.warnings ? Theme.say("All for the game version") : Theme.plural(Mods.active.warnings, "{} mod with a warning", "{} mods with a warning")
+            text: summary.errors.length > 4 ? Theme.plural(summary.errors.length - 4, "{} more problem", "{} more problems") : Hub.mods.warnings === 0 ? "" : verdict.versionOnly === Hub.mods.warnings ? Theme.say("All for the game version") : Theme.plural(Hub.mods.warnings, "{} mod with a warning", "{} mods with a warning")
             action: Theme.say("All problems")
             onActed: Mods.problemsOpen = true
         }
@@ -89,18 +89,18 @@ Column {
             }
             Btn { visible: launched.logged > 0; text: Theme.say("Open log"); onClicked: Mods.showLogs() }
         }
-        Line { visible: Mods.active.dirty; text: Theme.fill("Not saved: {}", Mods.active.unsaved); action: Theme.say("Save"); primary: true; onActed: Mods.save() }
-        Line { visible: summary.errors.length === 0 && !Mods.active.dirty && Mods.troubles.length === 0; text: Theme.say("No problems, and the list is saved.") }
+        Line { visible: Hub.mods.dirty; text: Theme.fill("Not saved: {}", Hub.mods.unsaved); action: Theme.say("Save"); primary: true; onActed: Mods.save() }
+        Line { visible: summary.errors.length === 0 && !Hub.mods.dirty && Mods.troubles.length === 0; text: Theme.say("No problems, and the list is saved.") }
     }
 
     Card {
-        visible: Mods.active.conflicts + Mods.behind + (summary.facts.replacements || 0) + summary.changed > 0
+        visible: Hub.mods.conflicts + Mods.behind + (summary.facts.replacements || 0) + summary.changed > 0
         title: Theme.say("To review")
         key: "overview-review"
         spacing: Theme.gap
         Line {
-            visible: Mods.active.conflicts > 0
-            text: Theme.plural(Mods.active.conflicts, "{} mod shares textures with another", "{} mods share textures with another")
+            visible: Hub.mods.conflicts > 0
+            text: Theme.plural(Hub.mods.conflicts, "{} mod shares textures with another", "{} mods share textures with another")
             action: Theme.say("Show")
             onActed: Mods.filterBy("is:conflict")
         }

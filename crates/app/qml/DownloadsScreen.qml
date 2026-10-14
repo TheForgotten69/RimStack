@@ -37,7 +37,7 @@ Item {
             return ({ time: 0, items: [] })
         // Read again after a check and after the mods are.
         void downloads.updates
-        void Mods.active.libraryVersion
+        void Hub.mods.libraryVersion
         return JSON.parse(downloads.sinceLaunch())
     }
     // Per Workshop id, the entries Steam's site gave: { time, text }.
@@ -87,7 +87,6 @@ Item {
         Hub.settings.keep("replacementsIgnored", ids.join(","))
         ignoredReplacements = ids
         replacementsRead += 1
-        Mods.tick++
     }
 
     component UpdateRow: RowLayout {
@@ -491,7 +490,7 @@ Item {
                 ]
                 Repeater {
                     id: replaced
-                    model: screen.visible && screen.replacementsRead >= 0 && Mods.tick >= 0 ? JSON.parse(screen.downloads.replacements()) : []
+                    model: screen.visible && screen.replacementsRead >= 0 && Hub.mods.libraryVersion >= 0 ? JSON.parse(screen.downloads.replacements()) : []
                     RowLayout {
                         id: old
                         required property var modelData

@@ -20,22 +20,22 @@ Item {
         }
         if (warningsShown > 0)
             entries.push({ text: Theme.plural(warningsShown, "{} warning", "{} warnings"), icon: "funnel", run: () => toggleTerm("is:warning") })
-        if (Mods.active.conflicts > 0)
-            entries.push({ text: Theme.fill("{} share textures", Mods.active.conflicts), icon: "image", run: () => toggleTerm("is:conflict") })
+        if (Hub.mods.conflicts > 0)
+            entries.push({ text: Theme.fill("{} share textures", Hub.mods.conflicts), icon: "image", run: () => toggleTerm("is:conflict") })
         if (Mods.behind > 0)
             entries.push({ text: Theme.plural(Mods.behind, "{} update", "{} updates"), icon: "download", run: () => Mods.showUpdates() })
         if (entries.length > 0)
             entries.push({ line: true })
-        entries.push({ text: Theme.say("Undo (Ctrl + Z)"), icon: "undo-2", off: !Mods.active.canUndo || Mods.active.previewing, run: () => Mods.undo() })
-        entries.push({ text: Theme.say("Redo (Ctrl + Shift + Z)"), icon: "redo-2", off: !Mods.active.canRedo || Mods.active.previewing, run: () => Mods.redo() })
+        entries.push({ text: Theme.say("Undo (Ctrl + Z)"), icon: "undo-2", off: !Hub.mods.canUndo || Hub.mods.previewing, run: () => Mods.undo() })
+        entries.push({ text: Theme.say("Redo (Ctrl + Shift + Z)"), icon: "redo-2", off: !Hub.mods.canRedo || Hub.mods.previewing, run: () => Mods.redo() })
         return entries
     }
     // The mods whose one trouble is the game version they list.
     readonly property int versionOnly: Mods.overview.versionOnly || 0
-    readonly property bool versionLine: versionOnly >= 3 && !Mods.active.previewing && !Theme.demo
+    readonly property bool versionLine: versionOnly >= 3 && !Hub.mods.previewing && !Theme.demo
     // The mods warned about for something the line above the list does not say.
     readonly property int otherWarnings: Mods.overview.otherWarnings || 0
-    readonly property int warningsShown: versionLine ? otherWarnings : Mods.active.warnings
+    readonly property int warningsShown: versionLine ? otherWarnings : Hub.mods.warnings
     readonly property alias list: view
 
     function toggleTerm(term) {
@@ -46,9 +46,9 @@ Item {
 
     // "is:changed" narrows to what is not saved yet: with nothing unsaved it would empty both lists.
     Connections {
-        target: Mods.active
+        target: Hub.mods
         function onDirtyChanged() {
-            if (!Mods.active.dirty && filter.terms.indexOf("is:changed") >= 0)
+            if (!Hub.mods.dirty && filter.terms.indexOf("is:changed") >= 0)
                 activePane.toggleTerm("is:changed")
         }
     }
@@ -61,7 +61,7 @@ Item {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
-        visible: Mods.active.problem === ""
+        visible: Hub.mods.problem === ""
         RowLayout {
             z: 6
             Layout.leftMargin: Theme.gapCard
@@ -82,15 +82,15 @@ Item {
                 border.color: activeFocus ? Theme.focus : tone
                 onClicked: activePane.toggleTerm(term)
             }
-            Count { visible: Mods.active.errors > 0; term: "is:error"; tone: Theme.err; icon: "circle-alert"; text: Theme.plural(Mods.active.errors, "{} error", "{} errors"); tip: Theme.say("Mods the game cannot load as they are. Click to show only these.") }
+            Count { visible: Hub.mods.errors > 0; term: "is:error"; tone: Theme.err; icon: "circle-alert"; text: Theme.plural(Hub.mods.errors, "{} error", "{} errors"); tip: Theme.say("Mods the game cannot load as they are. Click to show only these.") }
             Count { id: warningsChip; visible: activePane.warningsShown > 0 && !activePane.tight; term: "is:warning"; tone: Theme.warn; icon: "triangle-alert"; text: activePane.versionLine ? Theme.plural(activePane.warningsShown, "{} more warning", "{} more warnings") : Theme.plural(activePane.warningsShown, "{} warning", "{} warnings"); tip: Theme.say("Mods with a warning: the game runs, something about them may not. Click to show only these.") }
-            Count { visible: Mods.active.conflicts > 0 && !activePane.tight; term: "is:conflict"; tone: Theme.warn; icon: "image"; text: Theme.fill("{} share textures", Mods.active.conflicts); tip: Theme.say("Mods that provide the same texture as another active mod. Click to show only these.") }
+            Count { visible: Hub.mods.conflicts > 0 && !activePane.tight; term: "is:conflict"; tone: Theme.warn; icon: "image"; text: Theme.fill("{} share textures", Hub.mods.conflicts); tip: Theme.say("Mods that provide the same texture as another active mod. Click to show only these.") }
             Row {
                 visible: Mods.problemCount > 0 && !activePane.tight
                 spacing: Theme.gapLine
                 Text {
                     // With no error in the list they are warnings, the word the details and the panel use; not said twice beside the chip.
-                    readonly property bool onlyWarnings: Mods.active.errors === 0
+                    readonly property bool onlyWarnings: Hub.mods.errors === 0
                     visible: activePane.stepping || !(onlyWarnings && activePane.warningsShown > 0 && activePane.warningsShown === Mods.problemCount)
                     anchors.verticalCenter: parent.verticalCenter
                     rightPadding: Theme.gapSmall
@@ -113,15 +113,15 @@ Item {
             Row {
                 visible: !Theme.demo && !activePane.tight
                 spacing: Theme.gapLine
-                Btn { enabled: Mods.active.canUndo && !Mods.active.previewing; icon: "undo-2"; tip: Theme.say("Undo (Ctrl + Z)"); onClicked: Mods.undo() }
-                Btn { enabled: Mods.active.canRedo && !Mods.active.previewing; icon: "redo-2"; tip: Theme.say("Redo (Ctrl + Shift + Z)"); onClicked: Mods.redo() }
+                Btn { enabled: Hub.mods.canUndo && !Hub.mods.previewing; icon: "undo-2"; tip: Theme.say("Undo (Ctrl + Z)"); onClicked: Mods.undo() }
+                Btn { enabled: Hub.mods.canRedo && !Hub.mods.previewing; icon: "redo-2"; tip: Theme.say("Redo (Ctrl + Shift + Z)"); onClicked: Mods.redo() }
             }
             // Sort follows what the mods' files say, so it waits until they are read.
             Btn {
                 id: sortButton
                 // Always named, and in the colour Sort marks what it moves with.
                 tone: Theme.moved
-                visible: !Theme.demo; enabled: !Mods.active.previewing && Mods.active.filesRead; icon: "arrow-up-down"; text: !Mods.active.filesRead ? Theme.say("Reading files…") : Mods.sortPending > 0 ? Theme.say("Sort") + "  " + Mods.sortPending : Theme.say("Sort"); tip: Theme.say("Shows the order the rules ask for, to keep or discard. Nothing is written before Save."); onClicked: Mods.previewSort()
+                visible: !Theme.demo; enabled: !Hub.mods.previewing && Hub.mods.filesRead; icon: "arrow-up-down"; text: !Hub.mods.filesRead ? Theme.say("Reading files…") : Mods.sortPending > 0 ? Theme.say("Sort") + "  " + Mods.sortPending : Theme.say("Sort"); tip: Theme.say("Shows the order the rules ask for, to keep or discard. Nothing is written before Save."); onClicked: Mods.previewSort()
                 Hint { step: 2; atRight: true; text: Theme.say("Sort shows the order the mods' rules ask for and what would move. Apply moves the mods; Discard leaves the list as it was.") }
             }
             // The hint stands beside the button, not inside it: a button that cannot be pressed would switch the hint off with it.
@@ -129,7 +129,7 @@ Item {
                 visible: !Theme.demo
                 implicitWidth: saveButton.implicitWidth
                 implicitHeight: saveButton.implicitHeight
-                Btn { id: saveButton; enabled: Mods.active.dirty; primary: Mods.active.dirty; icon: "save"; text: Theme.say("Save"); tip: Theme.say("Writes the load order to ModsConfig.xml (Ctrl + S). The file as it was is copied beside it first."); onClicked: Mods.save() }
+                Btn { id: saveButton; enabled: Hub.mods.dirty; primary: Hub.mods.dirty; icon: "save"; text: Theme.say("Save"); tip: Theme.say("Writes the load order to ModsConfig.xml (Ctrl + S). The file as it was is copied beside it first."); onClicked: Mods.save() }
                     Hint { step: 3; atRight: true; text: Theme.say("Nothing reaches the game before Save. Until then every change can be undone or discarded.") }
             }
             Btn {
@@ -137,7 +137,7 @@ Item {
                 visible: activePane.tight && !Theme.demo
                 icon: "ellipsis"
                 menu: true
-                tone: Mods.active.errors > 0 ? Theme.err : Mods.problemCount > 0 ? Theme.warn : "transparent"
+                tone: Hub.mods.errors > 0 ? Theme.err : Mods.problemCount > 0 ? Theme.warn : "transparent"
                 text: Mods.problemCount > 0 ? Theme.count(Mods.problemCount) : ""
                 tip: Theme.say("Problems, Undo, Redo")
                 spoken: Theme.say("Problems, Undo, Redo")
@@ -145,7 +145,7 @@ Item {
             }
         }
         Rectangle {
-            visible: Mods.active.dirty && !Mods.active.previewing && !Theme.demo
+            visible: Hub.mods.dirty && !Hub.mods.previewing && !Theme.demo
             Layout.fillWidth: true
             Layout.leftMargin: Theme.gapLarge
             Layout.rightMargin: Theme.gapLarge
@@ -159,7 +159,7 @@ Item {
                 anchors.rightMargin: Theme.gapTiny
                 spacing: Theme.gap
                 Rectangle { implicitWidth: 7; implicitHeight: 7; radius: Math.min(width, height) / 2; color: Theme.warn }
-                Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: Theme.fill("Not saved: {}", Mods.active.unsaved) }
+                Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: Theme.fill("Not saved: {}", Hub.mods.unsaved) }
                 Btn { text: Theme.say("Show"); tip: Theme.say("Only the mods moved or activated since the last save"); onClicked: activePane.toggleTerm("is:changed") }
                 Btn { text: Theme.say("Discard"); tip: Theme.say("Back to the saved list. Undo brings the changes back."); onClicked: Mods.discardChanges() }
                 Btn { primary: true; text: Theme.say("Save"); onClicked: Mods.save() }
@@ -214,7 +214,7 @@ Item {
             text: Mods.saveProblem !== "" ? Theme.fill("The list was not saved. {}", Mods.saveProblem) : Mods.upkeepProblem
         }
         Rectangle {
-            visible: Mods.active.sortNote !== ""
+            visible: Hub.mods.sortNote !== ""
             Layout.fillWidth: true
             Layout.leftMargin: Theme.gapLarge
             Layout.rightMargin: Theme.gapLarge
@@ -237,18 +237,18 @@ Item {
                     lineHeight: 1.25
                     // The first sentence is the news; the rest is detail.
                     text: {
-                        const stop = Mods.active.sortNote.indexOf(". ")
-                        const head = stop < 0 ? Mods.active.sortNote : Mods.active.sortNote.substring(0, stop + 1)
-                        const rest = stop < 0 ? "" : Mods.active.sortNote.substring(stop + 1)
+                        const stop = Hub.mods.sortNote.indexOf(". ")
+                        const head = stop < 0 ? Hub.mods.sortNote : Hub.mods.sortNote.substring(0, stop + 1)
+                        const rest = stop < 0 ? "" : Hub.mods.sortNote.substring(stop + 1)
                         const plain = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
-                        return "<b>" + plain(head) + "</b>" + (Mods.active.previewing ? " <font color=\"" + Theme.ink2 + "\">" + Theme.say("Nothing has changed yet.") + "</font>" : "") + plain(rest)
+                        return "<b>" + plain(head) + "</b>" + (Hub.mods.previewing ? " <font color=\"" + Theme.ink2 + "\">" + Theme.say("Nothing has changed yet.") + "</font>" : "") + plain(rest)
                     }
                 }
-                Btn { visible: Mods.active.previewing; primary: true; text: Theme.say("Apply"); onClicked: Mods.endSort(true) }
-                Btn { visible: Mods.active.previewing; text: Theme.say("Discard"); onClicked: Mods.endSort(false) }
-                Btn { visible: !Mods.active.previewing; text: Theme.say("OK"); onClicked: Mods.active.sortNote = "" }
+                Btn { visible: Hub.mods.previewing; primary: true; text: Theme.say("Apply"); onClicked: Mods.endSort(true) }
+                Btn { visible: Hub.mods.previewing; text: Theme.say("Discard"); onClicked: Mods.endSort(false) }
+                Btn { visible: !Hub.mods.previewing; text: Theme.say("OK"); onClicked: Hub.mods.sortNote = "" }
                 // Nothing to decide: the note leaves by itself.
-                Timer { interval: 8000; running: Mods.active.sortNote !== "" && !Mods.active.previewing; onTriggered: Mods.active.sortNote = "" }
+                Timer { interval: 8000; running: Hub.mods.sortNote !== "" && !Hub.mods.previewing; onTriggered: Hub.mods.sortNote = "" }
             }
         }
         FilterField {
@@ -265,8 +265,6 @@ Item {
             placeholder: Theme.say("Filter active and inactive mods")
             found: Mods.filtered === "" ? "" : Theme.fill("{} active, {} inactive", Theme.count(Mods.active.matching), Theme.count(Mods.inactive.matching))
             onTextChanged: {
-                Mods.active.setFilter(text)
-                Mods.inactive.setFilter(text)
                 Mods.filtered = text
                 if (Mods.leftOffRestored)
                     Mods.prefs.lastFilter = text
@@ -293,9 +291,9 @@ Item {
                     Repeater {
                         id: offers
                         model: [
-                            ["is:error", Theme.plural(Mods.active.errors, "{} mod", "{} mods")],
-                            ["is:warning", Theme.plural(Mods.active.warnings, "{} mod", "{} mods")],
-                            ["is:conflict", Theme.plural(Mods.active.conflicts, "{} mod sharing textures", "{} mods sharing textures")],
+                            ["is:error", Theme.plural(Hub.mods.errors, "{} mod", "{} mods")],
+                            ["is:warning", Theme.plural(Hub.mods.warnings, "{} mod", "{} mods")],
+                            ["is:conflict", Theme.plural(Hub.mods.conflicts, "{} mod sharing textures", "{} mods sharing textures")],
                             ["is:changed", Theme.say("moved or activated since the last save")],
                             ["is:new", Theme.say("installed since the game was last started")],
                             ["is:updated", Mods.behind > 0 ? Theme.fill("{} with an update", Mods.behind) : Theme.say("after checking for updates")],
@@ -434,8 +432,8 @@ Item {
                         contentItem: Column {
                             spacing: Theme.gapSmall
                             Text { topPadding: Theme.gapTiny; color: Theme.ink2; font.pixelSize: Theme.small; font.weight: Font.DemiBold; text: Theme.say("Load order") }
-                            Btn { width: parent.width; icon: Mods.prefs.headings !== 0 ? "check" : ""; text: Theme.say("Under category headings"); onClicked: Mods.keepingScroll(() => Mods.prefs.headings = 1) }
-                            Btn { width: parent.width; icon: Mods.prefs.headings === 0 ? "check" : ""; text: Theme.say("One numbered list"); onClicked: Mods.keepingScroll(() => Mods.prefs.headings = 0) }
+                            Btn { width: parent.width; icon: Mods.prefs.headings !== 0 ? "check" : ""; text: Theme.say("Under category headings"); onClicked: Mods.prefs.headings = 1 }
+                            Btn { width: parent.width; icon: Mods.prefs.headings === 0 ? "check" : ""; text: Theme.say("One numbered list"); onClicked: Mods.prefs.headings = 0 }
                             Text { topPadding: Theme.gapTiny; color: Theme.ink2; font.pixelSize: Theme.small; font.weight: Font.DemiBold; text: Theme.say("Columns") }
                             Repeater {
                                 model: Object.keys(Mods.columns.labels)
@@ -475,11 +473,11 @@ Item {
     }
 
     Column {
-        visible: Mods.active.problem !== ""
+        visible: Hub.mods.problem !== ""
         anchors.centerIn: parent
         width: Math.min(parent.width - 80, 520)
         spacing: Theme.gapSmall
         Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("Mods could not be read") }
-        Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; lineHeight: 1.3; text: Mods.active.problem }
+        Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; lineHeight: 1.3; text: Hub.mods.problem }
     }
 }
