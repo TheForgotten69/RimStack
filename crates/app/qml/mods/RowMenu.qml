@@ -8,7 +8,7 @@ QtObject {
         const inActive = row.ownModel === Mods.active
         if (!(row.current))
             Mods.select(row.modId, inActive)
-        const about = Mods.active.details(row.modId)
+        const about = Mods.about(row.modId)
         const many = Mods.selectedCount > 1
         const workshop = about.source === "Workshop"
         const page = "https://steamcommunity.com/sharedfiles/filedetails/?id=" + about.folder
@@ -41,7 +41,7 @@ QtObject {
                 steam.push({ text: Theme.say("Download again with SteamCMD…"), icon: "download", run: () => Notices.ask({
                     title: Theme.fill("Download {} again", (about.name || "")),
                     lines: [Theme.say("SteamCMD downloads the mod anew, and the fresh copy replaces this folder:"), about.path],
-                    label: Theme.say("Download"), run: () => Mods.backend.redownload(about.folder, about.path) }) })
+                    label: Theme.say("Download"), run: () => Mods.downloads.redownload(about.folder, about.path) }) })
             if (!inActive)
                 steam.push({ text: Theme.say("Unsubscribe…"), icon: "minus", danger: true, run: () => Mods.unsubscribe(about.name || "", about.folder, about.path) })
             groups.push(steam)
@@ -50,7 +50,7 @@ QtObject {
             groups.push([
                 { title: Theme.say("Git") },
                 { text: Theme.say("Repository"), icon: "link", run: () => Qt.openUrlExternally(about.repository) },
-                { text: Theme.say("Update"), icon: "download", run: () => Mods.backend.updateFromGit(about.path) },
+                { text: Theme.say("Update"), icon: "download", run: () => Mods.downloads.updateFromGit(about.path) },
             ])
         // Its own other tags first, then the groups its neighbours are in.
         const filing = [{ title: Theme.say("Group under a tag") }]

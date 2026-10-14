@@ -9,30 +9,33 @@ impl qobject::ModListModel {
         if self.preview.is_some() || self.list.mods().iter().all(|m| m.installed.is_none()) {
             return;
         }
-        let Ok((library, _)) = crate::library() else {
+        let loaded = crate::app().library();
+        let Ok((library, _)) = &*loaded else {
             return;
         };
         let started = std::time::Instant::now();
         let before = self.list.mods().to_vec();
         let (mods, sorted) = sorted_by_category(library, before.clone());
         let moved = sorted.moved();
-        eprintln!("sort_us={}", started.elapsed().as_micros());
+        rimstack_core::note!("sort_us={}", started.elapsed().as_micros());
 
         let moves = moved.iter().filter(|m| **m).count();
         let mut note = match moves {
             0 => say!("Already in order."),
-            n => say!(
-                "Sorting would move {}.",
-                plural(n, &say!("mod"), &say!("mods"))
+            n => say_n!(
+                n,
+                "Sorting would move {} mod.",
+                "Sorting would move {} mods."
             ),
         };
         // Rules come before groups: say which groups they keep apart.
         let apart = rimstack_core::list::split_groups(sorted.order.iter().map(|&i| &mods[i]));
         if !apart.is_empty() {
             note += " ";
-            note += &say!(
-                "A rule keeps {} in more than one place: {}.",
-                plural(apart.len(), &say!("group"), &say!("groups")),
+            note += &say_n!(
+                apart.len(),
+                "A rule keeps {} group in more than one place: {}.",
+                "A rule keeps {} groups in more than one place: {}.",
                 apart.join(", ")
             );
         }
@@ -44,14 +47,12 @@ impl qobject::ModListModel {
             .collect();
         if !each.is_empty() {
             note += " ";
-            note += &match each.len() {
-                1 => say!("Ignored 1 rule that contradicts another: {}.", each[0]),
-                n => say!(
-                    "Ignored {} rules that contradict another: {}.",
-                    n,
-                    each.join("; ")
-                ),
-            };
+            note += &say_n!(
+                each.len(),
+                "Ignored {} rule that contradicts another: {}.",
+                "Ignored {} rules that contradict another: {}.",
+                each.join("; ")
+            );
         }
         self.as_mut().set_sort_note(QString::from(&note));
         if moves == 0 {
@@ -145,7 +146,8 @@ impl qobject::ModListModel {
     /// would change at the next unrelated refresh.
     pub(crate) fn refile(mut self: Pin<&mut Self>) {
         let applies = self.checked && self.preview.is_none();
-        let Some((library, _)) = crate::library().as_ref().ok().filter(|_| applies) else {
+        let loaded = crate::app().library();
+        let Some((library, _)) = loaded.as_ref().as_ref().ok().filter(|_| applies) else {
             self.as_mut().reset_with(|_| ());
             return;
         };
@@ -154,7 +156,8 @@ impl qobject::ModListModel {
     }
 
     pub(crate) fn sort_pending(&self) -> i32 {
-        let Ok((library, _)) = crate::library() else {
+        let loaded = crate::app().library();
+        let Ok((library, _)) = &*loaded else {
             return 0;
         };
         if self.preview.is_some() || !self.checked {
@@ -166,16 +169,34 @@ impl qobject::ModListModel {
 
     pub(crate) fn sort_moves(&self) -> QString {
         let Some(preview) = &self.preview else {
-            return QString::default();
-        };
-        let line = |(now, (m, &from)): (usize, (&Mod, &usize))| {
-            let id = m.installed.map_or(-1, |i| i as i64);
-            let why = preview.why.get(now)?.as_ref()?;
-            let (group, text) = (why.group, &why.text);
-            (from > 0).then(|| format!("{}\t{from}\t{}\t{id}\t{group}\t{text}", m.name, now + 1))
+            return QString::from("[]");
         };
         let moved = self.list.mods().iter().zip(&preview.moved_from).enumerate();
-        QString::from(&moved.filter_map(line).collect::<Vec<_>>().join("\n"))
+        let reasoned = moved.filter_map(|(now, (m, &from))| {
+            let why = preview.why.get(now)?.as_ref()?;
+            (from > 0).then_some((now, m, from, why))
+        });
+        let mut groups = rimstack_core::grouped::by_key(reasoned, |(_, _, _, why)| why.group);
+        groups.sort_by_key(|(_, moves)| std::cmp::Reverse(moves.len()));
+        let said: Vec<serde_json::Value> = groups
+            .iter()
+            .map(|(name, moves)| {
+                let moves: Vec<serde_json::Value> = moves
+                    .iter()
+                    .map(|(now, m, from, why)| {
+                        serde_json::json!({
+                            "name": m.name,
+                            "from": from,
+                            "to": now + 1,
+                            "modId": m.installed.map_or(-1, |i| i as i64),
+                            "why": why.text,
+                        })
+                    })
+                    .collect();
+                serde_json::json!({ "name": name, "moves": moves })
+            })
+            .collect();
+        QString::from(&serde_json::Value::Array(said).to_string())
     }
 
     /// Why Sort moves the mod at this position of the order on show.

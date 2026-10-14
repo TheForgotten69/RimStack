@@ -41,7 +41,6 @@ pub struct Assembly<'a> {
     blobs: &'a [u8],
     /// The texts its code uses, as UTF-16.
     user_strings: &'a [u8],
-    /// Rows per table.
     rows: [usize; 64],
     /// Where each table's rows start in the file, and the bytes per row.
     starts: [usize; TABLES.len()],
@@ -174,6 +173,18 @@ impl<'a> Assembly<'a> {
         }
         // The tables read must lie inside the file.
         dll.get(..at)?;
+        // A type's methods run from its first to the next type's first,
+        // so the firsts never go back. Where one does, every type before
+        // it would claim the methods of all: as many readings as types
+        // times methods, which a file can make four thousand million.
+        let mut last = 0;
+        for row in 1..=rows[TYPE_DEF] {
+            let first = assembly.cell(TYPE_DEF, row, 5)?;
+            if first < last {
+                return None;
+            }
+            last = first;
+        }
         Some(assembly)
     }
 
@@ -382,6 +393,19 @@ mod tests {
         assert!(assembly.types().is_empty());
         assert!(assembly.patches().is_empty());
         assert!(assembly.looked_up().is_empty());
+    }
+
+    #[test]
+    fn method_lists_that_go_back_are_a_damaged_file() {
+        let mut b = Builder::new();
+        b.type_def("My", "First", 0);
+        b.method("One", &[0x00, 0, 0x01]);
+        b.method("Two", &[0x00, 0, 0x01]);
+        b.type_def("My", "Second", 0);
+        let name = b.string("Third");
+        // Its methods would start at the first again, before Second's.
+        b.row(TYPE_DEF, &[0, name, 0, 0, 1, 1]);
+        assert!(Assembly::read(&b.finish()).is_none());
     }
 
     #[test]

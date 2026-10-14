@@ -2,7 +2,6 @@
 // each lead somewhere.
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import RimStack.Ui
 
@@ -13,9 +12,9 @@ Column {
     spacing: Theme.gapCard
     // Counted again each time this panel shows, and when the lists change.
     readonly property var facts: visible && Mods.backend && !Theme.demo && Mods.active.count >= 0 && Mods.tick >= 0 && Notices.journalled >= 0 ? JSON.parse(Mods.backend.summary()) : ({})
-    readonly property int changed: visible && Mods.backend && !Theme.demo ? JSON.parse(Mods.backend.sinceLaunch()).items.length : 0
+    readonly property int changed: visible && Mods.backend && !Theme.demo ? JSON.parse(Mods.downloads.sinceLaunch()).items.length : 0
     readonly property var errors: Mods.troubles.filter(trouble => trouble.error)
-    readonly property var slowest: String(Mods.overview.slowest || "").split("\n").filter(line => line !== "").map(line => line.split("\t"))
+    readonly property var slowest: Mods.overview.slowest || []
 
     component Line: RowLayout {
         id: line
@@ -48,7 +47,7 @@ Column {
         visible: !Theme.demo
         // Green is kept for a list with nothing to say about it.
         readonly property bool playable: summary.errors.length === 0 && !Mods.active.dirty
-        readonly property int versionOnly: Mods.troubles.filter(trouble => trouble.fix === "trust").length
+        readonly property int versionOnly: Mods.overview.versionOnly || 0
         title: !playable ? Theme.say("Before you play") : Mods.active.warnings === 0 ? Theme.say("Ready to play") : Theme.plural(Mods.active.warnings, "Playable, {} warning", "Playable, {} warnings")
         tone: summary.errors.length > 0 ? Theme.err : Mods.active.dirty ? Theme.warn : Mods.active.warnings > 0 ? Theme.ink : Theme.ok
         note: summary.errors.length > 0 ? summary.errors.length : ""
@@ -61,7 +60,6 @@ Column {
                 name: modelData.name
                 words: modelData.words
                 fix: modelData.fix
-                fixLabel: modelData.fixLabel
                 modId: modelData.modId
             }
         }
@@ -137,11 +135,11 @@ Column {
                 required property var modelData
                 width: summary.width
                 height: Theme.control
-                Rectangle { width: parent.width * Number(slow.modelData[3]); height: parent.height; radius: Theme.corner; color: Theme.warn; opacity: 0.14 }
-                Text { x: 6; width: parent.width - 70; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: slow.modelData[1] }
-                Text { anchors.right: parent.right; anchors.rightMargin: Theme.gapSmall; anchors.verticalCenter: parent.verticalCenter; color: Theme.ink2; font.pixelSize: Theme.small; font.features: { "tnum": 1 }; text: slow.modelData[2] }
+                Rectangle { width: parent.width * slow.modelData.part; height: parent.height; radius: Theme.corner; color: Theme.warn; opacity: 0.14 }
+                Text { x: 6; width: parent.width - 70; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: slow.modelData.name }
+                Text { anchors.right: parent.right; anchors.rightMargin: Theme.gapSmall; anchors.verticalCenter: parent.verticalCenter; color: Theme.ink2; font.pixelSize: Theme.small; font.features: { "tnum": 1 }; text: slow.modelData.took }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: Mods.showMod(Number(slow.modelData[0])) }
+                TapHandler { onTapped: Mods.showMod(slow.modelData.modId) }
             }
         }
     }
@@ -173,12 +171,12 @@ Column {
             }
         }
         Text {
-            visible: Mods.active.rulesProblem !== ""
+            visible: Mods.communityData.rulesProblem !== ""
             width: parent.width
             wrapMode: Text.WordWrap
             color: Theme.err
             font.pixelSize: Theme.body
-            text: Theme.fill("Community rules not updated: {}", Mods.active.rulesProblem)
+            text: Theme.fill("Community rules not updated: {}", Mods.communityData.rulesProblem)
         }
     }
 }

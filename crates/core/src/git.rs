@@ -1,5 +1,6 @@
 //! A mod kept as a Git checkout: where its repository is on the web.
 
+use crate::error::{Error, Result};
 use crate::say;
 
 use std::path::Path;
@@ -56,6 +57,10 @@ pub fn links_in(text: &str) -> Vec<String> {
     found
 }
 
+fn not_run(e: std::io::Error) -> Error {
+    Error::program(say!("git could not be run: {}", e))
+}
+
 /// The folder a repository is cloned into, under `mods`: its last part.
 pub fn folder_for(link: &str, mods: &Path) -> std::path::PathBuf {
     mods.join(link.rsplit('/').next().unwrap_or_default())
@@ -63,22 +68,25 @@ pub fn folder_for(link: &str, mods: &Path) -> std::path::PathBuf {
 
 /// Clones a repository into the folder `folder_for` gives; one that is
 /// there already is left alone. Uses the network.
-pub fn clone(link: &str, mods: &Path) -> Result<std::path::PathBuf, String> {
+pub fn clone(link: &str, mods: &Path) -> Result<std::path::PathBuf> {
     let into = folder_for(link, mods);
     if into.exists() {
-        return Err(say!("{} is there already", into.display()));
+        return Err(Error::refused(say!("{} is there already", into.display())));
     }
-    let ran = std::process::Command::new("git")
-        .arg("clone")
-        .arg(link)
-        .arg(&into)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .output()
-        .map_err(|e| say!("git could not be run: {}", e))?;
+    let ran = crate::program::run(
+        std::process::Command::new("git")
+            // A link is never an option, whatever it starts with.
+            .args(["clone", "--"])
+            .arg(link)
+            .arg(&into)
+            .env("GIT_TERMINAL_PROMPT", "0"),
+        crate::program::DOWNLOAD,
+    )
+    .map_err(not_run)?;
     if !ran.status.success() {
         let said = String::from_utf8_lossy(&ran.stderr);
         let last = said.lines().last().map(|line| line.trim().to_string());
-        return Err(last.unwrap_or_else(|| say!("git failed")));
+        return Err(Error::program(last.unwrap_or_else(|| say!("git failed"))));
     }
     Ok(into)
 }
@@ -86,10 +94,11 @@ pub fn clone(link: &str, mods: &Path) -> Result<std::path::PathBuf, String> {
 /// What `git --version` answers ("2.47.1"), or nothing where Git cannot
 /// be run: asking a checkout for updates needs it.
 pub fn installed() -> Option<String> {
-    let ran = std::process::Command::new("git")
-        .arg("--version")
-        .output()
-        .ok()?;
+    let ran = crate::program::run(
+        std::process::Command::new("git").arg("--version"),
+        crate::program::LOCAL,
+    )
+    .ok()?;
     let said = String::from_utf8_lossy(&ran.stdout);
     ran.status
         .success()
@@ -98,53 +107,63 @@ pub fn installed() -> Option<String> {
 
 /// How many commits a checkout is behind its remote, after asking the
 /// remote. Uses the network.
-pub fn behind(mod_root: &Path) -> Result<usize, String> {
+pub fn behind(mod_root: &Path) -> Result<usize> {
     let git = |args: &[&str]| {
-        let ran = std::process::Command::new("git")
-            .arg("-C")
-            .arg(mod_root)
-            .args(args)
-            .env("GIT_TERMINAL_PROMPT", "0")
-            .output()
-            .map_err(|e| say!("git could not be run: {}", e))?;
+        let ran = crate::program::run(
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(mod_root)
+                .args(args)
+                .env("GIT_TERMINAL_PROMPT", "0"),
+            crate::program::NETWORK,
+        )
+        .map_err(not_run)?;
         match ran.status.success() {
             true => Ok(String::from_utf8_lossy(&ran.stdout).trim().to_string()),
             false => {
                 let said = String::from_utf8_lossy(&ran.stderr);
-                Err(said
-                    .lines()
-                    .last()
-                    .map_or_else(|| say!("git failed"), |line| line.trim().to_string()))
+                let last = said.lines().last();
+                Err(Error::program(last.map_or_else(
+                    || say!("git failed"),
+                    |line| line.trim().to_string(),
+                )))
             }
         }
     };
     git(&["fetch", "--quiet"])?;
     let count = git(&["rev-list", "--count", "HEAD..@{upstream}"])?;
-    count.parse().map_err(|_| say!("git said {}", count))
+    count
+        .parse()
+        .map_err(|_| Error::format(say!("git said {}", count)))
 }
 
 /// Brings a checkout up to its remote, only by moving forward: local
 /// changes or commits stop it. Answers with the commit it is now at.
-pub fn update(mod_root: &Path) -> Result<String, String> {
-    let ran = std::process::Command::new("git")
-        .arg("-C")
-        .arg(mod_root)
-        .args(["pull", "--ff-only", "--quiet"])
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .output()
-        .map_err(|e| say!("git could not be run: {}", e))?;
+pub fn update(mod_root: &Path) -> Result<String> {
+    let ran = crate::program::run(
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(mod_root)
+            .args(["pull", "--ff-only", "--quiet"])
+            .env("GIT_TERMINAL_PROMPT", "0"),
+        crate::program::NETWORK,
+    )
+    .map_err(not_run)?;
     if !ran.status.success() {
         let said = String::from_utf8_lossy(&ran.stderr);
-        return Err(said
-            .lines()
-            .last()
-            .map_or_else(|| say!("git pull failed"), |line| line.trim().to_string()));
+        let last = said.lines().last();
+        return Err(Error::program(last.map_or_else(
+            || say!("git pull failed"),
+            |line| line.trim().to_string(),
+        )));
     }
-    let head = std::process::Command::new("git")
-        .arg("-C")
-        .arg(mod_root)
-        .args(["log", "-1", "--format=%h %s"])
-        .output();
+    let head = crate::program::run(
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(mod_root)
+            .args(["log", "-1", "--format=%h %s"]),
+        crate::program::LOCAL,
+    );
     let now = head.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
     Ok(now.unwrap_or_default())
 }

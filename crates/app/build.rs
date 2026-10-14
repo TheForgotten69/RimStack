@@ -53,6 +53,8 @@ fn main() {
                 "qml/mods/SelectionSummary.qml",
                 "qml/mods/ModHeader.qml",
                 "qml/mods/AboutTab.qml",
+                "qml/mods/Columns.qml",
+                "qml/mods/Dragging.qml",
                 "qml/mods/LoadOrderTab.qml",
                 "qml/mods/FilesTab.qml",
                 "qml/mods/ListSummary.qml",
@@ -75,7 +77,18 @@ fn main() {
     .qrc_resources(["assets/rimstack.svg"])
     .qt_module("Quick")
     .qt_module("QuickControls2")
-    .files(["src/model.rs", "src/backend.rs"]);
+    .files([
+        "src/model.rs",
+        "src/backend.rs",
+        "src/log_reader.rs",
+        "src/texture_tools.rs",
+        "src/save_reader.rs",
+        "src/downloads.rs",
+        "src/list_store.rs",
+        "src/broken_mod_search.rs",
+        "src/community_data.rs",
+        "src/mod_edits.rs",
+    ]);
     // SAFETY: one more source for the same compiler, nothing set that the generated code relies on.
     let builder = unsafe {
         builder.cc_builder(|cc| {

@@ -144,10 +144,7 @@ impl qobject::ModListModel {
                     }
                     FRESH => QVariant::from(&self.is_new(m)),
                     // Another mod of this list goes by the same name.
-                    TWIN => {
-                        let same = |other: &&Mod| other.name.eq_ignore_ascii_case(&m.name);
-                        QVariant::from(&(self.list.mods().iter().filter(same).count() > 1))
-                    }
+                    TWIN => QVariant::from(&self.twins.get(index).copied().unwrap_or(false)),
                     WHY => text(self.why_moved(index)),
                     NAME => text(&m.name),
                     AUTHOR => text(&m.author),
@@ -159,8 +156,7 @@ impl qobject::ModListModel {
                         text(&ms.map(rimstack_core::startup::seconds).unwrap_or_default())
                     }
                     LOAD_PART => {
-                        let slowest = self.list.mods().iter().filter_map(|m| m.load_micros).max();
-                        let part = match (m.load_micros, slowest) {
+                        let part = match (m.load_micros, self.slowest) {
                             (Some(own), Some(most)) if most > 0 => f64::from(own) / f64::from(most),
                             _ => 0.0,
                         };
@@ -168,15 +164,17 @@ impl qobject::ModListModel {
                     }
                     // 0 Workshop, 1 local, 2 a Git checkout, 3 the game's own.
                     SOURCE => {
-                        let installed = match (crate::library(), m.installed) {
+                        let loaded = crate::app().library();
+                        let installed = match (&*loaded, m.installed) {
                             (Ok((library, _)), Some(i)) => library.installed.get(i),
                             _ => None,
                         };
-                        let source = installed.map_or(0, |i| match i.source_label() {
-                            "Ludeon" => 3,
-                            "Local" if i.git => 2,
-                            "Local" => 1,
-                            _ => 0,
+                        use rimstack_core::paths::Source;
+                        let source = installed.map_or(0, |i| match i.source {
+                            Source::Official => 3,
+                            Source::Local if i.git => 2,
+                            Source::Local => 1,
+                            Source::Workshop => 0,
                         });
                         QVariant::from(&source)
                     }
@@ -217,7 +215,8 @@ impl qobject::ModListModel {
                     }
                     LOCAL => QVariant::from(&m.local),
                     PICTURE => {
-                        let installed = match (crate::library(), m.installed) {
+                        let loaded = crate::app().library();
+                        let installed = match (&*loaded, m.installed) {
                             (Ok((library, _)), Some(i)) => library.installed.get(i),
                             _ => None,
                         };

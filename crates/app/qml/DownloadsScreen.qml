@@ -13,23 +13,35 @@ Item {
     Appear { of: screen }
 
     required property Backend backend
+    required property Downloads downloads
     signal showMod(int modId)
 
-    readonly property var report: backend.updates ? JSON.parse(backend.updates) : ({})
+    readonly property var report: downloads.updates ? JSON.parse(downloads.updates) : ({})
     readonly property var updates: report.items || []
-    readonly property var found: backend.queue ? JSON.parse(backend.queue) : ({})
+    readonly property var found: downloads.queue ? JSON.parse(downloads.queue) : ({})
     readonly property var queue: found.items || []
     readonly property var repositories: found.repositories || []
     // Read again whenever a task ends: installing SteamCMD is one.
-    readonly property bool steamcmd: (backend.taskNote, JSON.parse(backend.settings()).steamcmd)
+    readonly property bool steamcmd: {
+        // Asked again whenever a task ends: one of them installs it.
+        void downloads.taskNote
+        return JSON.parse(backend.settings()).steamcmd
+    }
     // The mods the load order needs and does not have active.
-    readonly property var needed: Mods.troubles.filter(t => /^(activate|subscribe|search) /.test(t.fix))
+    readonly property var needed: Mods.troubles.filter(t => ["activate", "subscribe", "search"].indexOf(t.fix.action) >= 0)
     readonly property var info: visible ? JSON.parse(backend.settings()) : ({})
     // The mods that changed since the game was last seen starting;
     // read again when the screen shows and when the mod folders were.
-    readonly property var since: visible && !Theme.demo ? (backend.updates, Mods.active.libraryVersion, JSON.parse(backend.sinceLaunch())) : ({ time: 0, items: [] })
+    readonly property var since: {
+        if (!visible || Theme.demo)
+            return ({ time: 0, items: [] })
+        // Read again after a check and after the mods are.
+        void downloads.updates
+        void Mods.active.libraryVersion
+        return JSON.parse(downloads.sinceLaunch())
+    }
     // Per Workshop id, the entries Steam's site gave: { time, text }.
-    readonly property var notes: backend.changeNotes ? JSON.parse(backend.changeNotes) : ({})
+    readonly property var notes: downloads.changeNotes ? JSON.parse(downloads.changeNotes) : ({})
 
     function ago(seconds) {
         const minutes = Math.floor((Date.now() / 1000 - seconds) / 60)
@@ -73,9 +85,9 @@ Item {
     // The checkout being brought up to its remote, by its folder.
     property string updating: ""
     Connections {
-        target: screen.backend
+        target: screen.downloads
         function onTaskNoteChanged() {
-            if (screen.backend.taskNote.indexOf("…") === -1)
+            if (!screen.downloads.taskRunning)
                 screen.updating = ""
         }
     }
@@ -137,44 +149,44 @@ Item {
                 }
                 Btn {
                     id: add
-                    enabled: !screen.backend.queueBusy && pasted.text.trim() !== ""
+                    enabled: !screen.downloads.queueBusy && pasted.text.trim() !== ""
                     primary: pasted.text.trim() !== ""
-                    text: screen.backend.queueBusy ? Theme.say("Asking Steam…") : Theme.say("Look up")
-                    onClicked: screen.backend.lookUp(pasted.text)
+                    text: screen.downloads.queueBusy ? Theme.say("Asking Steam…") : Theme.say("Look up")
+                    onClicked: screen.downloads.lookUp(pasted.text)
                 }
                         Btn {
                 primary: !screen.report.checked
-                enabled: !screen.backend.updatesBusy
+                enabled: !screen.downloads.updatesBusy
                 icon: "refresh-cw"
                 text: Theme.say("Check for updates")
                 tip: screen.info.gitForWorkshop ? Theme.say("Asks Steam for the current version of each installed Workshop mod (only their Workshop ids are sent), and Git for new commits on each checkout in the game's Mods folder and in the Workshop folder.")
                     : Theme.say("Asks Steam for the current version of each installed Workshop mod (only their Workshop ids are sent), and Git for new commits on each checkout in the game's Mods folder.")
-                onClicked: screen.backend.checkUpdates()
+                onClicked: screen.downloads.checkUpdates()
             }
             }
 
             Card {
                 title: Theme.say("Updates")
-                note: screen.backend.updatesBusy ? Theme.say("Asking Steam…")
+                note: screen.downloads.updatesBusy ? Theme.say("Asking Steam…")
                     : !screen.report.checked ? Theme.say("Not checked")
                     : Theme.fill("{} for active mods, checked {}", screen.activeUpdates.length, screen.ago(screen.report.checked))
                 actions: [
                     Btn {
                         visible: screen.updates.length > 0
                         primary: screen.activeUpdates.length > 0
-                        enabled: screen.backend.taskNote.indexOf("…") === -1
+                        enabled: !screen.downloads.taskRunning
                         icon: "download"
                         text: Theme.say("Update in Steam")
                         tip: Theme.say("Steam, which must be running, downloads the newer version of each now. Left alone it does so the next time it starts.")
                         onClicked: {
                             const ids = screen.updates.map(item => item.id)
                             screen.asked = ids
-                            screen.backend.askSteam("download", JSON.stringify(ids))
+                            screen.downloads.askSteam("download", JSON.stringify(ids))
                         }
                     }
                 ]
                 Rectangle {
-                    visible: screen.backend.updatesBusy
+                    visible: screen.downloads.updatesBusy
                     width: parent.width
                     height: 3
                     radius: Math.min(width, height) / 2
@@ -185,7 +197,7 @@ Item {
                         height: parent.height
                         radius: Math.min(width, height) / 2
                         color: Theme.accent
-                        NumberAnimation on x { running: screen.backend.updatesBusy && !Theme.stored.reduceMotion; from: -page.width / 4; to: page.width; duration: 1200; loops: Animation.Infinite }
+                        NumberAnimation on x { running: screen.downloads.updatesBusy && !Theme.stored.reduceMotion; from: -page.width / 4; to: page.width; duration: 1200; loops: Animation.Infinite }
                     }
                 }
                 Text { visible: !!screen.report.problem; width: parent.width; wrapMode: Text.WordWrap; color: Theme.err; font.pixelSize: Theme.body; text: Theme.fill("Steam not reached: {}", (screen.report.problem || "")) }
@@ -244,7 +256,7 @@ Item {
                             tip: Theme.say("Moves forward to the remote; stops if the folder has changes of its own.")
                             onClicked: {
                                 screen.updating = checkout.modelData.path
-                                screen.backend.updateFromGit(checkout.modelData.path)
+                                screen.downloads.updateFromGit(checkout.modelData.path)
                             }
                         }
                     }
@@ -277,10 +289,10 @@ Item {
                     AskSteam {
                     readonly property var asked: screen.since.items.filter(item => item.kind === "workshop").map(item => [item.id, item.was])
                     visible: asked.length > 0
-                    backend: screen.backend
+                    downloads: screen.downloads
                     idle: Theme.say("Fetch change notes")
                     tip: Theme.say("Reads each mod's change notes from its Workshop page. Only the Workshop ids are sent.")
-                    onClicked: screen.backend.fetchChangeNotes(JSON.stringify(asked))
+                    onClicked: screen.downloads.fetchChangeNotes(JSON.stringify(asked))
                     }
                 ]
                 spacing: Theme.gapLarge
@@ -397,7 +409,7 @@ Item {
                         icon: "plus"
                         text: Theme.say("Subscribe in Steam")
                         tip: Theme.say("Steam, which must be running, subscribes to each and downloads it; it keeps them up to date afterwards.")
-                        onClicked: screen.backend.askSteam("subscribe", JSON.stringify(wanted))
+                        onClicked: screen.downloads.askSteam("subscribe", JSON.stringify(wanted))
                     },
                     Btn {
                         readonly property var wanted: screen.queue.filter(item => !!item.title && !item.installed).map(item => item.id)
@@ -408,7 +420,7 @@ Item {
                         onClicked: Notices.ask({
                             title: Theme.plural(wanted.length, "Download {} mod with SteamCMD", "Download {} mods with SteamCMD"),
                             lines: [Theme.say("Each is downloaded and copied into the game's own Mods folder:"), (screen.info.game || "") + "/Mods", Theme.say("Steam does not update mods installed this way.")],
-                            label: Theme.say("Download"), run: () => screen.backend.downloadWithSteamcmd(JSON.stringify(wanted)) })
+                            label: Theme.say("Download"), run: () => screen.downloads.downloadWithSteamcmd(JSON.stringify(wanted)) })
                     }
                 ]
                 Text { visible: screen.queue.length === 0 && !!(screen.found.problem || screen.found.note); width: parent.width; wrapMode: Text.WordWrap; color: screen.found.problem ? Theme.err : Theme.ink2; font.pixelSize: Theme.body; text: screen.found.problem || screen.found.note || "" }
@@ -433,7 +445,7 @@ Item {
                             onClicked: Notices.ask({
                                 title: Theme.fill("Clone {}", repository.modelData.name),
                                 lines: [Theme.say("git clone, from"), repository.modelData.link, Theme.say("Into"), repository.modelData.into],
-                                label: Theme.say("Clone"), run: () => screen.backend.cloneMod(repository.modelData.link) })
+                                label: Theme.say("Clone"), run: () => screen.downloads.cloneMod(repository.modelData.link) })
                         }
                     }
                 }
@@ -469,7 +481,6 @@ Item {
                         name: modelData.name
                         words: modelData.words
                         fix: modelData.fix
-                        fixLabel: modelData.fixLabel
                         modId: modelData.modId
                     }
                 }
@@ -492,7 +503,7 @@ Item {
                 ]
                 Repeater {
                     id: replaced
-                    model: screen.visible && screen.replacementsRead >= 0 && Mods.tick >= 0 ? JSON.parse(screen.backend.replacements()) : []
+                    model: screen.visible && screen.replacementsRead >= 0 && Mods.tick >= 0 ? JSON.parse(screen.downloads.replacements()) : []
                     RowLayout {
                         id: old
                         required property var modelData
@@ -527,7 +538,7 @@ Item {
                             text: Theme.say("Unsubscribe…")
                             spoken: Theme.fill("Unsubscribe from {}", old.modelData.name)
                             tip: Theme.say("Lets the replaced mod go: Steam unsubscribes and deletes its folder")
-                            onClicked: { const about = Mods.active.details(old.modelData.modId); Mods.unsubscribe(old.modelData.name, about.folder, about.path) }
+                            onClicked: { const about = Mods.about(old.modelData.modId); Mods.unsubscribe(old.modelData.name, about.folder, about.path) }
                         }
                     }
                 }
@@ -543,7 +554,7 @@ Item {
                     onClicked: Notices.ask({
                         title: Theme.say("Install SteamCMD"),
                         lines: [Theme.say("Valve's own downloader is fetched from Valve into"), (screen.info.dataFolder || "") + "/steamcmd", Theme.say("It runs with a home folder of its own there, apart from Steam's settings.")],
-                        label: Theme.say("Install"), run: () => screen.backend.installSteamcmd() })
+                        label: Theme.say("Install"), run: () => screen.downloads.installSteamcmd() })
                 }
                 Item { Layout.fillWidth: true }
             }

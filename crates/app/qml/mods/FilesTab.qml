@@ -2,7 +2,6 @@
 // and what is in the mod's folder.
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import RimStack.Ui
 
@@ -13,30 +12,28 @@ Column {
     GroupTitle { visible: patched.count > 0; text: Theme.say("Patched methods") }
     Repeater {
         id: patched
-        model: Mods.info.patches ? Mods.info.patches.split("\n") : []
+        model: Mods.info.patches || []
         Column {
             id: aim
-            required property string modelData
-            readonly property var parts: modelData.split("\t")
+            required property var modelData
             width: side.width
             bottomPadding: Theme.gapTiny
-            Text { width: parent.width; elide: Text.ElideLeft; color: Theme.ink; font.pixelSize: Theme.body; text: aim.parts[0] }
-            Text { visible: text !== ""; width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink3; font.pixelSize: Theme.small; text: aim.parts[1] || "" }
+            Text { width: parent.width; elide: Text.ElideLeft; color: Theme.ink; font.pixelSize: Theme.body; text: aim.modelData.method }
+            Text { visible: text !== ""; width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink3; font.pixelSize: Theme.small; text: aim.modelData.note }
         }
     }
                                 GroupTitle { text: Theme.say("Folder") }
     Text { width: parent.width; wrapMode: Text.WrapAnywhere; color: Theme.ink; font.pixelSize: Theme.body; text: Mods.info.path || "" }
     Item { width: 1; height: 8 }
     Repeater {
-        model: Mods.info.tree ? Mods.info.tree.split("\n") : []
+        model: Mods.files.tree || []
         RowLayout {
             id: branch
-            required property string modelData
-            readonly property var parts: modelData.split("\t")
+            required property var modelData
             width: side.width
             height: Theme.sized(21)
-            Text { Layout.fillWidth: true; elide: Text.ElideMiddle; color: Theme.ink; font.family: "monospace"; font.pixelSize: Theme.small; text: branch.parts[0] }
-            Text { color: Theme.ink3; font.pixelSize: Theme.small; text: Theme.plural(Number(branch.parts[1]), "{} file", "{} files") }
+            Text { Layout.fillWidth: true; elide: Text.ElideMiddle; color: Theme.ink; font.family: "monospace"; font.pixelSize: Theme.small; text: branch.modelData.folder }
+            Text { color: Theme.ink3; font.pixelSize: Theme.small; text: Theme.plural(branch.modelData.files, "{} file", "{} files") }
         }
     }
     GroupTitle { text: Theme.say("Folders the game loads from") }
@@ -46,7 +43,7 @@ Column {
         color: Theme.ink
         font.pixelSize: Theme.body
         lineHeight: 1.3
-        text: Mods.info.loadFolders || Theme.say("None")
+        text: (Mods.info.loadFolders || []).join("\n") || Theme.say("None")
     }
     Text {
         width: parent.width
@@ -61,7 +58,7 @@ Column {
     Column {
         id: hiddenHere
         // Counted again whenever the details are refreshed.
-        readonly property int count: Mods.info && Mods.selectedId >= 0 && Mods.backend ? Mods.backend.hiddenIn(Mods.selectedId) : 0
+        readonly property int count: Mods.info && Mods.selectedId >= 0 && Mods.backend ? Mods.textureTools.hiddenIn(Mods.selectedId) : 0
         property string problem
         visible: count > 0
         width: parent.width
@@ -78,7 +75,7 @@ Column {
             icon: "eye-off"
             text: Theme.say("Bring back all")
             onClicked: {
-                hiddenHere.problem = Mods.backend.unhideAll(Mods.selectedId)
+                hiddenHere.problem = Mods.textureTools.unhideAll(Mods.selectedId)
                 Mods.active.recheck()
                 Mods.refresh()
             }
@@ -89,8 +86,8 @@ Column {
     Repeater {
         model: [
             [Theme.say("Kinds of content"), Mods.info.contains],
-            [Theme.say("Assemblies"), Mods.info.assemblies],
-            [Theme.say("Textures"), Mods.info.textureCount],
+            [Theme.say("Assemblies"), Mods.files.assemblies || ""],
+            [Theme.say("Textures"), Mods.info.textureCount || ""],
             [Theme.say("DDS made by RimStack"), Mods.info.ddsMade],
         ].filter(pair => pair[1])
         Item {

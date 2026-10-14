@@ -2,7 +2,6 @@
 // and choosing all at once.
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import RimStack.Ui
 
@@ -43,13 +42,13 @@ Column {
             tip: cmpSummary.cmp ? Theme.fill("Sets aside {} files in {} by renaming them; Undo names them back.", cmpSummary.cmp.all.length, cmpSummary.names[1]) : ""
             onClicked: {
                 const cmp = cmpSummary.cmp
-                const folder = Mods.active.details(cmp.later).path || ""
+                const folder = Mods.about(cmp.later).path || ""
                 const aside = ["#", cmp.all.length, Theme.kept("Set aside {} texture of {}"), Theme.kept("Set aside {} textures of {}"), cmpSummary.names[1]]
                 const said = Theme.put(aside)
                 cmp.keepAll(true)
                 Notices.keep(aside, "unhide " + folder)
                 Notices.offer(said, Theme.say("Undo"), () => {
-                    Mods.backend.unhideIn(folder)
+                    Mods.textureTools.unhideIn(folder)
                     if (Mods.compareView)
                         Mods.compareView.reload()
                     Mods.active.recheck()

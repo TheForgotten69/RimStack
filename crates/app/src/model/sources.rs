@@ -14,12 +14,12 @@ pub(super) fn detected(library: &Library, mods: &[Mod]) -> Vec<infer::Inferred> 
     type Kept = (Vec<Option<usize>>, Vec<usize>, Vec<infer::Inferred>);
     static LAST: std::sync::Mutex<Option<Kept>> = std::sync::Mutex::new(None);
 
-    let known = crate::CONFLICTS.read().unwrap_or_else(|e| e.into_inner());
+    let known = crate::app().conflicts().reading();
     let Some(read) = known.as_ref() else {
         return Vec::new();
     };
     let list: Vec<Option<usize>> = mods.iter().map(|m| m.installed).collect();
-    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    let mut last = LAST.held();
     if let Some((for_list, for_read, rules)) = last.as_ref() {
         if *for_list == list && *for_read == read.members {
             return rules.clone();
@@ -73,28 +73,28 @@ pub(super) fn detected(library: &Library, mods: &[Mod]) -> Vec<infer::Inferred> 
 
 /// Runs `with` on where this install's rules come from: your own, the
 /// community's if they are switched on, and what the mods' files say.
-fn with_sources<T>(library: &Library, mods: &[Mod], with: impl FnOnce(Sources) -> T) -> T {
-    let yours = crate::USER_RULES.read().unwrap_or_else(|e| e.into_inner());
-    let community = crate::COMMUNITY.read().unwrap_or_else(|e| e.into_inner());
-    let use_community = crate::settings().is_on("communityRules");
-    let from_files = detected(library, mods);
+fn with_sources<T>(from_files: &[infer::Inferred], with: impl FnOnce(Sources) -> T) -> T {
+    let yours = crate::app().user_rules().reading();
+    let community = crate::app().community().reading();
+    let use_community = crate::app().settings().is_on("communityRules");
     with(Sources {
         yours: &yours,
         community: community.as_ref().filter(|_| use_community),
-        from_files: &from_files,
-        hints: crate::settings().get("fileHints") == Some("on"),
+        from_files,
+        hints: crate::app().settings().get("fileHints") == Some("on"),
     })
 }
 
 pub(super) fn all_rules(library: &Library, mods: &[Mod]) -> Vec<Rule> {
-    with_sources(library, mods, |sources| {
+    with_sources(&detected(library, mods), |sources| {
         ordering::all_rules(library, mods, sources)
     })
 }
 
 /// Moves the mod just added at `at` to where its rules allow.
 pub(super) fn settle(list: &mut GroupedList, at: usize) {
-    let Ok((library, _)) = crate::library() else {
+    let loaded = crate::app().library();
+    let Ok((library, _)) = &*loaded else {
         return;
     };
     let found = all_rules(library, list.mods());
@@ -103,7 +103,7 @@ pub(super) fn settle(list: &mut GroupedList, at: usize) {
 }
 
 pub(super) fn sorted_by_category(library: &Library, mods: Vec<Mod>) -> (Vec<Mod>, sort::Sorted) {
-    with_sources(library, &mods.clone(), |sources| {
+    with_sources(&detected(library, &mods), |sources| {
         ordering::sorted_by_category(library, mods, sources)
     })
 }

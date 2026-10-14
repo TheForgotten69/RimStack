@@ -11,13 +11,15 @@ Item {
     Appear { of: screen }
 
     required property Backend backend
+    required property KeptLists keptLists
+    required property SaveReader saveReader
     signal useList(var ids)
     property bool allMissing: false
     property bool allAdded: false
     // A row keeps room for a picture only while some save has one.
     readonly property bool pictured: saves.some(s => !!s.preview)
 
-    readonly property var report: backend.saves ? JSON.parse(backend.saves) : ({})
+    readonly property var report: saveReader.saves ? JSON.parse(saveReader.saves) : ({})
     readonly property var all: report.saves || []
     // With the RimSaves mod, saves sit in folders; "" shows every folder.
     readonly property var folders: report.folders || []
@@ -29,12 +31,12 @@ Item {
 
     // Compared again each time the screen is shown: the load order may
     // have changed meanwhile.
-    onVisibleChanged: if (visible) backend.loadSaves()
-    Component.onCompleted: if (visible) backend.loadSaves()
+    onVisibleChanged: if (visible) saveReader.loadSaves()
+    Component.onCompleted: if (visible) saveReader.loadSaves()
     // A re-read of the mods empties this report: the open screen asks for it again.
     Connections {
-        target: screen.backend
-        function onSavesChanged() { if (screen.visible && screen.backend.saves === "") screen.backend.loadSaves() }
+        target: screen.saveReader
+        function onSavesChanged() { if (screen.visible && screen.saveReader.saves === "") screen.saveReader.loadSaves() }
     }
 
     function when(seconds) {
@@ -215,8 +217,8 @@ Item {
                     anchors.centerIn: parent
                     width: Math.min(parent.width - 80, 460)
                     spacing: Theme.gapSmall
-                    Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: screen.backend.savesBusy ? Theme.say("Reading saves…") : Theme.say("No saves") }
-                    Text { visible: !screen.backend.savesBusy; width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; lineHeight: 1.3; text: screen.folder !== "" ? Theme.fill("RimSaves folder {} is empty", screen.folder) : "" }
+                    Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: screen.saveReader.savesBusy ? Theme.say("Reading saves…") : Theme.say("No saves") }
+                    Text { visible: !screen.saveReader.savesBusy; width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; lineHeight: 1.3; text: screen.folder !== "" ? Theme.fill("RimSaves folder {} is empty", screen.folder) : "" }
                 }
             }
         }
@@ -313,7 +315,7 @@ Item {
                             enabled: listName.text.trim() !== ""
                             text: Theme.say("Keep")
                             onClicked: {
-                                screen.listProblem = screen.backend.saveIdsAs(listName.text, JSON.stringify(screen.save.ids))
+                                screen.listProblem = screen.keptLists.saveIdsAs(listName.text, JSON.stringify(screen.save.ids))
                                 if (screen.listProblem === "")
                                     listName.text = ""
                             }

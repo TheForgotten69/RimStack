@@ -1,7 +1,6 @@
 // A one-line text box: for narrowing a list, or for typing a value.
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Layouts
 import RimStack.Ui
 
 Rectangle {

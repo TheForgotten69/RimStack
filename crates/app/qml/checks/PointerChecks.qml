@@ -158,9 +158,9 @@ Item {
             stop()
             for (let at = 0; at < Mods.active.count && Mods.comparing === null; at++) {
                 Mods.select(Mods.nthMod(Mods.active, at), true)
-                const other = (Mods.info.losesTo || Mods.info.winsOver || "").split("\n")[0].split("\t")[2]
+                const other = (Mods.info.losesTo || []).concat(Mods.info.winsOver || [])[0]
                 if (other)
-                    Mods.compareWith(Number(other))
+                    Mods.compareWith(other.modId)
             }
             if (Mods.comparing === null) {
                 checks.keys()

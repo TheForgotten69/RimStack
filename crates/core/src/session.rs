@@ -134,26 +134,10 @@ impl Session {
             .map(String::as_str)
             .partition(|id| before.contains_key(id));
         let deactivated = self.saved.iter().map(String::as_str);
-        // The mods that kept their order among themselves did not move:
-        // the longest run of rising old places, found by patience sorting.
+        // The mods that kept their order among themselves did not move.
         let places: Vec<usize> = kept.iter().map(|id| before[id]).collect();
-        let mut tails: Vec<usize> = Vec::new();
-        let mut previous: Vec<Option<usize>> = vec![None; places.len()];
-        for (at, place) in places.iter().enumerate() {
-            let pile = tails.partition_point(|&t| places[t] < *place);
-            previous[at] = pile.checked_sub(1).map(|p| tails[p]);
-            match tails.get_mut(pile) {
-                Some(tail) => *tail = at,
-                None => tails.push(at),
-            }
-        }
-        let mut stayed = vec![false; places.len()];
-        let mut at = tails.last().copied();
-        while let Some(i) = at {
-            stayed[i] = true;
-            at = previous[i];
-        }
-        let moved = kept.iter().zip(stayed).filter(|(_, stayed)| !stayed);
+        let moved = kept.iter().zip(crate::sort::moved(&places));
+        let moved = moved.filter(|(_, moved)| *moved);
         Changes {
             moved: moved.map(|(id, _)| *id).collect(),
             activated,

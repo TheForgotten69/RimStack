@@ -1,7 +1,6 @@
 // The inactive mods: how they are ordered, a filter, and the list.
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import RimStack.Ui
 

@@ -3,33 +3,34 @@
 //! longer updates it, the settings mods keep, set aside, and the game
 //! started without Steam.
 
+use crate::error::{Error, Result};
 use crate::say;
 
 use std::path::{Path, PathBuf};
 
 /// Copies a mod's folder into `local_mods` under its own folder name.
 /// Nothing is replaced: a folder of that name stops it.
-pub fn copy_to_local(mod_root: &Path, local_mods: &Path) -> Result<PathBuf, String> {
+pub fn copy_to_local(mod_root: &Path, local_mods: &Path) -> Result<PathBuf> {
     let name = mod_root
         .file_name()
-        .ok_or_else(|| say!("the mod's folder has no name"))?;
+        .ok_or_else(|| Error::refused(say!("the mod's folder has no name")))?;
     let to = local_mods.join(name);
     if to.exists() {
-        return Err(say!("{} is there already", to.display()));
+        return Err(Error::refused(say!("{} is there already", to.display())));
     }
     crate::redownload::copy_all(mod_root, &to).map_err(|e| {
         let _ = std::fs::remove_dir_all(&to);
-        format!("{}: {e}", to.display())
+        Error::file(&to, e)
     })?;
     Ok(to)
 }
 
 /// Moves every mod's settings file (`Mod_*.xml` in the game's `Config`
-/// folder) into `aside`. Returns how many; they can be moved back by hand.
-pub fn set_mod_settings_aside(config: &Path, aside: &Path) -> Result<usize, String> {
-    let failed = |e: std::io::Error| format!("{}: {e}", aside.display());
-    let files = std::fs::read_dir(config.join("Config"))
-        .map_err(|e| format!("{}: {e}", config.display()))?;
+/// folder) into `aside`, all of them or none. Returns how many; they can
+/// be moved back by hand.
+pub fn set_mod_settings_aside(config: &Path, aside: &Path) -> Result<usize> {
+    let failed = |e: std::io::Error| Error::file(aside, e);
+    let files = std::fs::read_dir(config.join("Config")).map_err(|e| Error::file(config, e))?;
     let settings: Vec<PathBuf> = files
         .flatten()
         .map(|entry| entry.path())
@@ -41,12 +42,19 @@ pub fn set_mod_settings_aside(config: &Path, aside: &Path) -> Result<usize, Stri
     if settings.is_empty() {
         return Ok(0);
     }
+    // Every file is copied before any is taken away: one that cannot be
+    // copied leaves the mods with all their settings, not with half.
     std::fs::create_dir_all(aside).map_err(failed)?;
-    for file in &settings {
+    let copied = settings.iter().try_for_each(|file| {
         let to = aside.join(file.file_name().unwrap_or_default());
-        std::fs::rename(file, &to)
-            .or_else(|_| std::fs::copy(file, &to).and_then(|_| std::fs::remove_file(file)))
-            .map_err(failed)?;
+        std::fs::copy(file, to).map(drop)
+    });
+    if let Err(problem) = copied {
+        let _ = std::fs::remove_dir_all(aside);
+        return Err(failed(problem));
+    }
+    for file in &settings {
+        std::fs::remove_file(file).map_err(|e| Error::file(file, e))?;
     }
     Ok(settings.len())
 }
@@ -105,21 +113,66 @@ pub fn game_running(proc: &Path, game_dir: &Path) -> bool {
         })
 }
 
+/// A line of launch options as its arguments: divided at spaces, but
+/// not inside quotes, which are taken off. `-savedatafolder="/my saves"`
+/// is one argument. A quote left open runs to the end.
+pub fn arguments(line: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut now = String::new();
+    let (mut quoted, mut begun) = (None, false);
+    for c in line.chars() {
+        match quoted {
+            Some(quote) if c == quote => quoted = None,
+            Some(_) => now.push(c),
+            None if c == '"' || c == '\'' => (quoted, begun) = (Some(c), true),
+            None if c.is_whitespace() => {
+                if begun {
+                    found.push(std::mem::take(&mut now));
+                }
+                begun = false;
+            }
+            None => {
+                now.push(c);
+                begun = true;
+            }
+        }
+    }
+    if begun {
+        found.push(now);
+    }
+    found
+}
+
 /// Starts the game without Steam, with these arguments, and lets it run.
-pub fn start_game(game_dir: &Path, arguments: &str) -> Result<(), String> {
+pub fn start_game(game_dir: &Path, arguments: &str) -> Result<()> {
     let program = game_program(game_dir)
-        .ok_or_else(|| say!("the game's program was not found in its folder"))?;
+        .ok_or_else(|| Error::program(say!("the game's program was not found in its folder")))?;
     std::process::Command::new(&program)
-        .args(arguments.split_whitespace())
+        .args(self::arguments(arguments))
         .current_dir(game_dir)
         .spawn()
         .map(drop)
-        .map_err(|e| format!("{}: {e}", program.display()))
+        .map_err(|e| Error::program(format!("{}: {e}", program.display())))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launch_options_are_divided_at_spaces_outside_quotes() {
+        assert_eq!(
+            arguments("  -logfile   -popupwindow "),
+            ["-logfile", "-popupwindow"]
+        );
+        assert_eq!(
+            arguments(r#"-savedatafolder="/my saves/rim" -quicktest"#),
+            ["-savedatafolder=/my saves/rim", "-quicktest"]
+        );
+        assert_eq!(arguments("'a b' \"\" c"), ["a b", "", "c"]);
+        assert_eq!(arguments(r#"-x "left open"#), ["-x", "left open"]);
+        assert!(arguments("   ").is_empty());
+    }
 
     #[test]
     fn the_game_runs_when_a_process_was_started_from_its_program_or_its_code() {
@@ -174,7 +227,25 @@ mod tests {
             "x"
         );
         assert!(workshop.join("About/About.xml").is_file());
-        assert!(copy_to_local(&workshop, &local).is_err());
+        assert_eq!(
+            copy_to_local(&workshop, &local).unwrap_err().kind(),
+            crate::error::Kind::Refused
+        );
+    }
+
+    #[test]
+    fn settings_that_cannot_all_be_copied_all_stay_where_they_are() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = tmp.path().join("Config");
+        std::fs::create_dir_all(config.join("Mod_2_NotAFile.xml")).unwrap();
+        std::fs::write(config.join("Mod_1_A.xml"), "kept").unwrap();
+        let aside = tmp.path().join("aside");
+        assert!(set_mod_settings_aside(tmp.path(), &aside).is_err());
+        assert_eq!(
+            std::fs::read_to_string(config.join("Mod_1_A.xml")).unwrap(),
+            "kept"
+        );
+        assert!(!aside.exists());
     }
 
     #[test]

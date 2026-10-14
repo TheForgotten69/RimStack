@@ -11,6 +11,10 @@ Item {
     Appear { of: screen }
 
     required property Backend backend
+    required property CommunityData communityData
+    required property KeptLists keptLists
+    required property Downloads downloads
+    required property LogReader reader
     // The Mods screen's load-order model: it owns the community rules download.
     required property ModListModel rules
     signal useList(var ids)
@@ -310,11 +314,11 @@ Item {
                     title: Theme.say("Git for Workshop mods")
                     tip: Theme.say("Check now asks Steam about a Workshop mod, and Git about a checkout in the game's Mods folder. On: a Workshop mod that is a Git checkout is asked through Git as well, which fetches into its folder.")
                     changed: !!screen.info.gitForWorkshop
-                    onReset: { screen.keep("gitForWorkshop", "off"); screen.backend.restoreUpdates() }
+                    onReset: { screen.keep("gitForWorkshop", "off"); screen.downloads.restoreUpdates() }
                     Toggle {
                         title: Theme.say("Git for Workshop mods")
                         on: !!screen.info.gitForWorkshop
-                        onFlipped: on => { screen.keep("gitForWorkshop", on ? "on" : "off"); screen.backend.restoreUpdates() }
+                        onFlipped: on => { screen.keep("gitForWorkshop", on ? "on" : "off"); screen.downloads.restoreUpdates() }
                     }
                     Item { Layout.fillWidth: true }
                 }
@@ -352,9 +356,9 @@ Item {
                     readonly property int translated: Object.keys(Theme.words).filter(text => Theme.words[text] !== "").length
                     // The language's file, written with every text when it is not there yet.
                     function file(name) {
-                        const found = screen.backend.startLanguage(name)
-                        language.said = found.charAt(0) === "!" ? found.substring(1) : ""
-                        return language.said === "" ? found : ""
+                        const made = JSON.parse(screen.backend.startLanguage(name))
+                        language.said = made.problem || ""
+                        return made.file || ""
                     }
                     Btn {
                         id: languageButton
@@ -415,8 +419,9 @@ Item {
                             const now = {}
                             for (const name of Theme.colourNames)
                                 now[name] = "" + Theme[name]
-                            const file = screen.backend.startOwnTheme(Theme.name, JSON.stringify(now))
-                            ownTheme.said = file.charAt(0) === "!" ? file.substring(1) : ""
+                            const made = JSON.parse(screen.backend.startOwnTheme(Theme.name, JSON.stringify(now)))
+                            const file = made.file || ""
+                            ownTheme.said = made.problem || ""
                             if (ownTheme.said === "") {
                                 Theme.custom = JSON.parse(screen.backend.ownTheme(Theme.name))
                                 Qt.openUrlExternally(Theme.fileUrl(file))
@@ -592,15 +597,15 @@ Item {
                             : Theme.say("No")
                     }
                     Btn {
-                        enabled: !screen.rules.rulesBusy && !screen.rules.rulesCurrent
-                        icon: screen.rules.rulesCurrent ? "check" : "download"
-                        text: screen.rules.rulesBusy ? Theme.say("Downloading…") : screen.rules.rulesCurrent ? Theme.say("Up to date") : screen.overview.communityMods ? Theme.say("Update") : Theme.say("Download")
-                        onClicked: screen.rules.downloadRules()
+                        enabled: !screen.communityData.rulesBusy && !screen.communityData.rulesCurrent
+                        icon: screen.communityData.rulesCurrent ? "check" : "download"
+                        text: screen.communityData.rulesBusy ? Theme.say("Downloading…") : screen.communityData.rulesCurrent ? Theme.say("Up to date") : screen.overview.communityMods ? Theme.say("Update") : Theme.say("Download")
+                        onClicked: screen.communityData.downloadRules()
                     }
                     Item { Layout.fillWidth: true }
                 }
                 Repeater {
-                    model: (screen.rules.rulesBusy, screen.overview, screen.info, JSON.parse(screen.backend.databases()))
+                    model: (screen.communityData.rulesBusy, screen.overview, screen.info, JSON.parse(screen.communityData.databases()))
                     Line {
                         id: database
                         required property var modelData
@@ -609,7 +614,7 @@ Item {
                             title: database.modelData.name
                             on: database.modelData.on
                             onFlipped: on => {
-                                const off = JSON.parse(screen.backend.databases()).filter(other => other.id === database.modelData.id ? !on : !other.on).map(other => other.id)
+                                const off = JSON.parse(screen.communityData.databases()).filter(other => other.id === database.modelData.id ? !on : !other.on).map(other => other.id)
                                 screen.keep("databasesOff", off.join(","))
                             }
                         }
@@ -618,13 +623,13 @@ Item {
                     }
                 }
                 Text {
-                    visible: screen.rules.rulesProblem !== ""
+                    visible: screen.communityData.rulesProblem !== ""
                     x: 198
                     width: parent.width - 200
                     wrapMode: Text.WordWrap
                     color: Theme.err
                     font.pixelSize: Theme.body
-                    text: Theme.fill("Not updated: {}", screen.rules.rulesProblem)
+                    text: Theme.fill("Not updated: {}", screen.communityData.rulesProblem)
                 }
 
                 GroupTitle { visible: rimsort.visible && screen.finding === ""; text: Theme.say("RimSort") }
@@ -663,11 +668,11 @@ Item {
                 NameList {
                     width: parent.width
                     title: Theme.fill("Marked as working on RimWorld {}", (screen.info.gameVersion || ""))
-                    lines: screen.overview.trusted || ""
+                    lines: screen.overview.trusted || []
                     action: Theme.say("Remove")
                     onActed: (id) => {
-                        if (id !== "")
-                            screen.trust(Number(id), false)
+                        if (id !== null)
+                            screen.trust(id, false)
                     }
                 }
             }
@@ -706,7 +711,7 @@ Item {
                         enabled: !!screen.info.backup
                         text: Theme.say("Use")
                         onClicked: {
-                            const ids = screen.backend.originalList()
+                            const ids = screen.keptLists.originalList()
                             if (ids !== "")
                                 screen.useList(JSON.parse(ids))
                         }
@@ -719,14 +724,14 @@ Item {
                 Line {
                     title: Theme.say("Logs kept")
                     changed: screen.info.logsKept !== 10
-                    onReset: { screen.keep("logsKept", "10"); screen.backend.keepLogs() }
+                    onReset: { screen.keep("logsKept", "10"); screen.reader.keepLogs() }
                     tip: Theme.say("The game keeps the logs of its last two launches. RimStack copies each log once the game has stopped, so an older launch can still be read in Logs; the oldest give way.")
                     Choice {
                         readonly property var limits: [0, 5, 10, 25, 50]
                         title: Theme.say("Logs kept")
                         options: [Theme.say("None"), "5", "10", "25", "50"]
                         current: Math.max(0, limits.indexOf(screen.info.logsKept))
-                        onPicked: index => { screen.keep("logsKept", String(limits[index])); screen.backend.keepLogs() }
+                        onPicked: index => { screen.keep("logsKept", String(limits[index])); screen.reader.keepLogs() }
                     }
                     Text { Layout.fillWidth: true; color: Theme.ink2; font.pixelSize: Theme.small; text: Theme.plural(screen.info.logsKeptNow || 0, "{} kept now", "{} kept now") }
                 }
@@ -738,6 +743,11 @@ Item {
                 Line {
                     title: Theme.say("Settings")
                     CopyText { Layout.fillWidth: true; wrapMode: TextEdit.WrapAnywhere; text: screen.info.settingsFile || "" }
+                }
+                Line {
+                    title: Theme.say("Diagnostics")
+                    CopyText { Layout.fillWidth: true; wrapMode: TextEdit.WrapAnywhere; text: screen.info.diagnosticsFile || "" }
+                    Btn { icon: "scroll-text"; tip: Theme.say("Open file"); onClicked: Qt.openUrlExternally(Theme.fileUrl(screen.info.diagnosticsFile)) }
                 }
 
                 GroupTitle { visible: screen.finding === ""; text: Theme.say("About") }

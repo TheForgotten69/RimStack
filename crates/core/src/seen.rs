@@ -1,6 +1,7 @@
 //! Which mod folders were installed when the game was last started from
 //! RimStack, so the ones that came since can be shown as new.
 
+use crate::error::Error;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -20,14 +21,10 @@ impl Seen {
         Self(Some(folders.into_iter().collect()))
     }
 
-    pub fn write(&self, file: &Path) -> Result<(), String> {
-        let failed = |e: std::io::Error| format!("{}: {e}", file.display());
+    pub fn write(&self, file: &Path) -> Result<(), Error> {
         let mut lines: Vec<&str> = self.0.iter().flatten().map(String::as_str).collect();
         lines.sort_unstable();
-        if let Some(dir) = file.parent() {
-            std::fs::create_dir_all(dir).map_err(failed)?;
-        }
-        std::fs::write(file, lines.join("\n")).map_err(failed)
+        crate::whole::write(file, lines.join("\n"))
     }
 
     pub fn is_recorded(&self) -> bool {

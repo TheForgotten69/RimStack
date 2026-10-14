@@ -9,6 +9,7 @@ use crate::library::Library;
 use crate::list::Mod;
 use crate::rules::{Kind, Rule};
 use crate::say;
+use crate::say_n;
 use crate::tongue::named;
 use crate::workshopdb::Names;
 use std::collections::HashSet;
@@ -42,15 +43,23 @@ pub enum Fix {
 }
 
 impl Fix {
-    /// "activate <id>": what the window passes back to have it done.
-    pub fn code(&self) -> String {
+    /// What the window is told to do, with `target` saying to what.
+    pub fn action(&self) -> &'static str {
         match self {
-            Fix::None => String::new(),
-            Fix::Activate(id) => format!("activate {id}"),
-            Fix::Subscribe(id) => format!("subscribe {id}"),
-            Fix::Search(id) => format!("search {id}"),
-            Fix::Deactivate(at) => format!("deactivate {at}"),
-            Fix::Trust => "trust".to_string(),
+            Fix::None => "",
+            Fix::Activate(_) => "activate",
+            Fix::Subscribe(_) => "subscribe",
+            Fix::Search(_) => "search",
+            Fix::Deactivate(_) => "deactivate",
+            Fix::Trust => "trust",
+        }
+    }
+
+    pub fn target(&self) -> String {
+        match self {
+            Fix::None | Fix::Trust => String::new(),
+            Fix::Activate(id) | Fix::Subscribe(id) | Fix::Search(id) => id.clone(),
+            Fix::Deactivate(at) => at.to_string(),
         }
     }
 
@@ -78,8 +87,33 @@ impl Fix {
     }
 }
 
-pub fn plural(n: usize, one: &str, many: &str) -> String {
-    format!("{n} {}", if n == 1 { one } else { many })
+/// What a list's problems come to, for the lines that count them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Tally {
+    /// The needed mods that are installed and only switched off, by
+    /// folded package id, each once, in the order met.
+    pub needed: Vec<String>,
+    /// Problems that are only the game version a mod lists.
+    pub version_only: usize,
+    /// Mods with a warning that is not about the game version.
+    pub other_warnings: usize,
+}
+
+/// `troubles` holds each mod's own, in list order.
+pub fn tally(troubles: &[Vec<Trouble>]) -> Tally {
+    let mut tally = Tally::default();
+    for own in troubles {
+        for trouble in own {
+            match &trouble.fix {
+                Fix::Activate(id) if !tally.needed.contains(id) => tally.needed.push(id.clone()),
+                Fix::Trust => tally.version_only += 1,
+                _ => {}
+            }
+        }
+        let other = |t: &Trouble| !t.error && t.fix != Fix::Trust;
+        tally.other_warnings += usize::from(own.iter().any(other));
+    }
+    tally
 }
 
 /// Which mods are warned about when they do not list the game's version.
@@ -203,36 +237,31 @@ pub fn code(facts: &Facts) -> String {
         return String::new();
     }
     // Only what there is some of: a line of zeroes says nothing.
-    let some = |count: usize, what: String| (count > 0).then(|| format!("{count} {what}"));
+    let some = |count: usize, said: String| (count > 0).then_some(said);
+    let with = |counted: String, each: [Option<String>; 3]| {
+        let each: Vec<String> = each.into_iter().flatten().collect();
+        match each.is_empty() {
+            true => counted,
+            false => say!("{}: {}", counted, each.join(", ")),
+        }
+    };
     let types = [
-        some(facts.drawing, say!("drawing")),
-        some(facts.adding, say!("adding to the game")),
+        some(facts.drawing, say!("{} drawing", facts.drawing)),
+        some(facts.adding, say!("{} adding to the game", facts.adding)),
+        None,
     ];
-    let types: Vec<String> = types.into_iter().flatten().collect();
-    let mut parts = vec![match types.is_empty() {
-        true => plural(facts.types, &say!("type"), &say!("types")),
-        false => format!(
-            "{}: {}",
-            plural(facts.types, &say!("type"), &say!("types")),
-            types.join(", ")
-        ),
-    }];
+    let mut parts = vec![with(say_n!(facts.types, "{} type", "{} types"), types)];
     if facts.patches > 0 {
         let aimed = [
-            some(facts.on_playing, say!("while playing")),
-            some(facts.on_interface, say!("on the interface")),
-            some(facts.on_loading, say!("on loading")),
+            some(facts.on_playing, say!("{} while playing", facts.on_playing)),
+            some(
+                facts.on_interface,
+                say!("{} on the interface", facts.on_interface),
+            ),
+            some(facts.on_loading, say!("{} on loading", facts.on_loading)),
         ];
-        let aimed: Vec<String> = aimed.into_iter().flatten().collect();
-        let patched = plural(
-            facts.patches,
-            &say!("patched method"),
-            &say!("patched methods"),
-        );
-        parts.push(match aimed.is_empty() {
-            true => patched,
-            false => format!("{patched}: {}", aimed.join(", ")),
-        });
+        let patched = say_n!(facts.patches, "{} patched method", "{} patched methods");
+        parts.push(with(patched, aimed));
     }
     parts.join("\n")
 }
@@ -254,11 +283,11 @@ pub fn also_patching(mine: &[Aim], others: &[(&str, &[Aim])]) -> Vec<Vec<String>
     mine.iter().map(patching).collect()
 }
 
-/// The methods a mod patches, as "Type.Method<tab>note" lines: when the
+/// The methods a mod patches, each as `Type.Method` and a note: when the
 /// game runs the method, what the patch does to it, and the other mods
 /// in `also` that patch it too; those methods come first. At most
 /// `most`, then a line saying how many are left out.
-pub fn aims(aims: &[Aim], also: &[Vec<String>], most: usize) -> Vec<String> {
+pub fn aims(aims: &[Aim], also: &[Vec<String>], most: usize) -> Vec<(String, String)> {
     let note = |aim: &Aim, others: &[String]| {
         let when = match aim.when {
             Some(When::Playing) => say!("while playing"),
@@ -284,7 +313,7 @@ pub fn aims(aims: &[Aim], also: &[Vec<String>], most: usize) -> Vec<String> {
     let others = |at: usize| also.get(at).unwrap_or(&none);
     let mut order: Vec<usize> = (0..aims.len()).collect();
     order.sort_by_key(|&at| others(at).is_empty());
-    let mut lines: Vec<String> = order
+    let mut lines: Vec<(String, String)> = order
         .iter()
         .take(most)
         .map(|&at| {
@@ -293,11 +322,11 @@ pub fn aims(aims: &[Aim], also: &[Vec<String>], most: usize) -> Vec<String> {
                 true => say!("Target named in code"),
                 false => format!("{}.{}", aim.target, aim.method),
             };
-            format!("{name}\t{}", note(aim, others(at)))
+            (name, note(aim, others(at)))
         })
         .collect();
     if aims.len() > most {
-        lines.push(format!("{}\t", say!("{} more", aims.len() - most)));
+        lines.push((say!("{} more", aims.len() - most), String::new()));
     }
     lines
 }
@@ -418,12 +447,44 @@ mod tests {
     }
 
     #[test]
-    fn a_fix_has_a_code_a_button_and_a_kind() {
+    fn a_fix_has_an_action_a_target_a_button_and_a_kind() {
         let fix = Fix::Activate("a.fine".to_string());
-        assert_eq!(fix.code(), "activate a.fine");
+        assert_eq!(
+            (fix.action(), fix.target().as_str()),
+            ("activate", "a.fine")
+        );
         assert_eq!(fix.group(), "Needed and switched off");
-        assert_eq!(Fix::Deactivate(3).code(), "deactivate 3");
+        let other = Fix::Deactivate(3);
+        assert_eq!(
+            (other.action(), other.target().as_str()),
+            ("deactivate", "3")
+        );
+        assert_eq!(
+            (Fix::Trust.action(), Fix::Trust.target().as_str()),
+            ("trust", "")
+        );
         assert_eq!(Fix::None.label(), "");
+    }
+
+    #[test]
+    fn problems_are_counted_by_what_solves_them() {
+        let trouble = |error: bool, fix: Fix| Trouble {
+            error,
+            words: String::new(),
+            short: String::new(),
+            fix,
+        };
+        let needs = |id: &str| trouble(true, Fix::Activate(id.to_string()));
+        let counted = tally(&[
+            vec![needs("a.lib"), trouble(false, Fix::Trust)],
+            vec![needs("a.lib"), needs("b.lib")],
+            vec![trouble(false, Fix::None), trouble(false, Fix::None)],
+            vec![trouble(false, Fix::Trust)],
+            vec![],
+        ]);
+        assert_eq!(counted.needed, ["a.lib", "b.lib"]);
+        assert_eq!(counted.version_only, 2);
+        assert_eq!(counted.other_warnings, 1);
     }
 
     #[test]
@@ -491,9 +552,12 @@ mod tests {
         assert_eq!(
             aims(&patched, &[], 2),
             [
-                "Verse.Pawn.Tick\twhile playing, prefix, postfix",
-                "Verse.Pawn.Draw\tpostfix",
-                "1 more\t"
+                (
+                    "Verse.Pawn.Tick".to_string(),
+                    "while playing, prefix, postfix".to_string()
+                ),
+                ("Verse.Pawn.Draw".to_string(), "postfix".to_string()),
+                ("1 more".to_string(), "".to_string())
             ]
         );
         let unknown = Aim {
@@ -511,7 +575,10 @@ mod tests {
         );
         assert_eq!(
             aims(&[unknown], &[], 9),
-            ["Target named in code\tprefix, postfix"]
+            [(
+                "Target named in code".to_string(),
+                "prefix, postfix".to_string()
+            )]
         );
         let others: [(&str, &[Aim]); 2] = [("Second", &theirs), ("Third", &patched[1..2])];
         let also = also_patching(&patched, &others);
@@ -526,9 +593,15 @@ mod tests {
         assert_eq!(
             aims(&patched, &also, 2),
             [
-                "Verse.Pawn.Draw\tpostfix; also Third",
-                "Verse.Pawn.Kill\twhile playing, postfix; also Second",
-                "1 more\t"
+                (
+                    "Verse.Pawn.Draw".to_string(),
+                    "postfix; also Third".to_string()
+                ),
+                (
+                    "Verse.Pawn.Kill".to_string(),
+                    "while playing, postfix; also Second".to_string()
+                ),
+                ("1 more".to_string(), "".to_string())
             ]
         );
         let (_tmp, library) = two_mods();

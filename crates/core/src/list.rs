@@ -45,6 +45,29 @@ impl Category {
         Self::ALL.into_iter().find(|c| c.label() == label)
     }
 
+    /// What a category is kept as in the notes: never reworded, as its
+    /// label may be.
+    pub fn key(self) -> &'static str {
+        match self {
+            Category::Loaders => "loaders",
+            Category::Game => "game",
+            Category::Libraries => "libraries",
+            Category::Content => "content",
+            Category::Patches => "patches",
+            Category::Textures => "textures",
+            Category::Interface => "interface",
+            Category::Tweaks => "tweaks",
+            Category::Last => "last",
+        }
+    }
+
+    /// A category as the notes hold it: by its key, or by a label, which
+    /// is what was kept before there were keys.
+    pub fn from_kept(kept: &str) -> Option<Self> {
+        let by_key = Self::ALL.into_iter().find(|c| c.key() == kept);
+        by_key.or_else(|| Self::from_label(kept))
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Category::Loaders => "Loaders",
@@ -403,42 +426,39 @@ impl GroupedList {
         self.rebuild();
     }
 
-    pub fn toggle(&mut self, category: Category) -> Change {
-        let headers: Vec<(usize, usize)> = self
-            .rows
-            .iter()
-            .enumerate()
-            .filter_map(|(row, r)| match r {
-                Row::Header {
-                    category: c, count, ..
-                } if *c == category => Some((row, *count)),
-                _ => None,
-            })
-            .collect();
-
-        let collapsing = self.collapsed.insert(category);
-        if !collapsing {
-            self.collapsed.remove(&category);
-        }
-        self.rebuild();
-
+    /// What `toggle` would change, before it does: Qt must be told which
+    /// rows go or come before they do.
+    pub fn toggling(&self, category: Category) -> Change {
         // With sub-category rows a category is not one row per mod.
         if self.mods.iter().any(|m| !m.sub.is_empty()) {
             return Change::Reset;
         }
-        match headers.as_slice() {
-            [(_, 0)] => Change::Reset,
-            [(row, count)] if collapsing => Change::Removed {
-                first: row + 1,
-                count: *count,
-            },
-            [(row, count)] => Change::Inserted {
-                first: row + 1,
-                count: *count,
-            },
+        let mut headers = self.rows.iter().enumerate().filter_map(|(row, r)| match r {
+            Row::Header {
+                category: c, count, ..
+            } if *c == category => Some((row, *count)),
+            _ => None,
+        });
+        match (headers.next(), headers.next()) {
+            (Some((row, count)), None) if count > 0 => {
+                let first = row + 1;
+                match self.collapsed.contains(&category) {
+                    true => Change::Inserted { first, count },
+                    false => Change::Removed { first, count },
+                }
+            }
             // Not shown, or split into several runs by a manual order.
             _ => Change::Reset,
         }
+    }
+
+    pub fn toggle(&mut self, category: Category) -> Change {
+        let change = self.toggling(category);
+        if !self.collapsed.remove(&category) {
+            self.collapsed.insert(category);
+        }
+        self.rebuild();
+        change
     }
 
     /// Move a mod within the load order. Out-of-range indices are ignored.
@@ -481,6 +501,50 @@ impl GroupedList {
         self.flags.clear();
         self.rebuild();
         Some(m)
+    }
+
+    /// The library id of the mod on a row; nothing for a heading or a
+    /// mod that is not installed.
+    pub fn installed_on(&self, row: usize) -> Option<usize> {
+        match self.rows.get(row)? {
+            Row::Mod { index } => self.mods[*index].installed,
+            _ => None,
+        }
+    }
+
+    /// The nearest row holding an installed mod from `from`, going down
+    /// (`by` 1) or up (-1). `from` may be one above the first row or one
+    /// below the last, to start at an end.
+    pub fn step(&self, from: isize, by: isize) -> Option<usize> {
+        let mut row = from.checked_add(by)?;
+        while let Some(at) = usize::try_from(row).ok().filter(|at| *at < self.rows.len()) {
+            if self.installed_on(at).is_some() {
+                return Some(at);
+            }
+            row = row.checked_add(by)?;
+        }
+        None
+    }
+
+    /// The installed mods on the rows from one to the other, whichever
+    /// is the lower, both included.
+    pub fn installed_between(&self, a: usize, b: usize) -> Vec<usize> {
+        let rows = a.min(b)..=a.max(b);
+        rows.filter_map(|row| self.installed_on(row)).collect()
+    }
+
+    /// The mod the selection goes to when the one on `row` leaves the
+    /// list: the row below, the one above, then two away either side.
+    pub fn beside(&self, row: usize) -> Option<usize> {
+        let near = [
+            row.checked_add(1),
+            row.checked_sub(1),
+            row.checked_add(2),
+            row.checked_sub(2),
+        ];
+        near.into_iter()
+            .flatten()
+            .find_map(|at| self.installed_on(at))
     }
 
     fn matches(&self, index: usize) -> bool {
@@ -594,6 +658,17 @@ pub fn split_groups<'a>(mods: impl IntoIterator<Item = &'a Mod>) -> Vec<String> 
         last = now;
     }
     split
+}
+
+/// Per mod, whether another mod of the list goes by the same name,
+/// whatever the case of its letters.
+pub fn twins(mods: &[Mod]) -> Vec<bool> {
+    let mut named: std::collections::HashMap<String, usize> = Default::default();
+    for m in mods {
+        *named.entry(m.name.to_ascii_lowercase()).or_default() += 1;
+    }
+    let shared = |m: &Mod| named[&m.name.to_ascii_lowercase()] > 1;
+    mods.iter().map(shared).collect()
 }
 
 /// Where the stretch of neighbours in the same category as the mod at

@@ -6,15 +6,17 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::RwLock;
 
+use crate::locks::Shared;
+
 static WORDS: RwLock<Option<HashMap<String, String>>> = RwLock::new(None);
 
 /// From English to the chosen language; an empty table is English.
 pub fn set(words: HashMap<String, String>) {
-    *WORDS.write().unwrap_or_else(|e| e.into_inner()) = Some(words);
+    *WORDS.writing() = Some(words);
 }
 
 pub fn say(english: &str) -> String {
-    let words = WORDS.read().unwrap_or_else(|e| e.into_inner());
+    let words = WORDS.reading();
     let said = words.as_ref().and_then(|w| w.get(english));
     said.filter(|s| !s.is_empty())
         .map_or(english, String::as_str)
@@ -70,7 +72,7 @@ fn form_for<'a>(rule: &str, n: usize, one: &'a str, many: &'a str) -> &'a str {
 /// `fill` with the count first, in the form the language uses for it.
 pub fn several(n: usize, one: &str, many: &str, parts: &[&dyn Display]) -> String {
     let rule = {
-        let words = WORDS.read().unwrap_or_else(|e| e.into_inner());
+        let words = WORDS.reading();
         let said = words.as_ref().and_then(|w| w.get(PLURAL_RULE));
         said.filter(|s| !s.is_empty()).cloned()
     };
@@ -84,6 +86,74 @@ pub fn several(n: usize, one: &str, many: &str, parts: &[&dyn Display]) -> Strin
         out.push_str(piece);
     }
     out
+}
+
+/// Why a wording cannot stand where its English does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Misfit {
+    /// Not as many `{}` as the English: a value would be dropped, or a
+    /// place left bare.
+    Places,
+    /// A bar between forms in a language whose `@plural` names no third form.
+    Forms,
+    /// A space at either end, or a final `…`, that only one of the two has:
+    /// such a text is joined to what stands beside it.
+    Edges,
+}
+
+/// `third_form` is whether the language's `@plural` has a part after a slash.
+pub fn misfit(english: &str, said: &str, third_form: bool) -> Option<Misfit> {
+    let places = |text: &str| text.matches("{}").count();
+    let forms: Vec<&str> = said.split('|').collect();
+    if forms.len() > 1 && !third_form {
+        return Some(Misfit::Forms);
+    }
+    if forms.iter().any(|form| places(form) != places(english)) {
+        return Some(Misfit::Places);
+    }
+    let edges = |text: &str| {
+        (
+            text.starts_with(' '),
+            text.ends_with(' '),
+            text.ends_with('…'),
+        )
+    };
+    forms
+        .iter()
+        .any(|form| edges(form) != edges(english))
+        .then_some(Misfit::Edges)
+}
+
+fn third_form(rule: Option<&serde_json::Value>) -> bool {
+    rule.and_then(|rule| rule.as_str())
+        .is_some_and(|rule| rule.contains('/'))
+}
+
+/// A language's texts, from English to it: those it ships with (the text
+/// of its file), under those of the user's own file of the same name.
+/// Of the user's, an empty wording and one that does not fit its English
+/// leave the shipped one standing.
+pub fn table(shipped: &str, own: &str) -> serde_json::Map<String, serde_json::Value> {
+    let read = |text: &str| match serde_json::from_str(text) {
+        Ok(serde_json::Value::Object(words)) => words,
+        _ => Default::default(),
+    };
+    let (mut words, own) = (read(shipped), read(own));
+    let third = third_form(own.get(PLURAL_RULE).or(words.get(PLURAL_RULE)));
+    for (english, said) in own {
+        let Some(wording) = said.as_str().filter(|wording| !wording.is_empty()) else {
+            continue;
+        };
+        let why = misfit(&english, wording, third).filter(|_| english != PLURAL_RULE);
+        match why {
+            // Said in the record: on screen the shipped wording just stays.
+            Some(why) => {
+                crate::problem!("your wording {wording:?} for {english:?} is not used: {why:?}")
+            }
+            None => drop(words.insert(english, said)),
+        }
+    }
+    words
 }
 
 /// Marks a text that is kept in English here, as a key, and put in the
@@ -138,6 +208,45 @@ mod tests {
         );
         assert_eq!(fill("{} {}", &[&"a{}", &"b"]), "a{} b");
         assert_eq!(say("Not in any table"), "Not in any table");
+    }
+
+    #[test]
+    fn a_wording_fits_when_it_keeps_the_places_and_the_edges_of_its_english() {
+        assert_eq!(misfit("Needs {}", "Requiert {}", false), None);
+        assert_eq!(misfit("Needs {}", "Requis", false), Some(Misfit::Places));
+        assert_eq!(
+            misfit("{} of {}", "{} sur {} {}", false),
+            Some(Misfit::Places)
+        );
+        assert_eq!(misfit("{} mods", "{} mody|{} modów", true), None);
+        assert_eq!(
+            misfit("{} mods", "{} mody|modów", true),
+            Some(Misfit::Places)
+        );
+        assert_eq!(
+            misfit("{} mods", "{} mody|{} modów", false),
+            Some(Misfit::Forms)
+        );
+        assert_eq!(misfit("Reading…", "Lecture", false), Some(Misfit::Edges));
+        assert_eq!(misfit(" and ", "et", false), Some(Misfit::Edges));
+    }
+
+    #[test]
+    fn your_own_wording_stands_over_the_shipped_one_unless_it_does_not_fit() {
+        let shipped = r#"{ "@plural": "0 1", "Needs {}": "Requiert {}", "Save": "Enregistrer" }"#;
+        let own = r#"{ "Needs {}": "Il faut", "Save": "Sauver", "Play": "", "New": "Neuf" }"#;
+        let words = table(shipped, own);
+        assert_eq!(words["Needs {}"], "Requiert {}");
+        assert_eq!(words["Save"], "Sauver");
+        assert_eq!(words["New"], "Neuf");
+        assert!(!words.contains_key("Play"));
+        assert_eq!(table("not json", "[1]").len(), 0);
+        // A third form is allowed once your own rule names one.
+        let polish = table(
+            r#"{ "{} mods": "x {}" }"#,
+            r#"{ "@plural": "1 / 2 3 4", "{} mods": "{} mody|{} modów" }"#,
+        );
+        assert_eq!(polish["{} mods"], "{} mody|{} modów");
     }
 
     #[test]

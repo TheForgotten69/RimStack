@@ -8,9 +8,9 @@ import RimStack.Ui
 Popup {
     enter: PopIn {}
     exit: PopOut {}
-    id: menu
+    id: listsMenu
 
-    required property Backend backend
+    required property KeptLists keptLists
     signal useList(var ids)
     // The load order now goes by this name; "" when it has none.
     signal named(string name)
@@ -21,8 +21,8 @@ Popup {
     property string problem
 
     function reload() {
-        lists = JSON.parse(backend.savedLists())
-        snapshots = JSON.parse(backend.snapshots())
+        lists = JSON.parse(keptLists.savedLists())
+        snapshots = JSON.parse(keptLists.snapshots())
     }
 
     width: Theme.sized(380)
@@ -38,18 +38,18 @@ Popup {
 
         Text { color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("Saved lists") }
         Text {
-            visible: menu.lists.length === 0
+            visible: listsMenu.lists.length === 0
             width: parent.width
             color: Theme.ink2
             font.pixelSize: Theme.body
             text: Theme.say("None")
         }
         Repeater {
-            model: menu.lists
+            model: listsMenu.lists
             RowLayout {
                 id: saved
                 required property var modelData
-                width: menu.availableWidth
+                width: listsMenu.availableWidth
                 height: Theme.sized(28)
                 spacing: Theme.gapSmall
                 Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: saved.modelData.name }
@@ -61,29 +61,29 @@ Popup {
                     text: Theme.say("Update")
                     tip: Theme.fill("Keeps the load order as it is now under {}, in place of what it held", saved.modelData.name)
                     onClicked: {
-                        menu.problem = menu.backend.saveListAs(saved.modelData.name)
-                        if (menu.problem === "")
-                            menu.named(saved.modelData.name)
-                        menu.reload()
+                        listsMenu.problem = listsMenu.keptLists.saveListAs(saved.modelData.name)
+                        if (listsMenu.problem === "")
+                            listsMenu.named(saved.modelData.name)
+                        listsMenu.reload()
                     }
                 }
                 Btn {
                     text: Theme.say("Use")
                     onClicked: {
-                        const ids = menu.backend.savedList(saved.modelData.name)
+                        const ids = listsMenu.keptLists.savedList(saved.modelData.name)
                         if (ids !== "") {
-                            menu.useList(JSON.parse(ids))
-                            menu.named(saved.modelData.name)
+                            listsMenu.useList(JSON.parse(ids))
+                            listsMenu.named(saved.modelData.name)
                         }
-                        menu.close()
+                        listsMenu.close()
                     }
                 }
                 Btn {
                     icon: "trash-2"
                     tip: Theme.fill("Delete {}", saved.modelData.name)
                     onClicked: {
-                        menu.backend.deleteList(saved.modelData.name)
-                        menu.reload()
+                        listsMenu.keptLists.deleteList(saved.modelData.name)
+                        listsMenu.reload()
                     }
                 }
             }
@@ -105,37 +105,37 @@ Popup {
                 icon: "save"
                 text: Theme.say("Keep")
                 onClicked: {
-                    menu.problem = menu.backend.saveListAs(name.text)
-                    if (menu.problem === "") {
-                        menu.named(name.text.trim())
+                    listsMenu.problem = listsMenu.keptLists.saveListAs(name.text)
+                    if (listsMenu.problem === "") {
+                        listsMenu.named(name.text.trim())
                         name.text = ""
                     }
-                    menu.reload()
+                    listsMenu.reload()
                 }
             }
         }
-        Text { visible: menu.problem !== ""; width: parent.width; wrapMode: Text.WordWrap; color: Theme.err; font.pixelSize: Theme.body; text: menu.problem }
+        Text { visible: listsMenu.problem !== ""; width: parent.width; wrapMode: Text.WordWrap; color: Theme.err; font.pixelSize: Theme.body; text: listsMenu.problem }
 
-        Text { visible: menu.snapshots.length > 0; topPadding: Theme.gapSmall; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("Earlier") }
+        Text { visible: listsMenu.snapshots.length > 0; topPadding: Theme.gapSmall; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("Earlier") }
         Repeater {
             // The five newest fit; all ten are in RimStack's data folder.
-            model: menu.snapshots.slice(0, 5)
+            model: listsMenu.snapshots.slice(0, 5)
             RowLayout {
                 id: earlier
                 required property var modelData
-                width: menu.availableWidth
+                width: listsMenu.availableWidth
                 height: Theme.sized(28)
                 spacing: Theme.gapSmall
                 Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.listName(earlier.modelData.name) }
                 Btn {
                     text: Theme.say("Use")
                     onClicked: {
-                        const ids = menu.backend.snapshotList(earlier.modelData.name)
+                        const ids = listsMenu.keptLists.snapshotList(earlier.modelData.name)
                         if (ids !== "") {
-                            menu.useList(JSON.parse(ids))
-                            menu.named("")
+                            listsMenu.useList(JSON.parse(ids))
+                            listsMenu.named("")
                         }
-                        menu.close()
+                        listsMenu.close()
                     }
                 }
             }
@@ -145,18 +145,18 @@ Popup {
         Flow {
             width: parent.width
             spacing: Theme.gapSmall
-            Btn { icon: "copy"; text: Theme.say("Copy the load order"); tip: Theme.say("The active mods as text, one a line"); onClicked: { Theme.copy(Mods.active.listing()); menu.close() } }
+            Btn { icon: "copy"; text: Theme.say("Copy the load order"); tip: Theme.say("The active mods as text, one a line"); onClicked: { Theme.copy(Mods.active.listing()); listsMenu.close() } }
             Btn {
                 text: Theme.say("Use the copied list")
                 tip: Theme.say("A list of mods copied as text or as links becomes the load order. Save writes it.")
                 onClicked: {
-                    const ids = JSON.parse(menu.backend.idsInText(Theme.pasted()))
+                    const ids = JSON.parse(listsMenu.keptLists.idsInText(Theme.pasted()))
                     if (ids.length > 0) {
-                        menu.useList(ids)
-                        menu.named("")
-                        menu.close()
+                        listsMenu.useList(ids)
+                        listsMenu.named("")
+                        listsMenu.close()
                     } else {
-                        menu.problem = Theme.say("No mod found on the clipboard")
+                        listsMenu.problem = Theme.say("No mod found on the clipboard")
                     }
                 }
             }

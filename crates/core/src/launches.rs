@@ -1,8 +1,9 @@
 //! A record of each time the game was started from RimStack: when, with
 //! which load order, and how many kinds of error its log showed.
 
+use crate::error::Error;
 use serde_json::{json, Value};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const KEPT: usize = 30;
 
@@ -19,10 +20,7 @@ pub struct Launch {
 /// The launches on record, oldest first. No file, or one that cannot be
 /// read, is no launches: the record is a convenience, not a source.
 pub fn read(path: &Path) -> Vec<Launch> {
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return Vec::new();
-    };
-    let Ok(Value::Array(items)) = serde_json::from_str(&text) else {
+    let Some(Value::Array(items)) = crate::whole::read_json(path) else {
         return Vec::new();
     };
     let launch = |item: &Value| -> Option<Launch> {
@@ -42,20 +40,16 @@ pub fn read(path: &Path) -> Vec<Launch> {
     items.iter().filter_map(launch).collect()
 }
 
-pub fn write(path: &Path, launches: &[Launch]) -> Result<(), String> {
-    let failed = |e: std::io::Error| format!("{}: {e}", path.display());
+pub fn write(path: &Path, launches: &[Launch]) -> Result<(), Error> {
     let from = launches.len().saturating_sub(KEPT);
     let items: Vec<Value> = launches[from..]
         .iter()
         .map(|l| json!({ "time": l.time, "ids": l.ids, "errors": l.errors }))
         .collect();
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(failed)?;
-    }
-    std::fs::write(path, Value::Array(items).to_string()).map_err(failed)
+    crate::whole::write(path, Value::Array(items).to_string())
 }
 
-pub fn record(path: &Path, ids: &[String], now: u64) -> Result<(), String> {
+pub fn record(path: &Path, ids: &[String], now: u64) -> Result<(), Error> {
     let mut launches = read(path);
     launches.push(Launch {
         time: now,
@@ -81,9 +75,108 @@ pub fn last_clean(launches: &[Launch]) -> Option<&Launch> {
     launches.iter().rev().find(|l| l.errors == Some(0))
 }
 
+/// A launch on record beside the load order of now.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Shown {
+    /// The game's log of that launch, where it was kept.
+    pub log: Option<String>,
+    pub time: u64,
+    pub mods: usize,
+    pub errors: Option<usize>,
+    pub ids: Vec<String>,
+    /// How many mods the list has lost and gained since.
+    pub removed: usize,
+    pub added: usize,
+    pub reordered: bool,
+}
+
+/// The launches, newest first. `kept_logs` is what `logs::kept` lists.
+pub fn shown(record: &[Launch], list: &[String], kept_logs: &[(u64, PathBuf)]) -> Vec<Shown> {
+    let one = |(at, launch): (usize, &Launch)| {
+        let difference = crate::saves::compare(&launch.ids, list);
+        let next = record.get(at + 1).map(|after| after.time);
+        let log = crate::logs::kept_for(kept_logs, launch.time, next);
+        Shown {
+            log: log.map(|path| path.to_string_lossy().into_owned()),
+            time: launch.time,
+            mods: launch.ids.len(),
+            errors: launch.errors,
+            ids: launch.ids.clone(),
+            removed: difference.missing.len(),
+            added: difference.added.len(),
+            reordered: difference.reordered,
+        }
+    };
+    record.iter().enumerate().rev().map(one).collect()
+}
+
+/// What changed in the list since the last launch that logged no error.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct SinceClean {
+    pub time: u64,
+    pub ids: Vec<String>,
+    /// By name, as `name_of` gives it for a package id as written.
+    pub removed: Vec<String>,
+    pub added: Vec<String>,
+    pub reordered: bool,
+}
+
+pub fn since_clean(
+    record: &[Launch],
+    list: &[String],
+    name_of: &dyn Fn(&str) -> String,
+) -> Option<SinceClean> {
+    let clean = last_clean(record)?;
+    let difference = crate::saves::compare(&clean.ids, list);
+    let named = |ids: &[String], places: &[usize]| -> Vec<String> {
+        places.iter().map(|&i| name_of(&ids[i])).collect()
+    };
+    Some(SinceClean {
+        time: clean.time,
+        ids: clean.ids.clone(),
+        removed: named(&clean.ids, &difference.missing),
+        added: named(list, &difference.added),
+        reordered: difference.reordered,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launches_are_shown_newest_first_each_with_its_log_and_what_changed_since() {
+        let launch = |time, ids: &[&str], errors| Launch {
+            time,
+            ids: ids.iter().map(|id| id.to_string()).collect(),
+            errors,
+        };
+        let record = [
+            launch(100, &["a", "b"], Some(0)),
+            launch(200, &["a", "b", "c"], Some(4)),
+        ];
+        let list: Vec<String> = ["b", "a", "d"].map(String::from).to_vec();
+        let kept = [
+            (150, PathBuf::from("/logs/150.log")),
+            (250, PathBuf::from("/logs/250.log")),
+        ];
+        let rows = shown(&record, &list, &kept);
+        assert_eq!(
+            (rows[0].time, rows[0].log.as_deref()),
+            (200, Some("/logs/250.log"))
+        );
+        assert_eq!(
+            (rows[0].removed, rows[0].added, rows[0].reordered),
+            (1, 1, true)
+        );
+        assert_eq!(rows[1].log.as_deref(), Some("/logs/150.log"));
+
+        let upper = |id: &str| id.to_uppercase();
+        let since = since_clean(&record, &list, &upper).unwrap();
+        assert_eq!((since.time, since.removed.len()), (100, 0));
+        assert_eq!(since.added, ["D"]);
+        assert_eq!(since_clean(&record[1..], &list, &upper), None);
+    }
 
     fn ids(names: &[&str]) -> Vec<String> {
         names.iter().map(|s| s.to_string()).collect()

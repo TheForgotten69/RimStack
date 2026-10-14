@@ -2,6 +2,7 @@
 //! The list is the `replacements.json.gz` Mlie publishes with the Use This
 //! Instead mod; RimSort keeps a copy of the same file.
 
+use crate::error::Error;
 use crate::say;
 
 use serde_json::Value;
@@ -18,15 +19,15 @@ pub struct Replacement {
 }
 
 /// Replacements by the Workshop id of the mod they replace.
-pub fn parse(json: &str) -> Result<HashMap<String, Replacement>, String> {
+pub fn parse(json: &str) -> Result<HashMap<String, Replacement>, Error> {
     // RimSort writes the file with a byte order mark.
     let json = json.strip_prefix('\u{feff}').unwrap_or(json);
-    let root: Value =
-        serde_json::from_str(json).map_err(|e| say!("the list is not JSON: {}", e))?;
+    let root: Value = serde_json::from_str(json)
+        .map_err(|e| Error::format(say!("the list is not JSON: {}", e)))?;
     let rules = root
         .get("rules")
         .and_then(Value::as_array)
-        .ok_or_else(|| say!("the list has no rules"))?;
+        .ok_or_else(|| Error::format(say!("the list has no rules")))?;
     let text = |rule: &Value, key: &str| rule.get(key).and_then(Value::as_str).map(String::from);
     let replacement = |rule: &Value| -> Option<(String, Replacement)> {
         let versions = rule.get("newVersions").and_then(Value::as_array);
@@ -69,20 +70,19 @@ pub fn file_in(data_dir: &Path) -> std::path::PathBuf {
 
 /// Downloads the list as its author publishes it and keeps it at `to`.
 /// A download that does not read as the list never replaces a good one.
-pub fn download(to: &Path) -> Result<HashMap<String, Replacement>, String> {
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(std::time::Duration::from_secs(60)))
-        .build()
-        .into();
-    let failed = |e: ureq::Error| say!("the download failed: {}", e);
-    let mut response = agent.get(URL).call().map_err(failed)?;
-    let bytes = response.body_mut().read_to_vec().map_err(failed)?;
+pub fn download(to: &Path) -> Result<HashMap<String, Replacement>, Error> {
+    let agent = crate::web::agent(60);
+    let mut response = agent.get(URL).call().map_err(crate::web::failed)?;
+    let bytes = response
+        .body_mut()
+        .read_to_vec()
+        .map_err(crate::web::failed)?;
     let mut json = String::new();
     flate2::read::GzDecoder::new(bytes.as_slice())
         .read_to_string(&mut json)
-        .map_err(|e| say!("the list could not be unpacked: {}", e))?;
+        .map_err(|e| Error::format(say!("the list could not be unpacked: {}", e)))?;
     let list = parse(&json)?;
-    std::fs::write(to, bytes).map_err(|e| format!("{}: {e}", to.display()))?;
+    crate::whole::write(to, bytes)?;
     Ok(list)
 }
 

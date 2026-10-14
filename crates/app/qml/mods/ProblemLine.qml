@@ -10,9 +10,8 @@ RowLayout {
     // Shown before the sentence when the line is not about the selected mod.
     property string name
     property string words
-    // What `Mods.applyFix` is given, and what the button says.
-    property string fix
-    property string fixLabel
+    // { action, target, label }: what `Mods.applyFix` is given.
+    property var fix: ({})
     property int modId: -1
     spacing: Theme.gap
     Icon { Layout.alignment: Qt.AlignTop; Layout.topMargin: Theme.gapHair; name: line.error ? "circle-alert" : "triangle-alert"; size: 14; color: line.error ? Theme.err : Theme.warn }
@@ -29,8 +28,8 @@ RowLayout {
     }
     Btn {
         Layout.alignment: Qt.AlignTop
-        visible: line.fix !== "" && !Mods.active.previewing
-        text: Theme.say(line.fixLabel)
+        visible: !!line.fix.action && !Mods.active.previewing
+        text: Theme.say(line.fix.label || "")
         onClicked: Mods.applyFix(line.modId, line.fix)
     }
 }

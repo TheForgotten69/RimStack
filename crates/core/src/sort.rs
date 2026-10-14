@@ -27,8 +27,9 @@ impl Sorted {
     }
 }
 
-fn moved(order: &[usize]) -> Vec<bool> {
-    // Longest increasing run of old positions: patience sorting.
+/// For each place of `order`, whether what is there moved: all but the
+/// longest run of rising old positions, found by patience sorting.
+pub(crate) fn moved(order: &[usize]) -> Vec<bool> {
     let mut tails: Vec<usize> = Vec::new(); // index into `order`, by run length
     let mut previous: Vec<Option<usize>> = vec![None; order.len()];
     for (i, &old) in order.iter().enumerate() {

@@ -1,6 +1,7 @@
 //! The game's save files: which mods each was played with, and how that
 //! compares with a load order.
 
+use crate::error::Error;
 use crate::say;
 
 use crate::id;
@@ -153,10 +154,137 @@ pub fn compare(save_ids: &[String], list_ids: &[String]) -> Difference {
     }
 }
 
+/// What loading a save with the load order would do, worst first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Verdict {
+    Unreadable,
+    /// A mod of the save is not in the list, or the game is another version.
+    Breaks,
+    Differs,
+    Same,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Lacking {
+    pub name: String,
+    pub installed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Compared {
+    /// As the save wrote it.
+    pub game_version: String,
+    pub other_game: bool,
+    pub mods: usize,
+    pub ids: Vec<String>,
+    pub missing: Vec<Lacking>,
+    /// Names of the mods the list has and the save does not.
+    pub added: Vec<String>,
+    pub reordered: bool,
+}
+
+impl Compared {
+    /// `game_version` is the installed game's ("1.6"); `name_of` gives an
+    /// installed mod's name by folded package id.
+    pub fn of(
+        header: &Header,
+        list: &[String],
+        game_version: &str,
+        name_of: &dyn Fn(&str) -> Option<String>,
+    ) -> Self {
+        let difference = compare(&header.mod_ids, list);
+        let lacking = |&i: &usize| {
+            let key = id::split_steam(&header.mod_ids[i]).0;
+            let installed = name_of(&key);
+            // Not installed: the name the save itself kept, if it kept one.
+            let kept = || header.mod_names.get(i).cloned();
+            Lacking {
+                installed: installed.is_some(),
+                name: installed.or_else(kept).unwrap_or(key),
+            }
+        };
+        let named = |&i: &usize| {
+            let key = id::split_steam(&list[i]).0;
+            name_of(&key).unwrap_or(key)
+        };
+        let written = header.game_version.clone().unwrap_or_default();
+        let short = crate::modsconfig::short_version(&written).unwrap_or_default();
+        Self {
+            other_game: !short.is_empty() && short != game_version,
+            game_version: written,
+            mods: header.mod_ids.len(),
+            ids: header.mod_ids.clone(),
+            missing: difference.missing.iter().map(lacking).collect(),
+            added: difference.added.iter().map(named).collect(),
+            reordered: difference.reordered,
+        }
+    }
+
+    /// Only what can break a save counts as trouble.
+    pub fn verdict(&self) -> Verdict {
+        if !self.missing.is_empty() || self.other_game {
+            Verdict::Breaks
+        } else if self.added.is_empty() && !self.reordered {
+            Verdict::Same
+        } else {
+            Verdict::Differs
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Row {
+    pub file: String,
+    /// With the RimSaves mod a save's folder is part of its file name.
+    pub folder: String,
+    pub name: String,
+    pub facts: Vec<(&'static str, String)>,
+    pub preview: Option<String>,
+    pub path: String,
+    pub modified: u64,
+    pub megabytes: f64,
+    pub verdict: Verdict,
+    /// Why it could not be read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub problem: Option<String>,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub compared: Option<Compared>,
+}
+
+impl Row {
+    /// `facts` and `preview` are what RimSaves keeps beside the save.
+    pub fn of(
+        save: &SaveFile,
+        facts: Vec<(&'static str, String)>,
+        preview: Option<PathBuf>,
+        compared: Option<Compared>,
+    ) -> Self {
+        let (folder, shown) = crate::rimsaves::split(&save.name);
+        Self {
+            file: save.name.clone(),
+            folder: folder.to_string(),
+            name: shown.to_string(),
+            facts,
+            preview: preview.map(|picture| picture.to_string_lossy().into_owned()),
+            path: save.path.to_string_lossy().into_owned(),
+            modified: save.modified,
+            megabytes: save.bytes as f64 / 1_048_576.0,
+            verdict: compared
+                .as_ref()
+                .map_or(Verdict::Unreadable, Compared::verdict),
+            problem: save.header.as_ref().err().cloned(),
+            compared,
+        }
+    }
+}
+
 /// Copies `save` into `backups` under a name starting with `stamp`, then
 /// deletes all but the newest `keep` copies there. Returns the copy.
-pub fn back_up(save: &Path, backups: &Path, stamp: u64, keep: usize) -> Result<PathBuf, String> {
-    let failed = |e: std::io::Error| format!("{}: {e}", backups.display());
+pub fn back_up(save: &Path, backups: &Path, stamp: u64, keep: usize) -> Result<PathBuf, Error> {
+    let failed = |e: std::io::Error| Error::file(backups, e);
     std::fs::create_dir_all(backups).map_err(failed)?;
     let name = save.file_name().unwrap_or_default().to_string_lossy();
     let copy = backups.join(format!("{stamp:012}-{name}"));
@@ -206,6 +334,80 @@ mod tests {
     }
 
     use super::*;
+
+    fn header(ids: &[&str], version: &str) -> Header {
+        Header {
+            game_version: Some(version.to_string()),
+            mod_ids: ids.iter().map(|id| id.to_string()).collect(),
+            mod_names: ids.iter().map(|id| format!("{id} by name")).collect(),
+        }
+    }
+
+    fn installed(key: &str) -> Option<String> {
+        ["a.core", "b.lib", "d.new"]
+            .contains(&key)
+            .then(|| key.to_uppercase())
+    }
+
+    #[test]
+    fn a_save_breaks_on_a_mod_the_list_lacks_or_on_another_game_version() {
+        let list: Vec<String> = ["a.core", "d.new"].map(String::from).to_vec();
+        let read = header(&["A.Core", "b.lib_steam", "c.gone"], "1.6.4 rev1");
+        let lacks = Compared::of(&read, &list, "1.6", &installed);
+        assert_eq!(lacks.verdict(), Verdict::Breaks);
+        let named: Vec<(&str, bool)> = lacks
+            .missing
+            .iter()
+            .map(|m| (m.name.as_str(), m.installed))
+            .collect();
+        assert_eq!(named, [("B.LIB", true), ("c.gone by name", false)]);
+        assert_eq!(lacks.added, ["D.NEW"]);
+
+        let alone: Vec<String> = vec!["a.core".to_string()];
+        let older = Compared::of(
+            &header(&["a.core"], "1.5.4 rev1"),
+            &alone,
+            "1.6",
+            &installed,
+        );
+        assert!(older.other_game && older.verdict() == Verdict::Breaks);
+        let same = Compared::of(
+            &header(&["a.core"], "1.6.4 rev1"),
+            &alone,
+            "1.6",
+            &installed,
+        );
+        assert_eq!(same.verdict(), Verdict::Same);
+        let more = Compared::of(&header(&["a.core"], "1.6.4"), &list, "1.6", &installed);
+        assert_eq!(more.verdict(), Verdict::Differs);
+    }
+
+    #[test]
+    fn a_row_says_what_was_compared_or_why_the_save_could_not_be_read() {
+        let save = |header| SaveFile {
+            path: PathBuf::from("/saves/Colony.rws"),
+            name: "Colony".to_string(),
+            modified: 7,
+            bytes: 3_145_728,
+            header,
+        };
+        let unreadable = Row::of(&save(Err("not UTF-8".to_string())), Vec::new(), None, None);
+        let said = serde_json::to_value(&unreadable).unwrap();
+        assert_eq!(said["verdict"], "unreadable");
+        assert_eq!(said["problem"], "not UTF-8");
+        assert!(said.get("ids").is_none());
+
+        let read = header(&["a.core"], "1.6.1");
+        let compared = Compared::of(&read, &["a.core".to_string()], "1.6", &installed);
+        let facts = vec![("Seed", "abc".to_string())];
+        let row = Row::of(&save(Ok(read)), facts, None, Some(compared));
+        let said = serde_json::to_value(&row).unwrap();
+        assert_eq!(said["verdict"], "same");
+        assert_eq!(said["megabytes"], 3.0);
+        assert_eq!(said["facts"][0][1], "abc");
+        assert_eq!(said["gameVersion"], "1.6.1");
+        assert!(said.get("problem").is_none());
+    }
 
     const START: &str = "\u{feff}<?xml version=\"1.0\" encoding=\"utf-8\"?>
 <savegame>

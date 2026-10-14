@@ -31,10 +31,10 @@ Item {
         return entries
     }
     // The mods whose one trouble is the game version they list.
-    readonly property int versionOnly: Mods.troubles.filter(trouble => trouble.fix === "trust").length
+    readonly property int versionOnly: Mods.overview.versionOnly || 0
     readonly property bool versionLine: versionOnly >= 3 && !Mods.active.previewing && !Theme.demo
     // The mods warned about for something the line above the list does not say.
-    readonly property int otherWarnings: new Set(Mods.troubles.filter(trouble => !trouble.error && trouble.fix !== "trust").map(trouble => trouble.modId)).size
+    readonly property int otherWarnings: Mods.overview.otherWarnings || 0
     readonly property int warningsShown: versionLine ? otherWarnings : Mods.active.warnings
     readonly property alias list: view
 
@@ -342,7 +342,7 @@ Item {
                 component Heading: Text {
                     id: heading
                     property string column
-                    color: Mods.shownBy === column && column !== "" ? Theme.ink : Theme.ink3
+                    color: Mods.columns.shownBy === column && column !== "" ? Theme.ink : Theme.ink3
                     font.pixelSize: Theme.caption
                     font.weight: Font.Medium
                     activeFocusOnTab: true
@@ -352,26 +352,26 @@ Item {
                     verticalAlignment: Text.AlignVCenter
                     Accessible.role: Accessible.ColumnHeader
                     Accessible.name: text
-                    Keys.onReturnPressed: Mods.showBy(heading.column)
-                    Keys.onSpacePressed: Mods.showBy(heading.column)
-                    Keys.onMenuPressed: Mods.menuRequested(heading, 0, heading.height + 2, Mods.columnMenu())
+                    Keys.onReturnPressed: Mods.columns.showBy(heading.column)
+                    Keys.onSpacePressed: Mods.columns.showBy(heading.column)
+                    Keys.onMenuPressed: Mods.menuRequested(heading, 0, heading.height + 2, Mods.columns.menu())
                     // Ctrl + Alt with an arrow moves the column, as a drag does.
                     Keys.onPressed: event => {
                         const by = event.key === Qt.Key_Left ? -1 : event.key === Qt.Key_Right ? 1 : 0
                         const held = (event.modifiers & Qt.ControlModifier) && (event.modifiers & Qt.AltModifier)
-                        const at = Mods.shownColumns.indexOf(heading.column)
+                        const at = Mods.columns.shown.indexOf(heading.column)
                         if (by === 0 || !held || at < 0)
                             return
-                        Mods.moveColumn(heading.column, at + by)
+                        Mods.columns.move(heading.column, at + by)
                         event.accepted = true
                     }
                     HoverHandler { cursorShape: Qt.PointingHandCursor }
                     Tip { text: heading.column === "" ? Theme.say("The load order itself") : Theme.say("Click to show the list by this column; again to turn it round. Right-click to choose the columns. Drag it, or Ctrl + Alt + Left or Right, to move it.") }
-                    TapHandler { onTapped: Mods.showBy(heading.column) }
-                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: point => Mods.menuRequested(heading, point.position.x, heading.height + 2, Mods.columnMenu()) }
+                    TapHandler { onTapped: Mods.columns.showBy(heading.column) }
+                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: point => Mods.menuRequested(heading, point.position.x, heading.height + 2, Mods.columns.menu()) }
                 }
                 Heading { Layout.preferredWidth: Theme.sized(28); horizontalAlignment: Text.AlignRight; column: ""; text: "#" }
-                Heading { Layout.fillWidth: true; column: "name"; text: Theme.say("Name") + (Mods.shownBy === "name" ? (Mods.shownDescending ? " ▾" : " ▴") : "") }
+                Heading { Layout.fillWidth: true; column: "name"; text: Theme.say("Name") + (Mods.columns.shownBy === "name" ? (Mods.columns.descending ? " ▾" : " ▴") : "") }
                 Repeater {
                     model: view.fitting
                     Heading {
@@ -381,7 +381,7 @@ Item {
                         column: modelData
                         Layout.preferredWidth: view.columnWidth(modelData)
                         horizontalAlignment: modelData === "load" ? Text.AlignRight : Text.AlignLeft
-                        text: Theme.say(Mods.columnNames[modelData]) + (Mods.shownBy === modelData ? (Mods.shownDescending ? " ▾" : " ▴") : "")
+                        text: Theme.say(Mods.columns.labels[modelData]) + (Mods.columns.shownBy === modelData ? (Mods.columns.descending ? " ▾" : " ▴") : "")
                         // Its left edge, dragged, makes it wider or narrower; the name takes the rest.
                         Item {
                             id: edge
@@ -398,7 +398,7 @@ Item {
                                 yAxis.enabled: false
                                 dragThreshold: 1
                                 onActiveChanged: if (active) from = extra.width
-                                onActiveTranslationChanged: if (active) Mods.sizeColumn(extra.modelData, from - activeTranslation.x)
+                                onActiveTranslationChanged: if (active) Mods.columns.size(extra.modelData, from - activeTranslation.x)
                             }
                         }
                         // Dragged sideways past a neighbour, it takes its place.
@@ -410,7 +410,7 @@ Item {
                                     return
                                 const moved = centroid.position.x - centroid.pressPosition.x
                                 if (Math.abs(moved) > extra.width / 2)
-                                    Mods.moveColumn(extra.modelData, extra.index + (moved > 0 ? 1 : -1))
+                                    Mods.columns.move(extra.modelData, extra.index + (moved > 0 ? 1 : -1))
                             }
                         }
                     }
@@ -438,13 +438,13 @@ Item {
                             Btn { width: parent.width; icon: Mods.prefs.headings === 0 ? "check" : ""; text: Theme.say("One numbered list"); onClicked: Mods.keepingScroll(() => Mods.prefs.headings = 0) }
                             Text { topPadding: Theme.gapTiny; color: Theme.ink2; font.pixelSize: Theme.small; font.weight: Font.DemiBold; text: Theme.say("Columns") }
                             Repeater {
-                                model: Object.keys(Mods.columnNames)
+                                model: Object.keys(Mods.columns.labels)
                                 Btn {
                                     required property string modelData
                                     width: parent.width
-                                    icon: Mods.shownColumns.indexOf(modelData) >= 0 ? "check" : ""
-                                    text: Theme.say(Mods.columnNames[modelData])
-                                    onClicked: Mods.toggleColumn(modelData)
+                                    icon: Mods.columns.shown.indexOf(modelData) >= 0 ? "check" : ""
+                                    text: Theme.say(Mods.columns.labels[modelData])
+                                    onClicked: Mods.columns.toggle(modelData)
                                 }
                             }
                             Text { width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink3; font.pixelSize: Theme.caption; text: Theme.say("A heading orders the list when clicked and moves when dragged.") }

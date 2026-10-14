@@ -1,4 +1,5 @@
 // A dotted line under a word that hovering explains.
+pragma ComponentBehavior: Bound
 import QtQuick
 import RimStack.Ui
 

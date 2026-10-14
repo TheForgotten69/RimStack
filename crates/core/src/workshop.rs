@@ -1,13 +1,13 @@
 //! The Steam Workshop: which version of each mod Steam has put on disk,
 //! and what the Workshop has now.
 
+use crate::error::Error;
 use crate::say;
 
 use crate::vdf::{tokens, Token};
 use rayon::prelude::*;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::time::Duration;
 
 const DETAILS_URL: &str =
     "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/";
@@ -91,13 +91,13 @@ pub struct Details {
 
 /// Reads the answer of Steam's file-details request. Items Steam does not
 /// know, or will not show, are left out.
-pub fn parse_details(json: &str) -> Result<Vec<Details>, String> {
-    let root: Value =
-        serde_json::from_str(json).map_err(|e| say!("Steam's answer is not JSON: {}", e))?;
+pub fn parse_details(json: &str) -> Result<Vec<Details>, Error> {
+    let root: Value = serde_json::from_str(json)
+        .map_err(|e| Error::format(say!("Steam's answer is not JSON: {}", e)))?;
     let files = root
         .pointer("/response/publishedfiledetails")
         .and_then(Value::as_array)
-        .ok_or_else(|| say!("Steam's answer has no file list"))?;
+        .ok_or_else(|| Error::format(say!("Steam's answer has no file list")))?;
     let details = |file: &Value| -> Option<Details> {
         Some(Details {
             id: file.get("publishedfileid")?.as_str()?.to_string(),
@@ -117,19 +117,18 @@ pub fn parse_details(json: &str) -> Result<Vec<Details>, String> {
 ///
 /// Steam takes several seconds per hundred items (it sends each one's
 /// whole description), so the requests go out side by side.
-pub fn fetch_details(ids: &[String]) -> Result<Vec<Details>, String> {
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(120)))
-        .build()
-        .into();
-    let ask = |batch: &[String]| -> Result<Vec<Details>, String> {
+pub fn fetch_details(ids: &[String]) -> Result<Vec<Details>, Error> {
+    let agent = crate::web::agent(120);
+    let ask = |batch: &[String]| -> Result<Vec<Details>, Error> {
         let mut form = vec![("itemcount".to_string(), batch.len().to_string())];
         for (i, id) in batch.iter().enumerate() {
             form.push((format!("publishedfileids[{i}]"), id.clone()));
         }
-        let failed = |e: ureq::Error| say!("Steam could not be asked: {}", e);
         let pairs = form.iter().map(|(k, v)| (k.as_str(), v.as_str()));
-        let mut response = agent.post(DETAILS_URL).send_form(pairs).map_err(failed)?;
+        let mut response = agent
+            .post(DETAILS_URL)
+            .send_form(pairs)
+            .map_err(crate::web::steam_failed)?;
         // Larger than the default limit: descriptions come along.
         let mut body = response
             .body_mut()
@@ -137,22 +136,15 @@ pub fn fetch_details(ids: &[String]) -> Result<Vec<Details>, String> {
             .limit(64 * 1024 * 1024)
             .reader();
         let mut text = String::new();
-        std::io::Read::read_to_string(&mut body, &mut text)
-            .map_err(|e| say!("Steam could not be asked: {}", e))?;
+        std::io::Read::read_to_string(&mut body, &mut text).map_err(crate::web::steam_failed)?;
         parse_details(&text)
     };
-    let answers: Vec<Result<Vec<Details>, String>> = ids.par_chunks(100).map(ask).collect();
+    let answers: Vec<Result<Vec<Details>, Error>> = ids.par_chunks(100).map(ask).collect();
     let mut all = Vec::new();
     for answer in answers {
         all.extend(answer?);
     }
     Ok(all)
-}
-
-/// The items whose Workshop version is newer than the one on disk.
-pub fn updates<'a>(on_disk: &HashMap<String, u64>, now: &'a [Details]) -> Vec<&'a Details> {
-    let newer = |d: &&Details| on_disk.get(&d.id).is_some_and(|&have| d.updated > have);
-    now.iter().filter(newer).collect()
 }
 
 const COLLECTIONS_URL: &str =
@@ -161,9 +153,9 @@ const COLLECTIONS_URL: &str =
 /// The items of each collection among `ids`, from Steam's answer to a
 /// collection-details request: (collection, its items). An id that is no
 /// collection has none.
-pub fn parse_collections(json: &str) -> Result<Vec<(String, Vec<String>)>, String> {
-    let root: Value =
-        serde_json::from_str(json).map_err(|e| say!("Steam's answer is not JSON: {}", e))?;
+pub fn parse_collections(json: &str) -> Result<Vec<(String, Vec<String>)>, Error> {
+    let root: Value = serde_json::from_str(json)
+        .map_err(|e| Error::format(say!("Steam's answer is not JSON: {}", e)))?;
     let all = root["response"]["collectiondetails"].as_array();
     let text = |v: &Value| v["publishedfileid"].as_str().map(String::from);
     let one = |c: &Value| {
@@ -174,7 +166,7 @@ pub fn parse_collections(json: &str) -> Result<Vec<(String, Vec<String>)>, Strin
         ))
     };
     Ok(all
-        .ok_or_else(|| say!("Steam's answer has no collections"))?
+        .ok_or_else(|| Error::format(say!("Steam's answer has no collections")))?
         .iter()
         .filter_map(one)
         .collect())
@@ -182,19 +174,16 @@ pub fn parse_collections(json: &str) -> Result<Vec<(String, Vec<String>)>, Strin
 
 /// `ids` with each collection replaced by its items, each id once.
 /// Asks Steam; no account or key.
-pub fn expand_collections(ids: &[String]) -> Result<Vec<String>, String> {
+pub fn expand_collections(ids: &[String]) -> Result<Vec<String>, Error> {
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(60)))
-        .build()
-        .into();
+    let agent = crate::web::agent(60);
     let mut form = vec![("collectioncount".to_string(), ids.len().to_string())];
     for (i, id) in ids.iter().enumerate() {
         form.push((format!("publishedfileids[{i}]"), id.clone()));
     }
-    let failed = |e: ureq::Error| say!("Steam could not be asked: {}", e);
+    let failed = crate::web::steam_failed;
     let pairs = form.iter().map(|(k, v)| (k.as_str(), v.as_str()));
     let mut response = agent
         .post(COLLECTIONS_URL)
@@ -286,23 +275,6 @@ mod tests {
     }
 
     #[test]
-    fn an_update_is_a_newer_workshop_version_of_something_on_disk() {
-        let on_disk: HashMap<String, u64> = [("1".to_string(), 100), ("2".to_string(), 100)].into();
-        let item = |id: &str, updated| Details {
-            id: id.into(),
-            title: id.into(),
-            updated,
-            size: 0,
-        };
-        let now = [item("1", 150), item("2", 100), item("3", 999)];
-        let found: Vec<&str> = updates(&on_disk, &now)
-            .iter()
-            .map(|d| d.id.as_str())
-            .collect();
-        assert_eq!(found, ["1"]);
-    }
-
-    #[test]
     #[ignore = "needs the network and RIMSTACK_WORKSHOP: .../steamapps/workshop/content/294100"]
     fn real_workshop_folder_is_checked_for_updates() {
         let content = std::path::PathBuf::from(std::env::var_os("RIMSTACK_WORKSHOP").unwrap());
@@ -325,7 +297,8 @@ mod tests {
             now.len(),
             started.elapsed()
         );
-        let behind = updates(&on_disk, &now);
+        let newer = |d: &&Details| on_disk.get(&d.id).is_some_and(|&have| d.updated > have);
+        let behind: Vec<&Details> = now.iter().filter(newer).collect();
         println!("{} on record, {} behind", on_disk.len(), behind.len());
         for d in behind.iter().take(8) {
             println!("  {} have {} now {}", d.title, on_disk[&d.id], d.updated);

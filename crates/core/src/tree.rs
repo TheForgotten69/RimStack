@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 
 /// A mod's folders two levels deep, each with how many files it holds
-/// (counting everything below it): "Textures/Things/<tab>612".
-pub fn folder_tree(root: &Path) -> Vec<String> {
+/// (counting everything below it): `("Textures/Things/", 612)`.
+pub fn folder_tree(root: &Path) -> Vec<(String, usize)> {
     fn files_under(dir: &Path) -> usize {
         let entries = std::fs::read_dir(dir).into_iter().flatten().flatten();
         entries
@@ -28,13 +28,10 @@ pub fn folder_tree(root: &Path) -> Vec<String> {
     for (name, path) in folders(root) {
         let inner = folders(&path);
         if inner.is_empty() || inner.len() > 12 {
-            lines.push(format!("{name}/\t{}", files_under(&path)));
+            lines.push((format!("{name}/"), files_under(&path)));
         } else {
             for (inner_name, inner_path) in inner {
-                lines.push(format!(
-                    "{name}/{inner_name}/\t{}",
-                    files_under(&inner_path)
-                ));
+                lines.push((format!("{name}/{inner_name}/"), files_under(&inner_path)));
             }
         }
     }
@@ -66,7 +63,11 @@ mod tests {
         // folders in it is one line.
         assert_eq!(
             folder_tree(root),
-            ["About/\t1", "Textures/Things/\t2", "Textures/UI/\t1"]
+            [
+                ("About/".to_string(), 1),
+                ("Textures/Things/".to_string(), 2),
+                ("Textures/UI/".to_string(), 1)
+            ]
         );
         assert!(folder_tree(&root.join("nowhere")).is_empty());
     }

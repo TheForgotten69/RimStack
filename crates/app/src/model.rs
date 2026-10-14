@@ -1,16 +1,15 @@
 //! The load-order list exposed to QML as a list model.
 
-use rimstack_core::say;
-#[allow(unused_imports)]
-use rimstack_core::tongue::named;
+use rimstack_core::locks::{Held, Shared};
 use rimstack_core::{
-    community, conflicts, demo, infer,
+    conflicts, demo, infer,
     library::Library,
-    list::{Category, GroupedList, Mod, Row},
-    loadfolders, modsconfig, notes,
+    list::{Category, Change, GroupedList, Mod, Row},
+    loadfolders, modsconfig,
     rules::{Kind, Rule},
     sort,
 };
+use rimstack_core::{say, say_n};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -58,12 +57,8 @@ pub mod qobject {
         #[qproperty(bool, files_read, cxx_name = "filesRead")]
         #[qproperty(bool, by_name, cxx_name = "byName")]
         #[qproperty(i32, headings)]
-        #[qproperty(i32, rules_version, cxx_name = "rulesVersion")]
         #[qproperty(i32, library_version, cxx_name = "libraryVersion")]
         #[qproperty(bool, rescanning)]
-        #[qproperty(bool, rules_busy, cxx_name = "rulesBusy")]
-        #[qproperty(bool, rules_current, cxx_name = "rulesCurrent")]
-        #[qproperty(QString, rules_problem, cxx_name = "rulesProblem")]
         type ModListModel = super::ModListModelRust;
     }
 
@@ -97,7 +92,18 @@ pub mod qobject {
         /// What the details panel shows for an installed mod, by its
         /// `modId` role. Empty for an unknown id.
         #[qinvokable]
-        fn details(self: &ModListModel, mod_id: i32) -> QMap_QString_QVariant;
+        fn details(self: &ModListModel, mod_id: i32) -> QString;
+
+        /// The folders of an installed mod with how many files each
+        /// holds, and its assemblies: `{ tree, assemblies }`. Walks the
+        /// mod's folder.
+        #[qinvokable]
+        fn files(self: &ModListModel, mod_id: i32) -> QString;
+
+        /// The name an installed mod is shown by; empty for an unknown id.
+        #[qinvokable]
+        #[cxx_name = "nameOf"]
+        fn name_of(self: &ModListModel, mod_id: i32) -> QString;
 
         /// Load-order position of an installed mod in this list, or -1.
         #[qinvokable]
@@ -109,12 +115,6 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "findMods"]
         fn find_mods(self: &ModListModel, text: &QString, most: i32) -> QString;
-
-        /// Group the mod under this tag inside its category: the tag
-        /// becomes its first. An empty name removes its first tag.
-        #[qinvokable]
-        #[cxx_name = "setSub"]
-        fn set_sub(self: Pin<&mut ModListModel>, mod_id: i32, name: &QString);
 
         #[qinvokable]
         #[cxx_name = "subsBeside"]
@@ -143,7 +143,7 @@ pub mod qobject {
 
         /// Facts about the whole install, once the lists have arrived.
         #[qinvokable]
-        fn overview(self: &ModListModel) -> QMap_QString_QVariant;
+        fn overview(self: &ModListModel) -> QString;
 
         /// Work out the order the mods' own rules ask for and show it as a
         /// preview: `previewing` turns true if anything moves, and
@@ -174,48 +174,22 @@ pub mod qobject {
         #[cxx_name = "rereadFolders"]
         fn reread_folders(self: Pin<&mut ModListModel>);
 
-        /// Add or remove a rule of your own: the first mod loads before
-        /// the second (both by library id). `rulesVersion` goes up when
-        /// something changed.
-        #[qinvokable]
-        #[cxx_name = "addRule"]
-        fn add_rule(self: Pin<&mut ModListModel>, first: i32, then: i32);
-        #[qinvokable]
-        #[cxx_name = "removeRule"]
-        fn remove_rule(self: Pin<&mut ModListModel>, first: i32, then: i32);
-
-        /// Keep your tags (separated by commas) and a note for the mod
-        /// with this library id, if this list holds it.
-        #[qinvokable]
-        #[cxx_name = "setNote"]
-        fn set_note(self: Pin<&mut ModListModel>, mod_id: i32, tags: &QString, note: &QString);
-
-        /// File this mod under the category with this label; an empty
-        /// label leaves the category to RimStack again. Call `sync` on
-        /// both lists afterwards.
-        #[qinvokable]
-        #[cxx_name = "setCategory"]
-        fn set_category(self: Pin<&mut ModListModel>, mod_id: i32, label: &QString);
-
-        /// Keep whether you trust this mod on your game version though
-        /// it does not list it: trusted, it gets no version warning.
-        #[qinvokable]
-        #[cxx_name = "setVersionOk"]
-        fn set_version_ok(self: Pin<&mut ModListModel>, mod_id: i32, ok: bool);
-
-        /// Between these two, changes to the load order count as one step
-        /// for Undo.
-        #[qinvokable]
-        #[cxx_name = "beginBatch"]
-        fn begin_batch(self: Pin<&mut ModListModel>);
-        #[qinvokable]
-        #[cxx_name = "endBatch"]
-        fn end_batch(self: Pin<&mut ModListModel>);
-
         /// Work out the problems and texture conflicts again: something
         /// outside the list changed what the game will load.
         #[qinvokable]
         fn recheck(self: Pin<&mut ModListModel>);
+
+        /// The tags of the mod with this library id were changed (see
+        /// `ModEdits`): its row and the groups read them again.
+        #[qinvokable]
+        #[cxx_name = "tagsChanged"]
+        fn tags_changed(self: Pin<&mut ModListModel>, mod_id: i32);
+
+        /// The community databases were downloaded again: the problems
+        /// and the categories that follow from them are worked out anew.
+        #[qinvokable]
+        #[cxx_name = "communityChanged"]
+        fn community_changed(self: Pin<&mut ModListModel>);
 
         /// Step the load order back or forward. Call `sync` on the other
         /// list afterwards.
@@ -244,12 +218,6 @@ pub mod qobject {
         #[qinvokable]
         fn save(self: Pin<&mut ModListModel>) -> QString;
 
-        /// Download the community rules, in the background. `rulesBusy` is
-        /// true meanwhile; `rulesProblem` says why if it failed.
-        #[qinvokable]
-        #[cxx_name = "downloadRules"]
-        fn download_rules(self: Pin<&mut ModListModel>);
-
         /// The next row after `row` (or, going back, before it) whose mod
         /// has a problem, wrapping round; -1 when there is none.
         #[qinvokable]
@@ -271,8 +239,9 @@ pub mod qobject {
         #[qinvokable]
         fn reshape(self: Pin<&mut ModListModel>);
 
-        /// The mods the preview moves, in the new order, one per line:
-        /// "name<tab>old number<tab>new number<tab>library id".
+        /// The mods the preview moves, by the kind of reason, the largest
+        /// kind first: a JSON array of `{ name, moves }`, each move
+        /// `{ name, from, to, modId, why }`.
         #[qinvokable]
         #[cxx_name = "sortMoves"]
         fn sort_moves(self: &ModListModel) -> QString;
@@ -328,9 +297,54 @@ pub mod qobject {
             to: i32,
         );
 
+        /// Take the mods with these library ids (a JSON array) from the
+        /// other list, in the order they have there, as one step for Undo.
+        ///
+        /// # Safety
+        /// `other` must be null or a live `ModListModel` other than `self`.
+        #[qinvokable]
+        #[cxx_name = "takeAllFrom"]
+        unsafe fn take_all_from(
+            self: Pin<&mut ModListModel>,
+            other: *mut ModListModel,
+            ids: &QString,
+        );
+
+        /// Each of these mods (library ids, a JSON array) to the top or
+        /// bottom of its category's stretch, keeping their order among
+        /// themselves, as one step for Undo.
+        #[qinvokable]
+        #[cxx_name = "moveAllToEdge"]
+        fn move_all_to_edge(self: Pin<&mut ModListModel>, ids: &QString, top: bool);
+
         #[qinvokable]
         #[cxx_name = "markReady"]
         fn mark_ready(self: &ModListModel);
+
+        /// The library id of the mod on this row; -1 for a heading or a
+        /// mod that is not installed.
+        #[qinvokable]
+        #[cxx_name = "modIdAt"]
+        fn mod_id_at(self: &ModListModel, row: i32) -> i32;
+
+        /// The row of the nearest installed mod from `from`, going down
+        /// (`by` 1) or up (-1), headings skipped; -1 at the end. `from`
+        /// may be -1 or `rows()` to start at an end.
+        #[qinvokable]
+        #[cxx_name = "stepRow"]
+        fn step_row(self: &ModListModel, from: i32, by: i32) -> i32;
+
+        /// The library ids of the installed mods on the rows from one to
+        /// the other, as a JSON array.
+        #[qinvokable]
+        #[cxx_name = "idsBetween"]
+        fn ids_between(self: &ModListModel, a: i32, b: i32) -> QString;
+
+        /// The library id of the mod the selection goes to when the one
+        /// on this row leaves the list; -1 for none.
+        #[qinvokable]
+        #[cxx_name = "idBeside"]
+        fn id_beside(self: &ModListModel, row: i32) -> i32;
 
         /// Number of rows on screen; for the self-test.
         #[qinvokable]
@@ -395,8 +409,7 @@ pub mod qobject {
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{
-    QByteArray, QHash, QHashPair_i32_QByteArray, QMap, QMapPair_QString_QVariant, QModelIndex,
-    QString, QVariant, QVector,
+    QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant, QVector,
 };
 use rayon::prelude::*;
 
@@ -405,6 +418,7 @@ mod fields;
 pub use fields::ModListModelRust;
 use fields::Preview;
 mod editing;
+mod reset;
 mod rows;
 mod shared_textures;
 mod sorting;
@@ -416,12 +430,8 @@ use rimstack_core::tree::folder_tree;
 use sources::*;
 use trust::troubles;
 
-type VariantMap = QMap<QMapPair_QString_QVariant>;
-
-/// One problem of a mod: whether it is an error, the problem as a
-/// sentence, and in a few words for the mod's row.
 use rimstack_core::ordering::{self, Sources};
-use rimstack_core::words::{self as words, plural, Trouble};
+use rimstack_core::words::{self as words, Trouble};
 
 fn text(s: &str) -> QVariant {
     QVariant::from(&QString::from(s))
@@ -430,12 +440,14 @@ fn text(s: &str) -> QVariant {
 /// The installed mods split by the load order being edited, each with
 /// your tags.
 fn arranged(library: &Library) -> rimstack_core::library::Arranged {
-    let mut now = library.arrange(crate::session().current());
+    let mut now = library.arrange(crate::app().session().current());
     for m in now.active.iter_mut() {
-        let took = crate::STARTUP.of(&rimstack_core::id::split_steam(&m.id).0);
+        let took = crate::app()
+            .startup()
+            .of(&rimstack_core::id::split_steam(&m.id).0);
         m.load_micros = took.map(|ms| (ms * 1000.0) as u32);
     }
-    let notes = crate::NOTES.read().unwrap_or_else(|e| e.into_inner());
+    let notes = crate::app().notes().reading();
     if !notes.is_empty() {
         for m in now.active.iter_mut().chain(now.inactive.iter_mut()) {
             let key = m.installed.and_then(|i| library.installed[i].key());
@@ -443,7 +455,7 @@ fn arranged(library: &Library) -> rimstack_core::library::Arranged {
                 m.tags = note.tags.clone();
                 m.sub = note.group().to_string();
                 // Filed by hand: that stands over what RimStack worked out.
-                if let Some(chosen) = Category::from_label(&note.category) {
+                if let Some(chosen) = Category::from_kept(&note.category) {
                     m.category = chosen;
                 }
             }
@@ -452,22 +464,39 @@ fn arranged(library: &Library) -> rimstack_core::library::Arranged {
     now
 }
 
-/// Changes what is noted about the mod with this library id, and keeps it.
-fn change_note(mod_id: i32, change: impl FnOnce(&mut notes::Note)) {
-    let Ok((library, _)) = crate::library() else {
-        return;
+/// One of the two lists as first shown, with the line under it and why
+/// the mods could not be read, if they could not.
+fn listed(loaded: &crate::Loaded, active: bool, headings: bool) -> (GroupedList, String, String) {
+    let (library, scan) = match loaded {
+        Ok(read) => read,
+        Err(problem) => {
+            return (
+                GroupedList::new(Vec::new()),
+                String::new(),
+                problem.to_string(),
+            )
+        }
     };
-    let installed = usize::try_from(mod_id).ok();
-    let Some(key) = installed.and_then(|i| library.installed.get(i)?.key()) else {
-        return;
-    };
-    let mut all = crate::NOTES.write().unwrap_or_else(|e| e.into_inner());
-    let mut note = all.get(&key).cloned().unwrap_or_default();
-    change(&mut note);
-    all.set(&key, note);
-    if let Err(problem) = all.write(&crate::notes_file()) {
-        eprintln!("{problem}");
+    if !active {
+        let status = say!(
+            "{} inactive, read in {} ms",
+            library.inactive.len(),
+            scan.as_millis()
+        );
+        return (
+            GroupedList::new(arranged(library).inactive),
+            status,
+            String::new(),
+        );
     }
+    let (mods, _) = sorted_by_category(library, arranged(library).active);
+    let mut list = GroupedList::flat(mods);
+    list.set_grouped(headings);
+    let status = match library.missing {
+        0 => say!("{} active", library.active.len()),
+        n => say!("{} active, {} not installed", library.active.len(), n),
+    };
+    (list, status, String::new())
 }
 
 impl qobject::ModListModel {
@@ -479,107 +508,19 @@ impl qobject::ModListModel {
 
     fn load_installed(self: Pin<&mut Self>, active: bool) {
         let headings = self.wants_headings();
-        let qt_thread = self.qt_thread();
-        std::thread::spawn(move || {
-            // Waits here, off the interface thread, until the scan is done.
-            let (list, status) = match crate::library() {
-                Ok((library, scan)) if active => (
-                    {
-                        let now = arranged(library);
-                        let (mods, _) = sorted_by_category(library, now.active);
-                        let mut list = GroupedList::flat(mods);
-                        list.set_grouped(headings);
-                        list
-                    },
-                    match library.missing {
-                        0 => say!("{} active", library.active.len()),
-                        n => say!("{} active, {} not installed", library.active.len(), n),
-                    },
-                ),
-                Ok((library, scan)) => (
-                    GroupedList::new(arranged(library).inactive),
-                    say!(
-                        "{} inactive, read in {} ms",
-                        library.inactive.len(),
-                        scan.as_millis()
-                    ),
-                ),
-                Err(_) => (GroupedList::new(Vec::new()), String::new()),
-            };
-            let problem = crate::library().as_ref().err().cloned().unwrap_or_default();
-            // An error here means the window closed first.
-            let _ = qt_thread.queue(move |mut model| {
-                model.as_mut().rust_mut().checked = active && problem.is_empty();
-                model.as_mut().rust_mut().installed = problem.is_empty();
-                model.as_mut().reset_with(|l| *l = list);
-                model.as_mut().reshape();
-                model.as_mut().set_problem(QString::from(&problem));
-                model.as_mut().set_status(QString::from(&status));
-                if let (true, Some(started)) = (active, crate::STARTED.get()) {
-                    eprintln!("mods_shown_ms={}", started.elapsed().as_millis());
-                }
-            });
-        });
-    }
-
-    fn download_rules(mut self: Pin<&mut Self>) {
-        if self.rules_busy {
-            return;
-        }
-        self.as_mut().set_rules_busy(true);
-        self.as_mut().set_rules_problem(QString::default());
-        let qt_thread = self.qt_thread();
-        std::thread::spawn(move || {
-            let mut problem = String::new();
-            if crate::database_on("rules") {
-                match community::download(&community::file_in(&crate::data_dir())) {
-                    Ok(fresh) => {
-                        *crate::COMMUNITY.write().unwrap_or_else(|e| e.into_inner()) = Some(fresh)
-                    }
-                    Err(why) => problem = why,
-                }
+        // Waits there, off the interface thread, until the scan is done.
+        let read = move || listed(&crate::app().library(), active, headings);
+        crate::background::run(self.qt_thread(), read, move |mut model, listed| {
+            let (list, status, problem) = listed;
+            model.as_mut().rust_mut().checked = active && problem.is_empty();
+            model.as_mut().rust_mut().installed = problem.is_empty();
+            model.as_mut().reset_with(|l| *l = list);
+            model.as_mut().reshape();
+            model.as_mut().set_problem(QString::from(&problem));
+            model.as_mut().set_status(QString::from(&status));
+            if let (true, Some(started)) = (active, crate::STARTED.get()) {
+                rimstack_core::note!("mods_shown_ms={}", started.elapsed().as_millis());
             }
-            let version = crate::PATHS.game_version.as_deref();
-            if let Some(version) = version.filter(|_| crate::database_on("worksOn")) {
-                let to = community::works_on_file(&crate::data_dir(), version);
-                match community::download_works_on(version, &to) {
-                    Ok(fresh) => {
-                        *crate::WORKS_ON.write().unwrap_or_else(|e| e.into_inner()) = fresh
-                    }
-                    Err(why) if problem.is_empty() => problem = why,
-                    Err(_) => {}
-                }
-            }
-            // Read at the next start: nothing shown now depends on it.
-            let to = rimstack_core::replacements::file_in(&crate::data_dir());
-            if crate::database_on("replacements") {
-                if let Err(why) = rimstack_core::replacements::download(&to) {
-                    if problem.is_empty() {
-                        problem = why;
-                    }
-                }
-            }
-            let to = rimstack_core::workshopdb::file_in(&crate::data_dir());
-            if crate::database_on("names") {
-                match rimstack_core::workshopdb::download(&to) {
-                    Ok(fresh) => {
-                        *crate::WORKSHOP_NAMES
-                            .write()
-                            .unwrap_or_else(|e| e.into_inner()) = fresh
-                    }
-                    Err(why) if problem.is_empty() => problem = why,
-                    Err(_) => {}
-                }
-            }
-            let _ = qt_thread.queue(move |mut model| {
-                model.as_mut().set_rules_current(problem.is_empty());
-                model.as_mut().set_rules_problem(QString::from(&problem));
-                model.as_mut().set_rules_busy(false);
-                // The version warnings may have changed: check again.
-                model.as_mut().rust_mut().checked_order = Vec::new();
-                model.as_mut().reset_with(|_| ());
-                model.as_mut().refile();
-            });
         });
     }
 
@@ -629,7 +570,8 @@ impl qobject::ModListModel {
     }
 
     fn listing(&self) -> QString {
-        let Ok((library, _)) = crate::library() else {
+        let loaded = crate::app().library();
+        let Ok((library, _)) = &*loaded else {
             return QString::default();
         };
         let installed = |m: &Mod| library.installed.get(m.installed?);
@@ -644,11 +586,12 @@ impl qobject::ModListModel {
     }
 
     fn find_mods(&self, text: &QString, most: i32) -> QString {
-        let Ok((library, _)) = crate::library() else {
+        let loaded = crate::app().library();
+        let Ok((library, _)) = &*loaded else {
             return QString::from("[]");
         };
         let active: std::collections::HashSet<usize> = library
-            .arrange(crate::session().current())
+            .arrange(crate::app().session().current())
             .active
             .iter()
             .filter_map(|m| m.installed)
@@ -667,6 +610,33 @@ impl qobject::ModListModel {
         QString::from(&serde_json::Value::Array(found).to_string())
     }
 
+    fn mod_id_at(&self, row: i32) -> i32 {
+        let on_row = usize::try_from(row)
+            .ok()
+            .and_then(|row| self.list.installed_on(row));
+        on_row.map_or(-1, |id| id as i32)
+    }
+
+    fn step_row(&self, from: i32, by: i32) -> i32 {
+        let found = self.list.step(from as isize, by.signum() as isize);
+        found.map_or(-1, |row| row as i32)
+    }
+
+    fn ids_between(&self, a: i32, b: i32) -> QString {
+        let ids = match (usize::try_from(a), usize::try_from(b)) {
+            (Ok(a), Ok(b)) => self.list.installed_between(a, b),
+            _ => Vec::new(),
+        };
+        QString::from(&serde_json::json!(ids).to_string())
+    }
+
+    fn id_beside(&self, row: i32) -> i32 {
+        let beside = usize::try_from(row)
+            .ok()
+            .and_then(|row| self.list.beside(row));
+        beside.map_or(-1, |id| id as i32)
+    }
+
     fn row_of(&self, position: i32) -> i32 {
         let rows = self.list.rows();
         let found = rows
@@ -675,60 +645,12 @@ impl qobject::ModListModel {
         found.map_or(-1, |r| r as i32)
     }
 
-    /// Change the list in a way that may touch any row.
-    fn reset_with<T>(mut self: Pin<&mut Self>, change: impl FnOnce(&mut GroupedList) -> T) -> T {
-        unsafe { self.as_mut().begin_reset_model() };
-        let result = change(&mut self.as_mut().rust_mut().list);
-        // Checked before the view re-reads its rows, so the markers are
-        // right; and only when the mods changed, not on a filter or collapse.
-        let now: Vec<Option<usize>> = self.list.mods().iter().map(|m| m.installed).collect();
-        if self.checked && now != self.checked_order {
-            if let Ok((library, _)) = crate::library() {
-                let (found, ignored) = troubles(library, self.list.mods());
-                self.as_mut().rust_mut().troubles = found;
-                self.as_mut().rust_mut().version_ignored = ignored;
-                self.as_mut().rust_mut().checked_order = now;
-                self.as_mut().find_conflicts(library);
-            }
-        }
-        // Every change to the load order is a step that can be undone. A
-        // sort on show is not one until it is applied. Noted before the
-        // flags, which say what changed since the save.
-        let step = self.checked && self.preview.is_none() && !self.batching;
-        if step {
-            let ids = self.list.mods().iter().map(|m| m.id.clone()).collect();
-            crate::session().record(ids);
-        }
-        if self.checked || self.installed {
-            let flags = self.flags();
-            self.as_mut().rust_mut().list.set_flags(flags);
-        }
-        unsafe { self.as_mut().end_reset_model() };
-        let in_conflict = self.in_conflict().len() as i32;
-        self.as_mut().set_conflicts(in_conflict);
-        let with = |error: bool| {
-            let has = |own: &&Vec<Trouble>| own.iter().any(|t| t.error == error);
-            self.troubles.iter().filter(has).count() as i32
-        };
-        let (errors, warnings) = (with(true), with(false));
-        self.as_mut().set_errors(errors);
-        self.as_mut().set_warnings(warnings);
-        let count = self.list.mods().len() as i32;
-        self.as_mut().set_count(count);
-        let matching = self.list.matching() as i32;
-        self.as_mut().set_matching(matching);
-        if step {
-            self.as_mut().session_changed();
-        }
-        result
-    }
-
     fn rescan(self: Pin<&mut Self>) {
-        self.read_again(crate::rescan);
+        self.read_again(|| crate::app().rescan());
     }
 
     fn reread_folders(self: Pin<&mut Self>) {
-        self.read_again(crate::reread_folders);
+        self.read_again(|| crate::app().reread_folders());
     }
 
     fn read_again(mut self: Pin<&mut Self>, read: fn()) {
@@ -737,20 +659,16 @@ impl qobject::ModListModel {
         }
         self.as_mut().set_rescanning(true);
         let active = self.checked;
-        let qt_thread = self.qt_thread();
-        std::thread::spawn(move || {
-            read();
-            let _ = qt_thread.queue(move |mut model| {
-                if model.preview.is_some() {
-                    model.as_mut().end_preview();
-                }
-                // Positions in the old reading mean nothing in the new one.
-                model.as_mut().rust_mut().checked_order = Vec::new();
-                model.as_mut().load_installed(active);
-                let next = model.library_version + 1;
-                model.as_mut().set_library_version(next);
-                model.as_mut().set_rescanning(false);
-            });
+        crate::background::run(self.qt_thread(), read, move |mut model, ()| {
+            if model.preview.is_some() {
+                model.as_mut().end_preview();
+            }
+            // Positions in the old reading mean nothing in the new one.
+            model.as_mut().rust_mut().checked_order = Vec::new();
+            model.as_mut().load_installed(active);
+            let next = model.library_version + 1;
+            model.as_mut().set_library_version(next);
+            model.as_mut().set_rescanning(false);
         });
     }
 
@@ -760,7 +678,7 @@ impl qobject::ModListModel {
 
     fn mark_ready(&self) {
         if let Some(started) = crate::STARTED.get() {
-            eprintln!("startup_ms={}", started.elapsed().as_millis());
+            rimstack_core::note!("startup_ms={}", started.elapsed().as_millis());
         }
     }
 }

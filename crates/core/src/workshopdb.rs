@@ -4,12 +4,12 @@
 //! The database is 49 MB of JSON. It is read once when downloaded and
 //! kept as a small file of `package id<tab>Workshop id<tab>name` lines.
 
+use crate::error::Error;
 use crate::say;
 
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 const URL: &str =
     "https://raw.githubusercontent.com/RimSort/Steam-Workshop-Database/main/steamDB.json";
@@ -37,9 +37,9 @@ struct Entry {
     steam_name: Option<String>,
 }
 
-pub fn parse(json: impl std::io::Read) -> Result<Names, String> {
+pub fn parse(json: impl std::io::Read) -> Result<Names, Error> {
     let all: Database = serde_json::from_reader(json)
-        .map_err(|e| say!("the database is not as expected: {}", e))?;
+        .map_err(|e| Error::format(say!("the database is not as expected: {}", e)))?;
     let item = |(workshop_id, entry): (String, Entry)| {
         let name = entry.steam_name.or(entry.name)?;
         Some((
@@ -54,7 +54,7 @@ pub fn file_in(data_dir: &Path) -> PathBuf {
     data_dir.join("workshopNames.tsv")
 }
 
-pub fn store(names: &Names, to: &Path) -> Result<(), String> {
+pub fn store(names: &Names, to: &Path) -> Result<(), Error> {
     let mut lines: Vec<String> = names
         .iter()
         .map(|(id, item)| {
@@ -66,7 +66,7 @@ pub fn store(names: &Names, to: &Path) -> Result<(), String> {
         })
         .collect();
     lines.sort();
-    std::fs::write(to, lines.join("\n")).map_err(|e| format!("{}: {e}", to.display()))
+    crate::whole::write(to, lines.join("\n"))
 }
 
 /// No file is no names.
@@ -86,13 +86,9 @@ pub fn read(path: &Path) -> Names {
     text.lines().filter_map(item).collect()
 }
 
-pub fn download(to: &Path) -> Result<Names, String> {
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(300)))
-        .build()
-        .into();
-    let failed = |e: ureq::Error| say!("the download failed: {}", e);
-    let mut response = agent.get(URL).call().map_err(failed)?;
+pub fn download(to: &Path) -> Result<Names, Error> {
+    let agent = crate::web::agent(300);
+    let mut response = agent.get(URL).call().map_err(crate::web::failed)?;
     let names = parse(response.body_mut().with_config().limit(200 << 20).reader())?;
     store(&names, to)?;
     Ok(names)

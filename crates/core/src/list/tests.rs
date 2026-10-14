@@ -307,6 +307,12 @@ fn a_category_is_found_again_by_its_label() {
         assert_eq!(Category::from_label(category.label()), Some(category));
     }
     assert_eq!(Category::from_label("interface"), None);
+    for category in Category::ALL {
+        assert_eq!(Category::from_kept(category.key()), Some(category));
+        assert_eq!(Category::from_kept(category.label()), Some(category));
+    }
+    assert_eq!(Category::from_kept("Performance"), Some(Category::Tweaks));
+    assert_eq!(Category::from_kept(""), None);
     assert_eq!(Category::from_label("Performance"), Some(Category::Tweaks));
     assert_eq!(Category::from_label(""), None);
 }
@@ -487,4 +493,92 @@ fn a_group_in_two_places_is_split_and_one_in_a_row_is_not() {
     // The same tag in another category is another group.
     mods[3].category = Category::Textures;
     assert!(split_groups(&mods).is_empty());
+}
+
+#[test]
+fn folding_a_category_with_a_group_in_it_is_not_one_row_per_mod() {
+    let mut mods = sample().mods().to_vec();
+    mods[4].sub = "Dubs".into();
+    mods[5].sub = "Dubs".into();
+    let mut list = GroupedList::new(mods);
+    let before = list.rows().len();
+    assert_eq!(list.toggling(Category::Content), Change::Reset);
+    assert_eq!(list.toggle(Category::Content), Change::Reset);
+    // The heading counted two mods; three rows went, the group's among them.
+    assert_eq!(before - list.rows().len(), 3);
+}
+
+#[test]
+fn what_folding_would_change_is_known_before_it_happens() {
+    let mut list = sample();
+    let told = list.toggling(Category::Game);
+    assert_eq!(told, Change::Removed { first: 3, count: 2 });
+    assert_eq!(list.rows().len(), 10);
+    assert_eq!(list.toggle(Category::Game), told);
+    assert_eq!(
+        list.toggling(Category::Game),
+        Change::Inserted { first: 3, count: 2 }
+    );
+}
+
+#[test]
+fn mods_that_share_a_name_are_twins_whatever_the_case() {
+    let mods = [
+        m("Rimefeller", "a", Category::Content),
+        m("HugsLib", "b", Category::Libraries),
+        m("RIMEFELLER", "c", Category::Content),
+    ];
+    assert_eq!(twins(&mods), [true, false, true]);
+}
+
+/// The sample with every mod installed but Royalty, numbered from 100
+/// in load order. Rows: 0 Loaders, 1 Harmony, 2 Game, 3 Core, 4 Royalty,
+/// 5 Libraries, 6 HugsLib, 7 Content, 8 Dubs Bad Hygiene, 9 Rimefeller.
+fn installed_sample() -> GroupedList {
+    let mut mods = sample().mods().to_vec();
+    for (at, m) in mods.iter_mut().enumerate() {
+        m.installed = (m.name != "Royalty").then_some(100 + at);
+    }
+    GroupedList::new(mods)
+}
+
+#[test]
+fn stepping_goes_to_the_next_installed_mod_past_headings_and_stops_at_the_ends() {
+    let list = installed_sample();
+    assert_eq!(list.installed_on(1), Some(100));
+    assert_eq!(
+        (
+            list.installed_on(0),
+            list.installed_on(4),
+            list.installed_on(99)
+        ),
+        (None, None, None)
+    );
+    assert_eq!(list.step(1, 1), Some(3));
+    // Royalty is not installed: there is nothing to select on its row.
+    assert_eq!(list.step(3, 1), Some(6));
+    assert_eq!(list.step(6, -1), Some(3));
+    assert_eq!((list.step(9, 1), list.step(1, -1)), (None, None));
+    // From outside either end, as with nothing selected.
+    assert_eq!((list.step(-1, 1), list.step(10, -1)), (Some(1), Some(9)));
+}
+
+#[test]
+fn a_stretch_of_rows_gives_its_installed_mods_whichever_end_comes_first() {
+    let list = installed_sample();
+    assert_eq!(list.installed_between(3, 8), [101, 103, 104]);
+    assert_eq!(list.installed_between(8, 3), [101, 103, 104]);
+    assert!(list.installed_between(0, 0).is_empty());
+    assert_eq!(list.installed_between(9, 99), [105]);
+}
+
+#[test]
+fn the_mod_beside_a_row_is_the_one_below_then_above_then_two_away() {
+    let list = installed_sample();
+    assert_eq!(list.beside(8), Some(105));
+    // Below Rimefeller is the end: the one above.
+    assert_eq!(list.beside(9), Some(104));
+    // HugsLib has headings on both sides: Dubs Bad Hygiene, two below.
+    assert_eq!(list.beside(6), Some(104));
+    assert_eq!(GroupedList::new(Vec::new()).beside(0), None);
 }

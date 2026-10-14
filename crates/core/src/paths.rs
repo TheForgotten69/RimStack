@@ -4,7 +4,8 @@
 use crate::vdf;
 use std::path::{Path, PathBuf};
 
-const APP_ID: &str = "294100";
+/// RimWorld, as Steam numbers it.
+pub const APP_ID: &str = "294100";
 const SETTINGS: &str = "Ludeon Studios/RimWorld by Ludeon Studios";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -57,12 +58,25 @@ impl Paths {
         Some(self.config.as_ref()?.join("Config").join("ModsConfig.xml"))
     }
 
+    /// The game's own folder of mods: where a mod Steam does not manage lies.
+    pub fn local_mods(&self) -> Option<PathBuf> {
+        Some(self.game.as_ref()?.join("Mods"))
+    }
+
+    /// Steam's record of the Workshop items it has downloaded for the game:
+    /// `<library>/steamapps/workshop/appworkshop_294100.acf`, two folders
+    /// above the items themselves.
+    pub fn steam_record(&self) -> Option<PathBuf> {
+        let workshop = self.workshop.as_ref()?.parent()?.parent()?;
+        Some(workshop.join(format!("appworkshop_{APP_ID}.acf")))
+    }
+
     /// The folders mods are installed in, those that exist.
     pub fn roots(&self) -> Vec<ModRoot> {
         let game = self.game.as_ref();
         [
             (game.map(|g| g.join("Data")), Source::Official),
-            (game.map(|g| g.join("Mods")), Source::Local),
+            (self.local_mods(), Source::Local),
             (self.workshop.clone(), Source::Workshop),
         ]
         .into_iter()
@@ -203,6 +217,33 @@ fn steam_roots(os: Os, home: &Path, env: Env) -> Vec<PathBuf> {
     existing(places)
 }
 
+/// Where a copy of the game not bought on Steam is usually put: the
+/// folders to look in, as RimSort does. Each may hold the game's folder
+/// under any name.
+fn other_shops(os: Os, home: &Path, env: Env) -> Vec<PathBuf> {
+    let places = match os {
+        Os::Linux => vec![home.join("GOG Games"), home.join("Games")],
+        Os::Windows => {
+            let drive = env("SystemDrive").unwrap_or_else(|| PathBuf::from("C:"));
+            let on_drive = PathBuf::from(format!("{}\\GOG Games", drive.display()));
+            vec![on_drive, home.join("GOG Games"), home.join("Games")]
+        }
+        Os::Mac => vec![PathBuf::from("/Applications"), home.join("Applications")],
+    };
+    existing(places)
+}
+
+/// The game's folder among the folders of `place`, told by the mod every
+/// copy has: `Data/Core`.
+fn game_in(os: Os, place: &Path) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(place).ok()?.flatten();
+    let folders = entries
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir());
+    let mut roots = folders.map(|folder| content_root(os, &folder));
+    roots.find(|root| root.join("Data").join("Core").is_dir())
+}
+
 /// The game's settings folder where it is not under Proton.
 fn native_settings(os: Os, home: &Path) -> Vec<PathBuf> {
     match os {
@@ -246,7 +287,13 @@ pub fn detect_on(os: Os, home: &Path, env: Env, overrides: &Overrides) -> Paths 
     let roots = steam_roots(os, home, env);
     let listed: Vec<vdf::Library> = roots
         .iter()
-        .filter_map(|r| std::fs::read_to_string(r.join("steamapps/libraryfolders.vdf")).ok())
+        .filter_map(|r| {
+            // Steam keeps the list in both places; an install may lack one.
+            let lists = ["steamapps/libraryfolders.vdf", "config/libraryfolders.vdf"];
+            lists
+                .iter()
+                .find_map(|list| std::fs::read_to_string(r.join(list)).ok())
+        })
         .flat_map(|text| vdf::libraries(&text))
         .collect();
     // Libraries that list the game come first, so a stale copy elsewhere
@@ -273,7 +320,11 @@ pub fn detect_on(os: Os, home: &Path, env: Env, overrides: &Overrides) -> Paths 
     let game = overrides
         .game
         .clone()
-        .or_else(|| found_game.as_ref().map(|(_, g)| g.clone()));
+        .or_else(|| found_game.as_ref().map(|(_, g)| g.clone()))
+        .or_else(|| {
+            let shops = other_shops(os, home, env);
+            shops.iter().find_map(|place| game_in(os, place))
+        });
     let workshop = overrides.workshop.clone().or_else(|| {
         // A copy of the game named by hand has no Workshop folder of its own.
         if overrides.game.is_some() {
@@ -488,6 +539,41 @@ mod tests {
         assert_eq!(app_dirs(Os::Mac, home, &none), (support.clone(), support));
         let windows = |name: &str| (name == "USERPROFILE").then(|| PathBuf::from("/u"));
         assert_eq!(super::home(&windows), PathBuf::from("/u"));
+    }
+
+    #[test]
+    fn a_copy_from_another_shop_is_found_by_its_core_and_has_no_workshop() {
+        let home = tempfile::tempdir().unwrap();
+        let game = home.path().join("GOG Games/RimWorld 1.6");
+        fs::create_dir_all(game.join("Data/Core")).unwrap();
+        fs::create_dir_all(home.path().join("GOG Games/Another Game/Data")).unwrap();
+        fs::write(game.join("Version.txt"), "1.6.4871 rev600").unwrap();
+        let paths = detect_on(Os::Linux, home.path(), &|_| None, &Overrides::default());
+        assert_eq!(paths.game, Some(game.canonicalize().unwrap()));
+        assert_eq!(
+            (paths.workshop, paths.game_version.as_deref()),
+            (None, Some("1.6"))
+        );
+
+        let mac = tempfile::tempdir().unwrap();
+        let bundle = mac.path().join("Applications/RimWorld.app");
+        fs::create_dir_all(bundle.join("Data/Core")).unwrap();
+        let paths = detect_on(Os::Mac, mac.path(), &|_| None, &Overrides::default());
+        assert_eq!(paths.game, Some(bundle.canonicalize().unwrap()));
+    }
+
+    #[test]
+    fn steam_s_list_of_libraries_is_read_from_either_place_it_keeps_it() {
+        let home = tempfile::tempdir().unwrap();
+        let second = home.path().join("games");
+        library_with_game(&second);
+        let root = steam_root(home.path(), &[(&second, true)]);
+        fs::create_dir_all(root.join("config")).unwrap();
+        let (usual, other) = ("steamapps/libraryfolders.vdf", "config/libraryfolders.vdf");
+        fs::rename(root.join(usual), root.join(other)).unwrap();
+        let paths = detect(home.path(), &Overrides::default());
+        let second = second.canonicalize().unwrap();
+        assert_eq!(paths.game, Some(second.join("steamapps/common/RimWorld")));
     }
 
     #[test]

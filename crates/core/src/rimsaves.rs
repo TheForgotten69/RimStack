@@ -122,9 +122,42 @@ pub fn preview(config: &Path, stem: &str) -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
+/// What RimSaves noted of a save that is worth a line each, as (what it
+/// is, its value), in the order shown. `what` is English: a key for the
+/// interface to put in the chosen language.
+pub fn facts(noted: &BTreeMap<String, String>) -> Vec<(&'static str, String)> {
+    use crate::tongue::named;
+    let known = [
+        (named("Colony"), "faction"),
+        (named("Colonists"), "nbColonist"),
+        (named("Settlements"), "nbColony"),
+        (named("Storyteller"), "storyteller"),
+        (named("Difficulty"), "storytellerDifficulty"),
+        (named("Scenario"), "scenario"),
+        (named("Seed"), "seed"),
+    ];
+    let filled = |key: &str| noted.get(key).filter(|value| !value.is_empty()).cloned();
+    known
+        .into_iter()
+        .filter_map(|(what, key)| Some((what, filled(key)?)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_the_facts_a_save_has_are_listed_in_their_order() {
+        let noted = parse_meta("seed:abc,faction:New Hope,nbColonist:,unknown:1");
+        assert_eq!(
+            facts(&noted),
+            [
+                ("Colony", "New Hope".to_string()),
+                ("Seed", "abc".to_string())
+            ]
+        );
+    }
     use std::fs;
 
     #[test]

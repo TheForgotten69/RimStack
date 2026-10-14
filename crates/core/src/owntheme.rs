@@ -74,9 +74,12 @@ const PAIRS: [(&str, &str, &str, f64); 11] = [
 /// Relative luminance of `#rrggbb`; an `#aarrggbb` colour is read without its alpha.
 fn luminance(colour: &str) -> Option<f64> {
     let hex = colour.strip_prefix('#')?;
+    if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
     let hex = match hex.len() {
         6 => hex,
-        8 => &hex[2..],
+        8 => hex.get(2..)?,
         _ => return None,
     };
     let channel = |at: usize| {
@@ -153,6 +156,14 @@ mod tests {
         // Alpha is not part of the ratio.
         assert_eq!(contrast("#ff000000", "#ffffff").map(f64::round), Some(21.0));
         assert_eq!(contrast("red", "#ffffff"), None);
+    }
+
+    #[test]
+    fn a_colour_with_anything_but_hex_digits_is_no_colour() {
+        // Eight bytes after the #, the second letter two of them.
+        assert_eq!(contrast("#aébbccd", "#000000"), None);
+        assert_eq!(contrast("#+f0000", "#000000"), None);
+        assert_eq!(contrast("#12345", "#000000"), None);
     }
 
     #[test]

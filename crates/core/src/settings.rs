@@ -1,5 +1,6 @@
 //! RimStack's own settings: a small file of names and values.
 
+use crate::error::Error;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -12,10 +13,7 @@ pub struct Settings {
 impl Settings {
     /// No file, or a damaged one, is the default settings.
     pub fn read(path: &Path) -> Self {
-        let Ok(text) = std::fs::read_to_string(path) else {
-            return Self::default();
-        };
-        let Ok(Value::Object(entries)) = serde_json::from_str(&text) else {
+        let Some(Value::Object(entries)) = crate::whole::read_json(path) else {
             return Self::default();
         };
         let values = entries
@@ -25,18 +23,15 @@ impl Settings {
         Self { values }
     }
 
-    pub fn write(&self, path: &Path) -> Result<(), String> {
-        let failed = |e: std::io::Error| format!("{}: {e}", path.display());
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(failed)?;
-        }
+    pub fn write(&self, path: &Path) -> Result<(), Error> {
         let entries: serde_json::Map<String, Value> = self
             .values
             .iter()
             .map(|(k, v)| (k.clone(), Value::String(v.clone())))
             .collect();
-        let text = serde_json::to_string_pretty(&Value::Object(entries)).unwrap_or_default();
-        std::fs::write(path, text).map_err(failed)
+        let text = serde_json::to_string_pretty(&Value::Object(entries))
+            .map_err(|e| Error::format(format!("{}: {e}", path.display())))?;
+        crate::whole::write(path, text)
     }
 
     /// The value, or nothing when it was never set or was set to empty.
@@ -45,6 +40,12 @@ impl Settings {
             .get(name)
             .map(String::as_str)
             .filter(|v| !v.is_empty())
+    }
+
+    /// A value that is several, kept with commas between: each of them.
+    pub fn listed(&self, name: &str) -> impl Iterator<Item = &str> {
+        let kept = self.get(name).unwrap_or_default();
+        kept.split(',').map(str::trim).filter(|one| !one.is_empty())
     }
 
     /// A switch that is on unless it was turned off.
@@ -66,6 +67,17 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_value_of_several_is_read_one_by_one() {
+        let mut s = Settings::default();
+        assert_eq!(s.listed("databasesOff").count(), 0);
+        s.set("databasesOff", "rules, names,,");
+        assert_eq!(
+            s.listed("databasesOff").collect::<Vec<_>>(),
+            ["rules", "names"]
+        );
+    }
 
     #[test]
     fn values_are_kept_trimmed_and_empty_forgets() {

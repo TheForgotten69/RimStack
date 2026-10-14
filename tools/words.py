@@ -26,9 +26,12 @@ for path in sorted(glob.glob(os.path.join(root, "qml", "**", "*.qml"), recursive
         return f'{found.group(1)}: Theme.say("{text}")'
 
     named = in_commands if path.endswith("Main.qml") else shown
-    wrapped = re.sub(named + literal, wrap, source)
-    if wrapped != source:
-        open(path, "w", encoding="utf-8").write(wrapped)
+    # A comment may quote a text; it shows none.
+    commented = lambda line: line.lstrip().startswith("//")
+    lines = [line if commented(line) else re.sub(named + literal, wrap, line) for line in source.split("\n")]
+    if "\n".join(lines) != source:
+        open(path, "w", encoding="utf-8").write("\n".join(lines))
+    wrapped = "\n".join(line for line in lines if not commented(line))
     words.update(json.loads(f'"{t}"') for t in re.findall(r"Theme\.(?:say|fill|kept)\(" + literal, wrapped))
     # A sentence chosen between two: Theme.fill(shown ? "{} of {}, in {}" : "{} of {}", …).
     for pair in re.findall(r"Theme\.fill\([^\"\n(),]*\?\s*" + literal + r"\s*:\s*" + literal, wrapped):
@@ -37,7 +40,7 @@ for path in sorted(glob.glob(os.path.join(root, "qml", "**", "*.qml"), recursive
         words.update(json.loads(f'"{t}"') for t in pair)
     # Lists of texts that are translated where they are shown.
     for line in wrapped.split("\n"):
-        if re.search(r"\b(options|words|model|columnNames|labels):\s*[\[(]", line):
+        if re.search(r"\b(options|words|model|labels):\s*[\[(]", line):
             words.update(json.loads(f'"{t}"') for t in re.findall(literal, line) if re.search(r"[A-Za-z]{2}", t))
 
 # The lists in Theme.qml that are put in the chosen language where shown.

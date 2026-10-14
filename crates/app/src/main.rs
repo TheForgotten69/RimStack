@@ -1,13 +1,21 @@
 use rimstack_core::say;
 
 mod backend;
+mod background;
+mod broken_mod_search;
+mod community_data;
+mod downloads;
+mod list_store;
+mod log_reader;
+mod mod_edits;
 mod model;
+mod save_reader;
 mod state;
+mod texture_tools;
 
 pub use state::*;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
-use std::sync::LazyLock;
 use std::time::Instant;
 
 /// The desktop entry and the icon, kept in the program and written where
@@ -31,11 +39,11 @@ fn put_among_applications() {
                 .args(["org.kde.KIconLoader.iconChanged", "int32:0"])
                 .status();
             if let Err(problem) = told {
-                eprintln!("icons changed, desktop not told: {problem}");
+                rimstack_core::problem!("icons changed, desktop not told: {problem}");
             }
         }
         Ok(false) => {}
-        Err(problem) => eprintln!("desktop entry: {problem}"),
+        Err(problem) => rimstack_core::problem!("desktop entry: {problem}"),
     }
 }
 
@@ -43,11 +51,13 @@ fn put_among_applications() {
 /// `rimstack --steamworks=subscribe:1,2`. It ends with 0 when Steam took
 /// the requests, and says why not otherwise.
 fn steamworks(request: &str) -> std::process::ExitCode {
+    use rimstack_core::error::Error;
     use rimstack_core::steamworks;
-    let asked = steamworks::parse(request).ok_or("not a request".to_string());
-    let library = PATHS.game.as_deref().and_then(steamworks::library);
+    let asked = steamworks::parse(request).ok_or_else(|| Error::refused("not a request"));
+    let library = app().paths().game.as_deref().and_then(steamworks::library);
     let done = asked.and_then(|(action, ids)| {
-        let library = library.ok_or_else(|| say!("the game's Steam library was not found"))?;
+        let library = library
+            .ok_or_else(|| Error::program(say!("the game's Steam library was not found")))?;
         steamworks::act(&library, action, &ids)
     });
     match done {
@@ -59,40 +69,60 @@ fn steamworks(request: &str) -> std::process::ExitCode {
     }
 }
 
+/// `--check` drives the Mods screen and saves the load order it finds:
+/// that is for a copy of the game's settings, never the real ones.
+fn check_on_real_settings() -> bool {
+    let checking = std::env::args().any(|a| a.starts_with("--check"));
+    checking && std::env::var_os("RIMSTACK_CONFIG").is_none()
+}
+
 fn main() -> std::process::ExitCode {
+    if check_on_real_settings() {
+        eprintln!("--check saves the load order: run tools/check-app.sh, which gives it a copy through RIMSTACK_CONFIG");
+        return std::process::ExitCode::from(2);
+    }
     if let Some(request) =
         std::env::args().find_map(|a| a.strip_prefix("--steamworks=").map(String::from))
     {
         return steamworks(&request);
     }
     STARTED.get_or_init(Instant::now);
+    if let Err(problem) = rimstack_core::diagnostics::start(&app().diagnostics_file()) {
+        rimstack_core::problem!("{}: {problem}", app().diagnostics_file().display());
+    }
+    rimstack_core::diagnostics::record_panics();
+    rimstack_core::note!(
+        "RimStack {} started on {}",
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS
+    );
     // Before the mods are read: their problems are put in words as they are.
-    backend::speak(settings().get("language").unwrap_or_default());
+    backend::speak(app().settings().get("language").unwrap_or_default());
     if !std::env::args().any(|a| a == "--demo" || a == "--selftest") {
         std::thread::spawn(|| {
-            LazyLock::force(&COMMUNITY);
-            library();
+            app().community();
+            app().library();
         });
     }
     #[cfg(target_os = "linux")]
     if !std::env::args().any(|a| a.starts_with("--shot") || a.starts_with("--check")) {
         put_among_applications();
     }
-    let mut app = QGuiApplication::new();
-    if let Some(app) = app.as_mut() {
-        keep_app(app);
+    let mut qt = QGuiApplication::new();
+    if let Some(qt) = qt.as_mut() {
+        keep_app(qt);
     }
     backend::use_window_icon();
-    let font = settings().get("font").map(String::from);
+    let font = app().settings().get("font").map(String::from);
     if let Some(family) = font {
         use_font(&family);
     }
     // Names the file the window's own settings (pane widths) are kept in.
-    if let Some(app) = app.as_mut() {
-        QGuiApplication::set_organization_name(app, &QString::from("RimStack"));
+    if let Some(qt) = qt.as_mut() {
+        QGuiApplication::set_organization_name(qt, &QString::from("RimStack"));
     }
-    if let Some(app) = app.as_mut() {
-        QGuiApplication::set_application_name(app, &QString::from("RimStack"));
+    if let Some(qt) = qt.as_mut() {
+        QGuiApplication::set_application_name(qt, &QString::from("RimStack"));
     }
     QGuiApplication::set_desktop_file_name(&QString::from("rimstack"));
     let mut engine = QQmlApplicationEngine::new();
@@ -105,8 +135,7 @@ fn main() -> std::process::ExitCode {
             .release();
         engine.load(&QUrl::from("qrc:/qt/qml/RimStack/Ui/qml/Main.qml"));
     }
-    if let Some(app) = app.as_mut() {
-        app.exec();
-    }
-    std::process::ExitCode::SUCCESS
+    // What the window ended with: the checks end it with 1 when one failed.
+    let ended = qt.as_mut().map_or(1, |qt| qt.exec());
+    std::process::ExitCode::from(u8::try_from(ended).unwrap_or(1))
 }

@@ -2,7 +2,6 @@
 // marks, tags, author, version and what is going on with it.
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import RimStack.Ui
 
@@ -277,7 +276,7 @@ Item {
                 onAccent: row.current
                 // Where no heading names the group, the row does.
                 readonly property var all: row.tags.split(", ")
-                readonly property bool headed: row.columns && Mods.shownBy === "" && Mods.prefs.headings !== 0
+                readonly property bool headed: row.columns && Mods.columns.shownBy === "" && Mods.prefs.headings !== 0
                 icon: "tag"
                 maxWidth: Theme.sized(120)
                 text: headed ? all.length : all[0] + (all.length > 1 ? "  +" + (all.length - 1) : "")
@@ -364,7 +363,7 @@ Item {
         id: quick
         readonly property bool hovered: toggleHover.hovered || folderHover.hovered || moreHover.hovered
         readonly property bool chosen: row.current && Mods.selectedCount === 1
-        visible: (hover.hovered || chosen) && !row.isHeader && row.modId >= 0 && Mods.dragged === null && !Mods.active.previewing && Mods.picking === ""
+        visible: (hover.hovered || chosen) && !row.isHeader && row.modId >= 0 && Mods.drag.held === null && !Mods.active.previewing && Mods.picking === ""
         anchors.right: parent.right
         anchors.rightMargin: Theme.gapCard
         anchors.verticalCenter: parent.verticalCenter
@@ -454,17 +453,17 @@ Item {
 
     DragHandler {
         id: dragger
-        enabled: !row.isHeader && !Mods.active.previewing && (!row.columns || Mods.shownBy === "")
+        enabled: !row.isHeader && !Mods.active.previewing && (!row.columns || Mods.columns.shownBy === "")
         target: null
         onActiveChanged: {
             if (dragger.active)
-                Mods.dragged = { model: row.ownModel, modIndex: row.modIndex, modId: row.modId, name: row.name }
+                Mods.drag.held = { model: row.ownModel, modIndex: row.modIndex, modId: row.modId, name: row.name }
             else
-                Mods.finishDrag()
+                Mods.drag.finish()
         }
         onCentroidChanged: {
             if (dragger.active) {
-                Mods.dragPoint = centroid.scenePosition
+                Mods.drag.point = centroid.scenePosition
             }
         }
     }
@@ -472,8 +471,8 @@ Item {
     DropArea {
         anchors.fill: parent
         enabled: !row.isHeader
-        onEntered: Mods.dropTarget = { model: row.ownModel, modIndex: row.modIndex, item: row }
-        onExited: if (Mods.dropTarget && Mods.dropTarget.item === row) Mods.dropTarget = null
+        onEntered: Mods.drag.target = { model: row.ownModel, modIndex: row.modIndex, item: row }
+        onExited: if (Mods.drag.target && Mods.drag.target.item === row) Mods.drag.target = null
         Rectangle {
             visible: parent.containsDrag
             x: 6

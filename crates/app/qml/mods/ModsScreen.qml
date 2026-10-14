@@ -49,8 +49,8 @@ Item {
         // A mod dragged out of the load order is dropped here.
         DropArea {
             anchors.fill: parent
-            onEntered: Mods.dropTarget = { model: Mods.inactive, modIndex: Mods.inactive.count, item: rail }
-            onExited: if (Mods.dropTarget && Mods.dropTarget.item === rail) Mods.dropTarget = null
+            onEntered: Mods.drag.target = { model: Mods.inactive, modIndex: Mods.inactive.count, item: rail }
+            onExited: if (Mods.drag.target && Mods.drag.target.item === rail) Mods.drag.target = null
             Rectangle { visible: parent.containsDrag; anchors.fill: parent; anchors.margins: Theme.gapThin; radius: Theme.corner; color: "transparent"; border.width: 2; border.color: Theme.focus }
         }
     }
@@ -155,7 +155,7 @@ Item {
     height: parent.height - bulk.height
     active: Mods.comparing !== null
     sourceComponent: CompareView {
-        backend: Mods.backend
+        textureTools: Mods.textureTools
                     earlier: Mods.comparing.earlier
         later: Mods.comparing.later
         earlierPlace: Mods.active.indexOf(Mods.comparing.earlier) + 1
@@ -175,13 +175,13 @@ Item {
 
 Rectangle {
     id: ghost
-    visible: Mods.dragged !== null
+    visible: Mods.drag.held !== null
     width: Theme.sized(300)
     height: Theme.sized(26)
     radius: Theme.corner
     color: Theme.accent
     opacity: 0.9
-    readonly property point at: screen.mapFromItem(null, Mods.dragPoint.x, Mods.dragPoint.y)
+    readonly property point at: screen.mapFromItem(null, Mods.drag.point.x, Mods.drag.point.y)
     x: at.x + 10
     y: at.y - height / 2
     Drag.active: visible
@@ -194,7 +194,7 @@ Rectangle {
         elide: Text.ElideRight
         color: "white"
         font.pixelSize: Theme.body
-        text: Mods.dragged ? Mods.dragged.name : ""
+        text: Mods.drag.held ? Mods.drag.held.name : ""
     }
 }
 
@@ -296,29 +296,13 @@ Timer {
             Mods.previewSort()
         for (let at = 0; comparing && at < Mods.active.count && Mods.comparing === null; at++) {
             Mods.select(Mods.nthMod(Mods.active, at), true)
-            const other = (Mods.info.losesTo || Mods.info.winsOver || "").split("\n")[0].split("\t")[2]
+            const other = (Mods.info.losesTo || []).concat(Mods.info.winsOver || [])[0]
             if (other)
-                Mods.compareWith(Number(other))
+                Mods.compareWith(other.modId)
         }
     }
 }
 
-Timer {
-    interval: 2500
-    running: Qt.application.arguments.indexOf("--probe-move") !== -1
-    onTriggered: {
-        const a = activePane.list, i = inactivePane.list
-        a.contentY = 900; i.contentY = 1200
-        console.log("PROBE before active=" + a.contentY + " inactive=" + i.contentY)
-        const row = 45
-        const id = Mods.idAt(Mods.active, row)
-        Mods.moveAcross(Mods.active, Mods.active.indexOf(id), id)
-        console.log("PROBE just after active=" + a.contentY + " inactive=" + i.contentY)
-        later.start()
-    }
-}
-Timer { id: later; interval: 800; onTriggered: { console.log("PROBE later active=" + activePane.list.contentY + " inactive=" + inactivePane.list.contentY); const id = Mods.idAt(Mods.inactive, 60); inactivePane.list.contentY = 1200; Mods.moveAcross(Mods.inactive, Mods.inactive.indexOf(id), id); later2.start() } }
-Timer { id: later2; interval: 800; onTriggered: console.log("PROBE activate later active=" + activePane.list.contentY + " inactive=" + inactivePane.list.contentY) }
 // `--pick=40` selects the mod on that row of the load order, `--tab=1`
 // a tab of its details, `--notes` fetches its change notes; for screenshots.
 Timer {
@@ -332,7 +316,7 @@ Timer {
         Mods.tab = tab ? Number(tab.substring(6)) : 0
         // `--notes` asks for the picked mod's change notes, as its Fetch button does.
         if (Qt.application.arguments.indexOf("--notes") !== -1 && Mods.info.source === "Workshop")
-            Mods.backend.fetchChangeNotes(JSON.stringify([[Mods.info.folder, 0]]))
+            Mods.downloads.fetchChangeNotes(JSON.stringify([[Mods.info.folder, 0]]))
     }
 }
 

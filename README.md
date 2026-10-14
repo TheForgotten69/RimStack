@@ -18,7 +18,7 @@ What is not built, and where the window differs from the mockup, is listed under
 Needs Rust 1.85 or later, Qt 6 (base and declarative) and a C++ compiler.
 
 ```bash
-cargo test -p rimstack-core
+cargo test --workspace
 cargo build -p rimstack-app --release
 ./target/release/rimstack              # your installed mods
 ./target/release/rimstack --demo       # 2,300 made-up mods instead
@@ -34,6 +34,8 @@ scan_ms         reading every mod's About.xml
 mods_shown_ms   from process start to the lists being filled
 startup_ms      from process start to the first frame
 ```
+
+The same lines, every problem that was worked around and any crash with its trace are kept in `diagnostics.log` in RimStack's data folder (on Linux `~/.local/share/RimStack/`; Settings, RimStack shows where). Past one megabyte it is set aside as `diagnostics.log.old`.
 
 ## Languages
 

@@ -30,7 +30,7 @@ ApplicationWindow {
     // data, and not when taking a picture of a screen.
     // `--first` shows the set-up card whatever the settings say; for screenshots.
     property bool firstRun: Qt.application.arguments.indexOf("--first") !== -1
-        || (!Theme.demo && shotPath === "" && Mods.checkMode === "" && !JSON.parse(appBackend.settings()).setupDone)
+        || (!Theme.demo && shotPath === "" && Mods.checkMode === "" && appBackend.setting("setupDone") === "")
 
     // What a careful player would settle before starting the game.
     readonly property var inTheWay: [
@@ -60,7 +60,7 @@ ApplicationWindow {
         interval: 2500
         running: !Theme.demo && window.shotPath === "" && Mods.checkMode === "" && !window.firstRun
         onTriggered: {
-            const ids = appBackend.listResetByGame()
+            const ids = appLists.listResetByGame()
             if (ids !== "")
                 Notices.offer(Theme.fill("The game emptied its list of mods, as it does on a new version. The last launch from RimStack had {} mods.", JSON.parse(ids).length), Theme.say("Use that list"), () => window.useList(JSON.parse(ids)))
         }
@@ -75,8 +75,16 @@ ApplicationWindow {
     }
 
         Backend { id: appBackend }
+        ModEdits { id: appEdits }
+        CommunityData { id: appCommunity }
+        BrokenModSearch { id: appHunt }
+        KeptLists { id: appLists }
+        Downloads { id: appDownloads }
+        SaveReader { id: appSaves }
+        TextureTools { id: appTextures }
+        LogReader { id: appLogs }
 
-    readonly property var behindItems: appBackend.updates ? (JSON.parse(appBackend.updates).items || []) : []
+    readonly property var behindItems: appDownloads.updates ? (JSON.parse(appDownloads.updates).items || []) : []
     readonly property int behind: behindItems.length
     // What the game would load: the count the window shows.
     readonly property int behindActive: behindItems.filter(item => item.active).length
@@ -87,7 +95,7 @@ ApplicationWindow {
         if (Theme.demo)
             return
         const recorded = JSON.parse(appBackend.summary()).lastLaunch
-        const report = appBackend.logs ? JSON.parse(appBackend.logs) : ({})
+        const report = appLogs.logs ? JSON.parse(appLogs.logs) : ({})
         const written = Math.floor((JSON.parse(appBackend.stamps()).log || 0) / 1000)
         // The log knows of starts not recorded here: a round of the
         // search for the broken mod, or the game started from Steam.
@@ -115,22 +123,22 @@ ApplicationWindow {
         // not under a sort on show, a drag or a comparison.
         if (changed("mods"))
             modsPending = true
-        else if (modsPending && !Mods.active.rescanning && !Mods.active.previewing && Mods.dragged === null && Mods.comparing === null) {
+        else if (modsPending && !Mods.active.rescanning && !Mods.active.previewing && Mods.drag.held === null && Mods.comparing === null) {
             modsPending = false
             Mods.active.rescan()
         }
         if (changed("theme"))
             readOwnColours()
         if (changed("language"))
-            Theme.words = JSON.parse(appBackend.languageWords(JSON.parse(appBackend.settings()).language || ""))
+            Theme.words = JSON.parse(appBackend.languageWords(appBackend.setting("language")))
         if (changed("saves") && section === 3)
-            appBackend.loadSaves()
+            appSaves.loadSaves()
         if (changed("log")) {
             // The game writes its log all the time it runs.
             if (gameRunning)
                 now.log = before.log
             else {
-                appBackend.keepLogs()
+                appLogs.keepLogs()
                 if (section === 4 && logsLoader.item)
                     logsLoader.item.load()
                 Qt.callLater(readLastLaunch)
@@ -139,7 +147,7 @@ ApplicationWindow {
         // Never taken unasked: the game empties the file when it first
         // starts on a new version. And it writes it while starting.
         if (changed("modsConfig") && now.modsConfig !== 0) {
-            const ids = gameRunning ? null : JSON.parse(appBackend.listOnDisk() || "[]")
+            const ids = gameRunning ? null : JSON.parse(appLists.listOnDisk() || "[]")
             if (ids === null)
                 now.modsConfig = before.modsConfig
             else
@@ -151,7 +159,7 @@ ApplicationWindow {
     Timer { interval: Mods.checkMode === "live" ? 500 : 2000; repeat: true; triggeredOnStart: true; running: (window.visibility !== Window.Minimized && window.visibility !== Window.Hidden) || Mods.checkMode === "live"; onTriggered: window.look() }
     onGameRunningChanged: {
         if (gameRunning && !Theme.demo)
-            appBackend.noteGameStarted()
+            appDownloads.noteGameStarted()
         else
             look()
     }
@@ -191,29 +199,44 @@ ApplicationWindow {
         }
         readOwnColours()
         if (!Theme.demo) {
-            appBackend.restoreUpdates()
-            appBackend.keepLogs()
+            appDownloads.restoreUpdates()
+            appLogs.keepLogs()
         }
         Theme.words = JSON.parse(appBackend.languageWords(kept.language || ""))
         readLastLaunch()
     }
     Connections {
-        target: appBackend
+        target: appLogs
         function onLogsChanged() { window.readLastLaunch() }
     }
 
     Binding { target: Mods; property: "backend"; value: appBackend }
-    Binding { target: Notices; property: "backend"; value: appBackend }
-    // What a background task says when it ends becomes a notice; the
-    // tray shows it while it runs. A leading "!" marks a failure.
+    Binding { target: Mods; property: "edits"; value: appEdits }
+    Binding { target: Mods; property: "communityData"; value: appCommunity }
     Connections {
-        target: appBackend
-        function onTaskNoteChanged() {
-            const note = appBackend.taskNote
-            if (note === "" || note.endsWith("…"))
+        target: appCommunity
+        function onRulesBusyChanged() {
+            if (appCommunity.rulesBusy)
                 return
-            const failed = note.charAt(0) === "!"
-            Notices.say(Theme.said(failed ? note.substring(1) : note), failed ? "err" : "ok")
+            Mods.active.communityChanged()
+            Mods.overview = JSON.parse(Mods.active.overview())
+        }
+    }
+    Binding { target: Mods; property: "hunter"; value: appHunt }
+    Binding { target: Mods; property: "keptLists"; value: appLists }
+    Binding { target: Mods; property: "downloads"; value: appDownloads }
+    Binding { target: Mods; property: "textureTools"; value: appTextures }
+    Binding { target: Notices; property: "keptLists"; value: appLists }
+    // What a background task says when it ends becomes a notice; the
+    // tray shows it while it runs.
+    Connections {
+        target: appDownloads
+        function onTaskNoteChanged() {
+            const note = appDownloads.taskNote
+            if (note === "" || appDownloads.taskRunning)
+                return
+            const failed = appDownloads.taskFailed
+            Notices.say(Theme.said(note), failed ? "err" : "ok")
             if (!failed)
                 Notices.record(note, "")
         }
@@ -225,10 +248,10 @@ ApplicationWindow {
     readonly property var tasks: [
         Mods.active.rescanning ? { text: Theme.say("Reading the mod folders…") } : null,
         !Mods.active.filesRead && Mods.active.count > 0 && !Theme.demo ? { text: Theme.say("Reading the active mods' files…") } : null,
-        appBackend.texturesBusy ? { text: appBackend.texturesProgress || Theme.say("Counting textures…"), cancel: () => appBackend.cancelTextures() } : null,
-        appBackend.updatesBusy ? { text: Theme.say("Asking Steam for updates…") } : null,
-        Mods.active.rulesBusy ? { text: Theme.say("Downloading community data…") } : null,
-        appBackend.taskNote.endsWith("…") ? { text: appBackend.taskNote } : null,
+        appTextures.texturesBusy ? { text: appTextures.texturesProgress || Theme.say("Counting textures…"), cancel: () => appTextures.cancelTextures() } : null,
+        appDownloads.updatesBusy ? { text: Theme.say("Asking Steam for updates…") } : null,
+        appCommunity.rulesBusy ? { text: Theme.say("Downloading community data…") } : null,
+        appDownloads.taskRunning ? { text: appDownloads.taskNote } : null,
     ].filter(task => task !== null)
     Binding { target: Mods; property: "behind"; value: window.behindActive }
     Binding { target: Mods; property: "hunting"; value: !!hunt.search.active }
@@ -238,11 +261,13 @@ ApplicationWindow {
         function onFindBrokenRequested() { window.findBroken() }
         function onShowLogs() { window.section = 4 }
         function onRescanned() {
-            appBackend.forget()
+            appSaves.forget()
+            appTextures.forget()
+            appLogs.forget()
             // What Downloads lists names mods by their place in the last
             // reading of the folders: asked again, not emptied.
             if (!Theme.demo)
-                appBackend.restoreUpdates()
+                appDownloads.restoreUpdates()
         }
     }
 
@@ -261,7 +286,7 @@ ApplicationWindow {
     // before the search out of the few that are kept.
     function play(round) {
         // A copy of the newest save, in case this launch damages it.
-        const problem = Theme.demo || round ? "" : appBackend.backUpNewestSave()
+        const problem = Theme.demo || round ? "" : appSaves.backUpNewestSave()
         if (problem !== "")
             console.warn("save not backed up: " + problem)
         if (!Theme.demo && !round) {
@@ -293,8 +318,8 @@ ApplicationWindow {
 
             TopBar {
                 id: topBar
+                keptLists: appLists
                 Layout.fillWidth: true
-                backend: appBackend
                 section: window.section
                 behind: window.behindActive
                 gameRunning: window.gameRunning
@@ -307,9 +332,9 @@ ApplicationWindow {
             }
 
             HuntBar {
+                hunter: appHunt
                 id: hunt
                 Layout.fillWidth: true
-                backend: appBackend
                 // The round's list goes on the Mods screen; whoever is reading the log stays there.
                 onUseList: ids => Mods.useList(ids, true)
                 onSaveAndPlay: if (Mods.save()) window.play(true)
@@ -325,18 +350,21 @@ ApplicationWindow {
                 Loader {
                     active: window.section === 1 || item !== null
                     sourceComponent: DownloadsScreen {
+                        downloads: appDownloads
                         backend: appBackend
                         onShowMod: modId => window.showMod(modId)
                     }
                 }
                 Loader {
                     active: window.section === 2 || item !== null
-                    sourceComponent: TexturesScreen { backend: appBackend }
+                    sourceComponent: TexturesScreen { textureTools: appTextures }
                 }
                 Loader {
                     active: window.section === 3 || item !== null
                     sourceComponent: SavesScreen {
+                        keptLists: appLists
                         backend: appBackend
+                        saveReader: appSaves
                         onUseList: ids => window.useList(ids)
                     }
                 }
@@ -344,7 +372,7 @@ ApplicationWindow {
                     id: logsLoader
                     active: window.section === 4 || item !== null
                     sourceComponent: LogsScreen {
-                        backend: appBackend
+                        reader: appLogs
                         onUseList: ids => window.useList(ids)
                         onShowMod: modId => window.showMod(modId)
                         onFindBroken: window.findBroken()
@@ -355,7 +383,11 @@ ApplicationWindow {
                     id: settingsLoader
                     active: window.section === 5 || item !== null
                     sourceComponent: SettingsScreen {
+                        communityData: appCommunity
+                        downloads: appDownloads
+                        keptLists: appLists
                         backend: appBackend
+                        reader: appLogs
                                                 rules: Mods.active
                         overview: Mods.overview
                         onUseList: ids => window.useList(ids)
@@ -366,9 +398,10 @@ ApplicationWindow {
             }
 
             StatusBar {
+                keptLists: appLists
+                textureTools: appTextures
                 id: statusBar
                 Layout.fillWidth: true
-                backend: appBackend
                 lastLaunch: window.lastLaunch
                 tasks: window.tasks
                 onUseList: ids => window.useList(ids)
@@ -412,9 +445,9 @@ ApplicationWindow {
     Timer { interval: 4000; running: !Theme.demo && window.shotPath === "" && Mods.checkMode === ""; onTriggered: if (JSON.parse(appBackend.settings()).selfCheck) appBackend.checkRelease() }
     // Steam's site refused past the last wait: said once, with how far the asking got.
     Connections {
-        target: appBackend
+        target: appDownloads
         function onChangeNotesStateChanged() {
-            const state = appBackend.changeNotesState ? JSON.parse(appBackend.changeNotesState) : ({})
+            const state = appDownloads.changeNotesState ? JSON.parse(appDownloads.changeNotesState) : ({})
             if (state.refused)
                 Notices.say(Theme.fill("Steam's site still refuses: change notes of {} of {} mods read", state.done, state.asked), "err")
         }
@@ -462,7 +495,7 @@ ApplicationWindow {
                 { name: Theme.say("Play"), group: Theme.say("Game"), run: () => window.pressPlay() },
                 { name: Theme.say("Next problem"), group: Theme.say("Load order"), run: () => { window.section = 0; Mods.showNextProblem() }, when: Mods.errors + Mods.active.warnings > 0 },
                 { name: Theme.say("Saved lists"), group: Theme.say("Load order"), run: () => topBar.listsMenu.open(), when: !Theme.demo },
-                { name: Theme.say("Use the list from before RimStack"), group: Theme.say("Load order"), run: () => { const ids = appBackend.originalList(); if (ids !== "") window.useList(JSON.parse(ids)) }, when: !!folders.backup },
+                { name: Theme.say("Use the list from before RimStack"), group: Theme.say("Load order"), run: () => { const ids = appLists.originalList(); if (ids !== "") window.useList(JSON.parse(ids)) }, when: !!folders.backup },
 
                 { name: Theme.fill(Mods.selectedActive ? "Deactivate {}" : "Activate {}", mod ? mod.name : ""), group: Theme.say("Selected mod"), run: () => Mods.toggleSelected(), when: !!mod && !Mods.active.previewing },
                 { name: Theme.fill("Open folder of {}", (mod ? mod.name : "")), group: Theme.say("Selected mod"), run: () => open(mod.path), when: !!mod && !!mod.path },
@@ -470,7 +503,7 @@ ApplicationWindow {
                 { name: Theme.fill("Copy package id of {}", (mod ? mod.name : "")), group: Theme.say("Selected mod"), run: () => Theme.copy(mod.packageId), when: !!mod && !!mod.packageId },
                 { name: Theme.say("Clear selection"), group: Theme.say("Selected mod"), keys: Theme.say("Esc"), run: () => Mods.select(-1, false), when: Mods.selectedId >= 0 },
 
-                { name: Theme.say("Use the list on the clipboard"), group: Theme.say("Load order"), run: () => { const ids = JSON.parse(appBackend.idsInText(Theme.pasted())); if (ids.length > 0) window.useList(ids) }, when: !Theme.demo },
+                { name: Theme.say("Use the list on the clipboard"), group: Theme.say("Load order"), run: () => { const ids = JSON.parse(appLists.idsInText(Theme.pasted())); if (ids.length > 0) window.useList(ids) }, when: !Theme.demo },
                 { name: Theme.say("Copy the load order as text"), group: Theme.say("Load order"), run: () => Theme.copy(Mods.active.listing()) },
                 { name: Theme.say("Mods with errors"), group: Theme.say("Filter"), run: () => filter("is:error"), when: Mods.errors > 0 },
                 { name: Theme.say("Mods with warnings"), group: Theme.say("Filter"), run: () => filter("is:warning"), when: Mods.active.warnings > 0 },
@@ -481,11 +514,11 @@ ApplicationWindow {
                 { name: Theme.say("Clear filter"), group: Theme.say("Filter"), run: () => filter("") },
 
                 { name: Theme.say("Read the mod folders again"), group: Theme.say("Mods"), run: () => Mods.active.rescan(), when: !Theme.demo },
-                { name: Theme.say("Check for updates"), group: Theme.say("Downloads"), run: () => { window.section = 1; appBackend.checkUpdates() }, when: !Theme.demo },
-                { name: Theme.say("Update community rules"), group: Theme.say("Sorting"), run: () => Mods.active.downloadRules(), when: !Theme.demo && !Mods.active.rulesCurrent },
-                { name: Theme.say("Read the saves again"), group: Theme.say("Saves"), run: () => { window.section = 3; appBackend.loadSaves() }, when: !Theme.demo },
+                { name: Theme.say("Check for updates"), group: Theme.say("Downloads"), run: () => { window.section = 1; appDownloads.checkUpdates() }, when: !Theme.demo },
+                { name: Theme.say("Update community rules"), group: Theme.say("Sorting"), run: () => appCommunity.downloadRules(), when: !Theme.demo && !appCommunity.rulesCurrent },
+                { name: Theme.say("Read the saves again"), group: Theme.say("Saves"), run: () => { window.section = 3; appSaves.loadSaves() }, when: !Theme.demo },
                 { name: Theme.say("Read the log again"), group: Theme.say("Logs"), run: () => { window.section = 4; Qt.callLater(() => logsLoader.item.load()) }, when: !Theme.demo },
-                { name: Theme.say("Back up the newest save"), group: Theme.say("Saves"), run: () => appBackend.backUpNewestSave(), when: !Theme.demo },
+                { name: Theme.say("Back up the newest save"), group: Theme.say("Saves"), run: () => appSaves.backUpNewestSave(), when: !Theme.demo },
 
                 { name: Theme.say("Mods"), group: Theme.say("Go to"), run: () => window.section = 0 },
                 { name: Theme.say("Downloads"), group: Theme.say("Go to"), run: () => window.section = 1 },
@@ -576,7 +609,7 @@ ApplicationWindow {
         active: window.firstRun
         sourceComponent: FirstRun {
             info: JSON.parse(appBackend.settings())
-            databases: JSON.parse(appBackend.databases())
+            databases: JSON.parse(appCommunity.databases())
             languages: JSON.parse(appBackend.languages())
             onSettingPicked: (name, value) => appBackend.setSetting(name, value)
             onLanguagePicked: name => {
@@ -590,7 +623,7 @@ ApplicationWindow {
                         onStart: (withData, withRimSort) => {
                 appBackend.setSetting("setupDone", "yes")
                 if (withData && (!Mods.overview.communityMods || !Mods.overview.worksOn))
-                    Mods.active.downloadRules()
+                    appCommunity.downloadRules()
                 if (withRimSort)
                     appBackend.importRimSortRules()
                 window.firstRun = false

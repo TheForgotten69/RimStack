@@ -6,6 +6,7 @@
 //! round never fails for a missing requirement. It assumes one mod is at
 //! fault; two that only break together are not found this way.
 
+use crate::error::Error;
 use crate::library::Library;
 use crate::list::Mod;
 use crate::paths::Source;
@@ -124,13 +125,9 @@ impl Bisect {
         serde_json::from_str(&std::fs::read_to_string(file).ok()?).ok()
     }
 
-    pub fn write(&self, file: &Path) -> Result<(), String> {
-        let failed = |e: std::io::Error| format!("{}: {e}", file.display());
-        if let Some(dir) = file.parent() {
-            std::fs::create_dir_all(dir).map_err(failed)?;
-        }
-        let text = serde_json::to_string(self).map_err(|e| e.to_string())?;
-        std::fs::write(file, text).map_err(failed)
+    pub fn write(&self, file: &Path) -> Result<(), Error> {
+        let text = serde_json::to_string(self).map_err(|e| Error::format(e.to_string()))?;
+        crate::whole::write(file, text)
     }
 }
 

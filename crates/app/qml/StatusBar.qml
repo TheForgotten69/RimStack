@@ -8,7 +8,8 @@ import RimStack.Ui
 
 Rectangle {
     id: strip
-    required property Backend backend
+    required property KeptLists keptLists
+    required property TextureTools textureTools
     // The newest launch on record: { time, errors }.
     property var lastLaunch: null
     // What runs in the background now: { text, cancel }.
@@ -86,11 +87,11 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.gapLarge
         Text {
-            visible: strip.tasks.length === 0 && strip.backend.texturesProgress !== ""
+            visible: strip.tasks.length === 0 && strip.textureTools.texturesProgress !== ""
             anchors.verticalCenter: parent.verticalCenter
             color: Theme.ink2
             font.pixelSize: Theme.small
-            text: strip.backend.texturesProgress
+            text: strip.textureTools.texturesProgress
         }
         Row {
             id: tray
@@ -161,7 +162,8 @@ Rectangle {
                 id: historyMenu
                 x: parent.width - width
                 y: -height - 8
-                backend: strip.backend
+                keptLists: strip.keptLists
+                textureTools: strip.textureTools
                 onUseList: ids => strip.useList(ids)
             }
         }

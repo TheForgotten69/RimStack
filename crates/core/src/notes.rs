@@ -5,6 +5,7 @@
 //! A mod's first tag is also its group: inside a category, mods with
 //! the same first tag are kept side by side under that tag's name.
 
+use crate::error::Error;
 use crate::id;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -16,7 +17,7 @@ pub struct Note {
     pub text: String,
     /// You said it works on your game version though it does not list it.
     pub version_ok: bool,
-    /// The category you filed it under, by its label; empty to leave
+    /// The category you filed it under, by `Category::key`; empty to leave
     /// that to RimStack.
     pub category: String,
 }
@@ -67,10 +68,7 @@ pub fn tags_in(text: &str) -> Vec<String> {
 impl Notes {
     /// No file, or a damaged one, is no notes.
     pub fn read(path: &Path) -> Self {
-        let Ok(text) = std::fs::read_to_string(path) else {
-            return Self::default();
-        };
-        let Ok(Value::Object(entries)) = serde_json::from_str(&text) else {
+        let Some(Value::Object(entries)) = crate::whole::read_json(path) else {
             return Self::default();
         };
         let note = |v: &Value| -> Note {
@@ -104,11 +102,7 @@ impl Notes {
         }
     }
 
-    pub fn write(&self, path: &Path) -> Result<(), String> {
-        let failed = |e: std::io::Error| format!("{}: {e}", path.display());
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(failed)?;
-        }
+    pub fn write(&self, path: &Path) -> Result<(), Error> {
         let entries: serde_json::Map<String, Value> = self
             .by_id
             .iter()
@@ -123,8 +117,9 @@ impl Notes {
                 (k.clone(), entry)
             })
             .collect();
-        let text = serde_json::to_string_pretty(&Value::Object(entries)).unwrap_or_default();
-        std::fs::write(path, text).map_err(failed)
+        let text = serde_json::to_string_pretty(&Value::Object(entries))
+            .map_err(|e| Error::format(format!("{}: {e}", path.display())))?;
+        crate::whole::write(path, text)
     }
 
     pub fn get(&self, package_id: &str) -> Option<&Note> {

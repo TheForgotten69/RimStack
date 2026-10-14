@@ -3,9 +3,10 @@
 
 use super::*;
 
-impl qobject::Backend {
+impl qobject::TextureTools {
     pub(super) fn skip_textures(mut self: Pin<&mut Self>, mod_id: i32, skip: bool) {
-        let Ok((library, _)) = crate::library() else {
+        let loaded = crate::app().library();
+        let Ok((library, _)) = &*loaded else {
             return;
         };
         let key = usize::try_from(mod_id)
@@ -14,7 +15,7 @@ impl qobject::Backend {
         let Some(key) = key else {
             return;
         };
-        let mut skipped = skipped_mods();
+        let mut skipped = skipped_mods(crate::app());
         if skip {
             skipped.insert(key);
         } else {
@@ -22,8 +23,8 @@ impl qobject::Backend {
         }
         let mut kept: Vec<String> = skipped.into_iter().collect();
         kept.sort();
-        if let Err(problem) = crate::set_setting("textureSkip", &kept.join(",")) {
-            eprintln!("{problem}");
+        if let Err(problem) = crate::app().set_setting("textureSkip", &kept.join(",")) {
+            rimstack_core::problem!("{problem}");
         }
         self.as_mut().load_textures();
     }
@@ -57,7 +58,8 @@ impl qobject::Backend {
     pub(super) fn texture_work(self: Pin<&mut Self>, mods: Vec<usize>, remove: bool) {
         let qt_thread = self.qt_thread();
         std::thread::spawn(move || {
-            let Ok((library, _)) = crate::library() else {
+            let loaded = crate::app().library();
+            let Ok((library, _)) = &*loaded else {
                 let _ = qt_thread.queue(|mut b| b.as_mut().set_textures_busy(false));
                 return;
             };
@@ -68,7 +70,7 @@ impl qobject::Backend {
                 .collect();
             let mut failed = 0;
             if !roots.is_empty() {
-                let file = manifest_file();
+                let file = manifest_file(crate::app());
                 let mut manifest = textures::Manifest::read(&file);
                 let total: usize = roots
                     .iter()
@@ -83,9 +85,9 @@ impl qobject::Backend {
                         b.as_mut().set_textures_progress(QString::from(&text));
                     });
                 };
-                history::STOP_TEXTURES.store(false, Ordering::Relaxed);
+                STOP_TEXTURES.store(false, Ordering::Relaxed);
                 for root in roots {
-                    if history::STOP_TEXTURES.load(Ordering::Relaxed) {
+                    if STOP_TEXTURES.load(Ordering::Relaxed) {
                         break;
                     }
                     if remove {
@@ -99,16 +101,16 @@ impl qobject::Backend {
                         });
                         failed += outcome.failed.len();
                         for (png, reason) in outcome.failed {
-                            eprintln!("{}: {reason}", png.display());
+                            rimstack_core::problem!("{}: {reason}", png.display());
                         }
                     }
                     // After every mod, so a crash loses track of little.
                     if let Err(problem) = manifest.write(&file) {
-                        eprintln!("{problem}");
+                        rimstack_core::problem!("{problem}");
                     }
                 }
             }
-            let text = textures_report(library).to_string();
+            let text = textures_report(crate::app(), library).to_string();
             let note = match failed {
                 0 => String::new(),
                 1 => say!("1 texture could not be converted; it keeps using its PNG."),
@@ -127,7 +129,8 @@ impl qobject::Backend {
 
     pub(super) fn dds_audit(&self) -> QString {
         use rayon::prelude::*;
-        let Ok((library, _)) = crate::library() else {
+        let loaded = crate::app().library();
+        let Ok((library, _)) = &*loaded else {
             return QString::from("[]");
         };
         let found: Vec<Value> = library
@@ -150,7 +153,8 @@ impl qobject::Backend {
     }
 
     pub(super) fn compare(&self, earlier: i32, later: i32) -> QString {
-        let Ok((library, _)) = crate::library() else {
+        let loaded = crate::app().library();
+        let Ok((library, _)) = &*loaded else {
             return QString::default();
         };
         let (Ok(a), Ok(b)) = (usize::try_from(earlier), usize::try_from(later)) else {
@@ -220,15 +224,16 @@ impl qobject::Backend {
             .and_then(|()| hidden.write(&file));
         match done {
             Ok(()) => {
-                *crate::CONFLICTS.write().unwrap_or_else(|e| e.into_inner()) = None;
+                crate::app().textures_changed();
                 QString::default()
             }
-            Err(problem) => QString::from(&problem),
+            Err(problem) => QString::from(&problem.to_string()),
         }
     }
 
     pub(super) fn hidden_in(&self, mod_id: i32) -> i32 {
-        let Ok((library, _)) = crate::library() else {
+        let loaded = crate::app().library();
+        let Ok((library, _)) = &*loaded else {
             return 0;
         };
         let Some(m) = usize::try_from(mod_id)
@@ -246,7 +251,8 @@ impl qobject::Backend {
     }
 
     pub(super) fn unhide_all(&self, mod_id: i32) -> QString {
-        let Ok((library, _)) = crate::library() else {
+        let loaded = crate::app().library();
+        let Ok((library, _)) = &*loaded else {
             return QString::default();
         };
         let Some(m) = usize::try_from(mod_id)
@@ -258,10 +264,10 @@ impl qobject::Backend {
         let file = hidden_file();
         let mut hidden = Hidden::read(&file);
         let done = hidden.unhide_all(&m.path).and_then(|_| hidden.write(&file));
-        *crate::CONFLICTS.write().unwrap_or_else(|e| e.into_inner()) = None;
+        crate::app().textures_changed();
         match done {
             Ok(()) => QString::default(),
-            Err(problem) => QString::from(&problem),
+            Err(problem) => QString::from(&problem.to_string()),
         }
     }
 
@@ -271,7 +277,7 @@ impl qobject::Backend {
     pub(super) fn texture_difference(&self, earlier: &QString, later: &QString) -> QString {
         use std::hash::{Hash, Hasher};
         let (earlier, later) = (earlier.to_string(), later.to_string());
-        let dir = crate::data_dir().join("cache");
+        let dir = crate::app().data_dir().join("cache");
         // One picture at a time is on show; the last one's file goes.
         for old in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
             if old.file_name().to_string_lossy().starts_with("difference-") {

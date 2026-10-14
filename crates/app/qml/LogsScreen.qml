@@ -12,14 +12,14 @@ Item {
     id: screen
     Appear { of: screen }
 
-    required property Backend backend
+    required property LogReader reader
     signal showMod(int modId)
     signal useList(var ids)
     signal findBroken()
     // The search for the broken mod is under way.
     property bool hunting: false
 
-    readonly property var report: backend.logs ? JSON.parse(backend.logs) : ({})
+    readonly property var report: reader.logs ? JSON.parse(reader.logs) : ({})
     // The game keeps two logs: this launch's and the one before.
     property bool previous: false
     // A recorded launch on show in place of a log: its place in `launches`, or -1.
@@ -37,10 +37,8 @@ Item {
     // A run of errors alike but for a name shows as its first, until opened.
     property var openRuns: ({})
     // What the filter holds for the errors that point at no mod.
-    readonly property string noMod: "mod:none"
-    readonly property var errors: (report.errors || []).filter(e => filterText === "" ? e.run === e.at || openRuns[e.run] === true
-        : filterText === noMod ? !e.mod
-        : e.head.toLowerCase().indexOf(filterText) !== -1 || (e.mod || "").toLowerCase().indexOf(filterText) !== -1)
+    readonly property string noMod: reader.noModFilter()
+    readonly property var errors: report.errors ? JSON.parse(reader.errorsListed(filterText, JSON.stringify(Object.keys(openRuns).filter(run => openRuns[run]).map(Number)))) : []
     function toggleRun(run) {
         const now = Object.assign({}, openRuns)
         now[run] = !now[run]
@@ -56,16 +54,7 @@ Item {
     }
     // The mods the errors point at, most errors first:
     // { name, modId, kinds, times }.
-    readonly property var culprits: {
-        const by = {}
-        for (const e of report.errors || []) {
-            const key = e.mod || ""
-            const entry = by[key] || (by[key] = { name: key, modId: e.modId, kinds: 0, times: 0 })
-            entry.kinds += 1
-            entry.times += e.count
-        }
-        return Object.values(by).sort((a, b) => Number(b.name === "") - Number(a.name === "") || b.times - a.times)
-    }
+    readonly property var culprits: report.culprits || []
     // The log's lines that hold the filter text: { number, text }.
     readonly property var lines: {
         const all = report.text || []
@@ -94,16 +83,16 @@ Item {
 
     function load() {
         if (kept !== "")
-            backend.loadKeptLog(kept)
+            reader.loadKeptLog(kept)
         else
-            backend.loadLogs(previous)
+            reader.loadLogs(previous)
     }
     onVisibleChanged: if (visible) load()
     Component.onCompleted: if (visible) load()
     // A re-read of the mods empties this report: the open screen asks for it again.
     Connections {
-        target: screen.backend
-        function onLogsChanged() { if (screen.visible && screen.backend.logs === "") screen.load() }
+        target: screen.reader
+        function onLogsChanged() { if (screen.visible && screen.reader.logs === "") screen.load() }
     }
     // A kept log on show, by its path, in place of the game's last or previous one.
     property string kept: ""
@@ -120,13 +109,13 @@ Item {
         loadPending()
     }
     function loadPending() {
-        if (!pending || backend.logsBusy)
+        if (!pending || reader.logsBusy)
             return
         pending = false
         load()
     }
     Connections {
-        target: screen.backend
+        target: screen.reader
         function onLogsBusyChanged() { screen.loadPending() }
     }
 
@@ -499,7 +488,7 @@ Item {
                     TapHandler { acceptedButtons: Qt.RightButton; onTapped: (point) => lineMenu.openAt(logLine, point.position.x, point.position.y, [{ text: Theme.say("Copy line"), icon: "copy", run: () => Theme.copy(logLine.modelData.text) }]) }
                 }
                 Text {
-                    visible: logView.count === 0 && !screen.backend.logsBusy
+                    visible: logView.count === 0 && !screen.reader.logsBusy
                     anchors.centerIn: parent
                     color: Theme.ink2
                     font.pixelSize: Theme.body
@@ -615,10 +604,10 @@ Item {
                         color: screen.report.problem ? Theme.err : Theme.ink
                         font.pixelSize: Theme.title
                         font.weight: Font.DemiBold
-                        text: screen.backend.logsBusy ? Theme.say("Reading the log…") : screen.report.problem ? Theme.say("Log could not be read") : screen.filterText !== "" ? Theme.say("No error matches") : screen.report.lines ? Theme.say("No errors") : Theme.say("No log")
+                        text: screen.reader.logsBusy ? Theme.say("Reading the log…") : screen.report.problem ? Theme.say("Log could not be read") : screen.filterText !== "" ? Theme.say("No error matches") : screen.report.lines ? Theme.say("No errors") : Theme.say("No log")
                     }
                     Text {
-                        visible: !screen.backend.logsBusy
+                        visible: !screen.reader.logsBusy
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap

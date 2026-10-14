@@ -10,16 +10,7 @@ Column {
     width: parent.width
     visible: Mods.problemsOpen && Mods.comparing === null && !Mods.active.previewing
     spacing: Theme.gapLarge
-    readonly property var groups: {
-        const found = []
-        for (const trouble of Mods.troubles) {
-            let group = found.find(g => g.name === trouble.group)
-            if (!group)
-                found.push(group = { name: trouble.group, error: trouble.error, lines: [] })
-            group.lines.push(trouble)
-        }
-        return found.sort((a, b) => Number(b.error) - Number(a.error))
-    }
+    readonly property var groups: Mods.overview.troubleGroups || []
 
     RowLayout {
         width: parent.width
@@ -54,7 +45,7 @@ Column {
             tone: modelData.error ? Theme.err : Theme.warn
             key: "problems-" + modelData.name
             spacing: Theme.gap
-            readonly property int trusted: modelData.lines.filter(line => line.fix === "trust").length
+            readonly property int trusted: modelData.lines.filter(line => line.fix.action === "trust").length
             Btn {
                 visible: group.trusted > 1
                 text: Theme.fill("Ignore all {} for RimWorld {}", group.trusted, (Mods.overview.gameVersion || ""))
@@ -95,7 +86,6 @@ Column {
                     name: modelData.name
                     words: modelData.words
                     fix: modelData.fix
-                    fixLabel: modelData.fixLabel
                     modId: modelData.modId
                 }
             }

@@ -2,6 +2,7 @@
 //! mod authors did not write themselves. Downloaded only when asked, kept
 //! in RimStack's data folder, never shipped with RimStack.
 
+use crate::error::Error;
 use crate::say;
 
 use crate::about::About;
@@ -10,7 +11,6 @@ use crate::rules::{self, Kind, Rule};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 pub const URL: &str =
     "https://raw.githubusercontent.com/RimSort/Community-Rules-Database/main/communityRules.json";
@@ -119,13 +119,13 @@ impl Community {
     }
 }
 
-pub fn parse(text: &str) -> Result<Community, String> {
-    let root: Value =
-        serde_json::from_str(text).map_err(|e| say!("community rules are not JSON: {}", e))?;
+pub fn parse(text: &str) -> Result<Community, Error> {
+    let root: Value = serde_json::from_str(text)
+        .map_err(|e| Error::format(say!("community rules are not JSON: {}", e)))?;
     let rules = root
         .get("rules")
         .and_then(Value::as_object)
-        .ok_or_else(|| say!("community rules have no \"rules\" list"))?;
+        .ok_or_else(|| Error::format(say!("community rules have no \"rules\" list")))?;
 
     let ids = |entry: &Value, key: &str| -> Vec<String> {
         let targets = entry.get(key).and_then(Value::as_object);
@@ -167,11 +167,12 @@ pub fn works_on_file(data_dir: &Path, game_version: &str) -> PathBuf {
 }
 
 /// The folded package ids in the text of a `ModIdsToFix.xml`.
-pub fn works_on(xml: &str) -> Result<std::collections::HashSet<String>, String> {
+pub fn works_on(xml: &str) -> Result<std::collections::HashSet<String>, Error> {
     let xml = xml.strip_prefix('\u{feff}').unwrap_or(xml);
-    let doc = roxmltree::Document::parse(xml).map_err(|e| say!("the list is not XML: {}", e))?;
+    let doc = roxmltree::Document::parse(xml)
+        .map_err(|e| Error::format(say!("the list is not XML: {}", e)))?;
     if !doc.root_element().has_tag_name("ModIdsToFix") {
-        return Err(say!("the list is not a ModIdsToFix file"));
+        return Err(Error::format(say!("the list is not a ModIdsToFix file")));
     }
     let items = doc
         .root_element()
@@ -195,27 +196,20 @@ pub fn read_works_on(path: &Path) -> std::collections::HashSet<String> {
 pub fn download_works_on(
     game_version: &str,
     to: &Path,
-) -> Result<std::collections::HashSet<String>, String> {
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(30)))
-        .build()
-        .into();
-    let failed = |e: ureq::Error| say!("the download failed: {}", e);
+) -> Result<std::collections::HashSet<String>, Error> {
+    let agent = crate::web::agent(30);
     // No list is published for a game version until someone starts one:
     // that is an empty list, not a failure.
     let text = match agent.get(works_on_url(game_version)).call() {
-        Ok(mut response) => response.body_mut().read_to_string().map_err(failed)?,
+        Ok(mut response) => response
+            .body_mut()
+            .read_to_string()
+            .map_err(crate::web::failed)?,
         Err(ureq::Error::StatusCode(404)) => "<ModIdsToFix></ModIdsToFix>".to_string(),
-        Err(problem) => return Err(failed(problem)),
+        Err(problem) => return Err(crate::web::failed(problem)),
     };
     let parsed = works_on(&text)?;
-    let io = |e: std::io::Error| say!("cannot write {}: {}", to.display(), e);
-    if let Some(dir) = to.parent() {
-        std::fs::create_dir_all(dir).map_err(io)?;
-    }
-    let partial = to.with_extension("xml.part");
-    std::fs::write(&partial, &text).map_err(io)?;
-    std::fs::rename(&partial, to).map_err(io)?;
+    crate::whole::write(to, &text)?;
     Ok(parsed)
 }
 
@@ -224,36 +218,29 @@ pub fn file_in(data_dir: &Path) -> PathBuf {
 }
 
 /// Reads the kept file. `Ok(None)` when it was never downloaded.
-pub fn read(path: &Path) -> Result<Option<Community>, String> {
+pub fn read(path: &Path) -> Result<Option<Community>, Error> {
     match std::fs::read_to_string(path) {
         Ok(text) => parse(&text).map(Some),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(say!("cannot read {}: {}", path.display(), e)),
+        Err(e) => Err(Error::file(path, e)),
     }
 }
 
 /// Checks `text` and keeps it at `to`. A file that does not parse never
 /// replaces a good one, and neither does half a file.
-pub fn store(text: &str, to: &Path) -> Result<Community, String> {
+pub fn store(text: &str, to: &Path) -> Result<Community, Error> {
     let parsed = parse(text)?;
-    let failed = |e: std::io::Error| say!("cannot write {}: {}", to.display(), e);
-    if let Some(dir) = to.parent() {
-        std::fs::create_dir_all(dir).map_err(failed)?;
-    }
-    let partial = to.with_extension("json.part");
-    std::fs::write(&partial, text).map_err(failed)?;
-    std::fs::rename(&partial, to).map_err(failed)?;
+    crate::whole::write(to, text)?;
     Ok(parsed)
 }
 
-pub fn download(to: &Path) -> Result<Community, String> {
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(30)))
-        .build()
-        .into();
-    let failed = |e: ureq::Error| say!("the download failed: {}", e);
-    let mut response = agent.get(URL).call().map_err(failed)?;
-    let text = response.body_mut().read_to_string().map_err(failed)?;
+pub fn download(to: &Path) -> Result<Community, Error> {
+    let agent = crate::web::agent(30);
+    let mut response = agent.get(URL).call().map_err(crate::web::failed)?;
+    let text = response
+        .body_mut()
+        .read_to_string()
+        .map_err(crate::web::failed)?;
     store(&text, to)
 }
 
@@ -348,8 +335,9 @@ mod tests {
 
     #[test]
     fn text_that_is_not_the_rules_file_is_refused() {
-        assert!(parse("<html>").unwrap_err().contains("not JSON"));
-        assert!(parse("{}").unwrap_err().contains("no \"rules\""));
+        let said = |text| parse(text).unwrap_err().to_string();
+        assert!(said("<html>").contains("not JSON"));
+        assert!(said("{}").contains("no \"rules\""));
     }
 
     #[test]

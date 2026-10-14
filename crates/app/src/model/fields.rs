@@ -40,16 +40,9 @@ pub struct ModListModelRust {
     /// one numbered list, -1 headings when the order is close to
     /// category order. Call `reshape` after changing it.
     pub(super) headings: i32,
-    /// Goes up each time a rule of your own is added or removed.
-    pub(super) rules_version: i32,
     /// Goes up each time the mod folders have been read again.
     pub(super) library_version: i32,
     pub(super) rescanning: bool,
-    pub(super) rules_busy: bool,
-    /// The community rules were downloaded while this window was open,
-    /// so they are known to be the latest.
-    pub(super) rules_current: bool,
-    pub(super) rules_problem: QString,
     /// Whether this is the load order of the installed mods: the list
     /// that is checked for problems.
     pub(super) checked: bool,
@@ -61,6 +54,10 @@ pub struct ModListModelRust {
     /// The load order `troubles` was worked out for.
     pub(super) checked_order: Vec<Option<usize>>,
     pub(super) list: GroupedList,
+    /// Per mod of `list`, and its slowest load: worked out once per
+    /// change, since every row on screen asks.
+    pub(super) twins: Vec<bool>,
+    pub(super) slowest: Option<u32>,
     pub(super) preview: Option<Preview>,
 }
 
@@ -85,12 +82,8 @@ impl Default for ModListModelRust {
             files_read: false,
             by_name: false,
             headings: -1,
-            rules_version: 0,
             library_version: 0,
             rescanning: false,
-            rules_busy: false,
-            rules_current: false,
-            rules_problem: QString::default(),
             checked: false,
             installed: false,
             batching: false,
@@ -98,6 +91,8 @@ impl Default for ModListModelRust {
             version_ignored: Vec::new(),
             checked_order: Vec::new(),
             list: GroupedList::new(Vec::new()),
+            twins: Vec::new(),
+            slowest: None,
             preview: None,
         }
     }

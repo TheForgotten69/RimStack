@@ -26,9 +26,9 @@ Rectangle {
         Btn { icon: "tag"; text: Theme.say("Tag…"); tip: Theme.say("Adds a tag to every selected mod"); onClicked: Mods.bulkRequested("tag") }
         Btn { text: Theme.say("Group…"); tip: Theme.say("Makes a tag the first of every selected mod: inside a category they are kept side by side under it"); onClicked: Mods.bulkRequested("sub") }
         Btn { visible: Mods.versionWarned.length > 0; icon: "eye-off"; text: Theme.fill("Ignore version warning  {}", Mods.versionWarned.length); tip: Theme.say("No warning about the game version for the selected mods that have one"); onClicked: Mods.trustSelected(true) }
-        Rectangle { visible: Mods.selectedActive && Mods.shownBy === ""; implicitWidth: 1; implicitHeight: Theme.sized(16); color: Theme.line }
-        Btn { visible: Mods.selectedActive && Mods.shownBy === ""; icon: "arrow-up"; text: Theme.say("To top"); tip: Theme.say("To the top of their category"); onClicked: Mods.selectedToEdge(true) }
-        Btn { visible: Mods.selectedActive && Mods.shownBy === ""; icon: "arrow-down"; text: Theme.say("To bottom"); tip: Theme.say("To the bottom of their category"); onClicked: Mods.selectedToEdge(false) }
+        Rectangle { visible: Mods.selectedActive && Mods.columns.shownBy === ""; implicitWidth: 1; implicitHeight: Theme.sized(16); color: Theme.line }
+        Btn { visible: Mods.selectedActive && Mods.columns.shownBy === ""; icon: "arrow-up"; text: Theme.say("To top"); tip: Theme.say("To the top of their category"); onClicked: Mods.selectedToEdge(true) }
+        Btn { visible: Mods.selectedActive && Mods.columns.shownBy === ""; icon: "arrow-down"; text: Theme.say("To bottom"); tip: Theme.say("To the bottom of their category"); onClicked: Mods.selectedToEdge(false) }
         Item { implicitWidth: Theme.gapWide }
         Btn { text: Theme.say("Clear selection"); tip: Theme.say("Clear the selection (Esc)"); onClicked: Mods.select(-1, false) }
     }

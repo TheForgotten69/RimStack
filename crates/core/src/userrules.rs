@@ -2,6 +2,7 @@
 //! community's rules and the mods' own.
 
 use crate::about::About;
+use crate::error::Error;
 use crate::id;
 use crate::rules::{self, Kind, Rule};
 use serde_json::{json, Value};
@@ -16,10 +17,7 @@ pub struct UserRules {
 impl UserRules {
     /// No file, or a damaged one, is no rules.
     pub fn read(path: &Path) -> Self {
-        let Ok(text) = std::fs::read_to_string(path) else {
-            return Self::default();
-        };
-        let Ok(Value::Array(items)) = serde_json::from_str(&text) else {
+        let Some(Value::Array(items)) = crate::whole::read_json(path) else {
             return Self::default();
         };
         let pair = |item: &Value| -> Option<(String, String)> {
@@ -31,18 +29,15 @@ impl UserRules {
         }
     }
 
-    pub fn write(&self, path: &Path) -> Result<(), String> {
-        let failed = |e: std::io::Error| format!("{}: {e}", path.display());
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(failed)?;
-        }
+    pub fn write(&self, path: &Path) -> Result<(), Error> {
         let items: Vec<Value> = self
             .pairs
             .iter()
             .map(|(first, then)| json!({ "first": first, "then": then }))
             .collect();
-        let text = serde_json::to_string_pretty(&Value::Array(items)).unwrap_or_default();
-        std::fs::write(path, text).map_err(failed)
+        let text = serde_json::to_string_pretty(&Value::Array(items))
+            .map_err(|e| Error::format(format!("{}: {e}", path.display())))?;
+        crate::whole::write(path, text)
     }
 
     /// Adds "`first` loads before `then`". The opposite rule, if there was

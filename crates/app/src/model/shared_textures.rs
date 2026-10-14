@@ -7,7 +7,7 @@ impl qobject::ModListModel {
     /// The library ids of the active mods that share a texture with
     /// another active mod.
     pub(crate) fn in_conflict(&self) -> std::collections::HashSet<usize> {
-        let known = crate::CONFLICTS.read().unwrap_or_else(|e| e.into_inner());
+        let known = crate::app().conflicts().reading();
         let Some(known) = known.as_ref() else {
             return Default::default();
         };
@@ -16,11 +16,12 @@ impl qobject::ModListModel {
     }
 
     pub(crate) fn is_new(&self, m: &Mod) -> bool {
-        let installed = match (crate::library(), m.installed) {
+        let loaded = crate::app().library();
+        let installed = match (&*loaded, m.installed) {
             (Ok((library, _)), Some(i)) => library.installed.get(i),
             _ => None,
         };
-        let seen = crate::SEEN.read().unwrap_or_else(|e| e.into_inner());
+        let seen = crate::app().seen().reading();
         installed.is_some_and(|i| seen.is_new(&i.path.to_string_lossy()))
     }
 
@@ -35,8 +36,9 @@ impl qobject::ModListModel {
     pub(crate) fn flags(&self) -> Vec<u16> {
         use rimstack_core::list::flag;
         let conflict = self.in_conflict();
-        let behind = crate::BEHIND.read().unwrap_or_else(|e| e.into_inner());
-        let library = crate::library().as_ref().ok();
+        let behind = crate::app().behind().reading();
+        let loaded = crate::app().library();
+        let library = loaded.as_ref().as_ref().ok();
         let installed = library
             .map(|l| l.0.installed.as_slice())
             .unwrap_or_default();
@@ -47,8 +49,10 @@ impl qobject::ModListModel {
         let week_ago = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |now| now.as_secs().saturating_sub(7 * 24 * 3600));
-        let in_save = crate::NEWEST_SAVE.as_ref().filter(|_| self.checked);
-        let session = crate::session();
+        let newest_save = crate::app().newest_save();
+        let in_save = newest_save.as_ref().as_ref().filter(|_| self.checked);
+        let steam_record = crate::app().steam_record();
+        let session = crate::app().session();
         let changes = session.changes();
         let changed: std::collections::HashSet<&str> = match self.checked {
             true => changes
@@ -82,12 +86,7 @@ impl qobject::ModListModel {
             if in_save.is_some_and(|ids| !ids.contains(&key)) {
                 flags |= flag::NOT_IN_SAVE;
             }
-            if folder.is_some_and(|f| {
-                crate::STEAM_RECORD
-                    .0
-                    .get(f)
-                    .is_some_and(|at| *at >= week_ago)
-            }) {
+            if folder.is_some_and(|f| steam_record.0.get(f).is_some_and(|at| *at >= week_ago)) {
                 flags |= flag::RECENT;
             }
             if copies.get(&key).is_some_and(|n| *n > 1) {
@@ -106,45 +105,54 @@ impl qobject::ModListModel {
 
     /// Works out, in the background, which active mods provide the same
     /// textures; unless that is already known for this set of mods.
-    pub(crate) fn find_conflicts(mut self: Pin<&mut Self>, library: &'static Library) {
+    pub(crate) fn find_conflicts(mut self: Pin<&mut Self>, loaded: std::sync::Arc<crate::Loaded>) {
         let mut members: Vec<usize> = self.checked_order.iter().flatten().copied().collect();
         members.sort_unstable();
         members.dedup();
-        let known = crate::CONFLICTS.read().unwrap_or_else(|e| e.into_inner());
+        let known = crate::app().conflicts().reading();
         let already = known.as_ref().is_some_and(|c| c.members == members);
         drop(known);
         self.as_mut().set_files_read(already);
         if already {
             return;
         }
-        let qt_thread = self.qt_thread();
-        std::thread::spawn(move || {
-            let active: std::collections::HashSet<String> = members
-                .iter()
-                .filter_map(|&i| library.installed[i].key())
-                .collect();
-            let read: Vec<(Vec<String>, infer::Scanned)> = members
-                .par_iter()
-                .map(|&i| {
-                    let root = &library.installed[i].path;
-                    let loaded =
-                        loadfolders::folders(root, &library.game_version, &|m| active.contains(m));
-                    (conflicts::provided(&loaded), infer::scan(&loaded))
-                })
-                .collect();
-            let (provided, scanned): (Vec<_>, Vec<_>) = read.into_iter().unzip();
-            let found = crate::Conflicts {
-                overlaps: conflicts::overlaps(&provided),
-                scanned: members.iter().copied().zip(scanned).collect(),
-                members,
+        let read = move || {
+            let Ok((library, _)) = &*loaded else {
+                return false;
             };
-            *crate::CONFLICTS.write().unwrap_or_else(|e| e.into_inner()) = Some(found);
-            let _ = qt_thread.queue(|mut model| {
+            *crate::app().conflicts().writing() = Some(read_files(library, members));
+            true
+        };
+        crate::background::run(self.qt_thread(), read, |mut model, read| {
+            if read {
                 model.as_mut().set_files_read(true);
                 model.as_mut().refile();
                 let next = model.conflicts_version + 1;
                 model.as_mut().set_conflicts_version(next);
-            });
+            }
         });
+    }
+}
+
+/// What the files of these mods (library ids, ascending) provide and
+/// point at, each read from the folders the game would load it from.
+fn read_files(library: &rimstack_core::library::Library, members: Vec<usize>) -> crate::Conflicts {
+    let active: std::collections::HashSet<String> = members
+        .iter()
+        .filter_map(|&i| library.installed[i].key())
+        .collect();
+    let read: Vec<(Vec<String>, infer::Scanned)> = members
+        .par_iter()
+        .map(|&i| {
+            let root = &library.installed[i].path;
+            let loaded = loadfolders::folders(root, &library.game_version, &|m| active.contains(m));
+            (conflicts::provided(&loaded), infer::scan(&loaded))
+        })
+        .collect();
+    let (provided, scanned): (Vec<_>, Vec<_>) = read.into_iter().unzip();
+    crate::Conflicts {
+        overlaps: conflicts::overlaps(&provided),
+        scanned: members.iter().copied().zip(scanned).collect(),
+        members,
     }
 }

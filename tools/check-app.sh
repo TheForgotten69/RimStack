@@ -4,6 +4,8 @@
 # folder first; the real ones are only read.
 #
 #   cargo build -p rimstack-app --release && tools/check-app.sh
+#
+# RIMSTACK_LANGUAGE=Français runs them with that language chosen.
 set -euo pipefail
 
 real="${RIMSTACK_CONFIG:-$HOME/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios}"
@@ -12,6 +14,11 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 mkdir -p "$tmp/config/Config" "$tmp/data/RimStack"
+language="${RIMSTACK_LANGUAGE:-}"
+for settings in settings settings2; do
+    mkdir -p "$tmp/$settings/RimStack"
+    printf '{ "language": "%s" }' "$language" > "$tmp/$settings/RimStack/settings.json"
+done
 cp "$real/Config/ModsConfig.xml" "$tmp/config/Config/"
 cp "$tmp/config/Config/ModsConfig.xml" "$tmp/original.xml"
 # Sort with the same community rules as the real run, if there are any.
@@ -73,7 +80,7 @@ echo "check ok    after unhiding, the two mods are exactly as they were"
 mkdir -p "$tmp/workshop-b/900001/About" "$tmp/settings3/RimStack" "$tmp/config3/Config"
 printf '<ModMetaData><name>third</name><packageId>check.third</packageId><supportedVersions><li>1.6</li></supportedVersions></ModMetaData>' > "$tmp/workshop-b/900001/About/About.xml"
 cp "$tmp/config2/Config/ModsConfig.xml" "$tmp/config3/Config/"
-printf '{ "workshop": "%s", "setupDone": "yes" }' "$tmp/empty-workshop" > "$tmp/settings3/RimStack/settings.json"
+printf '{ "workshop": "%s", "setupDone": "yes", "language": "%s" }' "$tmp/empty-workshop" "$language" > "$tmp/settings3/RimStack/settings.json"
 live="$tmp/live.log"
 RIMSTACK_GAME="$game" RIMSTACK_CONFIG="$tmp/config3" XDG_DATA_HOME="$tmp/data3" XDG_CONFIG_HOME="$tmp/settings3" \
     QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 timeout 60 "$app" --check=live "--live-folder=$tmp/workshop-b" > "$live" 2>&1 &
@@ -85,5 +92,6 @@ sleep 4
 sed -i '/check.second/d' "$tmp/config3/Config/ModsConfig.xml"
 wait "$shown" && ok=0 || ok=$?
 grep -E '^qml: check (ok|FAIL)' "$live" | sed 's/^qml: //'
-rm -rf "$game/Mods/fourth"
+[ -f "$game/Mods/900001/About/About.xml" ] || fail "the copied mod is not in the game's own Mods folder"
+rm -rf "$game/Mods/fourth" "$game/Mods/900001"
 [ "$ok" = 0 ] || fail "the live changes"

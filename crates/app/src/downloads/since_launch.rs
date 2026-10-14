@@ -10,30 +10,43 @@ const MOST_ASKED: usize = 40;
 const MOST_NOTES: usize = 4;
 
 fn at_launch_file() -> PathBuf {
-    crate::data_dir().join("at-launch.json")
+    crate::app().data_dir().join("at-launch.json")
 }
 
 /// Notes the versions on disk now, for the next comparison.
-pub(super) fn record_versions() {
+pub(crate) fn record_versions() {
     let record = AtLaunch {
-        time: now(),
-        workshop: steam_record()
+        time: now_secs(),
+        workshop: steam_record(crate::app())
             .map(|acf| workshop::installed_times(&acf))
             .unwrap_or_default(),
     };
     if let Err(problem) = record.write(&at_launch_file()) {
-        eprintln!("{problem}");
+        rimstack_core::problem!("{problem}");
     }
 }
 
-fn notes(found: &[changes::Note]) -> Vec<Value> {
-    let shown = found.iter().take(MOST_NOTES);
-    shown
-        .map(|n| json!({ "time": n.time, "text": n.text }))
-        .collect()
+/// The first few of a mod's notes: all the screen has room for.
+fn shown(found: &[changes::Note]) -> &[changes::Note] {
+    &found[..found.len().min(MOST_NOTES)]
 }
 
-impl qobject::Backend {
+/// When the game's newest log was written: it writes one at every start.
+fn logged() -> Option<u64> {
+    let paths = crate::app().paths();
+    let newest = rimstack_core::logs::files(paths.config.as_ref()?)
+        .into_iter()
+        .next()?;
+    let written = std::fs::metadata(newest).ok()?.modified().ok()?;
+    Some(
+        written
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()?
+            .as_secs(),
+    )
+}
+
+impl qobject::Downloads {
     /// The game was seen starting, whoever started it: what it loads now
     /// is what later changes are counted from.
     pub(super) fn note_game_started(&self) {
@@ -46,76 +59,48 @@ impl qobject::Backend {
     /// notes come with `fetchChangeNotes`.
     pub(super) fn since_launch(&self) -> QString {
         let none = || QString::from(&json!({ "time": 0, "items": [] }).to_string());
-        let Ok((library, _)) = crate::library() else {
+        let loaded = crate::app().library();
+        let Ok((library, _)) = &*loaded else {
             return none();
         };
-        let now = steam_record()
+        let now = steam_record(crate::app())
             .map(|acf| workshop::installed_times(&acf))
             .unwrap_or_default();
-        // Without a record of the versions, the time of the launch says
-        // which were published since.
-        let launched = launches::read(&launches_file()).pop().map(|l| l.time);
-        let logged = crate::PATHS.config.as_ref().and_then(|config| {
-            let newest = rimstack_core::logs::files(config).into_iter().next()?;
-            let written = std::fs::metadata(newest).ok()?.modified().ok()?;
-            Some(
-                written
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .ok()?
-                    .as_secs(),
-            )
-        });
-        let last = changes::counted_from(launched, logged);
-        let (time, updated) = match (AtLaunch::read(&at_launch_file()), last) {
-            (Some(record), _) => (record.time, record.updated(&now)),
-            (None, Some(time)) => {
-                let since = now.iter().filter(|(_, at)| **at > time);
-                (time, since.map(|(id, _)| (id.clone(), time)).collect())
-            }
-            (None, None) => return none(),
+        let launched = launches::read(&launches_file(crate::app()))
+            .pop()
+            .map(|l| l.time);
+        let record = AtLaunch::read(&at_launch_file());
+        let last = changes::counted_from(launched, logged());
+        let Some((time, updated)) = changes::since(record.as_ref(), last, &now) else {
+            return none();
         };
 
-        let active: std::collections::HashSet<usize> = {
-            let list = crate::session().current().to_vec();
-            let arranged = library.arrange(&list);
-            arranged.active.iter().filter_map(|m| m.installed).collect()
-        };
-        let mods = workshop_mods(library);
-        let mut items: Vec<Value> = updated
-            .iter()
-            .filter_map(|(id, was)| {
-                let i = *mods.get(id.as_str())?;
-                Some(json!({
-                    "kind": "workshop", "id": id, "modId": i,
-                    "name": library.installed[i].display_name(),
-                    "active": active.contains(&i), "was": was, "now": now.get(id), "notes": [],
-                }))
-            })
-            .collect();
-        for (i, m) in library.installed.iter().enumerate().filter(|(_, m)| m.git) {
+        use rimstack_core::downloads::{changed, items, newest_first, Changed};
+        let active = crate::app().active_now(library);
+        let mut rows = changed(&items(library, &active), &updated, &now);
+        for (mod_id, m) in library.installed.iter().enumerate().filter(|(_, m)| m.git) {
             let commits = changes::git_notes(&m.path, time);
             if let Some(newest) = commits.first() {
-                items.push(json!({
-                    "kind": "git", "id": m.path.to_string_lossy(), "modId": i,
-                    "name": m.display_name(), "active": active.contains(&i),
-                    "was": time, "now": newest.time, "notes": notes(&commits),
-                }));
+                rows.push(Changed {
+                    kind: "git",
+                    id: m.path.to_string_lossy().into_owned(),
+                    mod_id,
+                    name: m.display_name().to_string(),
+                    active: active.contains(&mod_id),
+                    was: time,
+                    now: Some(newest.time),
+                    notes: shown(&commits).to_vec(),
+                });
             }
         }
-        items.sort_by_key(|v| {
-            (
-                !v["active"].as_bool().unwrap_or(false),
-                std::cmp::Reverse(v["now"].as_u64()),
-            )
-        });
-        QString::from(&json!({ "time": time, "items": items }).to_string())
+        QString::from(&json!({ "time": time, "items": newest_first(rows) }).to_string())
     }
 
     /// The newest commits of the Git checkout in this folder, as a JSON
     /// array of `{ time, text }`. Read from the checkout; no network.
     pub(super) fn git_notes(&self, folder: &QString) -> QString {
         let commits = changes::git_notes(std::path::Path::new(&folder.to_string()), 0);
-        QString::from(&Value::Array(notes(&commits)).to_string())
+        QString::from(&json!(shown(&commits)).to_string())
     }
 
     /// Asks Steam's site for the change notes of these Workshop mods, in
@@ -157,16 +142,7 @@ impl qobject::Backend {
             state(0, 0, false);
             while let Some((id, was)) = asked.get(at) {
                 let said = match changes::fetch_steam_notes(id) {
-                    Ok(all) => {
-                        let newer: Vec<changes::Note> =
-                            all.iter().filter(|n| n.time > *was).cloned().collect();
-                        let shown = if newer.is_empty() {
-                            &all[..all.len().min(1)]
-                        } else {
-                            &newer[..]
-                        };
-                        json!(notes(shown))
-                    }
+                    Ok(all) => json!(shown(changes::worth_showing(&all, *was))),
                     Err(changes::NotesProblem::Refused { wait }) => {
                         refusals += 1;
                         let Some(pause) = changes::pause_after_refusal(refusals, wait) else {

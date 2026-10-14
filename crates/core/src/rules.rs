@@ -7,8 +7,8 @@ use crate::about::About;
 use crate::id;
 use std::collections::HashMap;
 
-/// Where a rule comes from. Later variants are stronger: when rules loop,
-/// the weakest is the one dropped.
+/// Where a rule comes from. When rules loop, the weakest by `strength`
+/// is the one dropped.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Kind {
     /// Community: this mod belongs at the bottom of the list.

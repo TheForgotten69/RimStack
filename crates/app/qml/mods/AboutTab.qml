@@ -3,7 +3,6 @@
 // filed, your tags and note, and its latest changes.
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import RimStack.Ui
 
@@ -14,15 +13,10 @@ Column {
     visible: Mods.tab === 0
     topPadding: Theme.gapLarge
     spacing: Theme.gapCard
-    // "<! for an error>sentence<tab>fix<tab>the fix's button" per problem.
-    readonly property var clashes: (Mods.info.losesTo ? Mods.info.losesTo.split("\n").map(l => "loses\t" + l) : [])
-        .concat(Mods.info.winsOver ? Mods.info.winsOver.split("\n").map(l => "wins\t" + l) : [])
+    readonly property var clashes: (Mods.info.losesTo || []).map(c => ({ loses: true, clash: c }))
+        .concat((Mods.info.winsOver || []).map(c => ({ loses: false, clash: c })))
     readonly property string linkColour: "<style>a { color: " + Theme.focus + "; }</style>"
-    readonly property var problems: Mods.info.problems ? String(Mods.info.problems).split("\n").map(line => {
-        const error = line.charAt(0) === "!"
-        const part = (error ? line.substring(1) : line).split("\t")
-        return { error: error, words: part[0], fix: part[1] || "", fixLabel: part[2] || "" }
-    }) : []
+    readonly property var problems: Mods.info.problems || []
 
     Card {
         visible: side.problems.length > 0 || !!Mods.info.unreadable || !!Mods.info.versionOk
@@ -37,14 +31,13 @@ Column {
                 error: modelData.error
                 words: modelData.words
                 fix: modelData.fix
-                fixLabel: modelData.fixLabel
                 modId: Mods.selectedId
             }
         }
         // The banner's action, for when the banner is not there.
         Btn {
-            readonly property int alike: Mods.troubles.filter(t => t.fix === "trust").length
-            visible: alike > 1 && side.problems.some(p => p.fix === "trust") && !Mods.active.previewing
+            readonly property int alike: Mods.overview.versionOnly || 0
+            visible: alike > 1 && side.problems.some(p => p.fix.action === "trust") && !Mods.active.previewing
             text: Theme.fill("Ignore all {} for RimWorld {}", alike, (Mods.overview.gameVersion || ""))
             tip: Theme.say("No warning about the game version while RimWorld stays on this version.")
             onClicked: Mods.setVersionAside(Mods.overview.gameVersion || "")
@@ -82,25 +75,24 @@ Column {
         spacing: Theme.gap
         Repeater {
             id: conflictLines
-            // "<loses|wins><tab>name<tab>N textures<tab>id"
             model: side.clashes
             Column {
                 id: clash
-                required property string modelData
-                readonly property var parts: modelData.split("\t")
-                readonly property bool loses: parts[0] === "loses"
+                required property var modelData
+                readonly property bool loses: modelData.loses
+                readonly property var other: modelData.clash
                 width: side.width
                 spacing: Theme.gapTiny
                 RowLayout {
                     width: parent.width
                     spacing: Theme.gapSmall
-                    Chip { tone: clash.loses ? Theme.warn : Theme.ok; icon: clash.loses ? "arrow-down" : "arrow-up"; text: Theme.fill(clash.loses ? "loses {}" : "wins {}", clash.parts[2].split(" ")[0]) }
-                    Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: clash.parts[1] }
+                    Chip { tone: clash.loses ? Theme.warn : Theme.ok; icon: clash.loses ? "arrow-down" : "arrow-up"; text: Theme.fill(clash.loses ? "loses {}" : "wins {}", clash.other.textures) }
+                    Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: clash.other.name }
                 }
                 Row {
                     spacing: Theme.gapSmall
-                    Btn { text: Theme.say("Compare"); tip: Theme.say("Both mods' versions of each shared texture, side by side"); onClicked: Mods.compareWith(Number(clash.parts[3])) }
-                    Btn { visible: clash.loses; enabled: !Mods.active.previewing; text: Theme.say("Win all"); tip: Theme.say("Adds an own rule: this mod loads after the other."); onClicked: Mods.winAll(Number(clash.parts[3])) }
+                    Btn { text: Theme.say("Compare"); tip: Theme.say("Both mods' versions of each shared texture, side by side"); onClicked: Mods.compareWith(clash.other.modId) }
+                    Btn { visible: clash.loses; enabled: !Mods.active.previewing; text: Theme.say("Win all"); tip: Theme.say("Adds an own rule: this mod loads after the other."); onClicked: Mods.winAll(clash.other.modId) }
                 }
             }
         }
@@ -232,8 +224,8 @@ Column {
         // checkout's commits, read from its folder.
         readonly property bool workshop: Mods.info.source === "Workshop"
         readonly property bool git: !workshop && !!Mods.info.repository
-        readonly property var fetched: Mods.backend && Mods.backend.changeNotes ? JSON.parse(Mods.backend.changeNotes) : ({})
-        readonly property var notes: workshop ? (fetched[Mods.info.folder] || []) : git && Mods.backend ? JSON.parse(Mods.backend.gitNotes(Mods.info.path || "")) : []
+        readonly property var fetched: Mods.backend && Mods.downloads.changeNotes ? JSON.parse(Mods.downloads.changeNotes) : ({})
+        readonly property var notes: workshop ? (fetched[Mods.info.folder] || []) : git && Mods.backend ? JSON.parse(Mods.downloads.gitNotes(Mods.info.path || "")) : []
         visible: !Theme.demo && (workshop || git)
         title: Theme.say("Latest changes")
         key: "about-changes"
@@ -241,10 +233,10 @@ Column {
         actions: [
             AskSteam {
                 visible: latest.workshop
-                backend: Mods.backend
+                downloads: Mods.downloads
                 idle: latest.notes.length > 0 ? Theme.say("Fetch again") : Theme.say("Fetch")
                 tip: Theme.say("Reads this mod's change notes from its Workshop page. Only its Workshop id is sent.")
-                onClicked: Mods.backend.fetchChangeNotes(JSON.stringify([[Mods.info.folder, 0]]))
+                onClicked: Mods.downloads.fetchChangeNotes(JSON.stringify([[Mods.info.folder, 0]]))
             },
             Btn { visible: latest.workshop; icon: "external-link"; spoken: Theme.fill("Change notes of {}", Mods.info.name || ""); tip: Theme.say("The mod's change notes on the Workshop."); onClicked: Theme.openChangeNotes(Mods.info.folder) }
         ]

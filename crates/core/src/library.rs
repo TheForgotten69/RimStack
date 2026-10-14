@@ -1,5 +1,6 @@
 //! The installed mods and which of them are active.
 
+use crate::error::Error;
 use crate::say;
 use crate::tongue::named;
 
@@ -368,6 +369,21 @@ impl Library {
         found.into_iter().take(most).map(|f| f.3).collect()
     }
 
+    /// The installed Workshop mods: library id by Workshop id.
+    pub fn workshop_mods(&self) -> HashMap<&str, usize> {
+        let installed = self.installed.iter().enumerate();
+        installed
+            .filter(|(_, m)| m.source == Source::Workshop)
+            .map(|(i, m)| (m.folder.as_str(), i))
+            .collect()
+    }
+
+    /// The library ids of the installed mods a load order names.
+    pub fn active_ids(&self, ids: &[String]) -> std::collections::HashSet<usize> {
+        let active = self.arrange(ids).active;
+        active.iter().filter_map(|m| m.installed).collect()
+    }
+
     /// Splits the installed mods into those named by `ids` (package ids as
     /// `ModsConfig.xml` writes them, in load order) and the rest.
     pub fn arrange(&self, ids: &[String]) -> Arranged {
@@ -481,15 +497,17 @@ pub fn build(mods: Vec<Installed>, active: &[String], game_version: &str) -> Lib
     library
 }
 
-pub fn load(paths: &Paths) -> Result<Library, String> {
+pub fn load(paths: &Paths) -> Result<Library, Error> {
     let roots = paths.roots();
     if roots.is_empty() {
-        return Err(say!(
+        return Err(Error::refused(say!(
             "RimWorld was not found. Set RIMSTACK_GAME to its folder."
-        ));
+        )));
     }
     let config = paths.mods_config().ok_or_else(|| {
-        say!("RimWorld's settings folder was not found. Set RIMSTACK_CONFIG to it.")
+        Error::refused(say!(
+            "RimWorld's settings folder was not found. Set RIMSTACK_CONFIG to it."
+        ))
     })?;
     let active = crate::modsconfig::read(&config)?.active;
     let version = paths.game_version.as_deref().unwrap_or_default();

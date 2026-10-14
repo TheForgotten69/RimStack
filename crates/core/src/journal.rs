@@ -1,6 +1,7 @@
 //! What RimStack changed, newest last: a save, a sort, textures set
 //! aside, a download. Each entry says how to take it back, where it can be.
 
+use crate::error::Error;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -24,16 +25,12 @@ pub fn read(file: &Path) -> Vec<Entry> {
     serde_json::from_str(&text).unwrap_or_default()
 }
 
-pub fn add(file: &Path, entry: Entry) -> Result<(), String> {
-    let failed = |e: std::io::Error| format!("{}: {e}", file.display());
+pub fn add(file: &Path, entry: Entry) -> Result<(), Error> {
     let mut entries = read(file);
     entries.push(entry);
     let from = entries.len().saturating_sub(KEPT);
-    if let Some(dir) = file.parent() {
-        std::fs::create_dir_all(dir).map_err(failed)?;
-    }
-    let text = serde_json::to_string(&entries[from..]).map_err(|e| e.to_string())?;
-    std::fs::write(file, text).map_err(failed)
+    let text = serde_json::to_string(&entries[from..]).map_err(|e| Error::format(e.to_string()))?;
+    crate::whole::write(file, text)
 }
 
 #[cfg(test)]

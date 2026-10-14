@@ -1085,7 +1085,7 @@ dependencies = [
 
 [[package]]
 name = "rimstack-app"
-version = "0.0.0"
+version = "1.0.0"
 dependencies = [
  "cxx",
  "cxx-qt",
@@ -1093,13 +1093,15 @@ dependencies = [
  "cxx-qt-lib",
  "rayon",
  "rimstack-core",
+ "serde",
  "serde_json",
+ "tempfile",
  "trash",
 ]
 
 [[package]]
 name = "rimstack-core"
-version = "0.0.0"
+version = "1.0.0"
 dependencies = [
  "flate2",
  "image 0.25.10",

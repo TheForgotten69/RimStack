@@ -7,12 +7,13 @@
 //! the `--steamworks=` argument) that ends as soon as Steam has the
 //! requests.
 
+use crate::error::Error;
 use crate::say;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-const GAME: &str = "294100";
+use crate::paths::APP_ID as GAME;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
@@ -76,19 +77,22 @@ fn workshop_interface(
 
 /// Asks Steam, which must be running, to subscribe to, unsubscribe from
 /// or download these Workshop items. Steam then downloads or removes them.
-pub fn act(library: &Path, action: Action, ids: &[u64]) -> Result<(), String> {
+pub fn act(library: &Path, action: Action, ids: &[u64]) -> Result<(), Error> {
     type Item = unsafe extern "C" fn(*mut std::ffi::c_void, u64) -> u64;
     // ISteamUGC::DownloadItem(id, high priority): true when Steam took it.
     type Fetch = unsafe extern "C" fn(*mut std::ffi::c_void, u64, bool) -> bool;
+    enum Ask<'a> {
+        Item(libloading::Symbol<'a, Item>),
+        Fetch(libloading::Symbol<'a, Fetch>),
+    }
     std::env::set_var("SteamAppId", GAME);
     std::env::set_var("SteamGameId", GAME);
-    let missing = |what: &str| say!("the game's Steam library has no {}", what);
+    let missing = |what: &str| Error::program(say!("the game's Steam library has no {}", what));
     // SAFETY: the game's own Steamworks library, called as its flat C
     // interface is declared: Init before anything else, the Workshop
     // interface only while initialised, Shutdown last.
     unsafe {
-        let steam =
-            libloading::Library::new(library).map_err(|e| format!("{}: {e}", library.display()))?;
+        let steam = libloading::Library::new(library).map_err(|e| Error::file(library, e))?;
         let init: libloading::Symbol<unsafe extern "C" fn() -> bool> = steam
             .get(b"SteamAPI_Init\0")
             .map_err(|_| missing("SteamAPI_Init"))?;
@@ -98,31 +102,37 @@ pub fn act(library: &Path, action: Action, ids: &[u64]) -> Result<(), String> {
         let shutdown: libloading::Symbol<unsafe extern "C" fn()> = steam
             .get(b"SteamAPI_Shutdown\0")
             .map_err(|_| missing("SteamAPI_Shutdown"))?;
-        let name: &[u8] = match action {
-            Action::Subscribe => b"SteamAPI_ISteamUGC_SubscribeItem\0",
-            Action::Unsubscribe => b"SteamAPI_ISteamUGC_UnsubscribeItem\0",
-            Action::Download => b"SteamAPI_ISteamUGC_DownloadItem\0",
-        };
         // Looked up before Init so a library without it leaves Steam alone.
-        let ask: libloading::Symbol<Item> =
-            steam.get(name).map_err(|_| missing("way to do that"))?;
-        let fetch: libloading::Symbol<Fetch> =
-            steam.get(name).map_err(|_| missing("way to do that"))?;
+        // Each under the one signature the flat API declares for it.
+        let ask = match action {
+            Action::Subscribe => steam
+                .get(b"SteamAPI_ISteamUGC_SubscribeItem\0")
+                .map(Ask::Item),
+            Action::Unsubscribe => steam
+                .get(b"SteamAPI_ISteamUGC_UnsubscribeItem\0")
+                .map(Ask::Item),
+            Action::Download => steam
+                .get(b"SteamAPI_ISteamUGC_DownloadItem\0")
+                .map(Ask::Fetch),
+        }
+        .map_err(|_| missing("way to do that"))?;
         let interface = workshop_interface(&steam).ok_or_else(|| missing("Workshop interface"))?;
         if !init() {
-            return Err(say!("Steam is not running, or does not own the game"));
+            return Err(Error::program(say!(
+                "Steam is not running, or does not own the game"
+            )));
         }
         let workshop = interface();
         if workshop.is_null() {
             shutdown();
-            return Err(say!("Steam gave no Workshop interface"));
+            return Err(Error::program(say!("Steam gave no Workshop interface")));
         }
         let mut refused = 0;
         for id in ids {
-            match action {
-                Action::Download => refused += usize::from(!fetch(workshop, *id, true)),
-                Action::Subscribe | Action::Unsubscribe => {
-                    ask(workshop, *id);
+            match &ask {
+                Ask::Fetch(fetch) => refused += usize::from(!fetch(workshop, *id, true)),
+                Ask::Item(item) => {
+                    item(workshop, *id);
                 }
             }
         }
@@ -133,7 +143,11 @@ pub fn act(library: &Path, action: Action, ids: &[u64]) -> Result<(), String> {
         }
         shutdown();
         if refused > 0 {
-            return Err(say!("Steam refused {} of {}", refused, ids.len()));
+            return Err(Error::program(say!(
+                "Steam refused {} of {}",
+                refused,
+                ids.len()
+            )));
         }
     }
     Ok(())

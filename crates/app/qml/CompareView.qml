@@ -10,7 +10,7 @@ import RimStack.Ui
 Rectangle {
     id: view
 
-    required property Backend backend
+    required property TextureTools textureTools
     // The two mods by library id; `earlier` is the one that loads first.
     property int earlier: -1
     property int later: -1
@@ -47,7 +47,7 @@ Rectangle {
     property real panY: 0.5
 
     function reload() {
-        const text = backend.compare(earlier, later)
+        const text = textureTools.compare(earlier, later)
         report = text ? JSON.parse(text) : ({})
         chosen = Math.min(chosen, Math.max(0, textures.length - 1))
     }
@@ -55,14 +55,14 @@ Rectangle {
     function keep(earlierOne) {
         if (!texture)
             return
-        problem = backend.keepTexture(texture.earlier, texture.later, earlierOne)
+        problem = textureTools.keepTexture(texture.earlier, texture.later, earlierOne)
         reload()
         changed()
     }
 
     function keepAll(earlierOnes) {
         for (const t of all) {
-            problem = backend.keepTexture(t.earlier, t.later, earlierOnes)
+            problem = textureTools.keepTexture(t.earlier, t.later, earlierOnes)
             if (problem !== "")
                 break
         }
@@ -312,7 +312,7 @@ Rectangle {
                 Layout.topMargin: Theme.gapTiny
                 spacing: Theme.gap
                 // Worked out when this mode shows a texture, not before.
-                readonly property var found: visible && view.texture ? JSON.parse(view.backend.textureDifference(view.texture.earlierShown, view.texture.laterShown)) : ({})
+                readonly property var found: visible && view.texture ? JSON.parse(view.textureTools.textureDifference(view.texture.earlierShown, view.texture.laterShown)) : ({})
                 Picture { Layout.fillWidth: true; Layout.fillHeight: true; named: Theme.say("Where the two pictures differ"); file: differing.found.file || "" }
                 Text {
                     Layout.fillWidth: true

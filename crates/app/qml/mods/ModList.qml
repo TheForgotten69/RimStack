@@ -16,13 +16,13 @@ ListView {
     // The chosen columns the width has room for beside a readable name:
     // Author narrows first; then Load goes, then Author, then Version.
     function roomBeside(shown, author) {
-        const taken = shown.reduce((sum, column) => sum + (column === "author" ? author : Mods.columnWidths[column]) + 12, 0)
+        const taken = shown.reduce((sum, column) => sum + (column === "author" ? author : Mods.columns.widths[column]) + 12, 0)
         return width - Theme.sized(wide ? 124 : 44) - 90 - taken
     }
     readonly property int nameRoom: Theme.sized(180)
-    readonly property int authorWidth: roomBeside(roomy ? Mods.shownColumns : [], Mods.columnWidths.author) >= nameRoom ? Mods.columnWidths.author : Theme.sized(86)
+    readonly property int authorWidth: roomBeside(roomy ? Mods.columns.shown : [], Mods.columns.widths.author) >= nameRoom ? Mods.columns.widths.author : Theme.sized(86)
     readonly property var fitting: {
-        let shown = roomy ? Mods.shownColumns.slice() : []
+        let shown = roomy ? Mods.columns.shown.slice() : []
         for (const column of ["load", "author", "version"]) {
             if (roomBeside(shown, authorWidth) >= nameRoom)
                 break
@@ -31,7 +31,7 @@ ListView {
         return shown
     }
     function columnWidth(column) {
-        return column === "author" ? authorWidth : Mods.columnWidths[column]
+        return column === "author" ? authorWidth : Mods.columns.widths[column]
     }
 
     clip: true
@@ -49,8 +49,8 @@ ListView {
         height: Theme.sized(30)
         DropArea {
             anchors.fill: parent
-            onEntered: Mods.dropTarget = { model: end.listView.model, modIndex: end.listView.model.count, item: end }
-            onExited: if (Mods.dropTarget && Mods.dropTarget.item === end) Mods.dropTarget = null
+            onEntered: Mods.drag.target = { model: end.listView.model, modIndex: end.listView.model.count, item: end }
+            onExited: if (Mods.drag.target && Mods.drag.target.item === end) Mods.drag.target = null
             Rectangle { visible: parent.containsDrag; x: 6; width: parent.width - 12; height: 2; radius: Math.min(width, height) / 2; color: Theme.focus }
         }
     }
@@ -151,9 +151,9 @@ ListView {
     Timer {
         interval: 16
         repeat: true
-        running: Mods.dragged !== null
+        running: Mods.drag.held !== null
         onTriggered: {
-            const at = list.mapFromItem(null, Mods.dragPoint.x, Mods.dragPoint.y)
+            const at = list.mapFromItem(null, Mods.drag.point.x, Mods.drag.point.y)
             if (at.x < 0 || at.x > list.width || at.y < -40 || at.y > list.height + 40)
                 return
             const edge = 40

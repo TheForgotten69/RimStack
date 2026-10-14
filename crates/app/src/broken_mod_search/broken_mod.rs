@@ -5,7 +5,7 @@ use super::*;
 use rimstack_core::bisect::{self, Bisect};
 
 fn search_file() -> PathBuf {
-    crate::data_dir().join("bisect.json")
+    crate::app().data_dir().join("bisect.json")
 }
 
 /// `{ active, suspects, rounds, list, original, found, foundId, stuck }`:
@@ -17,7 +17,9 @@ fn state(search: Option<&Bisect>) -> QString {
     };
     let name = |id: &str| {
         let key = rimstack_core::id::split_steam(id).0;
-        let known = crate::library()
+        let known = crate::app()
+            .library()
+            .as_ref()
             .as_ref()
             .ok()
             .and_then(|l| l.0.name_of(&key));
@@ -44,29 +46,30 @@ fn state(search: Option<&Bisect>) -> QString {
     QString::from(&said.to_string())
 }
 
-impl qobject::Backend {
+impl qobject::BrokenModSearch {
     pub(super) fn hunt_state(&self) -> QString {
         state(Bisect::read(&search_file()).as_ref())
     }
 
     /// Begins a search over the load order as it is now.
     pub(super) fn hunt_start(&self) -> QString {
-        let Ok((library, _)) = crate::library() else {
+        let loaded = crate::app().library();
+        let Ok((library, _)) = &*loaded else {
             return state(None);
         };
         // The newest save as it is before any round, apart from the
         // copies made before each launch: those are few and soon replaced.
-        let newest = saves_dir().and_then(|dir| saves::list(&dir).into_iter().next());
+        let newest = saves_dir(crate::app()).and_then(|dir| saves::list(&dir).into_iter().next());
         if let Some(save) = newest {
-            let kept = crate::data_dir().join("save-before-search");
-            if let Err(problem) = saves::back_up(&save.path, &kept, now(), 3) {
-                eprintln!("{problem}");
+            let kept = crate::app().data_dir().join("save-before-search");
+            if let Err(problem) = saves::back_up(&save.path, &kept, now_secs(), 3) {
+                rimstack_core::problem!("{problem}");
             }
         }
-        let now = library.arrange(crate::session().current()).active;
+        let now = library.arrange(crate::app().session().current()).active;
         let search = bisect::start(library, &now);
         if let Err(problem) = search.write(&search_file()) {
-            eprintln!("{problem}");
+            rimstack_core::problem!("{problem}");
         }
         state(Some(&search))
     }
@@ -78,7 +81,7 @@ impl qobject::Backend {
         };
         search.answer(broken);
         if let Err(problem) = search.write(&search_file()) {
-            eprintln!("{problem}");
+            rimstack_core::problem!("{problem}");
         }
         state(Some(&search))
     }

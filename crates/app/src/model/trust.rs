@@ -8,16 +8,13 @@ use std::collections::HashSet;
 /// the community lists as working on this game version, for one you
 /// excused, or for any when the check is switched off.
 pub(super) fn troubles(library: &Library, mods: &[Mod]) -> (Vec<Vec<Trouble>>, Vec<bool>) {
-    let mut trusted = crate::WORKS_ON
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone();
-    let notes = crate::NOTES.read().unwrap_or_else(|e| e.into_inner());
+    let mut trusted = crate::app().works_on().reading().clone();
+    let notes = crate::app().notes().reading();
     let excused: HashSet<String> = notes.version_ok().map(String::from).collect();
     drop(notes);
     trusted.extend(excused.iter().cloned());
     let off = {
-        let settings = crate::settings();
+        let settings = crate::app().settings();
         !rimstack_core::checks::version_warnings_shown(
             settings.get("versionWarnings") == Some("off"),
             settings.get("versionAsideFor"),
@@ -28,9 +25,7 @@ pub(super) fn troubles(library: &Library, mods: &[Mod]) -> (Vec<Vec<Trouble>>, V
         true => words::Versions::Ignored,
         false => words::Versions::CheckedBut(&trusted),
     };
-    let workshop = crate::WORKSHOP_NAMES
-        .read()
-        .unwrap_or_else(|e| e.into_inner());
+    let workshop = crate::app().workshop_names().reading();
     // The community's word is not an ignored warning; yours is.
     let by_you = match off {
         true => words::Versions::Ignored,

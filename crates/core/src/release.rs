@@ -1,8 +1,7 @@
 //! Whether a newer RimStack has been published: the latest release on
 //! GitHub against the version running.
 
-use crate::say;
-use std::time::Duration;
+use crate::error::Error;
 
 const LATEST: &str = "https://api.github.com/repos/TheForgotten69/RimStack/releases/latest";
 
@@ -43,21 +42,22 @@ pub fn newer(current: &str, latest: &str) -> bool {
 
 /// The latest release, or nothing where none has been published. Uses the
 /// network; only the request reaches GitHub.
-pub fn latest() -> Result<Option<Release>, String> {
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(15)))
-        .build()
-        .into();
-    let failed = |e: ureq::Error| say!("the download failed: {}", e);
+pub fn latest() -> Result<Option<Release>, Error> {
+    let agent = crate::web::agent(15);
     let asked = agent
         .get(LATEST)
         .header("User-Agent", "RimStack")
         .header("Accept", "application/vnd.github+json")
         .call();
     match asked {
-        Ok(mut answer) => Ok(parse(&answer.body_mut().read_to_string().map_err(failed)?)),
+        Ok(mut answer) => Ok(parse(
+            &answer
+                .body_mut()
+                .read_to_string()
+                .map_err(crate::web::failed)?,
+        )),
         Err(ureq::Error::StatusCode(404)) => Ok(None),
-        Err(problem) => Err(failed(problem)),
+        Err(problem) => Err(crate::web::failed(problem)),
     }
 }
 

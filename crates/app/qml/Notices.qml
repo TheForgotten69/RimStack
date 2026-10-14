@@ -8,7 +8,7 @@ import RimStack.Ui
 QtObject {
     id: notices
 
-    property Backend backend
+    property KeptLists keptLists
     // Each is { key, text, tone: "", "ok" or "err", label, run }.
     property var shown: []
     // This run's notices, newest first: { text, tone, time }.
@@ -49,9 +49,9 @@ QtObject {
         record(JSON.stringify(sentence), revert)
     }
     function record(what, revert) {
-        if (!backend || Theme.demo)
+        if (!keptLists || Theme.demo)
             return
-        backend.noteChange(what, revert || "")
+        keptLists.noteChange(what, revert || "")
         journalled++
     }
 }

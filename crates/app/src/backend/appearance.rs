@@ -45,20 +45,11 @@ fn shipped(name: &str) -> Option<&'static str> {
 fn language_table(name: &str) -> Value {
     let name = crate::language_name(name);
     let file = languages_dir().join(format!("{name}.json"));
-    let text = std::fs::read_to_string(file).unwrap_or_default();
-    let read = |text: &str| {
-        serde_json::from_str::<Value>(text)
-            .ok()
-            .filter(Value::is_object)
-    };
-    let mut words = shipped(name).and_then(read).unwrap_or_else(|| json!({}));
-    let own = read(&text).unwrap_or_else(|| json!({}));
-    for (english, said) in own.as_object().into_iter().flatten() {
-        if said.as_str().is_some_and(|s| !s.is_empty()) {
-            words[english] = said.clone();
-        }
-    }
-    words
+    let own = std::fs::read_to_string(file).unwrap_or_default();
+    Value::Object(rimstack_core::tongue::table(
+        shipped(name).unwrap_or_default(),
+        &own,
+    ))
 }
 
 /// Has the sentences written in Rust said in this language from now on.
@@ -69,6 +60,15 @@ pub fn speak(name: &str) -> Value {
         said.filter_map(|(english, said)| Some((english.clone(), said.as_str()?.to_string())));
     rimstack_core::tongue::set(table.collect());
     words
+}
+
+/// A file written on request, as `{ file }`, or `{ problem }`.
+fn made(file: Result<&std::path::Path, String>) -> QString {
+    let said = match file {
+        Ok(file) => json!({ "file": file.to_string_lossy() }),
+        Err(problem) => json!({ "problem": problem }),
+    };
+    QString::from(&said.to_string())
 }
 
 impl qobject::Backend {
@@ -99,10 +99,7 @@ impl qobject::Backend {
     pub(super) fn start_language(&self, name: &QString) -> QString {
         let name = name.to_string();
         if name.trim().is_empty() || name.contains(['/', '\\']) {
-            return QString::from(&format!(
-                "!{}",
-                say!("A language needs a name without slashes")
-            ));
+            return made(Err(say!("A language needs a name without slashes")));
         }
         let file = languages_dir().join(format!("{}.json", name.trim()));
         let write = || {
@@ -112,14 +109,14 @@ impl qobject::Backend {
         };
         if !file.exists() {
             if let Err(problem) = write() {
-                return QString::from(&format!("!{}: {problem}", file.display()));
+                return made(Err(format!("{}: {problem}", file.display())));
             }
         }
-        QString::from(&*file.to_string_lossy())
+        made(Ok(&file))
     }
 
     pub(super) fn stamps(&self) -> QString {
-        QString::from(&crate::stamps().to_string())
+        QString::from(&crate::app().stamps().to_string())
     }
 
     pub(super) fn use_font(&self, family: &QString) -> QString {
@@ -142,12 +139,15 @@ impl qobject::Backend {
         let text = std::fs::read_to_string(theme_file()).unwrap_or_default();
         let file = serde_json::from_str::<Value>(&text).unwrap_or(Value::Null);
         // An older file belongs to the theme in use when it is first met.
-        let known = crate::settings().get("ownColoursFor").map(String::from);
+        let known = crate::app()
+            .settings()
+            .get("ownColoursFor")
+            .map(String::from);
         let flat_for = match known {
             Some(known) => known,
             None if owntheme::is_flat(&file) => {
-                if let Err(problem) = crate::set_setting("ownColoursFor", &theme) {
-                    eprintln!("{problem}");
+                if let Err(problem) = crate::app().set_setting("ownColoursFor", &theme) {
+                    rimstack_core::problem!("{problem}");
                 }
                 theme.clone()
             }
@@ -171,9 +171,9 @@ impl qobject::Backend {
         let pretty = wanted.and_then(|w| serde_json::to_string_pretty(&w).ok());
         if let Some(pretty) = pretty {
             if let Err(problem) = std::fs::write(&file, pretty) {
-                return QString::from(&format!("!{}: {problem}", file.display()));
+                return made(Err(format!("{}: {problem}", file.display())));
             }
         }
-        QString::from(&*file.to_string_lossy())
+        made(Ok(&file))
     }
 }

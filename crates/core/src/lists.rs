@@ -1,6 +1,7 @@
 //! Load orders kept under a name, to go back to later: one small file
 //! each in RimStack's data folder.
 
+use crate::error::Error;
 use crate::say;
 
 use serde_json::{json, Value};
@@ -32,15 +33,13 @@ fn file_for(dir: &Path, name: &str) -> PathBuf {
     dir.join(format!("{safe}.json"))
 }
 
-pub fn save(dir: &Path, name: &str, ids: &[String]) -> Result<(), String> {
+pub fn save(dir: &Path, name: &str, ids: &[String]) -> Result<(), Error> {
     if name.trim().is_empty() {
-        return Err(say!("Give the list a name."));
+        return Err(Error::refused(say!("Give the list a name.")));
     }
     let path = file_for(dir, name);
-    let failed = |e: std::io::Error| format!("{}: {e}", path.display());
-    std::fs::create_dir_all(dir).map_err(failed)?;
     let text = json!({ "name": name.trim(), "ids": ids }).to_string();
-    std::fs::write(&path, text).map_err(failed)
+    crate::whole::write(&path, text)
 }
 
 fn read(path: &Path) -> Option<(String, Vec<String>)> {
@@ -84,16 +83,16 @@ pub fn prune(dir: &Path, keep: usize) {
     }
 }
 
-pub fn load(dir: &Path, name: &str) -> Result<Vec<String>, String> {
+pub fn load(dir: &Path, name: &str) -> Result<Vec<String>, Error> {
     let path = file_for(dir, name);
     read(&path)
         .map(|(_, ids)| ids)
-        .ok_or_else(|| say!("{} is not a saved list", path.display()))
+        .ok_or_else(|| Error::format(say!("{} is not a saved list", path.display())))
 }
 
-pub fn delete(dir: &Path, name: &str) -> Result<(), String> {
+pub fn delete(dir: &Path, name: &str) -> Result<(), Error> {
     let path = file_for(dir, name);
-    std::fs::remove_file(&path).map_err(|e| format!("{}: {e}", path.display()))
+    std::fs::remove_file(&path).map_err(|e| Error::file(&path, e))
 }
 
 #[cfg(test)]

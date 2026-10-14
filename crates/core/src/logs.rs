@@ -7,6 +7,7 @@
 //! engine (Waylith), which starts every entry with a time and a level
 //! and writes the log to `Logs/Player.log`.
 
+use crate::error::Error;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -156,11 +157,11 @@ pub fn errors(text: &str) -> Vec<ErrorGroup> {
 
 /// Reads a log file; one that does not exist has no errors. Bytes that
 /// are not UTF-8 are replaced, not refused.
-pub fn read(path: &Path) -> Result<String, String> {
+pub fn read(path: &Path) -> Result<String, Error> {
     match std::fs::read(path) {
         Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(e) => Err(format!("{}: {e}", path.display())),
+        Err(e) => Err(Error::file(path, e)),
     }
 }
 
@@ -181,17 +182,10 @@ const NOT_A_MOD: [&str; 13] = [
     "LudeonTK",
 ];
 
-/// The mod an error most likely comes from: the first stack frame, top
-/// down, whose namespace is the name of a mod's assembly. `assemblies`
-/// maps lower-case assembly names (no `.dll`) to whatever names the mod.
-pub fn likely_mod<T: Copy + PartialEq>(
-    group: &ErrorGroup,
-    assemblies: &HashMap<String, T>,
-) -> Option<T> {
-    mods_in(group, assemblies).into_iter().next()
-}
-
-/// Every mod whose code appears in an error, in the order met, each once.
+/// Every mod whose code appears in an error, in the order met, each
+/// once: a stack frame whose namespace is the name of a mod's assembly.
+/// `assemblies` maps lower-case assembly names (no `.dll`) to whatever
+/// names the mod. The first is the one the error most likely comes from.
 pub fn mods_in<T: Copy + PartialEq>(group: &ErrorGroup, assemblies: &HashMap<String, T>) -> Vec<T> {
     let mut found: Vec<T> = Vec::new();
     let lines = std::iter::once(&group.head).chain(&group.trace);
@@ -336,8 +330,97 @@ pub fn runs(groups: &[ErrorGroup]) -> Vec<usize> {
     starts
 }
 
+/// A mod the errors point at, or `None` for the errors pointing at no mod.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Culprit {
+    pub mod_id: Option<usize>,
+    /// Different errors pointing at it; `times` counts every logging of them.
+    pub kinds: usize,
+    pub times: usize,
+}
+
+/// Who the errors point at, from each error's mod and how often it was
+/// logged: the errors pointing at no mod first, then the mod logged
+/// most; ties stay in the log's order.
+pub fn culprits(errors: impl IntoIterator<Item = (Option<usize>, usize)>) -> Vec<Culprit> {
+    let mut found: Vec<Culprit> = Vec::new();
+    for (mod_id, count) in errors {
+        let at = found.iter().position(|c| c.mod_id == mod_id);
+        let at = at.unwrap_or_else(|| {
+            found.push(Culprit {
+                mod_id,
+                kinds: 0,
+                times: 0,
+            });
+            found.len() - 1
+        });
+        found[at].kinds += 1;
+        found[at].times += count;
+    }
+    found.sort_by_key(|c| (c.mod_id.is_some(), std::cmp::Reverse(c.times)));
+    found
+}
+
+/// What the filter box holds to list the errors that point at no mod.
+pub const NO_MOD: &str = "mod:none";
+
+/// Whether an error is listed under this filter. With none, a run of
+/// alike errors shows as its first until it is opened; with a text, the
+/// errors whose first line or mod holds it, whatever the case.
+pub fn listed(
+    filter: &str,
+    head: &str,
+    mod_name: Option<&str>,
+    first_of_run: bool,
+    run_open: bool,
+) -> bool {
+    let wanted = filter.trim().to_lowercase();
+    match wanted.as_str() {
+        "" => first_of_run || run_open,
+        NO_MOD => mod_name.is_none(),
+        text => {
+            let holds = |said: &str| said.to_lowercase().contains(text);
+            holds(head) || mod_name.is_some_and(holds)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_filter_lists_errors_by_text_or_by_having_no_mod() {
+        use super::{listed, NO_MOD};
+        assert!(listed("", "Null reference", None, true, false));
+        assert!(!listed("", "Null reference", None, false, false));
+        assert!(listed("", "Null reference", None, false, true));
+        assert!(listed(" NULL ", "Null reference", None, false, false));
+        assert!(listed(
+            "harm",
+            "Could not patch",
+            Some("Harmony"),
+            false,
+            false
+        ));
+        assert!(!listed("harm", "Could not patch", None, false, false));
+        assert!(listed(NO_MOD, "Could not patch", None, false, false));
+        assert!(!listed(
+            NO_MOD,
+            "Could not patch",
+            Some("Harmony"),
+            false,
+            false
+        ));
+    }
+
+    #[test]
+    fn errors_are_counted_by_the_mod_they_point_at() {
+        let found = super::culprits([(Some(4), 2), (None, 1), (Some(7), 9), (Some(4), 3)]);
+        let said: Vec<(Option<usize>, usize, usize)> =
+            found.iter().map(|c| (c.mod_id, c.kinds, c.times)).collect();
+        assert_eq!(said, [(None, 1, 1), (Some(7), 1, 9), (Some(4), 2, 5)]);
+        assert!(super::culprits([]).is_empty());
+    }
+
     #[test]
     fn a_log_is_kept_once_and_the_oldest_give_way() {
         let tmp = tempfile::tempdir().unwrap();
@@ -411,8 +494,8 @@ Runtime:   .NET 10.0.10-waylithclr.dev
         assert_eq!(found[1].trace, ["    at MyMod.Patches.Postfix() [0x2]"]);
         assert_eq!(game_version(WAYLITH).as_deref(), Some("1.7.4976 rev1043"));
         let assemblies: HashMap<String, u8> = [("mymod".to_string(), 7)].into();
-        assert_eq!(likely_mod(&found[1], &assemblies), Some(7));
-        assert_eq!(likely_mod(&found[0], &assemblies), None);
+        assert_eq!(mods_in(&found[1], &assemblies), [7]);
+        assert!(mods_in(&found[0], &assemblies).is_empty());
     }
 
     #[test]
@@ -512,10 +595,9 @@ Loaded 5 things
         ]
         .into();
         let found = errors(LOG);
-        assert_eq!(likely_mod(&found[0], &assemblies), Some(7));
-        assert_eq!(likely_mod(&found[1], &assemblies), None);
         // Loading Progress is in the same trace, further down.
         assert_eq!(mods_in(&found[0], &assemblies), [7]);
+        assert!(mods_in(&found[1], &assemblies).is_empty());
     }
 
     #[test]
@@ -527,7 +609,7 @@ Loaded 5 things
             count: 1,
             line: 1,
         };
-        assert_eq!(likely_mod(&group, &assemblies), Some(1));
+        assert_eq!(mods_in(&group, &assemblies), [1]);
     }
 
     #[test]

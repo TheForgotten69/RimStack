@@ -9,22 +9,23 @@ import RimStack.Ui
 Popup {
     enter: PopIn {}
     exit: PopOut {}
-    id: menu
-    required property Backend backend
+    id: historyMenu
+    required property KeptLists keptLists
+    required property TextureTools textureTools
     signal useList(var ids)
     property var entries: []
     function reload() {
-        entries = Theme.demo ? [] : JSON.parse(backend.journal())
+        entries = Theme.demo ? [] : JSON.parse(keptLists.journal())
     }
     function revert(entry) {
         const what = entry.revert.split(" ")[0]
         const about = entry.revert.substring(what.length + 1)
         if (what === "list") {
-            const ids = backend.snapshotList(about)
+            const ids = keptLists.snapshotList(about)
             if (ids !== "")
-                menu.useList(JSON.parse(ids))
+                historyMenu.useList(JSON.parse(ids))
         } else if (what === "unhide") {
-            const problem = backend.unhideIn(about)
+            const problem = textureTools.unhideIn(about)
             Notices.say(problem !== "" ? problem : Theme.say("Textures brought back"), problem !== "" ? "err" : "ok")
             Mods.active.recheck()
         }
@@ -47,9 +48,9 @@ Popup {
             width: parent.width
             spacing: Theme.gapSmall
             Text { color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("What RimStack changed") }
-            Text { visible: menu.entries.length === 0; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say("Nothing yet") }
+            Text { visible: historyMenu.entries.length === 0; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say("Nothing yet") }
             Repeater {
-                model: menu.entries.slice(0, 40)
+                model: historyMenu.entries.slice(0, 40)
                 RowLayout {
                     id: entry
                     required property var modelData
@@ -62,7 +63,7 @@ Popup {
                         text: entry.modelData.revert.indexOf("list ") === 0 ? Theme.say("Restore") : Theme.say("Bring back")
                         spoken: Theme.fill("Restore the list from before: {}", Theme.said(entry.modelData.what))
                         tip: entry.modelData.revert.indexOf("list ") === 0 ? Theme.say("The load order as it was just before. Nothing is written before Save.") : Theme.say("Renames the files back inside the mod")
-                        onClicked: menu.revert(entry.modelData)
+                        onClicked: historyMenu.revert(entry.modelData)
                     }
                 }
             }

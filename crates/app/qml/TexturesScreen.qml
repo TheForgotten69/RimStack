@@ -11,9 +11,9 @@ Item {
     id: screen
     Appear { of: screen }
 
-    required property Backend backend
+    required property TextureTools textureTools
 
-    readonly property var all: backend.textures ? JSON.parse(backend.textures) : []
+    readonly property var all: textureTools.textures ? JSON.parse(textureTools.textures) : []
     property bool activeOnly: true
     readonly property var shown: all.filter(m => !activeOnly || m.active)
     // The state most rows are in: not repeated on each of them.
@@ -32,12 +32,12 @@ Item {
     readonly property var mod: all.find(m => m.id === selectedId) || null
     property bool confirmRemove: false
 
-    onVisibleChanged: if (visible && all.length === 0) backend.loadTextures()
-    Component.onCompleted: if (visible) backend.loadTextures()
+    onVisibleChanged: if (visible && all.length === 0) textureTools.loadTextures()
+    Component.onCompleted: if (visible) textureTools.loadTextures()
     // A re-read of the mods empties this report: the open screen asks for it again.
     Connections {
-        target: screen.backend
-        function onTexturesChanged() { if (screen.visible && screen.backend.textures === "") screen.backend.loadTextures() }
+        target: screen.textureTools
+        function onTexturesChanged() { if (screen.visible && screen.textureTools.textures === "") screen.textureTools.loadTextures() }
     }
 
     function sum(list, key) {
@@ -112,7 +112,7 @@ Item {
                             Layout.alignment: Qt.AlignTop
                             text: Theme.say("Check all mods")
                             tip: Theme.say("Reads the header of every DDS file of the installed mods: not a DDS, cut short, a format the game has no reader for, or compressed with a size that is not a multiple of four.")
-                            onClicked: ddsAudit.found = JSON.parse(screen.backend.ddsAudit())
+                            onClicked: ddsAudit.found = JSON.parse(screen.textureTools.ddsAudit())
                         }
                         Choice { Layout.alignment: Qt.AlignTop; title: Theme.say("Mods"); options: ["Active mods", "All mods"]; current: screen.activeOnly ? 0 : 1; onPicked: index => screen.activeOnly = index === 0 }
                     }
@@ -138,26 +138,26 @@ Item {
                                 elide: Text.ElideRight
                                 color: Theme.ink2
                                 font.pixelSize: Theme.small
-                                text: screen.backend.texturesBusy ? (screen.backend.texturesProgress || Theme.say("Counting textures…")) : screen.backend.texturesProgress
+                                text: screen.textureTools.texturesBusy ? (screen.textureTools.texturesProgress || Theme.say("Counting textures…")) : screen.textureTools.texturesProgress
                             }
-                            Btn { visible: screen.backend.texturesBusy; text: Theme.say("Cancel"); tip: Theme.say("Stops after the mod it is on; what is done stays done"); onClicked: screen.backend.cancelTextures() }
+                            Btn { visible: screen.textureTools.texturesBusy; text: Theme.say("Cancel"); tip: Theme.say("Stops after the mod it is on; what is done stays done"); onClicked: screen.textureTools.cancelTextures() }
                             Btn {
                                 primary: screen.remaining.length > 0
-                                enabled: !screen.backend.texturesBusy && screen.remaining.length > 0
+                                enabled: !screen.textureTools.texturesBusy && screen.remaining.length > 0
                                 text: Theme.say("Convert remaining")
                                 tip: Theme.say("Writes a .dds beside each .png that has none, inside each mod's own folder. The .png files are not changed.")
-                                onClicked: screen.backend.convertTextures(screen.ids(screen.remaining))
+                                onClicked: screen.textureTools.convertTextures(screen.ids(screen.remaining))
                             }
                             Btn {
-                                enabled: !screen.backend.texturesBusy && screen.stale.length > 0
+                                enabled: !screen.textureTools.texturesBusy && screen.stale.length > 0
                                 text: Theme.say("Rebuild out of date")
                                 tip: Theme.say("Converts again where the .png changed after its .dds was made.")
-                                onClicked: screen.backend.convertTextures(screen.ids(screen.stale))
+                                onClicked: screen.textureTools.convertTextures(screen.ids(screen.stale))
                             }
                         }
                         Btn {
                             Layout.alignment: Qt.AlignTop
-                            enabled: !screen.backend.texturesBusy && screen.made.length > 0
+                            enabled: !screen.textureTools.texturesBusy && screen.made.length > 0
                             danger: true
                             text: Theme.say("Remove all converted…")
                             tip: Theme.say("Deletes the .dds files RimStack made, inside the mods' folders. Files it did not make are not touched.")
@@ -194,7 +194,7 @@ Item {
                         text: Theme.say("Delete them")
                         onClicked: {
                             screen.confirmRemove = false
-                            screen.backend.removeTextures(screen.ids(screen.made))
+                            screen.textureTools.removeTextures(screen.ids(screen.made))
                         }
                     }
                 }
@@ -293,8 +293,8 @@ Item {
                     anchors.centerIn: parent
                     width: Math.min(parent.width - 80, 460)
                     spacing: Theme.gapSmall
-                    Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: screen.backend.texturesBusy ? Theme.say("Counting textures…") : Theme.say("No textures") }
-                    Text { visible: !screen.backend.texturesBusy; width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; lineHeight: 1.3; text: screen.all.length === 0 ? "" : Theme.say("None in active mods") }
+                    Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: screen.textureTools.texturesBusy ? Theme.say("Counting textures…") : Theme.say("No textures") }
+                    Text { visible: !screen.textureTools.texturesBusy; width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; lineHeight: 1.3; text: screen.all.length === 0 ? "" : Theme.say("None in active mods") }
                 }
             }
         }
@@ -342,20 +342,20 @@ Item {
                         topPadding: Theme.gap
                         spacing: Theme.gapSmall
                         Btn {
-                            enabled: !screen.backend.texturesBusy && !!screen.mod && screen.mod.notConverted + screen.mod.outOfDate > 0
+                            enabled: !screen.textureTools.texturesBusy && !!screen.mod && screen.mod.notConverted + screen.mod.outOfDate > 0
                             text: !!screen.mod && screen.mod.outOfDate > 0 ? Theme.say("Rebuild") : Theme.say("Convert")
-                            onClicked: screen.backend.convertTextures(JSON.stringify([screen.mod.id]))
+                            onClicked: screen.textureTools.convertTextures(JSON.stringify([screen.mod.id]))
                         }
                         Btn {
-                            enabled: !screen.backend.texturesBusy && !!screen.mod && screen.mod.converted + screen.mod.outOfDate > 0
+                            enabled: !screen.textureTools.texturesBusy && !!screen.mod && screen.mod.converted + screen.mod.outOfDate > 0
                             text: Theme.say("Remove converted")
                             tip: Theme.say("Deletes only the .dds files RimStack made and that have not changed since.")
-                            onClicked: screen.backend.removeTextures(JSON.stringify([screen.mod.id]))
+                            onClicked: screen.textureTools.removeTextures(JSON.stringify([screen.mod.id]))
                         }
                         Btn {
-                            enabled: !screen.backend.texturesBusy
+                            enabled: !screen.textureTools.texturesBusy
                             text: !!screen.mod && screen.mod.skipped ? Theme.say("Stop skipping") : Theme.say("Skip this mod")
-                            onClicked: screen.backend.skipTextures(screen.mod.id, !screen.mod.skipped)
+                            onClicked: screen.textureTools.skipTextures(screen.mod.id, !screen.mod.skipped)
                         }
                     }
                 }
@@ -378,7 +378,7 @@ Item {
                                 title: Theme.fill("Set {} DDS files aside", ddsAudit.found.length),
                                 lines: [Theme.say("Each is renamed to .dds.rimstack-bad inside its own mod's folder, so the game loads the PNG beside it. The first of them:"), ddsAudit.found[0].file],
                                 label: Theme.say("Set aside"),
-                                run: () => { screen.backend.setDdsAside(JSON.stringify(ddsAudit.found.map(bad => bad.file))); ddsAudit.found = JSON.parse(screen.backend.ddsAudit()) } })
+                                run: () => { screen.textureTools.setDdsAside(JSON.stringify(ddsAudit.found.map(bad => bad.file))); ddsAudit.found = JSON.parse(screen.textureTools.ddsAudit()) } })
                         }
                     }
                     Text {

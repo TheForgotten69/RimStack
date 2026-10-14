@@ -53,8 +53,7 @@ impl Manifest {
         Self { made }
     }
 
-    pub fn write(&self, path: &Path) -> Result<(), String> {
-        let failed = |e: std::io::Error| format!("{}: {e}", path.display());
+    pub fn write(&self, path: &Path) -> Result<(), crate::error::Error> {
         let entries: serde_json::Map<String, Value> = self
             .made
             .iter()
@@ -63,12 +62,7 @@ impl Manifest {
                 (dds.to_string_lossy().into_owned(), entry)
             })
             .collect();
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(failed)?;
-        }
-        let partial = path.with_extension("json.part");
-        std::fs::write(&partial, Value::Object(entries).to_string()).map_err(failed)?;
-        std::fs::rename(&partial, path).map_err(failed)
+        crate::whole::write(path, Value::Object(entries).to_string())
     }
 
     pub fn len(&self) -> usize {
@@ -314,7 +308,8 @@ fn convert_one(png: &Path) -> Result<Made, String> {
 
 /// Deletes the DDS files RimStack made in the mod, and only those that
 /// are still byte for byte what it wrote. One that was changed since is
-/// kept and forgotten. Returns how many were deleted.
+/// kept and forgotten; one that could not be read or deleted stays
+/// RimStack's, for a later try. Returns how many were deleted.
 pub fn remove(mod_root: &Path, manifest: &mut Manifest) -> usize {
     let ours: Vec<PathBuf> = manifest
         .made
@@ -324,14 +319,25 @@ pub fn remove(mod_root: &Path, manifest: &mut Manifest) -> usize {
         .collect();
     let mut removed = 0;
     for dds in ours {
-        let made = manifest.made.remove(&dds).expect("listed above");
-        let unchanged = std::fs::read(&dds).is_ok_and(|bytes| hash(&bytes) == made.output_hash);
-        if unchanged && std::fs::remove_file(&dds).is_ok() {
-            removed += 1;
+        let wrote = manifest.made.get(&dds).map(|made| made.output_hash);
+        let forget = match std::fs::read(&dds) {
+            Ok(bytes) if Some(hash(&bytes)) == wrote => {
+                let deleted = std::fs::remove_file(&dds).is_ok();
+                removed += usize::from(deleted);
+                deleted
+            }
+            Ok(_) => true,
+            Err(problem) => problem.kind() == std::io::ErrorKind::NotFound,
+        };
+        if forget {
+            manifest.made.remove(&dds);
         }
     }
     removed
 }
+
+mod rows;
+pub use rows::{in_order, Row, State};
 
 #[cfg(test)]
 mod tests {
@@ -535,6 +541,22 @@ mod tests {
         assert!(root.join("Textures/shipped.dds").exists());
         assert!(manifest.is_empty());
         assert!(root.join("Textures/Things/a.png").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_file_that_cannot_be_deleted_stays_rimstack_s() {
+        use std::os::unix::fs::PermissionsExt;
+        let (_dir, root) = a_mod();
+        let mut manifest = Manifest::default();
+        convert(&root, &mut manifest, &|| ());
+        let folder = root.join("Textures/Things");
+        fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).unwrap();
+        let removed = remove(&root, &mut manifest);
+        fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!((removed, manifest.len()), (1, 1));
+        assert_eq!(remove(&root, &mut manifest), 1);
+        assert!(manifest.is_empty() && !folder.join("a.dds").exists());
     }
 
     #[test]

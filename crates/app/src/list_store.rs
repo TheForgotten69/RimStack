@@ -1,0 +1,280 @@
+//! Load orders kept beside the one being edited: saved lists, snapshots
+//! taken before a change, and the history of what RimStack changed.
+
+#[cxx_qt::bridge]
+pub mod qobject {
+    unsafe extern "C++" {
+        include!("cxx-qt-lib/qstring.h");
+        type QString = cxx_qt_lib::QString;
+    }
+
+    extern "RustQt" {
+        #[qobject]
+        #[qml_element]
+        type KeptLists = super::KeptListsRust;
+    }
+
+    impl cxx_qt::Threading for KeptLists {}
+
+    extern "RustQt" {
+        /// The package ids in a list someone pasted, as a JSON array.
+        #[qinvokable]
+        #[cxx_name = "idsInText"]
+        fn ids_in_text(self: &KeptLists, text: &QString) -> QString;
+
+        /// Keep the load order as it is now under `name`, among the
+        /// snapshots; the ten newest are kept. Taken before anything that
+        /// rearranges the whole list.
+        #[qinvokable]
+        fn snapshot(self: &KeptLists, name: &QString);
+
+        #[qinvokable]
+        #[cxx_name = "snapshotSaved"]
+        fn snapshot_saved(self: &KeptLists, name: &QString) -> QString;
+
+        #[qinvokable]
+        fn snapshots(self: &KeptLists) -> QString;
+
+        /// The package ids of a snapshot, as a JSON array; empty text if
+        /// there is no such snapshot.
+        #[qinvokable]
+        #[cxx_name = "snapshotList"]
+        fn snapshot_list(self: &KeptLists, name: &QString) -> QString;
+
+        /// Keep a list of package ids (a JSON array) under a name, among
+        /// the saved lists. Returns what went wrong, or nothing.
+        #[qinvokable]
+        #[cxx_name = "saveIdsAs"]
+        fn save_ids_as(self: &KeptLists, name: &QString, ids: &QString) -> QString;
+
+        /// The load order in ModsConfig.xml as it is on disk now, as a
+        /// JSON array of package ids; empty if it cannot be read.
+        #[qinvokable]
+        #[cxx_name = "listOnDisk"]
+        fn list_on_disk(self: &KeptLists) -> QString;
+
+        /// The load order as it was before RimStack first saved (kept as
+        /// ModsConfig.xml.rimstack-original), as a JSON array of package
+        /// ids; empty text if RimStack has never saved.
+        #[qinvokable]
+        #[cxx_name = "originalList"]
+        fn original_list(self: &KeptLists) -> QString;
+
+        #[qinvokable]
+        #[cxx_name = "savedLists"]
+        fn saved_lists(self: &KeptLists) -> QString;
+
+        /// Keep the load order being edited under a name. Returns what
+        /// went wrong, or nothing.
+        #[qinvokable]
+        #[cxx_name = "saveListAs"]
+        fn save_list_as(self: &KeptLists, name: &QString) -> QString;
+
+        /// The package ids kept under a name, as a JSON array; empty text
+        /// if there is no such list.
+        #[qinvokable]
+        #[cxx_name = "savedList"]
+        fn saved_list(self: &KeptLists, name: &QString) -> QString;
+
+        #[qinvokable]
+        #[cxx_name = "deleteList"]
+        fn delete_list(self: &KeptLists, name: &QString);
+
+        #[qinvokable]
+        #[cxx_name = "listResetByGame"]
+        fn list_reset_by_game(self: &KeptLists) -> QString;
+
+        /// Adds a line to the history of what RimStack changed; `revert`
+        /// is "list <snapshot>", "unhide <mod folder>" or nothing.
+        #[qinvokable]
+        #[cxx_name = "noteChange"]
+        fn note_change(self: &KeptLists, what: &QString, revert: &QString);
+
+        #[qinvokable]
+        fn journal(self: &KeptLists) -> QString;
+    }
+}
+
+use crate::backend::log_report::launches_file;
+use crate::backend::{lists_dir, now_secs, snapshots_dir};
+use cxx_qt_lib::QString;
+use rimstack_core::{journal, launches, lists, modsconfig, say};
+use serde_json::{json, Value};
+use std::path::PathBuf;
+
+fn journal_file() -> PathBuf {
+    crate::app().data_dir().join("journal.json")
+}
+
+#[derive(Default)]
+pub struct KeptListsRust {}
+
+impl qobject::KeptLists {
+    fn ids_in_text(&self, text: &QString) -> QString {
+        let ids = rimstack_core::share::ids_in(&text.to_string());
+        QString::from(&json!(ids).to_string())
+    }
+
+    fn snapshot(&self, name: &QString) {
+        let dir = snapshots_dir();
+        let list = crate::app().session().current().to_vec();
+        match lists::save(&dir, &name.to_string(), &list) {
+            Ok(()) => lists::prune(&dir, 30),
+            Err(problem) => rimstack_core::problem!("{problem}"),
+        }
+    }
+
+    /// Keeps the list as it is on disk among the snapshots; returns the
+    /// name it was kept under, or nothing if it could not be.
+    fn snapshot_saved(&self, name: &QString) -> QString {
+        let dir = snapshots_dir();
+        let list = crate::app().session().saved().to_vec();
+        match lists::save(&dir, &name.to_string(), &list) {
+            Ok(()) => {
+                lists::prune(&dir, 30);
+                name.clone()
+            }
+            Err(problem) => {
+                rimstack_core::problem!("{problem}");
+                QString::default()
+            }
+        }
+    }
+
+    fn snapshots(&self) -> QString {
+        let mut found = lists::all(&snapshots_dir());
+        found.sort_by_key(|l| std::cmp::Reverse(l.modified));
+        let rows: Vec<Value> = found
+            .iter()
+            .map(|l| json!({ "name": l.name, "mods": l.mods, "modified": l.modified }))
+            .collect();
+        QString::from(&Value::Array(rows).to_string())
+    }
+
+    fn snapshot_list(&self, name: &QString) -> QString {
+        match lists::load(&snapshots_dir(), &name.to_string()) {
+            Ok(ids) => QString::from(&json!(ids).to_string()),
+            Err(_) => QString::default(),
+        }
+    }
+
+    fn save_ids_as(&self, name: &QString, ids: &QString) -> QString {
+        let Ok(ids) = serde_json::from_str::<Vec<String>>(&ids.to_string()) else {
+            return QString::from(&say!("That is not a list of mods."));
+        };
+        match lists::save(&lists_dir(), &name.to_string(), &ids) {
+            Ok(()) => QString::default(),
+            Err(problem) => QString::from(&problem.to_string()),
+        }
+    }
+
+    fn list_on_disk(&self) -> QString {
+        let on_disk = crate::app().paths().mods_config();
+        match on_disk.and_then(|path| modsconfig::read(&path).ok()) {
+            Some(config) => QString::from(&json!(config.active).to_string()),
+            None => QString::default(),
+        }
+    }
+
+    fn original_list(&self) -> QString {
+        let original = crate::app()
+            .paths()
+            .mods_config()
+            .map(|c| c.with_file_name("ModsConfig.xml.rimstack-original"));
+        match original.and_then(|path| modsconfig::read(&path).ok()) {
+            Some(config) => QString::from(&json!(config.active).to_string()),
+            None => QString::default(),
+        }
+    }
+
+    fn saved_lists(&self) -> QString {
+        let found = lists::all(&lists_dir());
+        let rows: Vec<Value> = found
+            .iter()
+            .map(|l| json!({ "name": l.name, "mods": l.mods, "modified": l.modified }))
+            .collect();
+        QString::from(&Value::Array(rows).to_string())
+    }
+
+    fn save_list_as(&self, name: &QString) -> QString {
+        let list = crate::app().session().current().to_vec();
+        match lists::save(&lists_dir(), &name.to_string(), &list) {
+            Ok(()) => QString::default(),
+            Err(problem) => QString::from(&problem.to_string()),
+        }
+    }
+
+    fn saved_list(&self, name: &QString) -> QString {
+        match lists::load(&lists_dir(), &name.to_string()) {
+            Ok(ids) => QString::from(&json!(ids).to_string()),
+            Err(_) => QString::default(),
+        }
+    }
+
+    fn delete_list(&self, name: &QString) {
+        if let Err(problem) = lists::delete(&lists_dir(), &name.to_string()) {
+            rimstack_core::problem!("{problem}");
+        }
+    }
+
+    /// The list of the last launch from RimStack, as a JSON array, when
+    /// the list on disk now holds nothing but the game and its
+    /// expansions and that launch had more: the game empties the list
+    /// when it starts on a new version. Otherwise nothing.
+    fn list_reset_by_game(&self) -> QString {
+        let loaded = crate::app().library();
+        let Ok((library, _)) = &*loaded else {
+            return QString::default();
+        };
+        let Some(last) = launches::read(&launches_file(crate::app())).pop() else {
+            return QString::default();
+        };
+        let saved = crate::app().session().saved().to_vec();
+        let on_disk = library.arrange(&saved).active;
+        let official = |m: &rimstack_core::list::Mod| {
+            let installed = m.installed.and_then(|i| library.installed.get(i));
+            installed.is_some_and(|i| i.source == rimstack_core::paths::Source::Official)
+        };
+        match on_disk.iter().all(official) && last.ids.len() > saved.len() {
+            true => QString::from(&json!(last.ids).to_string()),
+            false => QString::default(),
+        }
+    }
+
+    fn note_change(&self, what: &QString, revert: &QString) {
+        let entry = journal::Entry {
+            time: now_secs(),
+            what: what.to_string(),
+            revert: revert.to_string(),
+        };
+        if let Err(problem) = journal::add(&journal_file(), entry) {
+            rimstack_core::problem!("{problem}");
+        }
+    }
+
+    /// The journal, newest first, as JSON: `{ time, what, revert }`, the
+    /// last empty where the entry can no longer be taken back.
+    fn journal(&self) -> QString {
+        let kept: Vec<String> = lists::all(&snapshots_dir())
+            .into_iter()
+            .map(|l| l.name)
+            .collect();
+        let still = |revert: &str| match revert.strip_prefix("list ") {
+            Some(name) => kept.iter().any(|k| k == name),
+            None => true,
+        };
+        let rows: Vec<Value> = journal::read(&journal_file())
+            .iter()
+            .rev()
+            .map(|e| {
+                let revert = if still(&e.revert) {
+                    e.revert.as_str()
+                } else {
+                    ""
+                };
+                json!({ "time": e.time, "what": e.what, "revert": revert })
+            })
+            .collect();
+        QString::from(&Value::Array(rows).to_string())
+    }
+}

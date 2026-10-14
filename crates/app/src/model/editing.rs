@@ -5,44 +5,19 @@
 use super::*;
 
 impl qobject::ModListModel {
-    pub(crate) fn set_note(mut self: Pin<&mut Self>, mod_id: i32, tags: &QString, note: &QString) {
-        let Ok((library, _)) = crate::library() else {
-            return;
-        };
-        let Ok(installed) = usize::try_from(mod_id) else {
+    pub(crate) fn tags_changed(mut self: Pin<&mut Self>, mod_id: i32) {
+        let loaded = crate::app().library();
+        let (Ok((library, _)), Ok(installed)) = (&*loaded, usize::try_from(mod_id)) else {
             return;
         };
         let Some(key) = library.installed.get(installed).and_then(|m| m.key()) else {
             return;
         };
-        let tags = notes::tags_in(&tags.to_string());
-        let mut all = crate::NOTES.write().unwrap_or_else(|e| e.into_inner());
-        let mut kept = all.get(&key).cloned().unwrap_or_default();
-        kept.tags = tags.clone();
-        kept.text = note.to_string().trim().to_string();
-        all.set(&key, kept);
-        if let Err(problem) = all.write(&crate::notes_file()) {
-            eprintln!("{problem}");
-        }
-        drop(all);
+        let notes = crate::app().notes().reading();
+        let tags = notes.get(&key).map(|note| note.tags.clone());
+        drop(notes);
         self.as_mut()
-            .reset_with(|list| list.set_tags(installed, &tags));
-    }
-
-    pub(crate) fn set_version_ok(self: Pin<&mut Self>, mod_id: i32, ok: bool) {
-        change_note(mod_id, |note| note.version_ok = ok);
-        self.recheck();
-    }
-
-    pub(crate) fn set_category(self: Pin<&mut Self>, mod_id: i32, label: &QString) {
-        let label = label.to_string();
-        let known = Category::from_label(&label).map_or("", Category::label);
-        change_note(mod_id, |note| note.category = known.to_string());
-    }
-
-    pub(crate) fn set_sub(self: Pin<&mut Self>, mod_id: i32, name: &QString) {
-        let name = name.to_string().trim().to_string();
-        change_note(mod_id, |note| note.set_group(&name));
+            .reset_with(|list| list.set_tags(installed, &tags.unwrap_or_default()));
     }
 
     fn sub_on(&self, row: i32) -> Option<usize> {
@@ -67,7 +42,7 @@ impl qobject::ModListModel {
         let members = self.list.in_sub_of(first).into_iter();
         let ids: Vec<usize> = members.filter_map(|at| mods[at].installed).collect();
         for id in ids {
-            change_note(id as i32, |note| note.remove_tag(&tag));
+            crate::mod_edits::change_note(id as i32, |note| note.remove_tag(&tag));
         }
     }
 
@@ -91,11 +66,12 @@ impl qobject::ModListModel {
             .reset_with(|list| list.show_by(key.map(|key| (key, descending))));
     }
 
-    pub(crate) fn begin_batch(mut self: Pin<&mut Self>) {
+    /// Until `end_batch`, changes to the load order count as one step for Undo.
+    fn begin_batch(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().batching = true;
     }
 
-    pub(crate) fn end_batch(mut self: Pin<&mut Self>) {
+    fn end_batch(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().batching = false;
         self.as_mut().reset_with(|_| ());
     }
@@ -105,46 +81,18 @@ impl qobject::ModListModel {
         self.as_mut().reset_with(|_| ());
     }
 
-    pub(crate) fn add_rule(self: Pin<&mut Self>, first: i32, then: i32) {
-        self.change_rule(first, then, true);
-    }
-
-    pub(crate) fn remove_rule(self: Pin<&mut Self>, first: i32, then: i32) {
-        self.change_rule(first, then, false);
-    }
-
-    pub(crate) fn change_rule(mut self: Pin<&mut Self>, first: i32, then: i32, add: bool) {
-        let Ok((library, _)) = crate::library() else {
-            return;
-        };
-        let key = |id: i32| library.installed.get(usize::try_from(id).ok()?)?.key();
-        let (Some(first), Some(then)) = (key(first), key(then)) else {
-            return;
-        };
-        let mut yours = crate::USER_RULES.write().unwrap_or_else(|e| e.into_inner());
-        let changed = match add {
-            true => yours.add(&first, &then),
-            false => yours.remove(&first, &then),
-        };
-        if !changed {
-            return;
-        }
-        if let Err(problem) = yours.write(&crate::user_rules_file()) {
-            eprintln!("{problem}");
-        }
-        drop(yours);
-        // The problem markers do not depend on rules; the details do.
-        let next = self.rules_version + 1;
-        self.as_mut().set_rules_version(next);
+    pub(crate) fn community_changed(mut self: Pin<&mut Self>) {
+        self.as_mut().recheck();
+        self.as_mut().refile();
     }
 
     pub(crate) fn unsaved_kept(&self) -> QString {
-        QString::from(&crate::session().changes().kept())
+        QString::from(&crate::app().session().changes().kept())
     }
 
     pub(crate) fn session_changed(mut self: Pin<&mut Self>) {
         let (dirty, undo, redo, unsaved) = {
-            let session = crate::session();
+            let session = crate::app().session();
             let unsaved = session.changes().in_words();
             (
                 session.is_dirty(),
@@ -173,19 +121,19 @@ impl qobject::ModListModel {
 
     /// Back to the list as it is on disk, as one step that Undo takes back.
     pub(crate) fn discard_changes(mut self: Pin<&mut Self>) {
-        let saved = crate::session().saved().to_vec();
-        crate::session().record(saved);
+        let saved = crate::app().session().saved().to_vec();
+        crate::app().session().record(saved);
         self.as_mut().sync();
     }
 
     pub(crate) fn undo(mut self: Pin<&mut Self>) {
-        if crate::session().undo().is_some() {
+        if crate::app().session().undo().is_some() {
             self.as_mut().sync();
         }
     }
 
     pub(crate) fn redo(mut self: Pin<&mut Self>) {
-        if crate::session().redo().is_some() {
+        if crate::app().session().redo().is_some() {
             self.as_mut().sync();
         }
     }
@@ -194,12 +142,13 @@ impl qobject::ModListModel {
         let Ok(ids) = serde_json::from_str::<Vec<String>>(&ids.to_string()) else {
             return;
         };
-        crate::session().record(ids);
+        crate::app().session().record(ids);
         self.as_mut().sync();
     }
 
     pub(crate) fn sync(mut self: Pin<&mut Self>) {
-        let (true, Ok((library, _))) = (self.installed, crate::library()) else {
+        let loaded = crate::app().library();
+        let (true, Ok((library, _))) = (self.installed, &*loaded) else {
             return;
         };
         let now = arranged(library);
@@ -224,20 +173,21 @@ impl qobject::ModListModel {
     }
 
     pub(crate) fn save(mut self: Pin<&mut Self>) -> QString {
-        let Some(path) = crate::PATHS.mods_config() else {
+        let Some(path) = crate::app().paths().mods_config() else {
             return QString::from(&say!("RimWorld's settings folder was not found."));
         };
         // An id is empty for a folder that is not a readable mod.
-        let ids: Vec<String> = crate::session()
+        let ids: Vec<String> = crate::app()
+            .session()
             .current()
             .iter()
             .filter(|id| !id.is_empty())
             .cloned()
             .collect();
         if let Err(problem) = modsconfig::write(&path, &ids) {
-            return QString::from(&problem);
+            return QString::from(&problem.to_string());
         }
-        crate::session().mark_saved();
+        crate::app().session().mark_saved();
         self.as_mut().session_changed();
         QString::default()
     }
@@ -246,50 +196,33 @@ impl qobject::ModListModel {
         let Some(category) = Category::ALL.get(category as usize).copied() else {
             return;
         };
-        // Qt must hear about a row change before it happens, so find the range first.
-        let headers: Vec<(usize, usize, bool)> = self
-            .list
-            .rows()
-            .iter()
-            .enumerate()
-            .filter_map(|(row, r)| match r {
-                Row::Header {
-                    category: c,
-                    count,
-                    collapsed,
-                } if *c == category => Some((row, *count, *collapsed)),
-                _ => None,
-            })
-            .collect();
-
+        // Qt must hear about a row change before it happens.
         let parent = QModelIndex::default();
-        match headers.as_slice() {
-            [(row, count, was_collapsed)] if *count > 0 => {
-                let first = (*row + 1) as i32;
-                let last = (*row + *count) as i32;
-                unsafe {
-                    if *was_collapsed {
-                        self.as_mut().begin_insert_rows(&parent, first, last);
-                    } else {
-                        self.as_mut().begin_remove_rows(&parent, first, last);
-                    }
-                }
-                self.as_mut().rust_mut().list.toggle(category);
-                unsafe {
-                    if *was_collapsed {
-                        self.as_mut().end_insert_rows();
-                    } else {
-                        self.as_mut().end_remove_rows();
-                    }
-                }
-                let header = self.index(*row as i32, 0, &parent);
-                self.as_mut()
-                    .data_changed(&header, &header, &QVector::default());
-            }
-            _ => {
+        let (first, count, inserting) = match self.list.toggling(category) {
+            Change::Inserted { first, count } => (first, count, true),
+            Change::Removed { first, count } => (first, count, false),
+            Change::Reset => {
                 self.as_mut().reset_with(|list| list.toggle(category));
+                return;
+            }
+        };
+        let (first, last) = (first as i32, (first + count - 1) as i32);
+        unsafe {
+            match inserting {
+                true => self.as_mut().begin_insert_rows(&parent, first, last),
+                false => self.as_mut().begin_remove_rows(&parent, first, last),
             }
         }
+        self.as_mut().rust_mut().list.toggle(category);
+        unsafe {
+            match inserting {
+                true => self.as_mut().end_insert_rows(),
+                false => self.as_mut().end_remove_rows(),
+            }
+        }
+        let header = self.index(first - 1, 0, &parent);
+        self.as_mut()
+            .data_changed(&header, &header, &QVector::default());
     }
 
     pub(crate) fn set_filter(mut self: Pin<&mut Self>, text: &QString) {
@@ -337,6 +270,44 @@ impl qobject::ModListModel {
                 list.arrange(by_name);
             }
         });
+    }
+
+    pub(crate) fn take_all_from(mut self: Pin<&mut Self>, other: *mut Self, ids: &QString) {
+        let own: *const Self = &*self;
+        if other.is_null() || std::ptr::eq(other, own) {
+            return;
+        }
+        // SAFETY: non-null, not `self`, and QML keeps the object alive for
+        // the call; each borrow of it ends before the next begins.
+        let place = move |id: usize| unsafe { &*other }.index_of(id as i32);
+        let mut ids = crate::backend::ids_from(ids);
+        ids.sort_by_key(|id| place(*id));
+        // Whichever of the two is the load order notes the one step.
+        self.as_mut().begin_batch();
+        unsafe { Pin::new_unchecked(&mut *other) }.begin_batch();
+        for id in ids {
+            let at = place(id);
+            if at >= 0 {
+                self.as_mut().take_from(other, at);
+            }
+        }
+        unsafe { Pin::new_unchecked(&mut *other) }.end_batch();
+        self.as_mut().end_batch();
+    }
+
+    pub(crate) fn move_all_to_edge(mut self: Pin<&mut Self>, ids: &QString, top: bool) {
+        let mut ids = crate::backend::ids_from(ids);
+        ids.sort_by_key(|id| self.index_of(*id as i32));
+        // The last one moved ends up outermost.
+        if top {
+            ids.reverse();
+        }
+        self.as_mut().begin_batch();
+        for id in ids {
+            let at = self.index_of(id as i32);
+            self.as_mut().move_to_edge(at, top);
+        }
+        self.as_mut().end_batch();
     }
 
     pub(crate) fn take_from_at(mut self: Pin<&mut Self>, other: *mut Self, index: i32, to: i32) {

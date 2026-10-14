@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 /// One entry of a mod's change notes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Note {
     /// Seconds since 1970.
     pub time: u64,
@@ -28,13 +28,10 @@ impl AtLaunch {
         serde_json::from_str(&std::fs::read_to_string(file).ok()?).ok()
     }
 
-    pub fn write(&self, file: &Path) -> Result<(), String> {
-        let failed = |e: std::io::Error| format!("{}: {e}", file.display());
-        if let Some(dir) = file.parent() {
-            std::fs::create_dir_all(dir).map_err(failed)?;
-        }
-        let text = serde_json::to_string(self).map_err(|e| e.to_string())?;
-        std::fs::write(file, text).map_err(failed)
+    pub fn write(&self, file: &Path) -> Result<(), crate::error::Error> {
+        let text =
+            serde_json::to_string(self).map_err(|e| crate::error::Error::format(e.to_string()))?;
+        crate::whole::write(file, text)
     }
 
     /// The Workshop ids whose version on disk is another one now, each
@@ -49,6 +46,36 @@ impl AtLaunch {
         found.sort();
         found
     }
+}
+
+/// Of a mod's notes, newest first, those written after the version it
+/// had; where none is (the notes lag behind the files), the newest one.
+pub fn worth_showing(all: &[Note], was: u64) -> &[Note] {
+    let newer = all.iter().take_while(|note| note.time > was).count();
+    &all[..newer.max(1).min(all.len())]
+}
+
+/// Since when changes are counted, and the Workshop mods updated since,
+/// each with the time of the version it had. With a record of the
+/// versions at the last start, it says; without one, a mod published
+/// after `last` (see `counted_from`) counts, and its earlier version's
+/// time is not known: `last` stands for it. Nothing where neither is.
+pub fn since(
+    record: Option<&AtLaunch>,
+    last: Option<u64>,
+    now: &HashMap<String, u64>,
+) -> Option<(u64, Vec<(String, u64)>)> {
+    if let Some(record) = record {
+        return Some((record.time, record.updated(now)));
+    }
+    let last = last?;
+    let mut published: Vec<(String, u64)> = now
+        .iter()
+        .filter(|(_, at)| **at > last)
+        .map(|(id, _)| (id.clone(), last))
+        .collect();
+    published.sort();
+    Some((last, published))
 }
 
 /// Text as a Workshop page writes it, read as plain text: line breaks
@@ -169,12 +196,14 @@ pub fn fetch_steam_notes(workshop_id: &str) -> Result<Vec<Note>, NotesProblem> {
 /// The commits a Git checkout gained since `since`, newest first, at
 /// most thirty: what `git log` says of each on one line.
 pub fn git_notes(checkout: &Path, since: u64) -> Vec<Note> {
-    let ran = std::process::Command::new("git")
-        .arg("-C")
-        .arg(checkout)
-        .args(["log", "-n", "30", "--pretty=%ct%x09%s"])
-        .arg(format!("--since=@{since}"))
-        .output();
+    let ran = crate::program::run(
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(checkout)
+            .args(["log", "-n", "30", "--pretty=%ct%x09%s"])
+            .arg(format!("--since=@{since}")),
+        crate::program::LOCAL,
+    );
     let Ok(ran) = ran else {
         return Vec::new();
     };
@@ -192,6 +221,40 @@ pub fn git_notes(checkout: &Path, since: u64) -> Vec<Note> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_notes_after_the_version_on_disk_are_shown_or_else_the_newest() {
+        let note = |time| Note {
+            time,
+            text: String::new(),
+        };
+        let all = [note(30), note(20), note(10)];
+        assert_eq!(worth_showing(&all, 15), &all[..2]);
+        assert_eq!(worth_showing(&all, 99), &all[..1]);
+        assert_eq!(worth_showing(&[], 0), &[]);
+    }
+
+    #[test]
+    fn changes_are_counted_from_the_record_or_failing_that_from_the_last_start() {
+        let times = |pairs: &[(&str, u64)]| -> HashMap<String, u64> {
+            pairs.iter().map(|(id, at)| (id.to_string(), *at)).collect()
+        };
+        let now = times(&[("1", 50), ("2", 90), ("3", 120)]);
+        let record = AtLaunch {
+            time: 100,
+            workshop: times(&[("1", 50), ("2", 60)]),
+        };
+        // 3 was installed since: not an update.
+        assert_eq!(
+            since(Some(&record), Some(999), &now),
+            Some((100, vec![("2".to_string(), 60)]))
+        );
+        assert_eq!(
+            since(None, Some(80), &now),
+            Some((80, vec![("2".to_string(), 80), ("3".to_string(), 80)]))
+        );
+        assert_eq!(since(None, None, &now), None);
+    }
 
     #[test]
     fn a_refusal_is_waited_out_longer_each_time_then_given_up() {

@@ -3,6 +3,7 @@
 //! RimStack changes files of a mod, and every rename is recorded so it
 //! can be put back.
 
+use crate::error::Error;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -25,10 +26,7 @@ impl Hidden {
     /// No file, or a damaged one, is nothing hidden. Files already renamed
     /// then stay renamed; `strays` finds them.
     pub fn read(path: &Path) -> Self {
-        let Ok(text) = std::fs::read_to_string(path) else {
-            return Self::default();
-        };
-        let Ok(Value::Object(entries)) = serde_json::from_str(&text) else {
+        let Some(Value::Object(entries)) = crate::whole::read_json(path) else {
             return Self::default();
         };
         let files = entries
@@ -38,22 +36,17 @@ impl Hidden {
         Self { files }
     }
 
-    pub fn write(&self, path: &Path) -> Result<(), String> {
-        let failed = |e: std::io::Error| format!("{}: {e}", path.display());
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(failed)?;
-        }
+    pub fn write(&self, path: &Path) -> Result<(), Error> {
         let entries: serde_json::Map<String, Value> = self
             .files
             .iter()
             .map(|(k, len)| (k.to_string_lossy().into_owned(), json!(len)))
             .collect();
-        let partial = path.with_extension("json.part");
-        std::fs::write(&partial, Value::Object(entries).to_string()).map_err(failed)?;
-        std::fs::rename(&partial, path).map_err(failed)
+        crate::whole::write(path, Value::Object(entries).to_string())
     }
 
-    pub fn is_hidden(&self, texture: &Path) -> bool {
+    #[cfg(test)]
+    fn is_hidden(&self, texture: &Path) -> bool {
         self.files.contains_key(texture)
     }
 
@@ -69,12 +62,12 @@ impl Hidden {
 
     /// Hides a texture: the PNG, and the DDS beside it if there is one.
     /// Hiding one that is already hidden changes nothing.
-    pub fn hide(&mut self, png: &Path) -> Result<(), String> {
+    pub fn hide(&mut self, png: &Path) -> Result<(), Error> {
         for file in [png.to_path_buf(), png.with_extension("dds")] {
             if self.files.contains_key(&file) || !file.is_file() {
                 continue;
             }
-            let failed = |e: std::io::Error| format!("{}: {e}", file.display());
+            let failed = |e: std::io::Error| Error::file(&file, e);
             let len = std::fs::metadata(&file).map_err(failed)?.len();
             std::fs::rename(&file, hidden_name(&file)).map_err(failed)?;
             self.files.insert(file, len);
@@ -85,21 +78,21 @@ impl Hidden {
     /// Puts a hidden texture back under its own name. If a file of that
     /// name exists again (Steam restored it), the hidden copy is left
     /// where it is and the record dropped: nothing is overwritten.
-    pub fn unhide(&mut self, png: &Path) -> Result<(), String> {
+    pub fn unhide(&mut self, png: &Path) -> Result<(), Error> {
         for file in [png.to_path_buf(), png.with_extension("dds")] {
             if self.files.remove(&file).is_none() {
                 continue;
             }
             let renamed = hidden_name(&file);
             if renamed.is_file() && !file.exists() {
-                std::fs::rename(&renamed, &file).map_err(|e| format!("{}: {e}", file.display()))?;
+                std::fs::rename(&renamed, &file).map_err(|e| Error::file(&file, e))?;
             }
         }
         Ok(())
     }
 
     /// Unhides everything in one mod's folder. Returns how many textures.
-    pub fn unhide_all(&mut self, mod_root: &Path) -> Result<usize, String> {
+    pub fn unhide_all(&mut self, mod_root: &Path) -> Result<usize, Error> {
         let pngs: Vec<PathBuf> = self
             .in_mod(mod_root)
             .into_iter()
@@ -110,19 +103,6 @@ impl Hidden {
             self.unhide(png)?;
         }
         Ok(pngs.len())
-    }
-
-    /// Recorded files that are back under their own name: Steam restores
-    /// renamed files when it updates or verifies a mod. Hiding them again
-    /// would need the stale hidden copy removed first, which RimStack does
-    /// not do by itself.
-    pub fn restored_by_steam(&self) -> Vec<&Path> {
-        let back = |p: &&PathBuf| p.exists();
-        self.files
-            .keys()
-            .filter(back)
-            .map(PathBuf::as_path)
-            .collect()
     }
 }
 
@@ -186,7 +166,6 @@ mod tests {
         let mut hidden = Hidden::default();
         hidden.hide(&dir.join("door.png")).unwrap();
         fs::write(dir.join("door.png"), "restored by Steam").unwrap();
-        assert_eq!(hidden.restored_by_steam(), [dir.join("door.png")]);
         hidden.unhide(&dir.join("door.png")).unwrap();
         assert_eq!(
             fs::read_to_string(dir.join("door.png")).unwrap(),

@@ -8,7 +8,7 @@ import RimStack.Ui
 
 Rectangle {
     id: bar
-    required property Backend backend
+    required property BrokenModSearch hunter
     // `Backend.huntState`, parsed.
     property var search: ({ active: false })
     signal useList(var ids)
@@ -20,19 +20,19 @@ Rectangle {
             useList(search.list)
     }
     function start() {
-        show(backend.huntStart())
+        show(hunter.huntStart())
     }
     function answer(broken) {
-        show(backend.huntAnswer(broken))
+        show(hunter.huntAnswer(broken))
     }
     // Back to the list the search began with, less `without` if given.
     function end(without) {
         const ids = search.original.filter(id => id !== without)
-        backend.huntStop()
+        hunter.huntStop()
         search = ({ active: false })
         useList(ids)
     }
-    Component.onCompleted: if (!Theme.demo) search = JSON.parse(backend.huntState())
+    Component.onCompleted: if (!Theme.demo) search = JSON.parse(hunter.huntState())
 
     // A round is under way: neither found nor stuck.
     readonly property bool asking: !!search.active && !search.found && (search.stuck || []).length === 0

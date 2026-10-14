@@ -8,7 +8,7 @@ import RimStack.Ui
 
 Rectangle {
     id: bar
-    required property Backend backend
+    required property KeptLists keptLists
     property int section: 0
     property int behind: 0
     property bool gameRunning: false
@@ -40,13 +40,13 @@ Rectangle {
             all += tabs.itemAt(at) ? tabs.itemAt(at).natural + nav.spacing : 0
         return all
     }
-    readonly property bool folded: left.x + left.width + 10 + sectionsWidth + 14 + Theme.field + 6 + right.spacing + playButton.width + 14 > width
+    readonly property bool folded: leftSide.x + leftSide.width + 10 + sectionsWidth + 14 + Theme.field + 6 + rightSide.spacing + playButton.width + 14 > width
 
     implicitHeight: Theme.topBar
     color: Theme.bar
 
     Row {
-        id: left
+        id: leftSide
         x: 12
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.gap
@@ -89,7 +89,7 @@ Rectangle {
             ListsMenu {
                 id: listsMenu
                 y: listsButton.height + 6
-                backend: bar.backend
+                keptLists: bar.keptLists
                 onUseList: ids => bar.useList(ids)
                 onNamed: name => Mods.prefs.listName = name
             }
@@ -99,7 +99,7 @@ Rectangle {
     Rectangle {
         id: sectionsBox
         // In the middle of the window while there is room on both sides.
-        x: Math.max(left.x + left.width + 10, Math.min((parent.width - width) / 2, right.x - width - 10))
+        x: Math.max(leftSide.x + leftSide.width + 10, Math.min((parent.width - width) / 2, rightSide.x - width - 10))
         anchors.verticalCenter: parent.verticalCenter
         width: nav.width + 4
         height: nav.height + 4
@@ -186,7 +186,7 @@ Rectangle {
     }
 
     Row {
-        id: right
+        id: rightSide
         anchors.right: parent.right
         anchors.rightMargin: Theme.gapCard
         anchors.verticalCenter: parent.verticalCenter
@@ -194,7 +194,7 @@ Rectangle {
         Rectangle {
             id: searchBox
             // What the name, the sections and Play leave: the box takes it, and is a glass alone when that is too little to type in.
-            readonly property real room: bar.width - 14 - playButton.width - right.spacing - (left.x + left.width + 10 + sectionsBox.width + 10)
+            readonly property real room: bar.width - 14 - playButton.width - rightSide.spacing - (leftSide.x + leftSide.width + 10 + sectionsBox.width + 10)
             readonly property bool small: room < Theme.sized(130)
             anchors.verticalCenter: parent.verticalCenter
             width: small ? Theme.field + 6 : Math.min(Theme.sized(250), room)

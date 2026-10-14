@@ -3,11 +3,12 @@
 //! the copy on disk, and mods never subscribed to put in the game's own
 //! `Mods` folder.
 
+use crate::error::{Error, Kind, Result};
 use crate::say;
 
 use std::path::{Path, PathBuf};
 
-const GAME: &str = "294100";
+use crate::paths::APP_ID as GAME;
 
 /// SteamCMD: the one RimStack installed under `data_dir`, or the one
 /// the system's `PATH` has.
@@ -25,46 +26,60 @@ pub fn steamcmd(data_dir: &Path) -> Option<PathBuf> {
 /// Downloads Valve's SteamCMD and unpacks it under `data_dir`. Uses the
 /// network and the system's `tar`. SteamCMD fetches the rest of itself
 /// the first time it runs.
-pub fn install(data_dir: &Path) -> Result<PathBuf, String> {
+pub fn install(data_dir: &Path) -> Result<PathBuf> {
     // Windows has shipped a tar that also reads zip files since 2018.
     let (archive, program) = match std::env::consts::OS {
         "linux" => ("steamcmd_linux.tar.gz", "steamcmd.sh"),
         "macos" => ("steamcmd_osx.tar.gz", "steamcmd.sh"),
         "windows" => ("steamcmd.zip", "steamcmd.exe"),
-        other => return Err(say!("RimStack does not install SteamCMD on {}", other)),
+        other => {
+            return Err(Error::refused(say!(
+                "RimStack does not install SteamCMD on {}",
+                other
+            )))
+        }
     };
     let dir = data_dir.join("steamcmd");
-    let failed = |what: &str, e: &dyn std::fmt::Display| format!("{what}: {e}");
-    std::fs::create_dir_all(&dir).map_err(|e| failed(&say!("its folder could not be made"), &e))?;
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(std::time::Duration::from_secs(120)))
-        .build()
-        .into();
+    let failed = |kind: Kind, what: String, e: &dyn std::fmt::Display| {
+        Error::new(kind, format!("{what}: {e}"))
+    };
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| failed(Kind::File, say!("its folder could not be made"), &e))?;
+    let agent = crate::web::agent(120);
     let url = format!("https://steamcdn-a.akamaihd.net/client/installer/{archive}");
     let mut response = agent
         .get(&url)
         .call()
-        .map_err(|e| failed(&say!("the download failed"), &e))?;
+        .map_err(|e| failed(Kind::Network, say!("the download failed"), &e))?;
     let bytes = response
         .body_mut()
         .read_to_vec()
-        .map_err(|e| failed(&say!("the download failed"), &e))?;
+        .map_err(|e| failed(Kind::Network, say!("the download failed"), &e))?;
     let packed = dir.join(archive);
     std::fs::write(&packed, bytes)
-        .map_err(|e| failed(&say!("the download could not be kept"), &e))?;
-    let unpacked = std::process::Command::new("tar")
-        .arg("-xf")
-        .arg(&packed)
-        .arg("-C")
-        .arg(&dir)
-        .status()
-        .map_err(|e| failed(&say!("tar could not be run"), &e))?;
+        .map_err(|e| failed(Kind::File, say!("the download could not be kept"), &e))?;
+    let unpacked = crate::program::run(
+        std::process::Command::new("tar")
+            .arg("-xf")
+            .arg(&packed)
+            .arg("-C")
+            .arg(&dir),
+        crate::program::NETWORK,
+    )
+    .map_err(|e| failed(Kind::Program, say!("tar could not be run"), &e))?
+    .status;
     let _ = std::fs::remove_file(&packed);
     let program = dir.join(program);
     match unpacked.success() && program.is_file() {
         true => Ok(program),
-        false => Err(say!("the download did not unpack to SteamCMD")),
+        false => Err(Error::program(say!(
+            "the download did not unpack to SteamCMD"
+        ))),
     }
+}
+
+fn not_an_id(id: &str) -> Error {
+    Error::refused(say!("{} is not a Workshop id", id))
 }
 
 fn is_workshop_id(id: &str) -> bool {
@@ -78,7 +93,7 @@ pub fn fetch_all(
     steamcmd: &Path,
     ids: &[String],
     scratch: &Path,
-) -> Vec<(String, Result<PathBuf, String>)> {
+) -> Vec<(String, Result<PathBuf>)> {
     let (asked, refused): (Vec<&String>, Vec<&String>) =
         ids.iter().partition(|id| is_workshop_id(id));
     // A home of its own: with the user's, SteamCMD finds their Steam
@@ -99,11 +114,9 @@ pub fn fetch_all(
     }
     let ran = match asked.is_empty() {
         true => Ok(String::new()),
-        false => command
-            .arg("+quit")
-            .output()
+        false => crate::program::run(command.arg("+quit"), crate::program::DOWNLOAD)
             .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
-            .map_err(|e| say!("SteamCMD could not be run: {}", e)),
+            .map_err(|e| Error::program(say!("SteamCMD could not be run: {}", e))),
     };
     let content = scratch.join("steamapps/workshop/content").join(GAME);
     let outcome = |id: &String| {
@@ -113,38 +126,43 @@ pub fn fetch_all(
             return Ok(fresh);
         }
         let last = said.lines().rev().find(|l| !l.trim().is_empty());
-        Err(say!(
+        Err(Error::program(say!(
             "SteamCMD did not download it: {}",
             last.map_or_else(|| say!("no reason given"), |line| line.trim().to_string())
-        ))
+        )))
     };
-    let not_an_id = |id: &&String| ((*id).clone(), Err(say!("{} is not a Workshop id", id)));
+    let not_an_id = |id: &&String| ((*id).clone(), Err(not_an_id(id)));
     let mut all: Vec<_> = refused.iter().map(not_an_id).collect();
     all.extend(asked.iter().map(|id| ((*id).clone(), outcome(id))));
     all
 }
 
 /// Downloads a Workshop item under `scratch` and returns its folder.
-pub fn fetch(steamcmd: &Path, workshop_id: &str, scratch: &Path) -> Result<PathBuf, String> {
+pub fn fetch(steamcmd: &Path, workshop_id: &str, scratch: &Path) -> Result<PathBuf> {
     let mut all = fetch_all(steamcmd, &[workshop_id.to_string()], scratch);
-    all.pop()
-        .map_or(Err(say!("nothing was asked")), |(_, outcome)| outcome)
+    all.pop().map_or(
+        Err(Error::refused(say!("nothing was asked"))),
+        |(_, outcome)| outcome,
+    )
 }
 
 /// Puts a downloaded item in the game's own `Mods` folder under its
 /// Workshop id, in the place of an earlier download of it, and notes the
 /// id where the game and other tools look for it.
-pub fn put_in_local(fresh: &Path, workshop_id: &str, local_mods: &Path) -> Result<PathBuf, String> {
+pub fn put_in_local(fresh: &Path, workshop_id: &str, local_mods: &Path) -> Result<PathBuf> {
+    if !is_workshop_id(workshop_id) {
+        return Err(not_an_id(workshop_id));
+    }
     let to = local_mods.join(workshop_id);
     match to.exists() {
         true => replace(&to, fresh)?,
         false => std::fs::rename(fresh, &to)
             .or_else(|_| copy_all(fresh, &to))
-            .map_err(|e| format!("{}: {e}", to.display()))?,
+            .map_err(|e| Error::file(&to, e))?,
     }
     let noted = to.join("About").join("PublishedFileId.txt");
     if !noted.exists() {
-        std::fs::write(&noted, workshop_id).map_err(|e| format!("{}: {e}", noted.display()))?;
+        std::fs::write(&noted, workshop_id).map_err(|e| Error::file(&noted, e))?;
     }
     Ok(to)
 }
@@ -152,33 +170,60 @@ pub fn put_in_local(fresh: &Path, workshop_id: &str, local_mods: &Path) -> Resul
 /// Puts `fresh` where `installed` is. The copy on disk is moved aside
 /// first and deleted only once the new one is in place; if that fails it
 /// is moved back.
-pub fn replace(installed: &Path, fresh: &Path) -> Result<(), String> {
-    let aside = installed.with_extension("rimstack-old");
-    let failed = |what: &str, e: std::io::Error| format!("{what}: {e}");
+pub fn replace(installed: &Path, fresh: &Path) -> Result<()> {
+    // Beside it under its whole name: a folder may have a dot in its own.
+    let mut aside = installed.as_os_str().to_os_string();
+    aside.push(".rimstack-old");
+    let aside = PathBuf::from(aside);
+    let failed = |what: &str, e: std::io::Error| Error::new(Kind::File, format!("{what}: {e}"));
+    // Left by a run that could not finish deleting it: in the way of
+    // this one, and a second copy of the mod to the game.
+    if aside.is_dir() && installed.is_dir() {
+        std::fs::remove_dir_all(&aside)
+            .map_err(|e| failed(&say!("the old copy could not be deleted"), e))?;
+    }
     std::fs::rename(installed, &aside)
         .map_err(|e| failed(&say!("the mod's folder could not be moved aside"), e))?;
     let moved = std::fs::rename(fresh, installed).or_else(|_| copy_all(fresh, installed));
     if let Err(problem) = moved {
         let _ = std::fs::remove_dir_all(installed);
-        let _ = std::fs::rename(&aside, installed);
-        return Err(failed(
-            &say!("the new copy could not be put in place"),
-            problem,
-        ));
+        let what = match std::fs::rename(&aside, installed) {
+            Ok(()) => say!("the new copy could not be put in place"),
+            Err(_) => say!(
+                "the new copy could not be put in place, and the old one is now {}",
+                aside.display()
+            ),
+        };
+        return Err(failed(&what, problem));
     }
     std::fs::remove_dir_all(&aside)
         .map_err(|e| failed(&say!("the old copy could not be deleted"), e))
 }
 
-/// For a download on another disk, where a folder cannot be renamed across.
+/// Folders inside folders, as far as a mod goes; a link to a folder
+/// above itself would otherwise be followed for ever.
+const DEEPEST: usize = 40;
+
+/// For a download on another disk, where a folder cannot be renamed
+/// across. What a link points at is copied in its place.
 pub(crate) fn copy_all(from: &Path, to: &Path) -> std::io::Result<()> {
+    copy_under(from, to, DEEPEST)
+}
+
+fn copy_under(from: &Path, to: &Path, deeper: usize) -> std::io::Result<()> {
+    let Some(deeper) = deeper.checked_sub(1) else {
+        return Err(std::io::Error::other(format!(
+            "{}: folders more than {DEEPEST} deep",
+            from.display()
+        )));
+    };
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(from)? {
         let entry = entry?;
-        let target = to.join(entry.file_name());
-        match entry.file_type()?.is_dir() {
-            true => copy_all(&entry.path(), &target)?,
-            false => drop(std::fs::copy(entry.path(), target)?),
+        let (source, target) = (entry.path(), to.join(entry.file_name()));
+        match source.is_dir() {
+            true => copy_under(&source, &target, deeper)?,
+            false => drop(std::fs::copy(&source, target)?),
         }
     }
     Ok(())
@@ -206,6 +251,22 @@ mod tests {
     }
 
     #[test]
+    fn a_folder_with_a_dot_in_its_name_is_set_aside_under_that_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (installed, other) = (
+            tmp.path().join("Mod.v2"),
+            tmp.path().join("Mod.rimstack-old"),
+        );
+        std::fs::create_dir_all(&installed).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(other.join("theirs.txt"), "kept").unwrap();
+        let fresh = tmp.path().join("new");
+        std::fs::create_dir_all(&fresh).unwrap();
+        replace(&installed, &fresh).unwrap();
+        assert!(other.join("theirs.txt").is_file());
+    }
+
+    #[test]
     fn the_copy_on_disk_stays_when_there_is_nothing_to_put_in_its_place() {
         let tmp = tempfile::tempdir().unwrap();
         let installed = tmp.path().join("123");
@@ -219,12 +280,56 @@ mod tests {
     }
 
     #[test]
+    fn a_folder_left_aside_earlier_does_not_stop_the_next_download() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (installed, fresh) = (tmp.path().join("123"), tmp.path().join("new"));
+        let left = tmp.path().join("123.rimstack-old");
+        for folder in [&installed, &fresh, &left] {
+            std::fs::create_dir_all(folder.join("About")).unwrap();
+        }
+        assert_eq!(replace(&installed, &fresh), Ok(()));
+        assert!(!left.exists());
+    }
+
+    #[test]
+    fn a_download_is_never_put_outside_the_mods_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (fresh, mods) = (tmp.path().join("fresh"), tmp.path().join("game/Mods"));
+        std::fs::create_dir_all(fresh.join("About")).unwrap();
+        std::fs::create_dir_all(&mods).unwrap();
+        let put = put_in_local(&fresh, "../../escaped", &mods);
+        assert_eq!(put.unwrap_err().kind(), Kind::Refused);
+        assert!(!tmp.path().join("escaped").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_folder_is_copied_as_what_it_points_at_and_a_loop_ends() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (from, shared) = (tmp.path().join("mod"), tmp.path().join("shared"));
+        std::fs::create_dir_all(&from).unwrap();
+        std::fs::create_dir_all(&shared).unwrap();
+        std::fs::write(shared.join("a.png"), "png").unwrap();
+        std::os::unix::fs::symlink(&shared, from.join("Textures")).unwrap();
+        let to = tmp.path().join("copy");
+        copy_all(&from, &to).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(to.join("Textures/a.png")).unwrap(),
+            "png"
+        );
+        assert!(!to.join("Textures").is_symlink());
+
+        std::os::unix::fs::symlink(&from, from.join("itself")).unwrap();
+        assert!(copy_all(&from, &tmp.path().join("again")).is_err());
+    }
+
+    #[test]
     fn only_a_number_is_asked_of_steamcmd() {
         let tmp = tempfile::tempdir().unwrap();
         let asked = fetch(Path::new("/nonexistent/steamcmd"), "12; rm -rf", tmp.path());
-        assert!(asked.unwrap_err().contains("not a Workshop id"));
+        assert_eq!(asked.unwrap_err().kind(), Kind::Refused);
         let missing = fetch(Path::new("/nonexistent/steamcmd"), "123456", tmp.path());
-        assert!(missing.unwrap_err().contains("could not be run"));
+        assert_eq!(missing.unwrap_err().kind(), Kind::Program);
     }
 
     /// A stand-in for SteamCMD that writes down the home it was given.

@@ -1,6 +1,7 @@
 //! Where two versions of a texture differ, as a picture: the pixels
 //! that are the same left out.
 
+use crate::error::Error;
 use image::{Rgba, RgbaImage};
 use std::path::Path;
 
@@ -54,20 +55,20 @@ pub fn of(earlier: &RgbaImage, later: &RgbaImage) -> Difference {
 }
 
 /// Reads two PNG files, writes their difference to `to` as a PNG.
-pub fn write(earlier: &Path, later: &Path, to: &Path) -> Result<(u64, u64), String> {
-    let read = |path: &Path| -> Result<RgbaImage, String> {
-        let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+pub fn write(earlier: &Path, later: &Path, to: &Path) -> Result<(u64, u64), Error> {
+    let read = |path: &Path| -> Result<RgbaImage, Error> {
+        let bytes = std::fs::read(path).map_err(|e| Error::file(path, e))?;
         let picture = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png);
         Ok(picture
-            .map_err(|e| format!("{}: {e}", path.display()))?
+            .map_err(|e| Error::format(format!("{}: {e}", path.display())))?
             .to_rgba8())
     };
     let found = of(&read(earlier)?, &read(later)?);
     if let Some(dir) = to.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        std::fs::create_dir_all(dir).map_err(|e| Error::file(dir, e))?;
     }
     let saved = found.picture.save_with_format(to, image::ImageFormat::Png);
-    saved.map_err(|e| format!("{}: {e}", to.display()))?;
+    saved.map_err(|e| Error::file(to, e))?;
     Ok((found.differing, found.total))
 }
 

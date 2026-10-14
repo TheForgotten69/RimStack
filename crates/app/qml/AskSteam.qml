@@ -6,12 +6,12 @@ import RimStack.Ui
 
 Btn {
     id: ask
-    required property var backend
+    required property var downloads
     property string idle
-    readonly property bool busy: !!backend && backend.changeNotesBusy
-    readonly property var far: backend && backend.changeNotesState ? JSON.parse(backend.changeNotesState) : ({})
+    readonly property bool busy: !!downloads && downloads.changeNotesBusy
+    readonly property var far: downloads && downloads.changeNotesState ? JSON.parse(downloads.changeNotesState) : ({})
     property int waits: 0
-    enabled: !!backend && !busy
+    enabled: !!downloads && !busy
     icon: "download"
     text: !busy ? idle
         : waits > 0 ? Theme.fill("Steam asks to wait, {} s", waits)

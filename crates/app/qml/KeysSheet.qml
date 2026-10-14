@@ -1,7 +1,6 @@
 // Every shortcut on one page; opened with "?".
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import RimStack.Ui
 
