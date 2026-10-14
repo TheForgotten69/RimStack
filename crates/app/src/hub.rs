@@ -49,6 +49,7 @@ pub mod qobject {
     impl cxx_qt::Initialize for Hub {}
 }
 
+use crate::App;
 use core::pin::Pin;
 use cxx::UniquePtr;
 use cxx_qt::CxxQtType;
@@ -56,6 +57,7 @@ use qobject::{
     DownloadsData, GameData, ListsData, LogsData, ModsData, SavesData, SearchData, SettingsData,
     TexturesData,
 };
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 pub struct HubRust {
@@ -101,6 +103,16 @@ impl Default for HubRust {
             owned_textures: UniquePtr::null(),
             owned_downloads: UniquePtr::null(),
         }
+    }
+}
+
+/// A QML singleton is made by QML, with nothing passed to it: the `App`
+/// waits here for the Hub, once.
+static HANDED: OnceLock<Arc<App>> = OnceLock::new();
+
+pub fn hand_over(app: Arc<App>) {
+    if HANDED.set(app).is_err() {
+        rimstack_core::problem!("the App was handed over twice");
     }
 }
 
@@ -150,7 +162,10 @@ where
 
 impl cxx_qt::Initialize for qobject::Hub {
     fn initialize(mut self: Pin<&mut Self>) {
-        let app = crate::workspace::shared();
+        let app = HANDED
+            .get()
+            .cloned()
+            .expect("main hands the App over before QML is loaded");
         let mut settings = crate::settings_data::qobject::make_settings_data();
         if let Some(settings) = settings.as_mut() {
             settings.connect(app.clone());

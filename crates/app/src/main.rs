@@ -20,6 +20,7 @@ mod workspace;
 pub use workspace::*;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
+use std::sync::Arc;
 use std::time::Instant;
 
 /// The desktop entry and the icon, kept in the program and written where
@@ -54,11 +55,11 @@ fn put_among_applications() {
 /// The short-lived process that asks Steam to subscribe or unsubscribe:
 /// `rimstack --steamworks=subscribe:1,2`. It ends with 0 when Steam took
 /// the requests, and says why not otherwise.
-fn steamworks(request: &str) -> std::process::ExitCode {
+fn steamworks(app: &App, request: &str) -> std::process::ExitCode {
     use rimstack_core::base::error::Error;
     use rimstack_core::rimworld::steamworks;
     let asked = steamworks::parse(request).ok_or_else(|| Error::refused("not a request"));
-    let library = app().paths().game.as_deref().and_then(steamworks::library);
+    let library = app.paths().game.as_deref().and_then(steamworks::library);
     let done = asked.and_then(|(action, ids)| {
         let library = library
             .ok_or_else(|| Error::program(said!("the game's Steam library was not found")))?;
@@ -85,14 +86,15 @@ fn main() -> std::process::ExitCode {
         eprintln!("--check saves the load order: run tools/check-app.sh, which gives it a copy through RIMSTACK_CONFIG");
         return std::process::ExitCode::from(2);
     }
+    let app = Arc::new(App::from_environment());
     if let Some(request) =
         std::env::args().find_map(|a| a.strip_prefix("--steamworks=").map(String::from))
     {
-        return steamworks(&request);
+        return steamworks(&app, &request);
     }
     STARTED.get_or_init(Instant::now);
-    if let Err(problem) = rimstack_core::base::diagnostics::start(&app().diagnostics_file()) {
-        rimstack_core::problem!("{}: {problem}", app().diagnostics_file().display());
+    if let Err(problem) = rimstack_core::base::diagnostics::start(&app.diagnostics_file()) {
+        rimstack_core::problem!("{}: {problem}", app.diagnostics_file().display());
     }
     rimstack_core::base::diagnostics::record_panics();
     rimstack_core::note!(
@@ -101,11 +103,12 @@ fn main() -> std::process::ExitCode {
         std::env::consts::OS
     );
     // Before the mods are read: their problems are put in words as they are.
-    app().speak();
+    app.speak();
     if !std::env::args().any(|a| a == "--demo" || a == "--selftest") {
-        std::thread::spawn(|| {
-            app().community();
-            app().library();
+        let early = app.clone();
+        std::thread::spawn(move || {
+            early.community();
+            early.library();
         });
     }
     #[cfg(target_os = "linux")]
@@ -114,7 +117,7 @@ fn main() -> std::process::ExitCode {
     }
     let mut qt = QGuiApplication::new();
     hub::use_window_icon();
-    let font = app().settings().get("font").map(String::from);
+    let font = app.settings().get("font").map(String::from);
     if let Some(family) = font {
         settings_data::qobject::set_font_family(&QString::from(&family));
     }
@@ -126,6 +129,7 @@ fn main() -> std::process::ExitCode {
         QGuiApplication::set_application_name(qt, &QString::from("RimStack"));
     }
     QGuiApplication::set_desktop_file_name(&QString::from("rimstack"));
+    hub::hand_over(app);
     let mut engine = QQmlApplicationEngine::new();
 
     if let Some(mut engine) = engine.as_mut() {

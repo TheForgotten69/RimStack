@@ -110,23 +110,6 @@ pub struct App {
     bus: crate::changes::Bus,
 }
 
-static SHARED: OnceLock<Arc<App>> = OnceLock::new();
-
-fn handle() -> &'static Arc<App> {
-    SHARED.get_or_init(|| Arc::new(App::from_environment()))
-}
-
-/// The one the running program uses. Until every part of the window is
-/// handed its `App` by the Hub, the parts not yet moved reach it here.
-pub fn app() -> &'static App {
-    handle()
-}
-
-/// The same `App` as `app()`, for the Hub to hand out.
-pub fn shared() -> Arc<App> {
-    handle().clone()
-}
-
 impl App {
     /// With the folders this system and environment give.
     pub fn from_environment() -> Self {
