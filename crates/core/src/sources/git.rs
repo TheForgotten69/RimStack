@@ -77,11 +77,12 @@ fn git() -> std::process::Command {
 
 /// The settings a checkout may hold, as `section.key` or
 /// `section.*.key`: those `git clone` writes (with submodules, a partial
-/// or shallow clone, another branch, SHA-256), and a few a person sets by
-/// hand that run nothing. Listed by Git 2.56 on its own clones. Any
-/// other setting may name a program, so a checkout holding one is
+/// or shallow clone, another branch, SHA-256), listed by Git 2.56 on its
+/// own clones, and those that run nothing found in 200 Workshop mods'
+/// checkouts (VS Code's merge base on 119 of them, git gui's window).
+/// Any other setting may name a program, so a checkout holding one is
 /// refused rather than guessed about.
-const PLAIN_CLONE: [&str; 24] = [
+const PLAIN_CLONE: [&str; 27] = [
     "core.repositoryformatversion",
     "core.filemode",
     "core.bare",
@@ -100,11 +101,14 @@ const PLAIN_CLONE: [&str; 24] = [
     "branch.*.remote",
     "branch.*.merge",
     "branch.*.rebase",
+    "branch.*.vscode-merge-base",
     "submodule.active",
     "submodule.*.url",
     "submodule.*.active",
     "user.name",
     "user.email",
+    "gui.wmstate",
+    "gui.geometry",
     "lfs.repositoryformatversion",
 ];
 
@@ -366,6 +370,8 @@ mod tests {
             "includeif.gitdir:/x.path",
             "gpg.ssh.program",
             "user.name",
+            "branch.main.vscode-merge-base",
+            "mergetool.vscode.cmd",
             "remote.origin.vcs",
         ]
         .into_iter()
@@ -379,6 +385,7 @@ mod tests {
                 "filter.lfs.smudge",
                 "includeif.gitdir:/x.path",
                 "gpg.ssh.program",
+                "mergetool.vscode.cmd",
                 "remote.origin.vcs"
             ]
         );
