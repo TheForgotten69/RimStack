@@ -386,8 +386,7 @@ fn id(held: i32) -> Option<ModId> {
 }
 
 fn ids(given: &QVariant) -> Vec<ModId> {
-    let held: Vec<i32> = crate::qml::values::from_qml(given).unwrap_or_default();
-    held.into_iter().filter_map(ModId::from_qml).collect()
+    crate::qml::values::mod_ids(given)
 }
 
 impl qobject::ModsData {

@@ -848,6 +848,7 @@
  "Textures brought back": "Texturas restauradas",
  "Textures set aside": "Texturas postas de lado",
  "{} is not a kept log": "{} não é um registro mantido",
+ "{} is not an installed mod's folder": "{} não é a pasta de um mod instalado",
  "That is not a list of mods.": "Isso não é uma lista de mods.",
  "That mod is no longer where it was read; read the folders again": "Esse mod não está mais onde foi lido; leia as pastas de novo",
  "The Workshop copy stays where it is; Steam keeps updating that one, not this.": "A cópia do Workshop permanece onde está; o Steam continua atualizando essa, e não esta.",

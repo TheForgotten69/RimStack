@@ -113,52 +113,6 @@ pub enum ReleaseSaid {
     Failed { problem: String },
 }
 
-/// `TextureTools.ddsAudit()`: the Textures screen's check of DDS files.
-#[derive(Serialize, Default)]
-pub struct DdsProblem<'a> {
-    #[serde(rename = "mod")]
-    pub of_mod: &'a str,
-    pub file: String,
-    pub why: String,
-}
-
-/// `TextureTools.compare()`: CompareView.
-#[derive(Serialize)]
-pub struct Comparison<'a> {
-    pub earlier: Side<'a>,
-    pub later: Side<'a>,
-    pub textures: Vec<SharedTexture>,
-}
-
-#[derive(Serialize)]
-pub struct Side<'a> {
-    pub id: ModId,
-    pub name: &'a str,
-}
-
-#[derive(Serialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct SharedTexture {
-    pub name: String,
-    pub earlier: String,
-    pub later: String,
-    pub earlier_shown: String,
-    pub later_shown: String,
-    pub earlier_bytes: u64,
-    pub later_bytes: u64,
-    /// The later mod wins unless its file is hidden.
-    pub keeps_earlier: bool,
-    pub your_choice: bool,
-}
-
-/// `TextureTools.textureDifference()`: the picture of where two differ.
-#[derive(Serialize, Default)]
-pub struct Difference {
-    pub file: String,
-    pub differing: u64,
-    pub total: u64,
-}
-
 /// `CommunityData.databases()`: Settings' list of community databases.
 #[derive(Serialize, Default)]
 pub struct Database {
@@ -331,40 +285,6 @@ mod tests {
             problem: "x".into(),
         };
         assert_eq!(fields(&failed), ["problem"]);
-    }
-
-    #[test]
-    fn texture_answers_keep_their_fields() {
-        assert_eq!(fields(&DdsProblem::default()), ["file", "mod", "why"]);
-        let side = || Side {
-            id: id(),
-            name: "a",
-        };
-        let comparison = Comparison {
-            earlier: side(),
-            later: side(),
-            textures: Vec::new(),
-        };
-        assert_eq!(fields(&comparison), ["earlier", "later", "textures"]);
-        assert_eq!(fields(&side()), ["id", "name"]);
-        assert_eq!(
-            fields(&SharedTexture::default()),
-            [
-                "earlier",
-                "earlierBytes",
-                "earlierShown",
-                "keepsEarlier",
-                "later",
-                "laterBytes",
-                "laterShown",
-                "name",
-                "yourChoice"
-            ]
-        );
-        assert_eq!(
-            fields(&Difference::default()),
-            ["differing", "file", "total"]
-        );
     }
 
     #[test]

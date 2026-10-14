@@ -848,6 +848,7 @@
  "Textures brought back": "Przywrócone tekstury",
  "Textures set aside": "Odłożone tekstury",
  "{} is not a kept log": "{} nie jest zachowywanym dziennikiem",
+ "{} is not an installed mod's folder": "{} nie jest folderem zainstalowanego moda",
  "That is not a list of mods.": "To nie jest lista modów.",
  "That mod is no longer where it was read; read the folders again": "Tego moda nie ma już tam, gdzie go odczytano; odczytaj foldery ponownie",
  "The Workshop copy stays where it is; Steam keeps updating that one, not this.": "Kopia z Workshop zostaje tam, gdzie jest; Steam nadal aktualizuje tamtą, a nie tę.",

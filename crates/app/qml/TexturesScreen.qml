@@ -11,39 +11,19 @@ Item {
     id: screen
     Appear { of: screen }
 
-    required property TextureTools textureTools
-
-    readonly property var all: textureTools.textures ? JSON.parse(textureTools.textures) : []
-    property bool activeOnly: true
-    readonly property var shown: all.filter(m => !activeOnly || m.active)
-    // The state most rows are in: not repeated on each of them.
-    readonly property string usual: {
-        const counts = {}
-        for (const m of shown)
-            counts[m.state] = (counts[m.state] || 0) + 1
-        const most = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || ""
-        return counts[most] > shown.length / 2 ? most : ""
-    }
-    // What "convert remaining" and "rebuild" would work on.
-    readonly property var remaining: shown.filter(m => !m.skipped && m.notConverted > 0)
-    readonly property var stale: shown.filter(m => !m.skipped && m.outOfDate > 0)
-    readonly property var made: shown.filter(m => m.converted + m.outOfDate > 0)
-    readonly property int madeFiles: sum(made, "converted") + sum(made, "outOfDate")
+    readonly property TexturesData tools: Hub.textures
+    readonly property var report: tools.report || ({})
+    readonly property var shown: report.rows || []
+    readonly property string usual: report.usual || ""
+    readonly property var remaining: report.remaining || []
+    readonly property var stale: report.stale || []
+    readonly property var made: report.made || []
+    readonly property int madeFiles: report.madeFiles || 0
     property int selectedId: -1
-    readonly property var mod: all.find(m => m.id === selectedId) || null
+    readonly property var mod: shown.find(m => m.id === selectedId) || null
     property bool confirmRemove: false
 
-    onVisibleChanged: if (visible && all.length === 0) textureTools.loadTextures()
-    Component.onCompleted: if (visible) textureTools.loadTextures()
-    // A re-read of the mods empties this report: the open screen asks for it again.
-    Connections {
-        target: screen.textureTools
-        function onTexturesChanged() { if (screen.visible && screen.textureTools.textures === "") screen.textureTools.loadTextures() }
-    }
-
-    function sum(list, key) {
-        return list.reduce((n, m) => n + m[key], 0)
-    }
+    Binding { target: Hub.textures; property: "wanted"; value: screen.visible }
 
     function megabytes(n) {
         if (n <= 0)
@@ -53,9 +33,6 @@ Item {
         return n < 10 ? Theme.fill("{} MB", n.toFixed(1)) : Theme.fill("{} MB", Theme.count(Math.round(n)))
     }
 
-    function ids(list) {
-        return JSON.stringify(list.map(m => m.id))
-    }
 
     RowLayout {
         anchors.fill: parent
@@ -72,8 +49,8 @@ Item {
                 Layout.bottomMargin: Theme.gap
                 implicitHeight: summary.implicitHeight + 16
                 color: "transparent"
-                readonly property int total: screen.sum(screen.shown, "textures")
-                readonly property int have: total - screen.sum(screen.shown, "notConverted")
+                readonly property int total: screen.report.total || 0
+                readonly property int have: screen.report.have || 0
                 ColumnLayout {
                     id: summary
                     x: 2
@@ -93,29 +70,29 @@ Item {
                             }
                             Chip {
                                 maxWidth: parent.width
-                                readonly property real png: screen.sum(screen.shown, "pngMb")
-                                readonly property real dds: screen.sum(screen.shown, "ddsMb")
+                                readonly property real png: screen.report.pngMb || 0
+                                readonly property real dds: screen.report.ddsMb || 0
                                 visible: png > 0
                                 text: screen.megabytes(png) + " PNG  →  " + (screen.megabytes(dds) || Theme.say("0 MB")) + " DDS" + (dds > png * 1.2 ? ", " + Theme.fill("{}× the size on disk, loads faster", (dds / png).toFixed(1)) : "")
                             }
                             Chip {
-                                readonly property var waiting: screen.shown.filter(m => m.waits)
-                                visible: waiting.length > 0
+                                visible: (screen.report.waiting || 0) > 0
                                 pressable: true
                                 tone: Theme.warn
-                                text: Theme.plural(waiting.length, "{} mod to convert", "{} mods to convert")
+                                text: Theme.plural(screen.report.waiting || 0, "{} mod to convert", "{} mods to convert")
                                 tip: Theme.say("Shows the first of them")
-                                onClicked: { screen.selectedId = waiting[0].id; list.positionViewAtBeginning() }
+                                onClicked: { screen.selectedId = screen.report.firstWaiting; list.positionViewAtBeginning() }
                             }
-                            Chip { visible: screen.sum(screen.stale, "outOfDate") > 0; tone: Theme.warn; icon: "triangle-alert"; text: Theme.fill("{} out of date", Theme.count(screen.sum(screen.stale, "outOfDate"))) }
+                            Chip { visible: (screen.report.outOfDate || 0) > 0; tone: Theme.warn; icon: "triangle-alert"; text: Theme.fill("{} out of date", Theme.count(screen.report.outOfDate)) }
                         }
                         Btn {
                             Layout.alignment: Qt.AlignTop
                             text: Theme.say("Check all mods")
                             tip: Theme.say("Reads the header of every DDS file of the installed mods: not a DDS, cut short, a format the game has no reader for, or compressed with a size that is not a multiple of four.")
-                            onClicked: ddsAudit.found = JSON.parse(screen.textureTools.ddsAudit())
+                            enabled: !screen.tools.auditing
+                            onClicked: screen.tools.audit()
                         }
-                        Choice { Layout.alignment: Qt.AlignTop; title: Theme.say("Mods"); options: ["Active mods", "All mods"]; current: screen.activeOnly ? 0 : 1; onPicked: index => screen.activeOnly = index === 0 }
+                        Choice { Layout.alignment: Qt.AlignTop; title: Theme.say("Mods"); options: ["Active mods", "All mods"]; current: screen.tools.activeOnly ? 0 : 1; onPicked: index => Hub.textures.activeOnly = index === 0 }
                     }
                     Rectangle {
                         Layout.fillWidth: true
@@ -139,26 +116,26 @@ Item {
                                 elide: Text.ElideRight
                                 color: Theme.ink2
                                 font.pixelSize: Theme.small
-                                text: screen.textureTools.texturesBusy ? (screen.textureTools.texturesProgress || Theme.say("Counting textures…")) : screen.textureTools.texturesProgress
+                                text: screen.tools.busy ? (screen.tools.progress || Theme.say("Counting textures…")) : screen.tools.progress
                             }
-                            Btn { visible: screen.textureTools.texturesBusy; text: Theme.say("Cancel"); tip: Theme.say("Stops after the mod it is on; what is done stays done"); onClicked: screen.textureTools.cancelTextures() }
+                            Btn { visible: screen.tools.busy; text: Theme.say("Cancel"); tip: Theme.say("Stops after the mod it is on; what is done stays done"); onClicked: screen.tools.cancel() }
                             Btn {
                                 primary: screen.remaining.length > 0
-                                enabled: !screen.textureTools.texturesBusy && screen.remaining.length > 0
+                                enabled: !screen.tools.busy && screen.remaining.length > 0
                                 text: Theme.say("Convert remaining")
                                 tip: Theme.say("Writes a .dds beside each .png that has none, inside each mod's own folder. The .png files are not changed.")
-                                onClicked: screen.textureTools.convertTextures(screen.ids(screen.remaining))
+                                onClicked: screen.tools.convert(screen.remaining)
                             }
                             Btn {
-                                enabled: !screen.textureTools.texturesBusy && screen.stale.length > 0
+                                enabled: !screen.tools.busy && screen.stale.length > 0
                                 text: Theme.say("Rebuild out of date")
                                 tip: Theme.say("Converts again where the .png changed after its .dds was made.")
-                                onClicked: screen.textureTools.convertTextures(screen.ids(screen.stale))
+                                onClicked: screen.tools.convert(screen.stale)
                             }
                         }
                         Btn {
                             Layout.alignment: Qt.AlignTop
-                            enabled: !screen.textureTools.texturesBusy && screen.made.length > 0
+                            enabled: !screen.tools.busy && screen.made.length > 0
                             danger: true
                             text: Theme.say("Remove all converted…")
                             tip: Theme.say("Deletes the .dds files RimStack made, inside the mods' folders. Files it did not make are not touched.")
@@ -195,7 +172,7 @@ Item {
                         text: Theme.say("Delete them")
                         onClicked: {
                             screen.confirmRemove = false
-                            screen.textureTools.removeTextures(screen.ids(screen.made))
+                            screen.tools.remove(screen.made)
                         }
                     }
                 }
@@ -278,7 +255,7 @@ Item {
                                 onAccent: row.current
                                 tone: row.modelData.state === "Converted" ? Theme.ok : row.modelData.state === "Out of date" ? Theme.warn : Theme.ink2
                                 icon: row.modelData.state === "Converted" ? "check" : row.modelData.state === "Out of date" ? "triangle-alert" : ""
-                                text: Theme.say(row.modelData.state)
+                                text: row.modelData.said
                             }
                             Item { Layout.fillWidth: true }
                         }
@@ -294,8 +271,8 @@ Item {
                     anchors.centerIn: parent
                     width: Math.min(parent.width - 80, 460)
                     spacing: Theme.gapSmall
-                    Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: screen.textureTools.texturesBusy ? Theme.say("Counting textures…") : Theme.say("No textures") }
-                    Text { visible: !screen.textureTools.texturesBusy; width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; lineHeight: 1.3; text: screen.all.length === 0 ? "" : Theme.say("None in active mods") }
+                    Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: screen.tools.busy ? Theme.say("Counting textures…") : Theme.say("No textures") }
+                    Text { visible: !screen.tools.busy; width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; lineHeight: 1.3; text: (screen.report.all || 0) === 0 ? "" : Theme.say("None in active mods") }
                 }
             }
         }
@@ -319,7 +296,7 @@ Item {
                     width: parent.width
                     visible: screen.mod !== null
                     Text { width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink; font.pixelSize: Theme.heading; font.weight: Font.DemiBold; text: screen.mod ? screen.mod.name : "" }
-                    Text { width: parent.width; topPadding: Theme.gapHair; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; text: screen.mod ? Theme.fill(screen.mod.active ? "{} textures, {}" : "{} textures, {}, not active", Theme.count(screen.mod.textures), Theme.say(screen.mod.state).toLowerCase()) : "" }
+                    Text { width: parent.width; topPadding: Theme.gapHair; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; text: screen.mod ? Theme.fill(screen.mod.active ? "{} textures, {}" : "{} textures, {}, not active", Theme.count(screen.mod.textures), screen.mod.said.toLowerCase()) : "" }
 
                     GroupTitle { text: Theme.say("Converted files") }
                     Repeater {
@@ -343,20 +320,20 @@ Item {
                         topPadding: Theme.gap
                         spacing: Theme.gapSmall
                         Btn {
-                            enabled: !screen.textureTools.texturesBusy && !!screen.mod && screen.mod.notConverted + screen.mod.outOfDate > 0
+                            enabled: !screen.tools.busy && !!screen.mod && screen.mod.notConverted + screen.mod.outOfDate > 0
                             text: !!screen.mod && screen.mod.outOfDate > 0 ? Theme.say("Rebuild") : Theme.say("Convert")
-                            onClicked: screen.textureTools.convertTextures(JSON.stringify([screen.mod.id]))
+                            onClicked: screen.tools.convert([screen.mod.id])
                         }
                         Btn {
-                            enabled: !screen.textureTools.texturesBusy && !!screen.mod && screen.mod.converted + screen.mod.outOfDate > 0
+                            enabled: !screen.tools.busy && !!screen.mod && screen.mod.converted + screen.mod.outOfDate > 0
                             text: Theme.say("Remove converted")
                             tip: Theme.say("Deletes only the .dds files RimStack made and that have not changed since.")
-                            onClicked: screen.textureTools.removeTextures(JSON.stringify([screen.mod.id]))
+                            onClicked: screen.tools.remove([screen.mod.id])
                         }
                         Btn {
-                            enabled: !screen.textureTools.texturesBusy
+                            enabled: !screen.tools.busy
                             text: !!screen.mod && screen.mod.skipped ? Theme.say("Stop skipping") : Theme.say("Skip this mod")
-                            onClicked: screen.textureTools.skipTextures(screen.mod.id, !screen.mod.skipped)
+                            onClicked: screen.tools.skip(screen.mod.id, !screen.mod.skipped)
                         }
                     }
                 }
@@ -364,13 +341,13 @@ Item {
                 GroupTitle { visible: ddsAudit.found !== null; width: parent.width; wrapMode: Text.WordWrap; text: Theme.say("All mods: DDS files the game would refuse") }
                 Column {
                     id: ddsAudit
-                    property var found: null
+                    readonly property var found: screen.tools.refused || null
                     visible: found !== null
                     width: parent.width
                     spacing: Theme.gapSmall
                     Row {
                         spacing: Theme.gap
-                        Btn { text: Theme.say("Close"); onClicked: ddsAudit.found = null }
+                        Btn { text: Theme.say("Close"); onClicked: screen.tools.closeAudit() }
                         Btn {
                             visible: !!ddsAudit.found && ddsAudit.found.length > 0
                             text: Theme.say("Set all aside…")
@@ -379,7 +356,7 @@ Item {
                                 title: Theme.fill("Set {} DDS files aside", ddsAudit.found.length),
                                 lines: [Theme.say("Each is renamed to .dds.rimstack-bad inside its own mod's folder, so the game loads the PNG beside it. The first of them:"), ddsAudit.found[0].file],
                                 label: Theme.say("Set aside"),
-                                run: () => { screen.textureTools.setDdsAside(JSON.stringify(ddsAudit.found.map(bad => bad.file))); ddsAudit.found = JSON.parse(screen.textureTools.ddsAudit()) } })
+                                run: () => screen.tools.setRefusedAside() })
                         }
                     }
                     Text {
@@ -394,7 +371,7 @@ Item {
                             id: refused
                             required property var modelData
                             width: ddsAudit.width
-                            Text { width: parent.width; elide: Text.ElideLeft; color: Theme.ink; font.pixelSize: Theme.small; text: refused.modelData.mod + " — " + refused.modelData.file.split("/").pop() }
+                            Text { width: parent.width; elide: Text.ElideLeft; color: Theme.ink; font.pixelSize: Theme.small; text: refused.modelData.mod + " — " + refused.modelData.name }
                             Text { width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink3; font.pixelSize: Theme.small; text: refused.modelData.why }
                         }
                     }

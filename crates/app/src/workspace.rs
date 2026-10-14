@@ -23,6 +23,7 @@ mod records;
 pub mod saves;
 pub mod search;
 mod settings;
+pub mod textures;
 mod upkeep;
 pub use settings::{newest_release, short_contrast};
 

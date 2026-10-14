@@ -78,7 +78,6 @@ fn main() {
     .qt_module("Quick")
     .qt_module("QuickControls2")
     .files([
-        "src/texture_tools.rs",
         "src/downloads.rs",
         "src/hub.rs",
         "src/settings_data.rs",
@@ -89,6 +88,7 @@ fn main() {
         "src/game_data.rs",
         "src/lists_data.rs",
         "src/search_data.rs",
+        "src/textures_data.rs",
     ]);
     // SAFETY: one more source for the same compiler, nothing set that the generated code relies on.
     let builder = unsafe {

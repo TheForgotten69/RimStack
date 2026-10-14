@@ -155,7 +155,6 @@ Item {
     height: parent.height - bulk.height
     active: Mods.comparing !== null
     sourceComponent: CompareView {
-        textureTools: Mods.textureTools
                     earlier: Mods.comparing.earlier
         later: Mods.comparing.later
         earlierPlace: Mods.active.indexOf(Mods.comparing.earlier) + 1

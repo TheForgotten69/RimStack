@@ -18,6 +18,8 @@ pub mod qobject {
         type ListsData = crate::lists_data::qobject::ListsData;
         include!("rimstack-app/src/search_data.cxxqt.h");
         type SearchData = crate::search_data::qobject::SearchData;
+        include!("rimstack-app/src/textures_data.cxxqt.h");
+        type TexturesData = crate::textures_data::qobject::TexturesData;
 
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
@@ -37,6 +39,7 @@ pub mod qobject {
         #[qproperty(*mut GameData, game, READ, CONSTANT)]
         #[qproperty(*mut ListsData, lists, READ, CONSTANT)]
         #[qproperty(*mut SearchData, search, READ, CONSTANT)]
+        #[qproperty(*mut TexturesData, textures, READ, CONSTANT)]
         type Hub = super::HubRust;
     }
 
@@ -46,7 +49,9 @@ pub mod qobject {
 use core::pin::Pin;
 use cxx::UniquePtr;
 use cxx_qt::CxxQtType;
-use qobject::{GameData, ListsData, LogsData, ModsData, SavesData, SearchData, SettingsData};
+use qobject::{
+    GameData, ListsData, LogsData, ModsData, SavesData, SearchData, SettingsData, TexturesData,
+};
 use std::time::Duration;
 
 pub struct HubRust {
@@ -57,6 +62,7 @@ pub struct HubRust {
     game: *mut GameData,
     lists: *mut ListsData,
     search: *mut SearchData,
+    textures: *mut TexturesData,
     owned_settings: UniquePtr<SettingsData>,
     owned_mods: UniquePtr<ModsData>,
     owned_saves: UniquePtr<SavesData>,
@@ -64,6 +70,7 @@ pub struct HubRust {
     owned_game: UniquePtr<GameData>,
     owned_lists: UniquePtr<ListsData>,
     owned_search: UniquePtr<SearchData>,
+    owned_textures: UniquePtr<TexturesData>,
 }
 
 impl Default for HubRust {
@@ -76,6 +83,7 @@ impl Default for HubRust {
             game: std::ptr::null_mut(),
             lists: std::ptr::null_mut(),
             search: std::ptr::null_mut(),
+            textures: std::ptr::null_mut(),
             owned_settings: UniquePtr::null(),
             owned_mods: UniquePtr::null(),
             owned_saves: UniquePtr::null(),
@@ -83,6 +91,7 @@ impl Default for HubRust {
             owned_game: UniquePtr::null(),
             owned_lists: UniquePtr::null(),
             owned_search: UniquePtr::null(),
+            owned_textures: UniquePtr::null(),
         }
     }
 }
@@ -165,6 +174,10 @@ impl cxx_qt::Initialize for qobject::Hub {
         if let Some(search) = search.as_mut() {
             search.connect(app.clone(), demo, !given("--check"));
         }
+        let mut textures = crate::textures_data::qobject::make_textures_data();
+        if let Some(textures) = textures.as_mut() {
+            textures.connect(app.clone());
+        }
         let mut hub = self.as_mut().rust_mut();
         hub.settings = address(&mut settings);
         hub.owned_settings = settings;
@@ -180,5 +193,7 @@ impl cxx_qt::Initialize for qobject::Hub {
         hub.owned_lists = lists;
         hub.search = address(&mut search);
         hub.owned_search = search;
+        hub.textures = address(&mut textures);
+        hub.owned_textures = textures;
     }
 }

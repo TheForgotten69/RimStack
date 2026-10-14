@@ -10,16 +10,17 @@ Column {
     width: parent.width
     visible: Mods.comparing !== null
     readonly property var cmp: Mods.compareView
-    readonly property var names: cmp && cmp.report.earlier ? [cmp.report.earlier.name, cmp.report.later.name] : ["", ""]
+    readonly property var report: Hub.textures.comparison || ({})
+    readonly property var names: report.earlier ? [report.earlier.name, report.later.name] : ["", ""]
     Text { color: Theme.ink; font.pixelSize: Theme.heading; font.weight: Font.DemiBold; text: Theme.say("Shared textures") }
     Text { width: parent.width; topPadding: Theme.gapHair; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.fill("{} and {}", cmpSummary.names[0], cmpSummary.names[1]) }
 
     GroupTitle { text: Theme.say("So far") }
     Repeater {
-        model: cmpSummary.cmp ? [
-            [Theme.fill("{} kept", cmpSummary.names[1]), cmpSummary.cmp.all.length - cmpSummary.cmp.keptEarlier],
-            [Theme.fill("{} kept", cmpSummary.names[0]), cmpSummary.cmp.keptEarlier],
-            [Theme.say("Chosen by hand"), Theme.fill("{} of {}", cmpSummary.cmp.yours, cmpSummary.cmp.all.length)],
+        model: cmpSummary.report.earlier ? [
+            [Theme.fill("{} kept", cmpSummary.names[1]), cmpSummary.report.total - cmpSummary.report.keptEarlier],
+            [Theme.fill("{} kept", cmpSummary.names[0]), cmpSummary.report.keptEarlier],
+            [Theme.say("Chosen by hand"), Theme.fill("{} of {}", cmpSummary.report.yours, cmpSummary.report.total)],
         ] : []
         RowLayout {
             id: tally
@@ -39,19 +40,12 @@ Column {
         Btn {
             text: Theme.fill("Keep all from {}", cmpSummary.names[0])
             // Keeping the earlier mod's versions renames files in the other mod.
-            tip: cmpSummary.cmp ? Theme.plural(cmpSummary.cmp.all.length, "Sets aside {} file in {} by renaming it; Undo names it back.", "Sets aside {} files in {} by renaming them; Undo names them back.", cmpSummary.names[1]) : ""
+            tip: cmpSummary.report.earlier ? Theme.plural(cmpSummary.report.total, "Sets aside {} file in {} by renaming it; Undo names it back.", "Sets aside {} files in {} by renaming them; Undo names them back.", cmpSummary.names[1]) : ""
             onClicked: {
-                const cmp = cmpSummary.cmp
-                const folder = Mods.about(cmp.later).path || ""
-                const aside = ["#", cmp.all.length, Theme.kept("Set aside {} texture of {}"), Theme.kept("Set aside {} textures of {}"), cmpSummary.names[1]]
-                const said = Theme.put(aside)
-                cmp.keepAll(true)
-                Notices.keep(aside, "unhide " + folder)
-                Notices.offer(said, Theme.say("Undo"), () => {
-                    Mods.textureTools.unhideIn(folder)
-                    if (Mods.compareView)
-                        Mods.compareView.reload()
-                })
+                const later = cmpSummary.report.later.id
+                const done = cmpSummary.cmp.keepAll(true)
+                if (done.said)
+                    Notices.offer(done.said, Theme.say("Undo"), () => Hub.textures.unhideMod(later))
             }
         }
     }

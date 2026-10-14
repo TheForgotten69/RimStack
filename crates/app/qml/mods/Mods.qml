@@ -79,7 +79,6 @@ Item {
     }
 
     property Downloads downloads
-    property TextureTools textureTools
 
     function compareWith(otherId) {
         const pair = Hub.mods.inLoadOrder(selectedId, otherId)

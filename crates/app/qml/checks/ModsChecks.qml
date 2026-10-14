@@ -92,21 +92,22 @@ Item {
         const a = Mods.nthMod(Mods.active, 0), b = Mods.nthMod(Mods.active, 1)
         Mods.select(a, true)
         textureCheck("two mods that share a texture are in conflict", ((Mods.info.losesTo || [])[0] || {}).modId === b)
-        let report = JSON.parse(Mods.textureTools.compare(a, b))
-        textureCheck("the comparison lists the shared texture, kept by load order", report.textures.length === 1 && !report.textures[0].keepsEarlier && !report.textures[0].yourChoice)
-        textureCheck("and names the two mods, the earlier first", report.earlier.name === "first" && report.later.name === "second")
-        const t = report.textures[0]
-        const differing = JSON.parse(Mods.textureTools.textureDifference(t.earlierShown, t.laterShown))
+        const tools = Hub.textures
+        tools.compare(a, b)
+        let shared = tools.shared
+        textureCheck("the comparison lists the shared texture, kept by load order", shared.length === 1 && !shared[0].keepsEarlier && !shared[0].yourChoice)
+        textureCheck("and names the two mods, the earlier first", tools.comparison.earlier.name === "first" && tools.comparison.later.name === "second")
+        const differing = tools.difference(shared[0].at)
         textureCheck("the difference of the two versions is a picture of every pixel", differing.total === 64 && differing.differing === 64 && differing.file.endsWith(".png"))
-        textureCheck("keeping the earlier mod's version works", Mods.textureTools.keepTexture(t.earlier, t.later, true) === "")
-        report = JSON.parse(Mods.textureTools.compare(a, b))
-        const now = report.textures[0]
-        textureCheck("the comparison then shows your choice", report.textures.length === 1 && now.keepsEarlier && now.yourChoice && now.laterShown.endsWith(".rimstack-hidden"))
+        textureCheck("keeping the earlier mod's version works", tools.keep(shared[0].at, true) === "")
+        shared = tools.shared
+        const now = shared[0]
+        textureCheck("the comparison then shows your choice", shared.length === 1 && now.keepsEarlier && now.yourChoice && now.laterShown.endsWith(".rimstack-hidden"))
         const picture = Qt.createQmlObject("import QtQuick; Image { asynchronous: false; cache: false }", checks)
         picture.source = Theme.fileUrl(now.laterShown)
         textureCheck("the hidden picture can still be shown", picture.status === Image.Ready && picture.sourceSize.width > 0)
         picture.destroy()
-        textureCheck("the later mod has one hidden texture", Mods.textureTools.hiddenIn(b) === 1 && Mods.textureTools.hiddenIn(a) === 0)
+        textureCheck("the later mod has one hidden texture", tools.hiddenIn(b) === 1 && tools.hiddenIn(a) === 0)
         afterRecheck.start()
     }
     Timer {
@@ -116,9 +117,11 @@ Item {
             const a = Mods.nthMod(Mods.active, 0), b = Mods.nthMod(Mods.active, 1)
             Mods.select(a, true)
             checks.textureCheck("the conflict is gone once the later file is hidden", (Mods.info.losesTo || []).length === 0)
-            checks.textureCheck("unhide all puts it back", Mods.textureTools.unhideAll(b) === "" && Mods.textureTools.hiddenIn(b) === 0)
-            const report = JSON.parse(Mods.textureTools.compare(a, b))
-            checks.textureCheck("and the load order decides again", report.textures.length === 1 && !report.textures[0].keepsEarlier && !report.textures[0].yourChoice)
+            const tools = Hub.textures
+            checks.textureCheck("unhide all puts it back", tools.unhideMod(b) === "" && tools.hiddenIn(b) === 0)
+            tools.compare(a, b)
+            const shared = tools.shared
+            checks.textureCheck("and the load order decides again", shared.length === 1 && !shared[0].keepsEarlier && !shared[0].yourChoice)
             Qt.exit(checks.textureFailures > 0 ? 1 : 0)
         }
     }

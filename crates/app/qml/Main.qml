@@ -63,7 +63,6 @@ ApplicationWindow {
     }
 
         Downloads { id: appDownloads }
-        TextureTools { id: appTextures }
 
     readonly property var behindItems: appDownloads.updates ? (JSON.parse(appDownloads.updates).items || []) : []
     readonly property int behind: behindItems.length
@@ -100,7 +99,6 @@ ApplicationWindow {
     }
 
     Binding { target: Mods; property: "downloads"; value: appDownloads }
-    Binding { target: Mods; property: "textureTools"; value: appTextures }
     // What a background task says when it ends becomes a notice; the
     // tray shows it while it runs.
     Connections {
@@ -122,7 +120,7 @@ ApplicationWindow {
     readonly property var tasks: [
         Hub.mods.rescanning ? { text: Theme.say("Reading the mod folders…") } : null,
         !Hub.mods.filesRead && Mods.active.count > 0 && !Theme.demo ? { text: Theme.say("Reading the active mods' files…") } : null,
-        appTextures.texturesBusy ? { text: appTextures.texturesProgress || Theme.say("Counting textures…"), cancel: () => appTextures.cancelTextures() } : null,
+        Hub.textures.busy ? { text: Hub.textures.progress || Theme.say("Counting textures…"), cancel: () => Hub.textures.cancel() } : null,
         appDownloads.updatesBusy ? { text: Theme.say("Asking Steam for updates…") } : null,
         Hub.settings.communityBusy ? { text: Theme.say("Downloading community data…") } : null,
         appDownloads.taskRunning ? { text: appDownloads.taskNote } : null,
@@ -134,7 +132,6 @@ ApplicationWindow {
         function onFindBrokenRequested() { window.findBroken() }
         function onShowLogs() { window.section = 4 }
         function onRescanned() {
-            appTextures.forget()
             // What Downloads lists names mods by their place in the last
             // reading of the folders: asked again, not emptied.
             if (!Theme.demo)
@@ -211,7 +208,7 @@ ApplicationWindow {
                 }
                 Loader {
                     active: window.section === 2 || item !== null
-                    sourceComponent: TexturesScreen { textureTools: appTextures }
+                    sourceComponent: TexturesScreen {}
                 }
                 Loader {
                     active: window.section === 3 || item !== null
@@ -242,7 +239,6 @@ ApplicationWindow {
             }
 
             StatusBar {
-                textureTools: appTextures
                 id: statusBar
                 Layout.fillWidth: true
                 lastLaunch: Hub.game.lastStart

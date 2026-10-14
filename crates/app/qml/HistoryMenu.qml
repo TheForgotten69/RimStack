@@ -10,7 +10,6 @@ Popup {
     enter: PopIn {}
     exit: PopOut {}
     id: historyMenu
-    required property TextureTools textureTools
     signal useList(var ids)
     readonly property var entries: Hub.lists.history || []
     function revert(entry) {
@@ -19,7 +18,7 @@ Popup {
             if (ids)
                 historyMenu.useList(ids)
         } else if (entry.bringBack !== "") {
-            const problem = textureTools.unhideIn(entry.bringBack)
+            const problem = Hub.textures.unhideFolder(entry.bringBack)
             Notices.say(problem !== "" ? problem : Theme.say("Textures brought back"), problem !== "" ? "err" : "ok")
         }
         close()

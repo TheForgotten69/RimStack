@@ -22,6 +22,14 @@ pub fn from_qml<T: DeserializeOwned>(given: &QVariant) -> Option<T> {
         .ok()
 }
 
+/// Mod ids as QML holds them; those that are none are left out.
+pub fn mod_ids(given: &QVariant) -> Vec<rimstack_core::mods::library::ModId> {
+    let held: Vec<i32> = from_qml(given).unwrap_or_default();
+    held.into_iter()
+        .filter_map(rimstack_core::mods::library::ModId::from_qml)
+        .collect()
+}
+
 fn from_value(value: &Value) -> QVariant {
     match value {
         Value::Null => QVariant::default(),

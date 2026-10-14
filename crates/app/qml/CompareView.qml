@@ -10,7 +10,6 @@ import RimStack.Ui
 Rectangle {
     id: view
 
-    required property TextureTools textureTools
     // The two mods by library id; `earlier` is the one that loads first.
     property int earlier: -1
     property int later: -1
@@ -20,17 +19,11 @@ Rectangle {
     signal done()
     signal changed()
 
-    property var report: ({})
-    readonly property var all: report.textures || []
-    property string filterText
-    readonly property var textures: filterText === "" ? all : all.filter(t => t.name.indexOf(filterText) !== -1)
+    readonly property var report: Hub.textures.comparison || ({})
+    readonly property var textures: Hub.textures.shared || []
     property int chosen: 0
     readonly property var texture: textures[chosen] || null
     property string problem
-    // How many of all shared textures each mod's version is used for, and
-    // how many of those were your choice.
-    readonly property int keptEarlier: all.filter(t => t.keepsEarlier).length
-    readonly property int yours: all.filter(t => t.yourChoice).length
 
     // 0 side by side, 1 slider (one over the other, with a line to drag),
     // 2 the pixels that differ: only for two pictures of one size.
@@ -47,27 +40,24 @@ Rectangle {
     property real panY: 0.5
 
     function reload() {
-        const text = textureTools.compare(earlier, later)
-        report = text ? JSON.parse(text) : ({})
+        Hub.textures.compare(earlier, later)
         chosen = Math.min(chosen, Math.max(0, textures.length - 1))
     }
+    Component.onDestruction: Hub.textures.endCompare()
 
     function keep(earlierOne) {
         if (!texture)
             return
-        problem = textureTools.keepTexture(texture.earlier, texture.later, earlierOne)
-        reload()
+        problem = Hub.textures.keep(texture.at, earlierOne)
         changed()
     }
 
+    // `{ said }` or `{ problem }`.
     function keepAll(earlierOnes) {
-        for (const t of all) {
-            problem = textureTools.keepTexture(t.earlier, t.later, earlierOnes)
-            if (problem !== "")
-                break
-        }
-        reload()
+        const done = Hub.textures.keepAll(earlierOnes) || ({})
+        problem = done.problem || ""
         changed()
+        return done
     }
 
     function kilobytes(n) {
@@ -177,7 +167,7 @@ Rectangle {
                     spacing: Theme.gap
                     Btn { text: Theme.say("‹ Load order"); onClicked: view.done() }
                     Item { Layout.fillWidth: true }
-                    Text { color: Theme.ink2; font.pixelSize: Theme.small; text: Theme.fill("{} shared", view.all.length) }
+                    Text { color: Theme.ink2; font.pixelSize: Theme.small; text: Theme.fill("{} shared", view.report.total || 0) }
                 }
                 FilterField {
                     Layout.fillWidth: true
@@ -185,7 +175,7 @@ Rectangle {
                     Layout.rightMargin: Theme.gapLarge
                     Layout.bottomMargin: Theme.gap
                     placeholder: Theme.say("Filter textures")
-                    onTextChanged: { view.filterText = text.trim().toLowerCase(); view.chosen = 0 }
+                    onTextChanged: { Hub.textures.sharedFilter = text; view.chosen = 0 }
                 }
                 ListView {
                     id: list
@@ -312,7 +302,7 @@ Rectangle {
                 Layout.topMargin: Theme.gapTiny
                 spacing: Theme.gap
                 // Worked out when this mode shows a texture, not before.
-                readonly property var found: visible && view.texture ? JSON.parse(view.textureTools.textureDifference(view.texture.earlierShown, view.texture.laterShown)) : ({})
+                readonly property var found: visible && view.texture ? Hub.textures.difference(view.texture.at) || ({}) : ({})
                 Picture { Layout.fillWidth: true; Layout.fillHeight: true; named: Theme.say("Where the two pictures differ"); file: differing.found.file || "" }
                 Text {
                     Layout.fillWidth: true

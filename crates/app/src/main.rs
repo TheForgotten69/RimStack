@@ -1,6 +1,5 @@
 use rimstack_core::said;
 
-mod backend;
 mod background;
 mod changes;
 mod downloads;
@@ -15,7 +14,7 @@ mod reports;
 mod saves_data;
 mod search_data;
 mod settings_data;
-mod texture_tools;
+mod textures_data;
 mod workspace;
 
 pub use workspace::*;

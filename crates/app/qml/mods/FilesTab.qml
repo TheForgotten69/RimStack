@@ -58,7 +58,7 @@ Column {
     Column {
         id: hiddenHere
         // Counted again whenever the details are refreshed.
-        readonly property int count: Mods.info && Mods.selectedId >= 0 && Mods.textureTools ? Mods.textureTools.hiddenIn(Mods.selectedId) : 0
+        readonly property int count: Mods.info && Mods.selectedId >= 0 ? Hub.textures.hiddenIn(Mods.selectedId) : 0
         property string problem
         visible: count > 0
         width: parent.width
@@ -75,7 +75,7 @@ Column {
             icon: "eye-off"
             text: Theme.say("Bring back all")
             onClicked: {
-                hiddenHere.problem = Mods.textureTools.unhideAll(Mods.selectedId)
+                hiddenHere.problem = Hub.textures.unhideMod(Mods.selectedId)
             }
         }
         Text { visible: hiddenHere.problem !== ""; width: parent.width; wrapMode: Text.WordWrap; color: Theme.err; font.pixelSize: Theme.body; text: hiddenHere.problem }
