@@ -15,7 +15,7 @@ in_commands = r"(?<![\w.])(text|title|tip|placeholder|name|group):\s*"
 literal = r'"((?:[^"\\\n]|\\.)*)"'
 words = set()
 for path in sorted(glob.glob(os.path.join(root, "qml", "**", "*.qml"), recursive=True)):
-    if os.sep + "checks" + os.sep in path or path.endswith("Theme.qml"):
+    if os.sep + "checks" + os.sep in path:
         continue
     source = open(path, encoding="utf-8").read()
 
@@ -28,15 +28,19 @@ for path in sorted(glob.glob(os.path.join(root, "qml", "**", "*.qml"), recursive
     named = in_commands if path.endswith("Main.qml") else shown
     # A comment may quote a text; it shows none.
     commented = lambda line: line.lstrip().startswith("//")
-    lines = [line if commented(line) else re.sub(named + literal, wrap, line) for line in source.split("\n")]
+    # Theme.qml's own literals are keys and colours, not texts to wrap.
+    keep = lambda line: commented(line) or path.endswith("Theme.qml")
+    lines = [line if keep(line) else re.sub(named + literal, wrap, line) for line in source.split("\n")]
     if "\n".join(lines) != source:
         open(path, "w", encoding="utf-8").write("\n".join(lines))
     wrapped = "\n".join(line for line in lines if not commented(line))
-    words.update(json.loads(f'"{t}"') for t in re.findall(r"Theme\.(?:say|fill|kept)\(" + literal, wrapped))
+    # Theme.qml calls its own functions without the name.
+    own = r"(?:Theme\.|(?<![.\w]))" if path.endswith("Theme.qml") else r"Theme\."
+    words.update(json.loads(f'"{t}"') for t in re.findall(own + r"(?:say|fill|kept)\(" + literal, wrapped))
     # A sentence chosen between two: Theme.fill(shown ? "{} of {}, in {}" : "{} of {}", …).
     for pair in re.findall(r"Theme\.fill\([^\"\n(),]*\?\s*" + literal + r"\s*:\s*" + literal, wrapped):
         words.update(json.loads(f'"{t}"') for t in pair)
-    for pair in re.findall(r"Theme\.plural\([^\"\n]*" + literal + r"\s*,\s*" + literal, wrapped):
+    for pair in re.findall(own + r"plural\([^\"\n]*" + literal + r"\s*,\s*" + literal, wrapped):
         words.update(json.loads(f'"{t}"') for t in pair)
     # Lists of texts that are translated where they are shown.
     for line in wrapped.split("\n"):

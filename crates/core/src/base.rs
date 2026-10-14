@@ -3,11 +3,13 @@
 //! Nothing here knows of RimWorld.
 
 pub mod atomic_file;
+pub mod derived;
 pub mod diagnostics;
 pub mod error;
 pub mod grouped;
 pub mod locks;
 pub mod markup;
+pub mod path_text;
 pub mod program;
 pub mod reread;
 pub mod translate;

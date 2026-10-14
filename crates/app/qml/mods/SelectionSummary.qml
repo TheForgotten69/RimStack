@@ -39,7 +39,7 @@ Column {
     property bool open: false
     onChosenChanged: if (chosen.length <= most) open = false
 
-    Text { color: Theme.ink; font.pixelSize: Theme.heading; font.weight: Font.DemiBold; text: Theme.fill("{} mods selected", Mods.selectedCount) }
+    Text { color: Theme.ink; font.pixelSize: Theme.heading; font.weight: Font.DemiBold; text: Theme.plural(Mods.selectedCount, "{} mod selected", "{} mods selected") }
     Text {
         topPadding: Theme.gapHair
         color: Theme.ink2

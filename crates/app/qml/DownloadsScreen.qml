@@ -43,18 +43,6 @@ Item {
     // Per Workshop id, the entries Steam's site gave: { time, text }.
     readonly property var notes: downloads.changeNotes ? JSON.parse(downloads.changeNotes) : ({})
 
-    function ago(seconds) {
-        const minutes = Math.floor((Date.now() / 1000 - seconds) / 60)
-        if (minutes < 1)
-            return Theme.say("just now")
-        if (minutes < 60)
-            return (minutes === 1 ? Theme.fill("{} minute ago", minutes) : Theme.fill("{} minutes ago", minutes))
-        if (minutes < 60 * 48)
-            return Theme.fill("{} hours ago", Math.floor(minutes / 60))
-        if (minutes < 60 * 24 * 60)
-            return Theme.fill("{} days ago", Math.floor(minutes / 1440))
-        return Theme.fill("{} months ago", Math.floor(minutes / 43200))
-    }
 
     property bool sinceOpen: false
     // "" for all the changed mods, "active" or "inactive" for those alone.
@@ -110,7 +98,7 @@ Item {
         spacing: Theme.gapLarge
         Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: row.modelData.name }
         Chip { visible: screen.asked.indexOf(row.modelData.id) !== -1; tone: Theme.ok; icon: "check"; text: Theme.say("Asked of Steam") }
-        Chip { tone: Theme.moved; text: screen.day(row.modelData.have) + " → " + screen.day(row.modelData.now); tip: Theme.fill("Published {}", screen.ago(row.modelData.now)) }
+        Chip { tone: Theme.moved; text: screen.day(row.modelData.have) + " → " + screen.day(row.modelData.now); tip: Theme.fill("Published {}", Theme.ago(row.modelData.now)) }
         Btn { text: Theme.say("Show"); spoken: Theme.fill("Show {}", row.modelData.name); onClicked: screen.showMod(row.modelData.modId) }
         Btn { text: Theme.say("What changed"); spoken: Theme.fill("What changed in {}", row.modelData.name); tip: Theme.say("The mod's change notes on the Workshop."); onClicked: Theme.openChangeNotes(row.modelData.id) }
     }
@@ -169,7 +157,7 @@ Item {
                 title: Theme.say("Updates")
                 note: screen.downloads.updatesBusy ? Theme.say("Asking Steam…")
                     : !screen.report.checked ? Theme.say("Not checked")
-                    : Theme.fill("{} for active mods, checked {}", screen.activeUpdates.length, screen.ago(screen.report.checked))
+                    : Theme.fill("{} for active mods, checked {}", screen.activeUpdates.length, Theme.ago(screen.report.checked))
                 actions: [
                     Btn {
                         visible: screen.updates.length > 0

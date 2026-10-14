@@ -191,7 +191,7 @@ Item {
                     Layout.fillWidth: true
                     spacing: Theme.gap
                     Icon { Layout.alignment: Qt.AlignTop; name: "triangle-alert"; size: Theme.icon; color: Theme.warn }
-                    Text { id: said; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.ink; font.pixelSize: Theme.body; text: Theme.fill("{} mods do not list RimWorld {}", activePane.versionOnly, (Mods.overview.gameVersion || "")) }
+                    Text { id: said; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.ink; font.pixelSize: Theme.body; text: Theme.plural(activePane.versionOnly, "{} mod does not list RimWorld {}", "{} mods do not list RimWorld {}", (Mods.overview.gameVersion || "")) }
                 }
                 RowLayout {
                     id: does
@@ -295,7 +295,7 @@ Item {
                         model: [
                             ["is:error", Theme.plural(Mods.active.errors, "{} mod", "{} mods")],
                             ["is:warning", Theme.plural(Mods.active.warnings, "{} mod", "{} mods")],
-                            ["is:conflict", Theme.fill("{} mods sharing textures", Mods.active.conflicts)],
+                            ["is:conflict", Theme.plural(Mods.active.conflicts, "{} mod sharing textures", "{} mods sharing textures")],
                             ["is:changed", Theme.say("moved or activated since the last save")],
                             ["is:new", Theme.say("installed since the game was last started")],
                             ["is:updated", Mods.behind > 0 ? Theme.fill("{} with an update", Mods.behind) : Theme.say("after checking for updates")],

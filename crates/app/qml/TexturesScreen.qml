@@ -28,6 +28,7 @@ Item {
     readonly property var remaining: shown.filter(m => !m.skipped && m.notConverted > 0)
     readonly property var stale: shown.filter(m => !m.skipped && m.outOfDate > 0)
     readonly property var made: shown.filter(m => m.converted + m.outOfDate > 0)
+    readonly property int madeFiles: sum(made, "converted") + sum(made, "outOfDate")
     property int selectedId: -1
     readonly property var mod: all.find(m => m.id === selectedId) || null
     property bool confirmRemove: false
@@ -186,7 +187,7 @@ Item {
                         elide: Text.ElideRight
                         color: Theme.ink
                         font.pixelSize: Theme.body
-                        text: Theme.fill("Delete the {} DDS files RimStack made in {} mods? The PNG files stay.", Theme.count(screen.sum(screen.made, "converted") + screen.sum(screen.made, "outOfDate")), screen.made.length)
+                        text: Theme.plural(screen.madeFiles, "Delete {} DDS file made by RimStack ({})? The PNG files stay.", "Delete {} DDS files made by RimStack ({})? The PNG files stay.", Theme.plural(screen.made.length, "{} mod", "{} mods"))
                     }
                     Btn { text: Theme.say("Cancel"); onClicked: screen.confirmRemove = false }
                     Btn {
@@ -243,7 +244,7 @@ Item {
                     readonly property color quiet: current ? Theme.onSelectedDim : Theme.ink2
                     readonly property bool settled: modelData.notConverted === 0 && modelData.outOfDate === 0
                     Accessible.role: Accessible.ListItem
-                    Accessible.name: Theme.fill("{}, {} textures, {}", modelData.name, Theme.count(modelData.textures), Theme.say(modelData.state))
+                    Accessible.name: Theme.fill("{}, {}, {}", modelData.name, Theme.plural(modelData.textures, "{} texture", "{} textures"), Theme.say(modelData.state))
                     width: list.width
                     height: Theme.row
                     opacity: settled && !current ? 0.6 : 1
@@ -326,7 +327,7 @@ Item {
                             [Theme.say("Created by RimStack"), [Theme.plural(screen.mod.converted + screen.mod.outOfDate, "{} file", "{} files"), screen.mod.madeMb > 0 ? screen.megabytes(screen.mod.madeMb) : ""].filter(part => part !== "").join(", "), false],
                             [Theme.say("Not made by RimStack"), Theme.plural(screen.mod.shipped, "{} file", "{} files"), false],
                             [Theme.say("Source PNG changed since"), Theme.plural(screen.mod.outOfDate, "{} file", "{} files"), screen.mod.outOfDate > 0],
-                            [Theme.say("No DDS yet"), Theme.fill("{} files", Theme.count(screen.mod.notConverted)), false],
+                            [Theme.say("No DDS yet"), Theme.plural(screen.mod.notConverted, "{} file", "{} files"), false],
                         ] : []
                         RowLayout {
                             id: fact
@@ -385,7 +386,7 @@ Item {
                         visible: ddsAudit.found !== null
                         color: Theme.ink
                         font.pixelSize: Theme.body
-                        text: ddsAudit.found === null ? "" : ddsAudit.found.length === 0 ? Theme.say("None") : Theme.fill("{} files", Theme.count(ddsAudit.found.length))
+                        text: ddsAudit.found === null ? "" : ddsAudit.found.length === 0 ? Theme.say("None") : Theme.plural(ddsAudit.found.length, "{} file", "{} files")
                     }
                     Repeater {
                         model: ddsAudit.found === null ? [] : ddsAudit.found.slice(0, 60)

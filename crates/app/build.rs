@@ -92,10 +92,10 @@ fn main() {
     // SAFETY: one more source for the same compiler, nothing set that the generated code relies on.
     let builder = unsafe {
         builder.cc_builder(|cc| {
-            cc.file("src/window_icon.cpp");
+            cc.file("src/application.cpp");
         })
     };
-    println!("cargo::rerun-if-changed=src/window_icon.cpp");
-    println!("cargo::rerun-if-changed=src/window_icon.h");
+    println!("cargo::rerun-if-changed=src/application.cpp");
+    println!("cargo::rerun-if-changed=src/application.h");
     builder.build();
 }

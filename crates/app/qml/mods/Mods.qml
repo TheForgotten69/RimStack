@@ -274,7 +274,7 @@ Item {
                 model.tagsChanged(id)
             }
         })
-        Notices.say(Theme.fill("Tagged {} mods: {}", ids.length, tag), "ok")
+        Notices.say(Theme.plural(ids.length, "Tagged {} mod: {}", "Tagged {} mods: {}", tag), "ok")
     }
 
     function subSelected(name) {
@@ -292,7 +292,7 @@ Item {
     function selectedToEdge(top) {
         const ids = selectedIds
         keepingScroll(() => activeModel.moveAllToEdge(JSON.stringify(ids), top))
-        done(Theme.fill("Moved {} mods", ids.length))
+        done(Theme.plural(ids.length, "Moved {} mod", "Moved {} mods"))
     }
 
     // T and N on a row: type the selected mod's tags or its note.

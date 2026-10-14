@@ -110,13 +110,10 @@ fn main() -> std::process::ExitCode {
         put_among_applications();
     }
     let mut qt = QGuiApplication::new();
-    if let Some(qt) = qt.as_mut() {
-        keep_app(qt);
-    }
     backend::use_window_icon();
     let font = app().settings().get("font").map(String::from);
     if let Some(family) = font {
-        use_font(&family);
+        backend::use_font(&family);
     }
     // Names the file the window's own settings (pane widths) are kept in.
     if let Some(qt) = qt.as_mut() {

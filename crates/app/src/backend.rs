@@ -3,7 +3,6 @@
 
 use rimstack_core::base::locks::Shared;
 use rimstack_core::kept::settings::Switch;
-use rimstack_core::say;
 use rimstack_core::{
     kept::launches,
     kept::lists,
@@ -17,6 +16,7 @@ use rimstack_core::{
     rimworld::saves,
     rimworld::workshop,
 };
+use rimstack_core::{say, say_n};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -26,10 +26,11 @@ pub mod qobject {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
 
-        include!("rimstack-app/src/window_icon.h");
-        /// Every window of the app carries the icon at this resource path.
+        include!("rimstack-app/src/application.h");
         #[rust_name = "set_window_icon"]
         fn setWindowIcon(resource: &QString);
+        #[rust_name = "set_font_family"]
+        fn setFontFamily(family: &QString) -> QString;
     }
 
     extern "RustQt" {
@@ -236,9 +237,13 @@ fn languages_dir(app: &crate::App) -> PathBuf {
     app.settings_file().with_file_name("languages")
 }
 
-/// The app's icon on its window, for the desktop to show with it.
 pub fn use_window_icon() {
     qobject::set_window_icon(&QString::from(":/qt/qml/RimStack/Ui/assets/rimstack.svg"));
+}
+
+/// Call on the window's thread only.
+pub fn use_font(family: &str) -> String {
+    qobject::set_font_family(&QString::from(family)).to_string()
 }
 
 fn theme_file(app: &crate::App) -> PathBuf {
@@ -433,7 +438,12 @@ impl qobject::Backend {
         let said = match rimstack_core::sources::maintenance::set_mod_settings_aside(config, &aside)
         {
             Ok(0) => say!("No mod has settings"),
-            Ok(count) => say!("{} files moved to {}", count, aside.display()),
+            Ok(count) => say_n!(
+                count,
+                "{} file moved to {}",
+                "{} files moved to {}",
+                aside.display()
+            ),
             Err(problem) => problem.into(),
         };
         QString::from(&said)

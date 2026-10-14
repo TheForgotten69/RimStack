@@ -593,7 +593,7 @@ Item {
                         color: screen.overview.communityMods ? Theme.ink : Theme.ink3
                         font.pixelSize: Theme.body
                         text: screen.overview.communityMods
-                            ? Theme.fill("{} mods, published {}", Theme.count(screen.overview.communityMods), Theme.day(screen.overview.communityTime))
+                            ? Theme.plural(screen.overview.communityMods, "{} mod, published {}", "{} mods, published {}", Theme.day(screen.overview.communityTime))
                             : Theme.say("No")
                     }
                     Btn {

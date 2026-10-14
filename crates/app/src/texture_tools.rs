@@ -108,7 +108,7 @@ use cxx_qt_lib::QString;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rimstack_core::mods::hidden::Hidden;
 use rimstack_core::mods::library::{Library, ModId};
-use rimstack_core::{mods::conflicts, mods::textures, say, say_n};
+use rimstack_core::{mods::conflicts, mods::textures, say_n};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 

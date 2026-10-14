@@ -94,7 +94,12 @@ impl qobject::TextureTools {
                         let outcome = textures::convert(root, &mut manifest, &|| {
                             let n = done.fetch_add(1, Ordering::Relaxed) + 1;
                             if n % 20 == 0 || n == total {
-                                say(say!("Converted {} of {} textures", n, total));
+                                say(say_n!(
+                                    total,
+                                    "{} texture: {} converted",
+                                    "{} textures: {} converted",
+                                    n
+                                ));
                             }
                         });
                         failed += outcome.failed.len();

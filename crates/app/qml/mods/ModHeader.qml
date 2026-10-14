@@ -61,7 +61,7 @@ Column {
                 Chip { visible: !!Mods.info.version; maxWidth: parent.width; text: Mods.info.version || "" }
                 Chip { visible: !!Mods.info.gameVersions; maxWidth: parent.width; tone: Mods.info.madeFor && !Mods.info.versionOk && Mods.info.source !== "Ludeon" ? Theme.warn : Theme.ink2; text: Theme.fill("RimWorld {}", (Mods.info.gameVersions || "")); tip: Mods.info.versionOk ? Theme.say("Marked as working on this game version") : "" }
                 Chip { visible: !!Mods.info.megabytes; text: Mods.info.megabytes ? Theme.fill("{} MB", (Mods.info.megabytes < 10 ? Mods.info.megabytes.toFixed(1) : Math.round(Mods.info.megabytes))) : "" }
-                Chip { visible: !!Mods.info.updated; maxWidth: parent.width; text: Mods.info.updated ? Theme.fill("updated {}", Theme.since(Mods.info.updated)) : "" }
+                Chip { visible: !!Mods.info.updated; maxWidth: parent.width; text: Mods.info.updated ? Theme.fill("updated {}", Theme.ago(Mods.info.updated)) : "" }
             }
         }
     }

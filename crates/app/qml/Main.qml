@@ -62,7 +62,7 @@ ApplicationWindow {
         onTriggered: {
             const ids = appLists.listResetByGame()
             if (ids !== "")
-                Notices.offer(Theme.fill("The game emptied its list of mods, as it does on a new version. The last launch from RimStack had {} mods.", JSON.parse(ids).length), Theme.say("Use that list"), () => window.useList(JSON.parse(ids)))
+                Notices.offer(Theme.plural(JSON.parse(ids).length, "The game emptied its list of mods, as it does on a new version. The last launch from RimStack had {} mod.", "The game emptied its list of mods, as it does on a new version. The last launch from RimStack had {} mods."), Theme.say("Use that list"), () => window.useList(JSON.parse(ids)))
         }
     }
     function pressPlay() {
@@ -125,7 +125,7 @@ ApplicationWindow {
         // starts on a new version.
         if (noticed.modsConfig) {
             const ids = JSON.parse(appLists.listOnDisk() || "[]")
-            Notices.offer(Theme.fill("ModsConfig.xml was written outside RimStack and now lists {} mods; the list here has {}.", ids.length, Mods.active.count), Theme.say("Use the file's"), () => { window.useList(ids); Mods.save() })
+            Notices.offer(Theme.plural(ids.length, "ModsConfig.xml was written outside RimStack and now lists {} mod; the list here has {}.", "ModsConfig.xml was written outside RimStack and now lists {} mods; the list here has {}.", Mods.active.count), Theme.say("Use the file's"), () => { window.useList(ids); Mods.save() })
         }
     }
     // While the window shows, in front or not: a list beside the game or Steam stays true.
@@ -422,7 +422,7 @@ ApplicationWindow {
         function onChangeNotesStateChanged() {
             const state = appDownloads.changeNotesState ? JSON.parse(appDownloads.changeNotesState) : ({})
             if (state.refused)
-                Notices.say(Theme.fill("Steam's site still refuses: change notes of {} of {} mods read", state.done, state.asked), "err")
+                Notices.say(Theme.plural(state.asked, "Steam's site still refuses: {} mod asked, change notes of {} read", "Steam's site still refuses: {} mods asked, change notes of {} read", state.done), "err")
         }
     }
     Connections {

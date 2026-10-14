@@ -4,6 +4,8 @@
 //! can be put back.
 
 use crate::base::error::Error;
+use crate::base::path_text;
+use crate::said;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -22,6 +24,29 @@ fn hidden_name(path: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
+/// The path a hidden file had before it was hidden; `None` for a file
+/// that is not hidden.
+pub fn original_of(hidden: &Path) -> Option<PathBuf> {
+    let name = hidden.file_name()?;
+    let original = match name.to_str() {
+        Some(text) => std::ffi::OsString::from(text.strip_suffix(SUFFIX)?),
+        None => without_suffix_bytes(name)?,
+    };
+    Some(hidden.with_file_name(original))
+}
+
+#[cfg(unix)]
+fn without_suffix_bytes(name: &std::ffi::OsStr) -> Option<std::ffi::OsString> {
+    use std::os::unix::ffi::OsStrExt;
+    let bytes = name.as_bytes().strip_suffix(SUFFIX.as_bytes())?;
+    Some(std::ffi::OsStr::from_bytes(bytes).to_os_string())
+}
+
+#[cfg(not(unix))]
+fn without_suffix_bytes(_name: &std::ffi::OsStr) -> Option<std::ffi::OsString> {
+    None
+}
+
 impl Hidden {
     /// No file, or a damaged one, is nothing hidden. Files already renamed
     /// then stay renamed; `strays` finds them.
@@ -31,7 +56,7 @@ impl Hidden {
         };
         let files = entries
             .iter()
-            .filter_map(|(k, v)| Some((PathBuf::from(k), v.as_u64()?)))
+            .filter_map(|(k, v)| Some((path_text::from_text(k), v.as_u64()?)))
             .collect();
         Self { files }
     }
@@ -40,7 +65,7 @@ impl Hidden {
         let entries: serde_json::Map<String, Value> = self
             .files
             .iter()
-            .map(|(k, len)| (k.to_string_lossy().into_owned(), json!(len)))
+            .map(|(k, len)| (path_text::to_text(k), json!(len)))
             .collect();
         crate::base::atomic_file::write(path, Value::Object(entries).to_string())
     }
@@ -63,6 +88,12 @@ impl Hidden {
     /// Hides a texture: the PNG, and the DDS beside it if there is one.
     /// Hiding one that is already hidden changes nothing.
     pub fn hide(&mut self, png: &Path) -> Result<(), Error> {
+        let texture = png
+            .extension()
+            .is_some_and(|x| x.eq_ignore_ascii_case("png"));
+        if !texture {
+            return Err(Error::refused(said!("{} is not a texture", png.display())));
+        }
         for file in [png.to_path_buf(), png.with_extension("dds")] {
             if self.files.contains_key(&file) || !file.is_file() {
                 continue;
@@ -173,6 +204,34 @@ mod tests {
         );
         assert!(dir.join("door.png.rimstack-hidden").exists());
         assert!(!hidden.is_hidden(&dir.join("door.png")));
+    }
+
+    #[test]
+    fn only_a_texture_is_ever_renamed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let notes = tmp.path().join("notes.txt");
+        fs::write(&notes, "mine").unwrap();
+        let refused = Hidden::default().hide(&notes).unwrap_err();
+        assert_eq!(refused.kind(), crate::base::error::Kind::Refused);
+        assert!(notes.exists());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_texture_with_a_name_that_is_not_utf8_comes_back() {
+        use std::os::unix::ffi::OsStrExt;
+        let (tmp, dir) = textures();
+        let png = dir.join(std::ffi::OsStr::from_bytes(b"wall\xff.png"));
+        fs::write(&png, "png").unwrap();
+        let record = tmp.path().join("hidden.json");
+        let mut hidden = Hidden::read(&record);
+        hidden.hide(&png).unwrap();
+        hidden.write(&record).unwrap();
+        assert_eq!(original_of(&hidden_name(&png)), Some(png.clone()));
+
+        let mut again = Hidden::read(&record);
+        again.unhide_all(dir.parent().unwrap()).unwrap();
+        assert!(png.exists());
     }
 
     #[test]

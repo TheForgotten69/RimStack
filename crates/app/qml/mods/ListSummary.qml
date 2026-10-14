@@ -100,7 +100,7 @@ Column {
         spacing: Theme.gap
         Line {
             visible: Mods.active.conflicts > 0
-            text: Theme.fill("{} mods share textures with another", Mods.active.conflicts)
+            text: Theme.plural(Mods.active.conflicts, "{} mod shares textures with another", "{} mods share textures with another")
             action: Theme.say("Show")
             onActed: Mods.filterBy("is:conflict")
         }
@@ -152,14 +152,14 @@ Column {
         startsFolded: true
         note: folded ? [summary.facts.saves === undefined ? "" : Theme.plural(summary.facts.saves, "{} save", "{} saves"),
             Theme.plural(summary.facts.snapshots || 0, "{} snapshot", "{} snapshots"),
-            Mods.overview.communityMods ? Theme.fill("rules for {} mods", Theme.count(Mods.overview.communityMods)) : "",
+            Mods.overview.communityMods ? Theme.plural(Mods.overview.communityMods, "rules for {} mod", "rules for {} mods") : "",
         ].filter(part => part !== "").join(", ") : ""
         Repeater {
             model: [
                 [Theme.say("Saves"), summary.facts.saves === undefined ? "" : (summary.facts.folders > 1 ? Theme.fill("{} in {} RimSaves folders", summary.facts.saves, summary.facts.folders) : summary.facts.saves + "")],
                 [Theme.say("Snapshots"), (summary.facts.snapshots || 0) + ""],
                 [Theme.say("Own rules"), (summary.facts.rules || 0) + ""],
-                [Theme.say("Community rules"), Mods.overview.communityMods ? Theme.fill("{} mods", Theme.count(Mods.overview.communityMods)) : Theme.say("Not downloaded")],
+                [Theme.say("Community rules"), Mods.overview.communityMods ? Theme.plural(Mods.overview.communityMods, "{} mod", "{} mods") : Theme.say("Not downloaded")],
             ].filter(pair => pair[1] !== "")
             Item {
                 id: about

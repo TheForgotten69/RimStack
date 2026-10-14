@@ -4,7 +4,8 @@
 
 use rimstack_core::base::translate::{misfit, PLURAL_RULE};
 use serde_json::{Map, Value};
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 fn read(file: &Path) -> Map<String, Value> {
     let text = std::fs::read_to_string(file).unwrap();
@@ -43,4 +44,91 @@ fn every_language_has_every_text_and_each_wording_fits_its_english() {
     }
     assert!(languages >= 7, "only {languages} language files were found");
     assert!(faults.is_empty(), "{}", faults.join("\n"));
+}
+
+fn files_under(dir: &Path, extension: &str, into: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(dir).unwrap().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            files_under(&path, extension, into);
+        } else if path.extension().is_some_and(|x| x == extension) {
+            into.push(path);
+        }
+    }
+}
+
+/// A count before a plural noun through `Theme.fill` or `say!` reads
+/// "Tagged 1 mods", and never takes a language's own plural forms.
+#[test]
+fn every_counted_sentence_has_its_singular() {
+    const NOUNS: [&str; 17] = [
+        "mods",
+        "files",
+        "textures",
+        "lines",
+        "minutes",
+        "hours",
+        "days",
+        "months",
+        "years",
+        "seconds",
+        "rules",
+        "errors",
+        "saves",
+        "problems",
+        "warnings",
+        "conflicts",
+        "commits",
+    ];
+    let app = Path::new(env!("CARGO_MANIFEST_DIR")).join("../app");
+    let mut sources = Vec::new();
+    files_under(&app.join("qml"), "qml", &mut sources);
+    files_under(&app.join("src"), "rs", &mut sources);
+    files_under(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+        "rs",
+        &mut sources,
+    );
+    let mut found = Vec::new();
+    for file in sources {
+        let text = fs::read_to_string(&file).unwrap();
+        // Rust texts below the tests are not shown (tools/words.py stops there too).
+        let shown = text.split("#[cfg(test)]").next().unwrap_or_default();
+        for (n, line) in shown.lines().enumerate() {
+            if counts_without_singular(line, &NOUNS) {
+                let short = file
+                    .strip_prefix(&app)
+                    .unwrap_or(&file)
+                    .display()
+                    .to_string();
+                found.push(format!("{short}:{}", n + 1));
+            }
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "{} counted sentences without a singular:\n{}",
+        found.len(),
+        found.join("\n")
+    );
+}
+
+/// `fill("…{} mods…"` or `say!("…{} mods…"`: a literal that puts a count
+/// before one of `nouns`.
+fn counts_without_singular(line: &str, nouns: &[&str]) -> bool {
+    ["fill(\"", "say!(\""].iter().any(|opener| {
+        line.match_indices(opener).any(|(at, _)| {
+            let literal = line[at + opener.len()..]
+                .split('"')
+                .next()
+                .unwrap_or_default();
+            nouns.iter().any(|noun| {
+                let counted = format!("{{}} {noun}");
+                literal.match_indices(&counted).any(|(i, _)| {
+                    let after = &literal[i + counted.len()..];
+                    !after.starts_with(|c: char| c.is_alphanumeric())
+                })
+            })
+        })
+    })
 }

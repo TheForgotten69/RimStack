@@ -67,7 +67,6 @@ fn download_all(app: &crate::App) -> String {
             Err(why) => failed.push(why),
         }
     }
-    // Read at the next start: nothing shown now depends on it.
     if app.database_on("replacements") {
         failed.extend(replacements::download(&replacements::file_in(data)).err());
     }

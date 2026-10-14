@@ -310,7 +310,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
                     Text { id: written; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: screen.report.written ? screen.when(screen.report.written) : screen.previous ? Theme.say("Launch before") : Theme.say("Last launch") }
-                    Text { width: parent.width; elide: Text.ElideRight; color: Theme.ink3; font.pixelSize: Theme.small; text: screen.report.lines ? [screen.report.version ? "RimWorld " + screen.report.version : "", Theme.fill("{} lines", Theme.count(screen.report.lines))].filter(s => s).join(", ") : "" }
+                    Text { width: parent.width; elide: Text.ElideRight; color: Theme.ink3; font.pixelSize: Theme.small; text: screen.report.lines ? [screen.report.version ? "RimWorld " + screen.report.version : "", Theme.plural(screen.report.lines, "{} line", "{} lines")].filter(s => s).join(", ") : "" }
                 }
                 RowLayout {
                 id: controls
@@ -501,7 +501,7 @@ Item {
                 Layout.bottomMargin: Theme.gapSmall
                 color: Theme.ink3
                 font.pixelSize: Theme.small
-                text: Theme.fill("First {} of {} lines", Theme.count((screen.report.text || []).length), Theme.count(screen.report.lines || 0))
+                text: Theme.plural(screen.report.lines || 0, "{} line, the first {} shown", "{} lines, the first {} shown", Theme.count((screen.report.text || []).length))
             }
 
             ListView {
@@ -615,7 +615,7 @@ Item {
                         font.pixelSize: Theme.body
                         lineHeight: 1.3
                         text: screen.report.problem || (screen.filterText !== "" ? ""
-                            : screen.report.lines ? Theme.fill("{} lines", Theme.count(screen.report.lines))
+                            : screen.report.lines ? Theme.plural(screen.report.lines, "{} line", "{} lines")
                             : Theme.say("Written when the game starts"))
                     }
                 }

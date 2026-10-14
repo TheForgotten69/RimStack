@@ -341,18 +341,22 @@ QtObject {
         return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0")
     }
 
-    // How long ago a moment (seconds since 1970) was, by the day.
-    function since(seconds) {
-        const days = Math.floor((Date.now() / 1000 - seconds) / 86400)
-        if (days < 1)
-            return say("today")
-        if (days < 2)
-            return say("yesterday")
+    // How long ago a moment (seconds since 1970) was.
+    function ago(seconds) {
+        const minutes = Math.floor((Date.now() / 1000 - seconds) / 60)
+        if (minutes < 1)
+            return say("just now")
+        if (minutes < 60)
+            return plural(minutes, "{} minute ago", "{} minutes ago")
+        const hours = Math.floor(minutes / 60)
+        if (hours < 48)
+            return plural(hours, "{} hour ago", "{} hours ago")
+        const days = Math.floor(hours / 24)
         if (days < 60)
-            return fill("{} days ago", days)
+            return plural(days, "{} day ago", "{} days ago")
         if (days < 730)
-            return fill("{} months ago", Math.floor(days / 30))
-        return fill("{} years ago", Math.floor(days / 365))
+            return plural(Math.floor(days / 30), "{} month ago", "{} months ago")
+        return plural(Math.floor(days / 365), "{} year ago", "{} years ago")
     }
 
     function count(n) {

@@ -142,7 +142,7 @@ impl qobject::Backend {
     }
 
     pub(super) fn use_font(&self, family: &QString) -> QString {
-        QString::from(&crate::use_font(&family.to_string()))
+        QString::from(&super::use_font(&family.to_string()))
     }
 
     pub(super) fn short_contrast(&self, colours: &QString) -> QString {

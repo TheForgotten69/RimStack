@@ -39,7 +39,7 @@ Column {
         Btn {
             text: Theme.fill("Keep all from {}", cmpSummary.names[0])
             // Keeping the earlier mod's versions renames files in the other mod.
-            tip: cmpSummary.cmp ? Theme.fill("Sets aside {} files in {} by renaming them; Undo names them back.", cmpSummary.cmp.all.length, cmpSummary.names[1]) : ""
+            tip: cmpSummary.cmp ? Theme.plural(cmpSummary.cmp.all.length, "Sets aside {} file in {} by renaming it; Undo names it back.", "Sets aside {} files in {} by renaming them; Undo names them back.", cmpSummary.names[1]) : ""
             onClicked: {
                 const cmp = cmpSummary.cmp
                 const folder = Mods.about(cmp.later).path || ""

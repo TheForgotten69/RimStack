@@ -2,7 +2,7 @@
 //! waits on a network or a prompt that never answers would otherwise
 //! hold its task for as long as RimStack runs.
 
-use crate::say;
+use crate::{say, say_n};
 
 use std::io::Read;
 use std::process::{Command, Output, Stdio};
@@ -52,7 +52,11 @@ pub fn run(command: &mut Command, limit: Duration) -> std::io::Result<Output> {
             // The pipes are not waited for: a program it started may hold them open.
             return Err(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
-                say!("no answer after {} seconds", limit.as_secs()),
+                say_n!(
+                    limit.as_secs() as usize,
+                    "no answer after {} second",
+                    "no answer after {} seconds"
+                ),
             ));
         }
         std::thread::sleep(pause);

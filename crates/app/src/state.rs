@@ -2,6 +2,7 @@
 //! from disk, and the load order being edited. Each is read on first
 //! use; what follows the folders is read again when they change.
 
+use rimstack_core::base::derived::Derived;
 use rimstack_core::base::locks::{Held, Shared};
 use rimstack_core::base::reread::Reread;
 use rimstack_core::{
@@ -14,44 +15,6 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock, RwLockReadGuard};
 use std::time::{Duration, Instant};
 
 pub static STARTED: OnceLock<Instant> = OnceLock::new();
-
-/// The application object, for what Qt only lets it change. Set once in
-/// `main`, where it lives until the app ends.
-static QT_APP: std::sync::atomic::AtomicPtr<cxx_qt_lib::QGuiApplication> =
-    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
-/// The font the system gave the app at its start, as Qt writes a font
-/// in text: what "System font" goes back to.
-static SYSTEM_FONT: Mutex<String> = Mutex::new(String::new());
-
-pub fn keep_app(app: std::pin::Pin<&mut cxx_qt_lib::QGuiApplication>) {
-    *SYSTEM_FONT.held() = app.font().to_qstring().to_string();
-    // SAFETY: the pointer is only stored; `use_font` says when it is used.
-    let app = unsafe { app.get_unchecked_mut() };
-    QT_APP.store(app, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// New texts take this font family from now on; an empty name gives the
-/// system's own. Returns the family in use. Texts already on screen
-/// keep theirs until told (`Theme.refont`). Call on the window's thread
-/// only.
-pub fn use_font(family: &str) -> String {
-    use cxx_qt_lib::{QFont, QString};
-    let app = QT_APP.load(std::sync::atomic::Ordering::Relaxed);
-    if app.is_null() {
-        return String::new();
-    }
-    let system = SYSTEM_FONT.held().clone();
-    let mut font = QFont::default();
-    font.from_string(&QString::from(&system));
-    if !family.trim().is_empty() {
-        font.set_family(&QString::from(family.trim()));
-    }
-    // SAFETY: `main` owns the application for the whole run and nothing
-    // else holds it while an invokable runs on its thread.
-    let app = unsafe { std::pin::Pin::new_unchecked(&mut *app) };
-    app.set_application_font(&font);
-    font.family().map(|f| f.to_string()).unwrap_or_default()
-}
 
 /// The language a setting names; none chosen is English, as before it had a file.
 pub fn language_name(chosen: &str) -> &str {
@@ -83,6 +46,8 @@ pub type Loaded = Result<(library::Library, Duration), rimstack_core::base::erro
 /// by Workshop id.
 type SteamRecord = (HashMap<String, u64>, HashMap<String, u64>);
 
+type Replacements = HashMap<String, rimstack_core::sources::replacements::Replacement>;
+
 pub struct App {
     home: PathBuf,
     settings_dir: PathBuf,
@@ -98,7 +63,7 @@ pub struct App {
     user_rules: OnceLock<RwLock<UserRules>>,
     community: OnceLock<RwLock<Option<community::Community>>>,
     works_on: OnceLock<RwLock<HashSet<String>>>,
-    replacements: OnceLock<HashMap<String, rimstack_core::sources::replacements::Replacement>>,
+    replacements: Derived<(PathBuf, u64), Replacements>,
     workshop_names: OnceLock<RwLock<rimstack_core::rimworld::workshopdb::Names>>,
     seen: OnceLock<RwLock<rimstack_core::kept::new_mods::Seen>>,
     steam_record: Reread<SteamRecord>,
@@ -153,7 +118,7 @@ impl App {
             user_rules: OnceLock::new(),
             community: OnceLock::new(),
             works_on: OnceLock::new(),
-            replacements: OnceLock::new(),
+            replacements: Derived::default(),
             workshop_names: OnceLock::new(),
             seen: OnceLock::new(),
             steam_record: Reread::new(),
@@ -449,17 +414,17 @@ impl App {
 
     /// Workshop mods with a maintained replacement, by Workshop id: its
     /// own download of the Use This Instead list, or RimSort's copy for
-    /// an install that has none yet.
-    pub fn replacements(
-        &self,
-    ) -> &HashMap<String, rimstack_core::sources::replacements::Replacement> {
-        self.replacements.get_or_init(|| {
-            let own = rimstack_core::sources::replacements::file_in(&self.data_dir);
-            let rimsort = self
-                .data_dir
-                .with_file_name("RimSort")
-                .join("dbs/UseThisInstead/replacements.json.gz");
-            rimstack_core::sources::replacements::read(if own.is_file() { &own } else { &rimsort })
+    /// an install that has none yet. Read again when the file changes.
+    pub fn replacements(&self) -> Arc<Replacements> {
+        let own = rimstack_core::sources::replacements::file_in(&self.data_dir);
+        let rimsort = self
+            .data_dir
+            .with_file_name("RimSort")
+            .join("dbs/UseThisInstead/replacements.json.gz");
+        let file = if own.is_file() { own } else { rimsort };
+        let written = rimstack_core::base::watch::changed_at(&file);
+        self.replacements.get((file.clone(), written), || {
+            rimstack_core::sources::replacements::read(&file)
         })
     }
 
@@ -673,5 +638,37 @@ pub(crate) mod tests {
         app.set_setting("game", &other.to_string_lossy()).unwrap();
         app.reread_folders();
         assert_eq!(app.paths().game, Some(tmp.path().join("game")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_replacements_list_written_now_is_the_one_shown() {
+        let (_tmp, app) = installed();
+        assert!(app.replacements().is_empty());
+
+        let file = rimstack_core::sources::replacements::file_in(app.data_dir());
+        std::fs::create_dir_all(app.data_dir()).unwrap();
+        let json = r#"{"rules":[{"oldWorkshopId":"111","newWorkshopId":"222","newName":"Roads Continued"}]}"#;
+        let packed = std::process::Command::new("gzip")
+            .arg("-c")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .and_then(|mut gzip| {
+                use std::io::Write;
+                gzip.stdin.take().unwrap().write_all(json.as_bytes())?;
+                gzip.wait_with_output()
+            })
+            .unwrap();
+        std::fs::write(&file, packed.stdout).unwrap();
+        assert!(
+            rimstack_core::sources::replacements::read(&file).contains_key("111"),
+            "control"
+        );
+
+        assert!(
+            app.replacements().contains_key("111"),
+            "a list downloaded now is shown at once"
+        );
     }
 }

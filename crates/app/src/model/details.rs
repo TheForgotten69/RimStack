@@ -190,10 +190,8 @@ impl qobject::ModListModel {
             notes.get(&k).cloned()
         });
         let note = note.unwrap_or_default();
-        let replaced = crate::app()
-            .replacements()
-            .get(&m.folder)
-            .filter(|_| workshop);
+        let replacements = crate::app().replacements();
+        let replaced = replacements.get(&m.folder).filter(|_| workshop);
         let steam_record = crate::app().steam_record();
         let (times, sizes) = &*steam_record;
         let mut said = Details {

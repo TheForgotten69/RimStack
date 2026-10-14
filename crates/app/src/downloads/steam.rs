@@ -247,7 +247,7 @@ impl qobject::Downloads {
         let items = rimstack_core::sources::downloads::items(library, &active);
         let rows = rimstack_core::sources::downloads::replaceable(
             &items,
-            crate::app().replacements(),
+            &crate::app().replacements(),
             &crate::app().replacements_ignored(),
         );
         crate::reports::said(&rows)

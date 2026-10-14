@@ -53,10 +53,9 @@ pub fn files_with_hidden(
             if let Some(texture) = name.strip_suffix(".png") {
                 into.push((texture.to_string(), (path, false)));
             } else if let Some(texture) = name.strip_suffix(HIDDEN) {
-                let own = path.to_string_lossy();
-                let own = PathBuf::from(&own[..own.len() - crate::mods::hidden::SUFFIX.len()]);
                 // A file of its own name is back as well: that one counts.
-                if !own.exists() {
+                let own = crate::mods::hidden::original_of(&path);
+                if let Some(own) = own.filter(|own| !own.exists()) {
                     into.push((texture.to_string(), (own, true)));
                 }
             }

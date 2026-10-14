@@ -94,7 +94,7 @@ pub fn rich(text: &str) -> String {
         let after = &rest[close + 1..];
         if tag.eq_ignore_ascii_case("img") {
             // Pictures are left out, with the address between the tags.
-            rest = after.find("[/img]").map_or("", |end| &after[end + 6..]);
+            rest = after.find("[/img]").map_or(after, |end| &after[end + 6..]);
         } else if tag.eq_ignore_ascii_case("url") {
             // No address given: the text between the tags is the address.
             let end = after.find("[/url]").unwrap_or(after.len());
@@ -170,6 +170,7 @@ mod tests {
         assert_eq!(rich("[img]REPLACE_HERO[/img]\nText"), "Text");
         assert_eq!(rich("[CF] Mod [1.6] a[0]"), "[CF] Mod [1.6] a[0]");
         assert_eq!(rich("open [ never closed"), "open [ never closed");
+        assert_eq!(rich("[img]\nRequires Harmony."), "Requires Harmony.");
     }
 
     #[test]
