@@ -39,6 +39,8 @@ impl Changes {
     /// The game's, its settings' or the Workshop's folder was set: they
     /// are found again and the mods there read.
     pub const FOLDERS: Self = Self(1 << 17);
+    /// Mods were added, removed or changed on disk: they are read again.
+    pub const MOD_FILES: Self = Self(1 << 18);
 
     pub fn contains(self, any_of: Self) -> bool {
         self.0 & any_of.0 != 0

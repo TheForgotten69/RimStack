@@ -44,29 +44,21 @@ ApplicationWindow {
         Notices.keep([Theme.kept("Began finding the broken mod")], before === "" ? "" : "list " + before)
         hunt.start()
     }
-    // Looked up every few seconds: the game may be started and closed
-    // from Steam as well as from here.
-    property bool gameRunning: false
-    Timer {
-        interval: 3000
-        repeat: true
-        running: !Theme.demo && window.shotPath === ""
-        triggeredOnStart: true
-        onTriggered: window.gameRunning = appBackend.gameRunning()
-    }
-    // The game empties its list of mods when it first starts on a new
-    // version: offer the list of the last launch, once per start.
-    Timer {
-        interval: 2500
-        running: !Theme.demo && window.shotPath === "" && Mods.checkMode === "" && !window.firstRun
-        onTriggered: {
-            const ids = appLists.listResetByGame()
-            if (ids !== "")
-                Notices.offer(Theme.plural(JSON.parse(ids).length, "The game emptied its list of mods, as it does on a new version. The last launch from RimStack had {} mod.", "The game emptied its list of mods, as it does on a new version. The last launch from RimStack had {} mods."), Theme.say("Use that list"), () => window.useList(JSON.parse(ids)))
+    Connections {
+        target: Hub.game
+        function onResetByGameChanged() {
+            const ids = Hub.game.resetByGame
+            if (!window.firstRun)
+                Notices.offer(Theme.plural(ids.length, "The game emptied its list of mods, as it does on a new version. The last launch from RimStack had {} mod.", "The game emptied its list of mods, as it does on a new version. The last launch from RimStack had {} mods."), Theme.say("Use that list"), () => window.useList(ids))
+        }
+        function onWrittenOutside(ids) {
+            Notices.offer(Theme.plural(ids.length, "ModsConfig.xml was written outside RimStack and now lists {} mod; the list here has {}.", "ModsConfig.xml was written outside RimStack and now lists {} mods; the list here has {}.", Mods.active.count), Theme.say("Use the file's"), () => { window.useList(ids); Mods.save() })
         }
     }
+    Binding { target: Hub.game; property: "watching"; value: (window.visibility !== Window.Minimized && window.visibility !== Window.Hidden) || Mods.checkMode === "live" }
+    Binding { target: Hub.game; property: "held"; value: Hub.mods.rescanning || Hub.mods.previewing || Mods.drag.held !== null || Mods.comparing !== null }
     function pressPlay() {
-        if (gameRunning)
+        if (Hub.game.running)
             return
         if (inTheWay.length > 0)
             topBar.beforePlay.open()
@@ -74,64 +66,15 @@ ApplicationWindow {
             play()
     }
 
-        Backend { id: appBackend }
         BrokenModSearch { id: appHunt }
         KeptLists { id: appLists }
         Downloads { id: appDownloads }
-        SaveReader { id: appSaves }
         TextureTools { id: appTextures }
-        LogReader { id: appLogs }
 
     readonly property var behindItems: appDownloads.updates ? (JSON.parse(appDownloads.updates).items || []) : []
     readonly property int behind: behindItems.length
     // What the game would load: the count the window shows.
     readonly property int behindActive: behindItems.filter(item => item.active).length
-    // The newest launch on record, for the status bar; read again when a
-    // launch is recorded or the log has been read.
-    property var lastLaunch: null
-    function readLastLaunch() {
-        if (Theme.demo)
-            return
-        const report = appLogs.logs ? JSON.parse(appLogs.logs) : ({})
-        lastLaunch = JSON.parse(appBackend.lastStart(report.written || 0, !!report.previous, (report.errors || []).length))
-        Mods.lastStart = lastLaunch
-    }
-    // What changed on disk while the window was open is read again
-    // without being asked: looked for every two seconds while the window
-    // is in front, and when the game stops.
-    function look() {
-        // `--live` keeps looking while a picture is taken; for checking this.
-        if (Theme.demo || (Mods.checkMode !== "" && Mods.checkMode !== "live") || (shotPath !== "" && Qt.application.arguments.indexOf("--live") === -1))
-            return
-        const inTheWay = Hub.mods.rescanning || Hub.mods.previewing || Mods.drag.held !== null || Mods.comparing !== null
-        const noticed = JSON.parse(appBackend.look(gameRunning, inTheWay))
-        if (noticed.mods)
-            Hub.mods.rescan()
-        if (noticed.theme || noticed.language)
-            Hub.settings.filesChanged()
-        if (noticed.saves && section === 3)
-            appSaves.loadSaves()
-        if (noticed.log) {
-            appLogs.keepLogs()
-            if (section === 4 && logsLoader.item)
-                logsLoader.item.load()
-            Qt.callLater(readLastLaunch)
-        }
-        // Never taken unasked: the game empties the file when it first
-        // starts on a new version.
-        if (noticed.modsConfig) {
-            const ids = JSON.parse(appLists.listOnDisk() || "[]")
-            Notices.offer(Theme.plural(ids.length, "ModsConfig.xml was written outside RimStack and now lists {} mod; the list here has {}.", "ModsConfig.xml was written outside RimStack and now lists {} mods; the list here has {}.", Mods.active.count), Theme.say("Use the file's"), () => { window.useList(ids); Mods.save() })
-        }
-    }
-    // While the window shows, in front or not: a list beside the game or Steam stays true.
-    Timer { interval: Mods.checkMode === "live" ? 500 : 2000; repeat: true; triggeredOnStart: true; running: (window.visibility !== Window.Minimized && window.visibility !== Window.Hidden) || Mods.checkMode === "live"; onTriggered: window.look() }
-    onGameRunningChanged: {
-        if (gameRunning && !Theme.demo)
-            appDownloads.noteGameStarted()
-        else
-            look()
-    }
     // The font chosen in Settings, for every text at once.
     function useFont(name) {
         const from = Qt.application.font.family
@@ -158,15 +101,8 @@ ApplicationWindow {
             Theme.stored.textScale = Math.round(Theme.stored.textScale * size * 20) / 20
             Hub.settings.keep("interfaceScale", "")
         }
-        if (!Theme.demo) {
+        if (!Theme.demo)
             appDownloads.restoreUpdates()
-            appLogs.keepLogs()
-        }
-        readLastLaunch()
-    }
-    Connections {
-        target: appLogs
-        function onLogsChanged() { window.readLastLaunch() }
     }
 
     Binding { target: Mods; property: "hunter"; value: appHunt }
@@ -208,9 +144,7 @@ ApplicationWindow {
         function onFindBrokenRequested() { window.findBroken() }
         function onShowLogs() { window.section = 4 }
         function onRescanned() {
-            appSaves.forget()
             appTextures.forget()
-            appLogs.forget()
             // What Downloads lists names mods by their place in the last
             // reading of the folders: asked again, not emptied.
             if (!Theme.demo)
@@ -232,23 +166,9 @@ ApplicationWindow {
     // launch to record, and it must not push the copies of the save from
     // before the search out of the few that are kept.
     function play(round) {
-        // A copy of the newest save, in case this launch damages it.
-        const problem = Theme.demo || round ? "" : appSaves.backUpNewestSave()
-        if (problem !== "")
-            console.warn("save not backed up: " + problem)
-        if (!Theme.demo && !round) {
-            appBackend.recordLaunch()
-            readLastLaunch()
-        }
-        const how = Hub.settings.report
-        if (how.launchDirectly) {
-            const failed = appBackend.startGameDirectly()
-            if (failed !== "")
-                console.warn("game not started: " + failed)
-            return
-        }
-        const given = (how.launchArguments || "").trim()
-        Qt.openUrlExternally(given === "" ? "steam://rungameid/294100" : "steam://run/294100//" + encodeURIComponent(given) + "/")
+        const address = Hub.game.play(round)
+        if (address !== "")
+            Qt.openUrlExternally(address)
     }
 
     // One item holding the whole window, so a picture of it has the background.
@@ -269,7 +189,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 section: window.section
                 behind: window.behindActive
-                gameRunning: window.gameRunning
+                gameRunning: Hub.game.running
                 inTheWay: window.inTheWay
                 onGo: section => window.section = section
                 onSearch: commands.open()
@@ -298,7 +218,6 @@ ApplicationWindow {
                     active: window.section === 1 || item !== null
                     sourceComponent: DownloadsScreen {
                         downloads: appDownloads
-                        backend: appBackend
                         onShowMod: modId => window.showMod(modId)
                     }
                 }
@@ -310,8 +229,6 @@ ApplicationWindow {
                     active: window.section === 3 || item !== null
                     sourceComponent: SavesScreen {
                         keptLists: appLists
-                        backend: appBackend
-                        saveReader: appSaves
                         onUseList: ids => window.useList(ids)
                     }
                 }
@@ -319,7 +236,6 @@ ApplicationWindow {
                     id: logsLoader
                     active: window.section === 4 || item !== null
                     sourceComponent: LogsScreen {
-                        reader: appLogs
                         onUseList: ids => window.useList(ids)
                         onShowMod: modId => window.showMod(modId)
                         onFindBroken: window.findBroken()
@@ -332,7 +248,6 @@ ApplicationWindow {
                     sourceComponent: SettingsScreen {
                         downloads: appDownloads
                         keptLists: appLists
-                        reader: appLogs
                         overview: Mods.overview
                         onUseList: ids => window.useList(ids)
                         onTrust: (modId, yes) => Mods.trust(modId, yes)
@@ -346,7 +261,7 @@ ApplicationWindow {
                 textureTools: appTextures
                 id: statusBar
                 Layout.fillWidth: true
-                lastLaunch: window.lastLaunch
+                lastLaunch: Hub.game.lastStart
                 tasks: window.tasks
                 onUseList: ids => window.useList(ids)
                 onKeys: keysSheet.open()
@@ -460,9 +375,9 @@ ApplicationWindow {
                 { name: Theme.say("Read the mod folders again"), group: Theme.say("Mods"), run: () => Hub.mods.rescan(), when: !Theme.demo },
                 { name: Theme.say("Check for updates"), group: Theme.say("Downloads"), run: () => { window.section = 1; appDownloads.checkUpdates() }, when: !Theme.demo },
                 { name: Theme.say("Update community rules"), group: Theme.say("Sorting"), run: () => Hub.settings.downloadCommunity(), when: !Theme.demo && !Hub.settings.communityCurrent },
-                { name: Theme.say("Read the saves again"), group: Theme.say("Saves"), run: () => { window.section = 3; appSaves.loadSaves() }, when: !Theme.demo },
+                { name: Theme.say("Read the saves again"), group: Theme.say("Saves"), run: () => { window.section = 3; Hub.saves.reread() }, when: !Theme.demo },
                 { name: Theme.say("Read the log again"), group: Theme.say("Logs"), run: () => { window.section = 4; Qt.callLater(() => logsLoader.item.load()) }, when: !Theme.demo },
-                { name: Theme.say("Back up the newest save"), group: Theme.say("Saves"), run: () => appSaves.backUpNewestSave(), when: !Theme.demo },
+                { name: Theme.say("Back up the newest save"), group: Theme.say("Saves"), run: () => Hub.saves.backUp(), when: !Theme.demo },
 
                 { name: Theme.say("Mods"), group: Theme.say("Go to"), run: () => window.section = 0 },
                 { name: Theme.say("Downloads"), group: Theme.say("Go to"), run: () => window.section = 1 },

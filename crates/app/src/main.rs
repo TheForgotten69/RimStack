@@ -5,14 +5,15 @@ mod background;
 mod broken_mod_search;
 mod changes;
 mod downloads;
+mod game_data;
 mod hub;
 mod list_store;
-mod log_reader;
+mod logs_data;
 mod mod_rows;
 mod mods_data;
 mod qml;
 mod reports;
-mod save_reader;
+mod saves_data;
 mod settings_data;
 mod texture_tools;
 mod workspace;
@@ -113,7 +114,7 @@ fn main() -> std::process::ExitCode {
         put_among_applications();
     }
     let mut qt = QGuiApplication::new();
-    backend::use_window_icon();
+    hub::use_window_icon();
     let font = app().settings().get("font").map(String::from);
     if let Some(family) = font {
         settings_data::qobject::set_font_family(&QString::from(&family));

@@ -12,7 +12,6 @@ Item {
 
     required property KeptLists keptLists
     required property Downloads downloads
-    required property LogReader reader
     signal useList(var ids)
     signal trust(int modId, bool yes)
     signal font(string family)
@@ -697,14 +696,14 @@ Item {
                 Line {
                     title: Theme.say("Logs kept")
                     changed: screen.info.logsKept !== 10
-                    onReset: { screen.keep("logsKept", "10"); screen.reader.keepLogs() }
+                    onReset: screen.keep("logsKept", "10")
                     tip: Theme.say("The game keeps the logs of its last two launches. RimStack copies each log once the game has stopped, so an older launch can still be read in Logs; the oldest give way.")
                     Choice {
                         readonly property var limits: [0, 5, 10, 25, 50]
                         title: Theme.say("Logs kept")
                         options: [Theme.say("None"), "5", "10", "25", "50"]
                         current: Math.max(0, limits.indexOf(screen.info.logsKept))
-                        onPicked: index => { screen.keep("logsKept", String(limits[index])); screen.reader.keepLogs() }
+                        onPicked: index => screen.keep("logsKept", String(limits[index]))
                     }
                     Text { Layout.fillWidth: true; color: Theme.ink2; font.pixelSize: Theme.small; text: Theme.plural(screen.info.logsKeptNow || 0, "{} kept now", "{} kept now") }
                 }

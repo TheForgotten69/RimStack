@@ -72,9 +72,9 @@ Column {
         // How the last attempt went, in one quiet line.
         RowLayout {
             id: launched
-            readonly property var launch: Mods.lastStart || ({})
+            readonly property var launch: Hub.game.lastStart || ({})
             readonly property var logged: launch.errors
-            visible: !!Mods.lastStart
+            visible: !!Hub.game.lastStart
             width: summary.width
             spacing: Theme.gap
             Text {

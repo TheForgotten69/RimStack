@@ -8,6 +8,18 @@ pub mod qobject {
         type SettingsData = crate::settings_data::qobject::SettingsData;
         include!("rimstack-app/src/mods_data.cxxqt.h");
         type ModsData = crate::mods_data::qobject::ModsData;
+        include!("rimstack-app/src/saves_data.cxxqt.h");
+        type SavesData = crate::saves_data::qobject::SavesData;
+        include!("rimstack-app/src/logs_data.cxxqt.h");
+        type LogsData = crate::logs_data::qobject::LogsData;
+        include!("rimstack-app/src/game_data.cxxqt.h");
+        type GameData = crate::game_data::qobject::GameData;
+
+        include!("cxx-qt-lib/qstring.h");
+        type QString = cxx_qt_lib::QString;
+        include!("rimstack-app/src/application.h");
+        #[rust_name = "set_window_icon"]
+        fn setWindowIcon(resource: &QString);
     }
 
     extern "RustQt" {
@@ -16,6 +28,9 @@ pub mod qobject {
         #[qml_singleton]
         #[qproperty(*mut SettingsData, settings, READ, CONSTANT)]
         #[qproperty(*mut ModsData, mods, READ, CONSTANT)]
+        #[qproperty(*mut SavesData, saves, READ, CONSTANT)]
+        #[qproperty(*mut LogsData, logs, READ, CONSTANT)]
+        #[qproperty(*mut GameData, game, READ, CONSTANT)]
         type Hub = super::HubRust;
     }
 
@@ -25,13 +40,20 @@ pub mod qobject {
 use core::pin::Pin;
 use cxx::UniquePtr;
 use cxx_qt::CxxQtType;
-use qobject::{ModsData, SettingsData};
+use qobject::{GameData, LogsData, ModsData, SavesData, SettingsData};
+use std::time::Duration;
 
 pub struct HubRust {
     settings: *mut SettingsData,
     mods: *mut ModsData,
+    saves: *mut SavesData,
+    logs: *mut LogsData,
+    game: *mut GameData,
     owned_settings: UniquePtr<SettingsData>,
     owned_mods: UniquePtr<ModsData>,
+    owned_saves: UniquePtr<SavesData>,
+    owned_logs: UniquePtr<LogsData>,
+    owned_game: UniquePtr<GameData>,
 }
 
 impl Default for HubRust {
@@ -39,14 +61,47 @@ impl Default for HubRust {
         Self {
             settings: std::ptr::null_mut(),
             mods: std::ptr::null_mut(),
+            saves: std::ptr::null_mut(),
+            logs: std::ptr::null_mut(),
+            game: std::ptr::null_mut(),
             owned_settings: UniquePtr::null(),
             owned_mods: UniquePtr::null(),
+            owned_saves: UniquePtr::null(),
+            owned_logs: UniquePtr::null(),
+            owned_game: UniquePtr::null(),
         }
     }
 }
 
+pub fn use_window_icon() {
+    qobject::set_window_icon(&cxx_qt_lib::QString::from(
+        ":/qt/qml/RimStack/Ui/assets/rimstack.svg",
+    ));
+}
+
+/// What the command line gives for `flag`: "" for the flag alone.
+fn value(flag: &str) -> Option<String> {
+    std::env::args().find_map(|a| match a.strip_prefix(flag)? {
+        "" => Some(String::new()),
+        rest => rest.strip_prefix('=').map(String::from),
+    })
+}
+
 fn given(flag: &str) -> bool {
-    std::env::args().any(|a| a == flag || a.starts_with(&format!("{flag}=")))
+    value(flag).is_some()
+}
+
+/// How often the game and the disk are looked at: never for made-up
+/// mods, a check or a picture, unless `--check=live` or `--live` asks.
+fn watch_every(demo: bool) -> Option<Duration> {
+    let check = value("--check");
+    let live = check.as_deref() == Some("live");
+    let still = demo || (check.is_some() && !live) || (given("--shot") && !given("--live"));
+    match (still, live) {
+        (true, _) => None,
+        (false, true) => Some(Duration::from_millis(500)),
+        (false, false) => Some(Duration::from_secs(2)),
+    }
 }
 
 /// What QML holds of an object the Hub owns: its address, valid for as
@@ -76,10 +131,28 @@ impl cxx_qt::Initialize for qobject::Hub {
         if let Some(mods) = mods.as_mut() {
             mods.connect(app.clone(), demo, !given("--check"));
         }
+        let mut saves = crate::saves_data::qobject::make_saves_data();
+        if let Some(saves) = saves.as_mut() {
+            saves.connect(app.clone());
+        }
+        let mut logs = crate::logs_data::qobject::make_logs_data();
+        if let Some(logs) = logs.as_mut() {
+            logs.connect(app.clone(), !demo);
+        }
+        let mut game = crate::game_data::qobject::make_game_data();
+        if let Some(game) = game.as_mut() {
+            game.connect(app.clone(), demo, watch_every(demo));
+        }
         let mut hub = self.as_mut().rust_mut();
         hub.settings = address(&mut settings);
         hub.owned_settings = settings;
         hub.mods = address(&mut mods);
         hub.owned_mods = mods;
+        hub.saves = address(&mut saves);
+        hub.owned_saves = saves;
+        hub.logs = address(&mut logs);
+        hub.owned_logs = logs;
+        hub.game = address(&mut game);
+        hub.owned_game = game;
     }
 }

@@ -4,10 +4,7 @@
 //! names who reads them.
 
 use cxx_qt_lib::QString;
-use rimstack_core::kept::launches::{Shown, SinceClean};
-use rimstack_core::mods::blame::{Blamed, Pointed};
 use rimstack_core::mods::library::ModId;
-use rimstack_core::rimworld::saves;
 use rimstack_core::sources::changes::Note;
 use rimstack_core::sources::downloads::{Asked, Behind, Changed};
 use serde::Serialize;
@@ -114,17 +111,6 @@ pub enum ReleaseSaid {
     Newer { version: String, page: String },
     Latest {},
     Failed { problem: String },
-}
-
-/// `SaveReader.saves`: the Saves screen.
-#[derive(Serialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct SavesReport {
-    pub saves: Vec<saves::Row>,
-    pub all_from: Option<String>,
-    pub rimsaves: bool,
-    pub folders: Vec<String>,
-    pub current_folder: Option<String>,
 }
 
 /// `BrokenModSearch.huntState()`: HuntBar and the search's dialog.
@@ -272,23 +258,6 @@ pub struct NotesState {
 /// `Downloads.changeNotes`: per Workshop id, the notes fetched so far.
 pub(crate) type ChangeNotes = std::collections::BTreeMap<String, Vec<Note>>;
 
-/// `LogReader.logs`: the Logs screen.
-#[derive(Serialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct LogsReport {
-    pub previous: bool,
-    pub has_other: bool,
-    pub path: String,
-    pub written: u64,
-    pub lines: usize,
-    pub version: Option<String>,
-    pub text: Vec<String>,
-    pub errors: Vec<Pointed>,
-    pub culprits: Vec<Blamed>,
-    pub launches: Vec<Shown>,
-    pub since_clean: Option<SinceClean>,
-}
-
 /// The fields an answer has, as QML reads them, sorted.
 #[cfg(test)]
 pub(crate) fn fields<T: Serialize>(value: &T) -> Vec<String> {
@@ -396,11 +365,7 @@ mod tests {
     }
 
     #[test]
-    fn saves_and_the_broken_mod_search_keep_their_fields() {
-        assert_eq!(
-            fields(&SavesReport::default()),
-            ["allFrom", "currentFolder", "folders", "rimsaves", "saves"]
-        );
+    fn the_broken_mod_search_keeps_its_fields() {
         assert_eq!(fields(&HuntState::default()), ["active"]);
         let searching = HuntState {
             active: true,
@@ -490,26 +455,6 @@ mod tests {
         assert_eq!(
             fields(&NotesState::default()),
             ["asked", "done", "refused", "resume"]
-        );
-    }
-
-    #[test]
-    fn the_logs_report_keeps_its_fields() {
-        assert_eq!(
-            fields(&LogsReport::default()),
-            [
-                "culprits",
-                "errors",
-                "hasOther",
-                "launches",
-                "lines",
-                "path",
-                "previous",
-                "sinceClean",
-                "text",
-                "version",
-                "written"
-            ]
         );
     }
 }

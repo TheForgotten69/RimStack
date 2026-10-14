@@ -522,6 +522,9 @@ impl qobject::ModsData {
         if changes.contains(Changes::LIBRARY | Changes::LANGUAGE) {
             return self.load(changes.contains(Changes::LIBRARY));
         }
+        if changes.contains(Changes::MOD_FILES) {
+            self.as_mut().rescan();
+        }
         if changes.contains(Changes::FOLDERS) {
             self.as_mut().set_rescanning(true);
             crate::background::run(self.qt_thread(), move || app.reread_folders(), |_, ()| {});

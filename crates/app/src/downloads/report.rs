@@ -1,10 +1,16 @@
 //! What Downloads shows: updates Steam has, and what pasted links are.
 
-use super::*;
+use crate::workspace::now_secs;
+use rimstack_core::base::locks::Shared;
 use rimstack_core::kept::settings::Switch;
 use rimstack_core::kept::updates::{LastCheck, Remote};
+use rimstack_core::mods::library::{Library, ModId};
+use rimstack_core::rimworld::{paths::Source, workshop};
 use rimstack_core::said;
+use rimstack_core::say;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// The installed Workshop mods by Workshop id (their folder name).
 pub(crate) fn steam_record(app: &crate::App) -> Result<String, rimstack_core::base::error::Error> {

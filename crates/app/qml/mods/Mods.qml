@@ -92,7 +92,6 @@ Item {
     signal showLogs()
     // When the game was last started and how that went, as far as known:
     // { time, errors }. The same wherever it is said.
-    property var lastStart: null
     readonly property var overview: Hub.mods.overview || ({})
     // Every problem of every active mod, each with what solves it.
     readonly property var troubles: overview.troubles || []

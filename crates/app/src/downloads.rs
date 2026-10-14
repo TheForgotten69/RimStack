@@ -109,29 +109,21 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "fetchChangeNotes"]
         fn fetch_change_notes(self: Pin<&mut Downloads>, asked: &QString);
-
-        /// The game was seen starting without Play: in a round of the
-        /// search for the broken mod, or from Steam. Notes the mods'
-        /// versions, for "what changed since".
-        #[qinvokable]
-        #[cxx_name = "noteGameStarted"]
-        fn note_game_started(self: &Downloads);
     }
 }
 
-use crate::backend::download_report::{
-    check, checkout_updated, last_check, queue_report, steam_record, updates_report,
-};
-use crate::backend::log_report::launches_file;
-use crate::backend::now_secs;
+use crate::workspace::now_secs;
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
+use report::{check, checkout_updated, last_check, queue_report, steam_record, updates_report};
 use rimstack_core::base::error::Error;
 use rimstack_core::base::locks::Shared;
 use rimstack_core::{keep, kept::launches, rimworld::workshop, say};
 use std::path::PathBuf;
 
+#[path = "downloads/report.rs"]
+pub(crate) mod report;
 #[path = "downloads/since_launch.rs"]
 pub(crate) mod since_launch;
 #[path = "downloads/steam.rs"]

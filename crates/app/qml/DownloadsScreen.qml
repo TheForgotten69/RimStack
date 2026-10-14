@@ -12,7 +12,6 @@ Item {
     id: screen
     Appear { of: screen }
 
-    required property Backend backend
     required property Downloads downloads
     signal showMod(int modId)
 

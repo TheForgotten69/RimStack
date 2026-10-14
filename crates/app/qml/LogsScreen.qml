@@ -12,38 +12,26 @@ Item {
     id: screen
     Appear { of: screen }
 
-    required property LogReader reader
+    readonly property LogsData reader: Hub.logs
     signal showMod(int modId)
     signal useList(var ids)
     signal findBroken()
     // The search for the broken mod is under way.
     property bool hunting: false
 
-    readonly property var report: reader.logs ? JSON.parse(reader.logs) : ({})
+    readonly property var facts: reader.head || ({})
     // The game keeps two logs: this launch's and the one before.
-    property bool previous: false
+    readonly property bool previous: reader.previous
     // A recorded launch on show in place of a log: its place in `launches`, or -1.
     // `--recorded=0` opens on the newest; for screenshots.
     property int recorded: {
         const given = Qt.application.arguments.find(a => a.startsWith("--recorded="))
         return given ? Number(given.substring(11)) : -1
     }
-    property string filterText
-    // The launches recorded here, newest first.
-    readonly property var launches: report.launches || []
-    // The game's last start is not one of them: a round of the search
-    // for the broken mod, or a start from Steam.
-    readonly property bool outside: onLast && !!report.written && report.written > (launches.length > 0 ? launches[0].time : 0) + 120
-    // A run of errors alike but for a name shows as its first, until opened.
-    property var openRuns: ({})
-    // What the filter holds for the errors that point at no mod.
-    readonly property string noMod: reader.noModFilter()
-    readonly property var errors: report.errors ? JSON.parse(reader.errorsListed(filterText, JSON.stringify(Object.keys(openRuns).filter(run => openRuns[run]).map(Number)))) : []
-    function toggleRun(run) {
-        const now = Object.assign({}, openRuns)
-        now[run] = !now[run]
-        openRuns = now
-    }
+    readonly property bool filtered: filter.text.trim() !== ""
+    readonly property var launches: reader.launches || []
+    readonly property bool outside: onLast && !!facts.outside
+    readonly property var errors: reader.errors || []
     property int selected: 0
     readonly property var error: errors[selected] || null
     // What the middle shows: 0 the errors, 1 the mods they point at, 2 the log.
@@ -52,26 +40,8 @@ Item {
         const given = Qt.application.arguments.find(a => a.startsWith("--view="))
         return given ? Number(given.substring(7)) : 0
     }
-    // The mods the errors point at, most errors first:
-    // { name, modId, kinds, times }.
-    readonly property var culprits: report.culprits || []
-    // The log's lines that hold the filter text: { number, text }.
-    readonly property var lines: {
-        const all = report.text || []
-        const found = []
-        for (let i = 0; i < all.length; i++) {
-            if (filterText === "" || all[i].toLowerCase().indexOf(filterText) !== -1)
-                found.push({ number: i + 1, text: all[i] })
-        }
-        return found
-    }
-    // The line each kind of error first appears on.
-    readonly property var errorLines: {
-        const at = {}
-        for (const e of report.errors || [])
-            at[e.line] = true
-        return at
-    }
+    readonly property var culprits: reader.culprits || []
+    readonly property var lines: reader.lines || []
 
     function showLine(number) {
         filter.text = ""
@@ -81,79 +51,40 @@ Item {
         logView.marked = number
     }
 
-    function load() {
-        if (kept !== "")
-            reader.loadKeptLog(kept)
-        else
-            reader.loadLogs(previous)
-    }
-    onVisibleChanged: if (visible) load()
-    Component.onCompleted: if (visible) load()
-    // A re-read of the mods empties this report: the open screen asks for it again.
-    Connections {
-        target: screen.reader
-        function onLogsChanged() { if (screen.visible && screen.reader.logs === "") screen.load() }
-    }
+    Binding { target: Hub.logs; property: "wanted"; value: screen.visible }
     // A kept log on show, by its path, in place of the game's last or previous one.
-    property string kept: ""
+    readonly property string kept: reader.kept
     readonly property bool onLast: !previous && kept === ""
     readonly property bool onBefore: previous && kept === ""
-    // One load at a time: a log chosen while another is read is read next.
-    property bool pending: false
     function show(before, keptLog) {
-        previous = before
-        kept = keptLog
         recorded = -1
         selected = 0
-        pending = true
-        loadPending()
-    }
-    function loadPending() {
-        if (!pending || reader.logsBusy)
-            return
-        pending = false
-        load()
-    }
-    Connections {
-        target: screen.reader
-        function onLogsBusyChanged() { screen.loadPending() }
+        Hub.logs.previous = before
+        Hub.logs.kept = keptLog
     }
 
     function when(seconds) {
         return Theme.moment(seconds)
     }
 
-    function outcome(count) {
-        if (count === null || count === undefined)
-            return Theme.say("Not read")
-        return count === 0 ? Theme.say("Clean") : Theme.plural(count, "{} error", "{} errors")
-    }
-
-    function helpText() {
-        const e = screen.error
-        const from = e.mod ? "Likely mod: " + e.mod + "\n" : ""
-        const game = report.version ? "RimWorld " + report.version + "\n" : ""
-        return e.head + "\n" + e.trace.join("\n") + "\n\n" + game + from + "Logged " + e.count + " times, first at line " + e.line + " of the log."
-    }
-
-
     component Entry: Item {
         id: entry
         property string title
-        property string state
-        property string stateTip
+        property string outcome
+        property string outcomeTip
         property bool bad: false
+        property bool clean: false
         property bool current: false
         property bool choosable: true
         signal chosen()
-        // The state drops under the title where the two do not fit side by side.
+        // The outcome drops under the title where the two do not fit side by side.
         readonly property bool stacked: entryChip.visible && entryTitle.implicitWidth + entryChip.implicitWidth + 36 + 14 + Theme.gap > width
         width: parent ? parent.width : 0
         implicitHeight: Theme.sized(34) + (stacked ? Theme.tag + Theme.gapTiny : 0) + (entryTitle.lineCount - 1) * entryTitle.font.pixelSize * 1.3
         height: implicitHeight
         Accessible.ignored: !visible
         Accessible.role: Accessible.ListItem
-        Accessible.name: title + (state !== "" ? ", " + state : "")
+        Accessible.name: title + (outcome !== "" ? ", " + outcome : "")
         Accessible.onPressAction: if (choosable) entry.chosen()
         Rectangle {
             anchors.fill: parent
@@ -174,7 +105,7 @@ Item {
             width: 9
             height: 9
             radius: Math.min(width, height) / 2
-            color: entry.current ? Theme.onSelected : entry.bad ? Theme.err : entry.state === screen.outcome(0) ? Theme.ok : Theme.ink3
+            color: entry.current ? Theme.onSelected : entry.bad ? Theme.err : entry.clean ? Theme.ok : Theme.ink3
             border.width: 2
             border.color: entry.current ? Theme.accent : Theme.panel
         }
@@ -186,7 +117,7 @@ Item {
             columnSpacing: Theme.gap
             rowSpacing: Theme.gapTiny
             Text { id: entryTitle; Layout.fillWidth: true; Layout.alignment: entry.stacked ? Qt.AlignBottom : Qt.AlignVCenter; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight; color: entry.current ? Theme.onSelected : entry.choosable ? Theme.ink : Theme.ink2; font.pixelSize: Theme.body; text: entry.title }
-            Chip { id: entryChip; Layout.alignment: entry.stacked ? Qt.AlignTop : Qt.AlignVCenter; visible: entry.state !== ""; maxWidth: entry.width - 50; onAccent: entry.current; tone: entry.bad ? Theme.err : entry.state === screen.outcome(0) ? Theme.ok : Theme.ink3; text: entry.state; tip: entry.stateTip }
+            Chip { id: entryChip; Layout.alignment: entry.stacked ? Qt.AlignTop : Qt.AlignVCenter; visible: entry.outcome !== ""; maxWidth: entry.width - 50; onAccent: entry.current; tone: entry.bad ? Theme.err : entry.clean ? Theme.ok : Theme.ink3; text: entry.outcome; tip: entry.outcomeTip }
         }
     }
 
@@ -199,7 +130,7 @@ Item {
         width: parent.width - x
         height: parent.height
         launch: screen.launches[screen.recorded] || null
-        outcome: launch ? screen.outcome(launch.errors) : ""
+        outcome: launch ? launch.outcome : ""
         onUseList: ids => screen.useList(ids)
         onClosed: screen.recorded = -1
     }
@@ -239,20 +170,22 @@ Item {
                 Entry {
                     Layout.fillWidth: true
                     title: screen.outside ? Theme.say("Last launch, not from here") : Theme.say("Last launch")
-                    state: screen.onLast ? screen.outcome((screen.report.errors || []).length) : ""
-                    stateTip: Theme.say("Different errors in the log; one that repeats counts once") + (screen.outside ? ". " + Theme.say("The game was started without Play: in a round of the search for the broken mod, or from Steam.") : "")
-                    bad: screen.onLast && (screen.report.errors || []).length > 0
+                    outcome: screen.onLast ? screen.facts.outcome || "" : ""
+                    outcomeTip: Theme.say("Different errors in the log; one that repeats counts once") + (screen.outside ? ". " + Theme.say("The game was started without Play: in a round of the search for the broken mod, or from Steam.") : "")
+                    bad: screen.onLast && screen.facts.errors > 0
+                    clean: screen.onLast && screen.facts.errors === 0
                     current: screen.onLast && screen.recorded < 0
                     onChosen: screen.show(false, "")
                 }
                 Entry {
                     id: beforeEntry
                     Layout.fillWidth: true
-                    visible: screen.kept !== "" || screen.previous || !!screen.report.hasOther
+                    visible: screen.kept !== "" || screen.previous || !!screen.facts.hasOther
                     title: Theme.say("Launch before")
-                    state: screen.onBefore ? screen.outcome((screen.report.errors || []).length) : ""
-                    stateTip: Theme.say("Different errors in the log; one that repeats counts once")
-                    bad: screen.onBefore && (screen.report.errors || []).length > 0
+                    outcome: screen.onBefore ? screen.facts.outcome || "" : ""
+                    outcomeTip: Theme.say("Different errors in the log; one that repeats counts once")
+                    bad: screen.onBefore && screen.facts.errors > 0
+                    clean: screen.onBefore && screen.facts.errors === 0
                     current: screen.onBefore && screen.recorded < 0
                     onChosen: screen.show(true, "")
                 }
@@ -277,8 +210,9 @@ Item {
                         current: screen.recorded === index || (screen.kept !== "" && screen.kept === modelData.log && screen.recorded < 0)
                         onChosen: modelData.log ? screen.show(false, modelData.log) : screen.recorded = index
                         title: screen.when(modelData.time)
-                        state: screen.outcome(modelData.errors)
+                        outcome: modelData.outcome
                         bad: modelData.errors > 0
+                        clean: modelData.errors === 0
                     }
                 }
             }
@@ -309,14 +243,14 @@ Item {
                 Column {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
-                    Text { id: written; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: screen.report.written ? screen.when(screen.report.written) : screen.previous ? Theme.say("Launch before") : Theme.say("Last launch") }
-                    Text { width: parent.width; elide: Text.ElideRight; color: Theme.ink3; font.pixelSize: Theme.small; text: screen.report.lines ? [screen.report.version ? "RimWorld " + screen.report.version : "", Theme.plural(screen.report.lines, "{} line", "{} lines")].filter(s => s).join(", ") : "" }
+                    Text { id: written; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: screen.facts.written ? screen.when(screen.facts.written) : screen.previous ? Theme.say("Launch before") : Theme.say("Last launch") }
+                    Text { width: parent.width; elide: Text.ElideRight; color: Theme.ink3; font.pixelSize: Theme.small; text: screen.facts.about || "" }
                 }
                 RowLayout {
                 id: controls
                 spacing: Theme.gap
-                Btn { compact: true; icon: "external-link"; text: Theme.say("Open file"); tip: screen.report.path || ""; enabled: !!screen.report.path; onClicked: Qt.openUrlExternally(Theme.fileUrl(screen.report.path)) }
-                Btn { compact: true; icon: "copy"; text: Theme.say("Copy path"); enabled: !!screen.report.path; onClicked: Theme.copy(screen.report.path) }
+                Btn { compact: true; icon: "external-link"; text: Theme.say("Open file"); tip: screen.facts.path || ""; enabled: !!screen.facts.path; onClicked: Qt.openUrlExternally(Theme.fileUrl(screen.facts.path)) }
+                Btn { compact: true; icon: "copy"; text: Theme.say("Copy path"); enabled: !!screen.facts.path; onClicked: Theme.copy(screen.facts.path) }
                 Btn {
                     visible: !Theme.demo && !screen.hunting
                     icon: "search"
@@ -331,9 +265,9 @@ Item {
 
             Rectangle {
                 id: since
-                visible: !!screen.report.sinceClean && screen.onLast && screen.view === 0
-                readonly property var info: screen.report.sinceClean || ({ removed: [], added: [], time: 0, ids: [] })
-                readonly property bool same: info.removed.length === 0 && info.added.length === 0 && !info.reordered
+                visible: !!screen.reader.since && screen.onLast && screen.view === 0
+                readonly property var info: screen.reader.since || ({ removed: "", added: "", time: 0, ids: [], same: true })
+                readonly property bool same: info.same
                 Layout.fillWidth: true
                 Layout.leftMargin: Theme.gapLarge
                 Layout.rightMargin: Theme.gapLarge
@@ -358,10 +292,10 @@ Item {
                             const plain = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
                             const dim = s => "<font color=\"" + Theme.ink2 + "\">" + s + "</font>"
                             const parts = []
-                            if (since.info.added.length > 0)
-                                parts.push(dim(Theme.say("Added")) + " " + plain(since.info.added.join(", ")))
-                            if (since.info.removed.length > 0)
-                                parts.push(dim(Theme.say("Removed")) + " " + plain(since.info.removed.join(", ")))
+                            if (since.info.added !== "")
+                                parts.push(dim(Theme.say("Added")) + " " + plain(since.info.added))
+                            if (since.info.removed !== "")
+                                parts.push(dim(Theme.say("Removed")) + " " + plain(since.info.removed))
                             if (since.info.reordered)
                                 parts.push(dim(Theme.say("Order changed")))
                             return "<b>" + Theme.say("Since the last clean launch") + "</b> " + dim("(" + screen.when(since.info.time) + ")") + "<br>"
@@ -383,7 +317,7 @@ Item {
                     id: filter
                     Layout.fillWidth: true
                     placeholder: screen.view === 2 ? Theme.say("Search the log") : Theme.say("Filter by text or mod")
-                    onTextChanged: { screen.filterText = text.trim().toLowerCase(); screen.selected = 0 }
+                    onTextChanged: { Hub.logs.filter = text; screen.selected = 0 }
                 }
                 Choice {
                     visible: screen.view === 2
@@ -408,7 +342,7 @@ Item {
                 property int at: 0
                 function open(culprit) {
                     screen.view = 0
-                    filter.text = culprit.name || screen.noMod
+                    filter.text = culprit.name || screen.reader.noMod
                 }
                 RowKeys {
                     id: culpritKeys
@@ -466,7 +400,7 @@ Item {
                 delegate: Item {
                     id: logLine
                     required property var modelData
-                    readonly property bool bad: screen.errorLines[modelData.number] === true
+                    readonly property bool bad: modelData.errorStarts
                     width: logView.width
                     height: Math.max(Theme.sized(20), lineText.implicitHeight + 4)
                     Rectangle { visible: logLine.modelData.number === logView.marked; anchors.fill: parent; color: Theme.accent; opacity: 0.25 }
@@ -488,20 +422,20 @@ Item {
                     TapHandler { acceptedButtons: Qt.RightButton; onTapped: (point) => lineMenu.openAt(logLine, point.position.x, point.position.y, [{ text: Theme.say("Copy line"), icon: "copy", run: () => Theme.copy(logLine.modelData.text) }]) }
                 }
                 Text {
-                    visible: logView.count === 0 && !screen.reader.logsBusy
+                    visible: logView.count === 0 && !screen.reader.busy
                     anchors.centerIn: parent
                     color: Theme.ink2
                     font.pixelSize: Theme.body
-                    text: screen.filterText !== "" ? Theme.say("No line matches") : Theme.say("No log")
+                    text: screen.filtered ? Theme.say("No line matches") : Theme.say("No log")
                 }
             }
             Text {
-                visible: screen.view === 2 && (screen.report.lines || 0) > (screen.report.text || []).length
+                visible: screen.view === 2 && (screen.facts.cut || "") !== ""
                 Layout.leftMargin: Theme.gapWide
                 Layout.bottomMargin: Theme.gapSmall
                 color: Theme.ink3
                 font.pixelSize: Theme.small
-                text: Theme.plural(screen.report.lines || 0, "{} line, the first {} shown", "{} lines, the first {} shown", Theme.count((screen.report.text || []).length))
+                text: screen.facts.cut || ""
             }
 
             ListView {
@@ -529,9 +463,6 @@ Item {
                     required property int index
                     required property var modelData
                     readonly property bool current: index === screen.selected
-                    // The kind of error is the part before the first colon.
-                    readonly property int cut: modelData.head.indexOf(":")
-                    readonly property bool kinded: cut > 0 && cut <= 90
                     width: list.width
                     height: Math.max(Theme.sized(40), rowText.implicitHeight + Theme.sized(18))
                     Accessible.role: Accessible.ListItem
@@ -567,17 +498,17 @@ Item {
                             Layout.fillWidth: true
                             Layout.minimumWidth: 0
                             spacing: Theme.gapThin
-                            Text { width: parent.width; elide: Text.ElideRight; color: row.current ? Theme.onSelected : Theme.ink; font.pixelSize: Theme.body; font.weight: Font.Medium; text: row.kinded ? row.modelData.head.substring(0, row.cut) : row.modelData.head }
-                            Text { visible: row.kinded; width: parent.width; elide: Text.ElideRight; color: row.current ? Theme.onSelectedDim : Theme.ink2; font.pixelSize: Theme.small; text: row.modelData.head.substring(row.cut + 1).trim() }
+                            Text { width: parent.width; elide: Text.ElideRight; color: row.current ? Theme.onSelected : Theme.ink; font.pixelSize: Theme.body; font.weight: Font.Medium; text: row.modelData.kind }
+                            Text { visible: row.modelData.detail !== ""; width: parent.width; elide: Text.ElideRight; color: row.current ? Theme.onSelectedDim : Theme.ink2; font.pixelSize: Theme.small; text: row.modelData.detail }
                         }
                         Chip {
-                            visible: row.modelData.alike > 1 && row.modelData.run === row.modelData.at && screen.filterText === ""
+                            visible: row.modelData.more > 0
                             onAccent: row.current
                             pressable: true
-                            icon: screen.openRuns[row.modelData.run] ? "chevron-down" : "chevron-right"
-                            text: Theme.fill("{} more alike", (row.modelData.alike - 1))
+                            icon: row.modelData.opened ? "chevron-down" : "chevron-right"
+                            text: Theme.fill("{} more alike", row.modelData.more)
                             tip: Theme.say("The errors after this one that differ from it only in their last word")
-                            onClicked: screen.toggleRun(row.modelData.run)
+                            onClicked: screen.reader.toggleRun(row.modelData.run)
                         }
                         Chip {
                             visible: !!row.modelData.mod
@@ -601,21 +532,21 @@ Item {
                     Text {
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
-                        color: screen.report.problem ? Theme.err : Theme.ink
+                        color: screen.reader.problem !== "" ? Theme.err : Theme.ink
                         font.pixelSize: Theme.title
                         font.weight: Font.DemiBold
-                        text: screen.reader.logsBusy ? Theme.say("Reading the log…") : screen.report.problem ? Theme.say("Log could not be read") : screen.filterText !== "" ? Theme.say("No error matches") : screen.report.lines ? Theme.say("No errors") : Theme.say("No log")
+                        text: screen.reader.busy ? Theme.say("Reading the log…") : screen.reader.problem !== "" ? Theme.say("Log could not be read") : screen.filtered ? Theme.say("No error matches") : screen.facts.lines ? Theme.say("No errors") : Theme.say("No log")
                     }
                     Text {
-                        visible: !screen.reader.logsBusy
+                        visible: !screen.reader.busy
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
                         color: Theme.ink2
                         font.pixelSize: Theme.body
                         lineHeight: 1.3
-                        text: screen.report.problem || (screen.filterText !== "" ? ""
-                            : screen.report.lines ? Theme.plural(screen.report.lines, "{} line", "{} lines")
+                        text: screen.reader.problem || (screen.filtered ? ""
+                            : screen.facts.lines ? Theme.plural(screen.facts.lines, "{} line", "{} lines")
                             : Theme.say("Written when the game starts"))
                     }
                 }
@@ -641,7 +572,7 @@ Item {
                 Column {
                     id: modSide
                     readonly property var mod: screen.view === 1 ? screen.culprits[culpritList.at] || null : null
-                    readonly property var theirs: mod ? (screen.report.errors || []).filter(e => (e.mod || "") === mod.name) : []
+                    readonly property var theirs: mod ? screen.reader.errorsOf(mod.name) || [] : []
                     x: 14
                     y: 14
                     width: parent.width - 28
@@ -678,7 +609,7 @@ Item {
                         width: parent.width
                         font.pixelSize: Theme.heading
                         font.weight: Font.DemiBold
-                        text: screen.error ? (screen.error.head.indexOf(":") > 0 && screen.error.head.indexOf(":") < 90 ? screen.error.head.substring(0, screen.error.head.indexOf(":")) : screen.error.head) : ""
+                        text: screen.error ? screen.error.kind : ""
                     }
                     Text {
                         width: parent.width
@@ -693,7 +624,7 @@ Item {
                     Row {
                         spacing: Theme.gapSmall
                         Btn { text: Theme.say("Show in log"); onClicked: screen.showLine(screen.error.line) }
-                        Btn { icon: "copy"; text: Theme.say("Copy report"); tip: Theme.say("The error, its stack trace, the game version and the likely mod, as text."); onClicked: Theme.copy(screen.helpText()) }
+                        Btn { icon: "copy"; text: Theme.say("Copy report"); tip: Theme.say("The error, its stack trace, the game version and the likely mod, as text."); onClicked: Theme.copy(screen.reader.helpText(screen.selected)) }
                     }
 
                     GroupTitle { text: Theme.say("Mods") }
@@ -754,7 +685,7 @@ Item {
                             color: Theme.ink2
                             font.family: "monospace"
                             font.pixelSize: Theme.small
-                            text: screen.error ? screen.error.trace.map(l => l.replace(/\s+$/, "").replace(/([.\/(,])/g, "$1\u200b")).join("\n") : ""
+                            text: screen.error ? screen.error.traceText : ""
                         }
                     }
                 }

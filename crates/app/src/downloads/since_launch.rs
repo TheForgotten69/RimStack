@@ -47,12 +47,6 @@ fn logged(app: &crate::App) -> Option<u64> {
 }
 
 impl qobject::Downloads {
-    /// The game was seen starting, whoever started it: what it loads now
-    /// is what later changes are counted from.
-    pub(super) fn note_game_started(&self) {
-        record_versions(crate::app());
-    }
-
     /// The time the game was last seen starting, and each mod that
     /// changed since. Read from disk only; a Workshop mod's notes come
     /// with `fetchChangeNotes`.
@@ -65,7 +59,7 @@ impl qobject::Downloads {
         let now = steam_record(crate::app())
             .map(|acf| workshop::installed_times(&acf))
             .unwrap_or_default();
-        let launched = launches::read(&launches_file(crate::app()))
+        let launched = launches::read(&crate::app().launches_file())
             .pop()
             .map(|l| l.time);
         let record = AtLaunch::read(&at_launch_file(crate::app()));

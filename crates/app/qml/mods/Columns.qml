@@ -13,20 +13,20 @@ QtObject {
     required property bool loadTimes
     signal shownByAsked()
 
-    readonly property Backend rules: Backend {}
+    readonly property ModsData rules: Hub.mods
     readonly property var labels: ({ author: "Author", version: "Version", load: "Load" })
     readonly property var chosen: prefs.columns === "" ? [] : prefs.columns.split(",")
     // A column with nothing in it is not drawn.
     readonly property var shown: chosen.filter(column => column !== "load" || loadTimes)
     // At 100% text, where a column was dragged.
-    readonly property var chosenWidths: JSON.parse(rules.columnWidths(prefs.columnSizes))
+    readonly property var chosenWidths: rules.columnWidths(prefs.columnSizes)
     readonly property var widths: ({ author: Theme.sized(chosenWidths.author || 142), version: Theme.sized(chosenWidths.version || 84), load: Theme.sized(chosenWidths.load || 56) })
 
     // "" for the load order itself.
     property string shownBy: ""
     property bool descending: false
     function showBy(column) {
-        const now = JSON.parse(rules.columnPressed(shownBy, descending, column))
+        const now = rules.columnPressed(shownBy, descending, column)
         shownBy = now[0]
         descending = now[1]
         shownByAsked()

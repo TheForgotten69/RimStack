@@ -10,52 +10,23 @@ Item {
     id: screen
     Appear { of: screen }
 
-    required property Backend backend
     required property KeptLists keptLists
-    required property SaveReader saveReader
     signal useList(var ids)
     property bool allMissing: false
     property bool allAdded: false
-    // A row keeps room for a picture only while some save has one.
-    readonly property bool pictured: saves.some(s => !!s.preview)
 
-    readonly property var report: saveReader.saves ? JSON.parse(saveReader.saves) : ({})
-    readonly property var all: report.saves || []
+    readonly property SavesData reader: Hub.saves
+    readonly property var saves: reader.saves || []
     // With the RimSaves mod, saves sit in folders; "" shows every folder.
-    readonly property var folders: report.folders || []
-    property string folder: ""
-    readonly property var saves: folder === "" ? all : all.filter(s => s.folder === folder)
-        property int selected: 0
+    readonly property string folder: reader.folder
+    property int selected: 0
     property string listProblem
     readonly property var save: saves[selected] || null
 
-    // Compared again each time the screen is shown: the load order may
-    // have changed meanwhile.
-    onVisibleChanged: if (visible) saveReader.loadSaves()
-    Component.onCompleted: if (visible) saveReader.loadSaves()
-    // A re-read of the mods empties this report: the open screen asks for it again.
-    Connections {
-        target: screen.saveReader
-        function onSavesChanged() { if (screen.visible && screen.saveReader.saves === "") screen.saveReader.loadSaves() }
-    }
+    Binding { target: Hub.saves; property: "wanted"; value: screen.visible }
 
     function when(seconds) {
         return Theme.moment(seconds)
-    }
-
-    function verdict(s) {
-        if (s.verdict === "unreadable")
-            return Theme.say("Cannot be read")
-        if (s.verdict === "same")
-            return Theme.say("Same mods as now")
-        if (s.verdict === "differs")
-            return Theme.say("Loads with the current list")
-        const parts = []
-        if (s.missing.length > 0)
-            parts.push(Theme.plural(s.missing.length, "{} mod missing", "{} mods missing"))
-        if (s.otherGame)
-            parts.push(Theme.say("other game version"))
-        return parts.join(", ")
     }
 
     RowLayout {
@@ -73,9 +44,9 @@ Item {
                 Layout.preferredHeight: Theme.header
                 spacing: Theme.gap
                 Text { color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("Saves") }
-                Text { color: Theme.ink3; font.pixelSize: Theme.body; text: [screen.folder !== "" ? Theme.fill("{} in {}", screen.saves.length, screen.folder) : screen.saves.length, screen.report.allFrom ? Theme.fill("all from RimWorld {}", screen.report.allFrom) : ""].filter(part => part !== "").join(", ") }
+                Text { color: Theme.ink3; font.pixelSize: Theme.body; text: screen.reader.heading }
                 Rectangle {
-                    visible: screen.folders.length > 1
+                    visible: (screen.reader.folders || []).length > 1
                     Layout.leftMargin: Theme.gap
                     implicitWidth: folderRow.width + 4
                     implicitHeight: folderRow.height + 4
@@ -86,7 +57,7 @@ Item {
                         anchors.centerIn: parent
                         spacing: Theme.gapLine
                         Repeater {
-                            model: [""].concat(screen.folders)
+                            model: [""].concat(screen.reader.folders || [])
                             Rectangle {
                                 id: folderTab
                                 required property string modelData
@@ -103,9 +74,9 @@ Item {
                                     color: folderTab.on ? Theme.ink : Theme.ink2
                                     font.pixelSize: Theme.small
                                     font.weight: Font.Medium
-                                    text: (folderTab.modelData || Theme.say("All")) + (folderTab.modelData !== "" && folderTab.modelData === screen.report.currentFolder ? " ●" : "")
+                                    text: (folderTab.modelData || Theme.say("All")) + (folderTab.modelData !== "" && folderTab.modelData === screen.reader.currentFolder ? " ●" : "")
                                 }
-                                TapHandler { onTapped: { screen.folder = folderTab.modelData; screen.selected = 0 } }
+                                TapHandler { onTapped: { Hub.saves.folder = folderTab.modelData; screen.selected = 0 } }
                             }
                         }
                     }
@@ -132,20 +103,18 @@ Item {
                     count: list.count
                     current: screen.selected
                     onChosen: index => screen.selected = index
-                    onEntered: if (screen.save && screen.save.verdict !== "unreadable" && screen.save.verdict !== "same") screen.useList(screen.save.ids)
+                    onEntered: if (screen.save && screen.save.usable) screen.useList(screen.save.ids)
                 }
                 delegate: Item {
                     id: row
                     required property int index
                     required property var modelData
                     readonly property bool current: index === screen.selected
-                    readonly property int absent: (modelData.missing || []).filter(mod => !mod.installed).length
-                    readonly property int idle: (modelData.missing || []).length - absent
                     readonly property color quiet: current ? Theme.onSelectedDim : Theme.ink2
                     width: list.width
-                    height: Math.max(screen.pictured ? 82 : 0, rowFacts.implicitHeight + Theme.sized(20))
+                    height: Math.max(screen.reader.pictured ? 82 : 0, rowFacts.implicitHeight + Theme.sized(20))
                     Accessible.role: Accessible.ListItem
-                    Accessible.name: modelData.name + ", " + screen.verdict(modelData)
+                    Accessible.name: modelData.name + ", " + modelData.said
                     Rectangle {
                         anchors.fill: parent
                         anchors.leftMargin: Theme.gapLarge
@@ -163,7 +132,7 @@ Item {
                         anchors.rightMargin: 26
                         spacing: Theme.gapLarge
                         Rectangle {
-                            visible: screen.pictured
+                            visible: screen.reader.pictured
                             implicitWidth: 104
                             implicitHeight: 62
                             radius: Theme.corner
@@ -193,17 +162,16 @@ Item {
                                 elide: Text.ElideRight
                                 color: row.quiet
                                 font.pixelSize: Theme.small
-                                text: [screen.when(row.modelData.modified), row.modelData.gameVersion ? "RimWorld " + row.modelData.gameVersion : "", row.modelData.mods !== undefined ? Theme.plural(row.modelData.mods, "{} mod", "{} mods") : "",
-                                       screen.report.rimsaves && screen.folder === "" ? row.modelData.folder : ""].filter(part => part).join("   ")
+                                text: screen.when(row.modelData.modified) + "   " + row.modelData.about
                             }
                             Row {
                                 spacing: Theme.gapTiny
                                 Chip { visible: row.modelData.verdict === "unreadable"; onAccent: row.current; tone: Theme.err; icon: "circle-alert"; text: Theme.say("cannot be read") }
                                 Chip { visible: row.modelData.verdict === "same"; onAccent: row.current; tone: Theme.ok; icon: "check"; text: Theme.say("same mods as now") }
                                 // Red for what has to be downloaded first; amber for what "Use this save's mod list" brings back.
-                                Chip { visible: row.absent > 0; onAccent: row.current; tone: Theme.err; icon: "circle-alert"; text: Theme.fill("{} not installed", row.absent); tip: Theme.say("Mods the save was played with that are not installed") }
-                                Chip { visible: row.idle > 0; onAccent: row.current; tone: Theme.warn; icon: "minus"; text: Theme.fill("{} not active", row.idle); tip: Theme.say("Mods the save was played with that are not active now") }
-                                Chip { visible: !!row.modelData.otherGame; onAccent: row.current; tone: screen.report.allFrom ? Theme.ink2 : Theme.warn; text: Theme.say("other game version") }
+                                Chip { visible: row.modelData.notInstalled > 0; onAccent: row.current; tone: Theme.err; icon: "circle-alert"; text: Theme.fill("{} not installed", row.modelData.notInstalled); tip: Theme.say("Mods the save was played with that are not installed") }
+                                Chip { visible: row.modelData.notActive > 0; onAccent: row.current; tone: Theme.warn; icon: "minus"; text: Theme.fill("{} not active", row.modelData.notActive); tip: Theme.say("Mods the save was played with that are not active now") }
+                                Chip { visible: !!row.modelData.otherGame; onAccent: row.current; tone: screen.reader.allFrom !== "" ? Theme.ink2 : Theme.warn; text: Theme.say("other game version") }
                                 Chip { visible: (row.modelData.added || []).length > 0; onAccent: row.current; text: Theme.fill("{} added", (row.modelData.added || []).length); tip: Theme.say("Mods active now that the save was not played with") }
                                 Chip { visible: !!row.modelData.reordered; onAccent: row.current; text: Theme.say("reordered") }
                             }
@@ -217,8 +185,8 @@ Item {
                     anchors.centerIn: parent
                     width: Math.min(parent.width - 80, 460)
                     spacing: Theme.gapSmall
-                    Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: screen.saveReader.savesBusy ? Theme.say("Reading saves…") : Theme.say("No saves") }
-                    Text { visible: !screen.saveReader.savesBusy; width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; lineHeight: 1.3; text: screen.folder !== "" ? Theme.fill("RimSaves folder {} is empty", screen.folder) : "" }
+                    Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: screen.reader.busy ? Theme.say("Reading saves…") : Theme.say("No saves") }
+                    Text { visible: !screen.reader.busy; width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; lineHeight: 1.3; text: screen.folder !== "" ? Theme.fill("RimSaves folder {} is empty", screen.folder) : "" }
                 }
             }
         }
@@ -269,20 +237,20 @@ Item {
                         wrapMode: Text.WordWrap
                         color: Theme.ink2
                         font.pixelSize: Theme.body
-                        text: screen.save ? (screen.report.rimsaves ? Theme.fill("In {}, {}, {} MB", screen.save.folder, screen.when(screen.save.modified), screen.save.megabytes.toFixed(1)) : Theme.fill("{}, {} MB", screen.when(screen.save.modified), screen.save.megabytes.toFixed(1))) : ""
+                        text: screen.save ? (screen.reader.rimsaves ? Theme.fill("In {}, {}, {} MB", screen.save.folder, screen.when(screen.save.modified), screen.save.megabytes.toFixed(1)) : Theme.fill("{}, {} MB", screen.when(screen.save.modified), screen.save.megabytes.toFixed(1))) : ""
                     }
                     Flow {
                         width: parent.width
                         topPadding: Theme.gapMedium
                         spacing: Theme.gapSmall
                         Btn {
-                            visible: !!screen.save && screen.save.verdict !== "unreadable" && screen.save.verdict !== "same"
+                            visible: !!screen.save && screen.save.usable
                             primary: !!screen.save && screen.save.verdict === "breaks"
                             icon: "list"
                             text: Theme.say("Use this save's mod list")
                             onClicked: screen.useList(screen.save.ids)
                         }
-                        Btn { icon: "folder-open"; text: Theme.say("Open folder"); onClicked: Qt.openUrlExternally(Theme.fileUrl(screen.save.path.substring(0, screen.save.path.lastIndexOf("/")))) }
+                        Btn { icon: "folder-open"; text: Theme.say("Open folder"); onClicked: Qt.openUrlExternally(Theme.fileUrl(screen.save.dir)) }
                     }
 
                     GroupTitle { visible: facts.count > 0; text: Theme.say("Colony") }
@@ -335,8 +303,6 @@ Item {
                         font.pixelSize: Theme.body
                         text: Theme.say("Nothing the save needs is missing.")
                     }
-                    Item { visible: false; width: 1; height: 1 }
-                    GroupTitle { visible: false; text: Theme.say("Same mods as now") }
                     Text { visible: !!screen.save && screen.save.verdict === "same"; width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink; font.pixelSize: Theme.body; lineHeight: 1.3; text: Theme.say("Same mods, same order as the load order") }
 
                     GroupTitle { visible: !!screen.save && !!screen.save.otherGame; text: Theme.say("Other game version") }
@@ -344,7 +310,7 @@ Item {
 
                     Text {
                         readonly property var gone: screen.save && screen.save.missing ? screen.save.missing : []
-                        readonly property int absent: gone.filter(mod => !mod.installed).length
+                        readonly property int absent: screen.save ? screen.save.notInstalled : 0
                         visible: gone.length > 0
                         width: parent.width
                         topPadding: Theme.gapTiny

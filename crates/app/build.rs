@@ -78,10 +78,7 @@ fn main() {
     .qt_module("Quick")
     .qt_module("QuickControls2")
     .files([
-        "src/backend.rs",
-        "src/log_reader.rs",
         "src/texture_tools.rs",
-        "src/save_reader.rs",
         "src/downloads.rs",
         "src/list_store.rs",
         "src/broken_mod_search.rs",
@@ -89,6 +86,9 @@ fn main() {
         "src/settings_data.rs",
         "src/mod_rows.rs",
         "src/mods_data.rs",
+        "src/saves_data.rs",
+        "src/logs_data.rs",
+        "src/game_data.rs",
     ]);
     // SAFETY: one more source for the same compiler, nothing set that the generated code relies on.
     let builder = unsafe {

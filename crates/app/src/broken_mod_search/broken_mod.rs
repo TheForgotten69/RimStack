@@ -61,7 +61,9 @@ impl qobject::BrokenModSearch {
         };
         // The newest save as it is before any round, apart from the
         // copies made before each launch: those are few and soon replaced.
-        let newest = saves_dir(crate::app()).and_then(|dir| saves::list(&dir).into_iter().next());
+        let newest = crate::app()
+            .saves_dir()
+            .and_then(|dir| saves::list(&dir).into_iter().next());
         if let Some(save) = newest {
             let kept = crate::app().data_dir().join("save-before-search");
             if let Err(problem) = saves::back_up(&save.path, &kept, now_secs(), 3) {

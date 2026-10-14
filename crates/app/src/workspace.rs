@@ -14,9 +14,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock, RwLockReadGuard};
 use std::time::{Duration, Instant};
 
+mod game;
 pub mod load_order;
+pub mod logs;
 mod notes;
 mod records;
+pub mod saves;
 mod settings;
 mod upkeep;
 pub use settings::{newest_release, short_contrast};
@@ -96,6 +99,8 @@ pub struct App {
     /// What `git --version` said: the program does not appear or leave
     /// while RimStack runs.
     git: OnceLock<Option<String>>,
+    /// The game's newest log as the Logs screen last read it.
+    log_read: Mutex<Option<rimstack_core::kept::launches::LogRead>>,
     bus: crate::changes::Bus,
 }
 
@@ -159,6 +164,7 @@ impl App {
             texture_counts: Mutex::new(BTreeMap::new()),
             list_on_disk: Mutex::new((0, false)),
             git: OnceLock::new(),
+            log_read: Mutex::new(None),
             bus: crate::changes::Bus::default(),
         }
     }

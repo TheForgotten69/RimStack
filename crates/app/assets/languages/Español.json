@@ -847,7 +847,7 @@
  "Textures": "Texturas",
  "Textures brought back": "Texturas restauradas",
  "Textures set aside": "Texturas apartadas",
- "That folder is not a mod's": "Esa carpeta no es la de un mod",
+ "{} is not a kept log": "{} no es un registro conservado",
  "That is not a list of mods.": "Eso no es una lista de mods.",
  "That mod is no longer where it was read; read the folders again": "Ese mod ya no está donde se leyó; vuelve a leer las carpetas",
  "The Workshop copy stays where it is; Steam keeps updating that one, not this.": "La copia del Workshop se queda donde está; Steam sigue actualizando esa, no esta.",
