@@ -10,7 +10,6 @@ Rectangle {
     // Opened over the load order from the rail, not standing beside it.
     property bool drawer: false
     color: Theme.panel
-    Component.onCompleted: if (drawer) mirror.focusInput()
     Shortcut { sequences: [StandardKey.Find]; enabled: pane.drawer; onActivated: mirror.focusInput() }
 
     ColumnLayout {

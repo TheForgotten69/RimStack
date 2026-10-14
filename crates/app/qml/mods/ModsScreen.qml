@@ -57,6 +57,10 @@ Item {
 
     SplitView {
         id: panes
+        // Under the open drawer: Qt hands a press taken above to the pointer
+        // handlers below as well, so the rows there would answer it. A mod
+        // dragged out of the drawer still lands in the load order.
+        enabled: !drawerLoader.active || Mods.drag.held !== null
         anchors.fill: parent
         anchors.leftMargin: rail.width
         anchors.bottomMargin: bulk.height
@@ -141,6 +145,8 @@ Item {
         z: 1
         sourceComponent: InactivePane {
             drawer: true
+            // Takes what its own items leave, so no press reaches the scrim or the load order under it.
+            MouseArea { anchors.fill: parent; z: -1; acceptedButtons: Qt.AllButtons; hoverEnabled: true }
             transform: Translate { id: drawerShift }
             NumberAnimation { target: drawerShift; property: "x"; from: -drawerLoader.width; to: 0; duration: Theme.calm; easing.type: Easing.OutCubic; running: true }
             Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.edge }

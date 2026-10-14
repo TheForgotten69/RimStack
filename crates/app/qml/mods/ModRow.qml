@@ -420,9 +420,9 @@ Item {
             if (quick.hovered || subOff.hovered)
                 return
             if (row.isSub)
-                row.ownModel.toggleSub(row.index)
+                Hub.mods.toggleSub(row.ownModel === Mods.active, row.index)
             else if (row.isHeader)
-                row.ownModel.toggleCategory(row.category)
+                Hub.mods.toggleCategory(row.ownModel === Mods.active, row.category)
             else if (Mods.picking !== "" && row.columns && row.modId >= 0 && row.modId !== Mods.selectedId)
                 Mods.pick(row.modId)
             else if (point.modifiers & Qt.ControlModifier)
@@ -441,7 +441,7 @@ Item {
         onTapped: (point) => {
             if (row.isSub)
                 Mods.menuRequested(row, point.position.x, point.position.y, [
-                    { text: row.collapsed ? Theme.say("Show its mods") : Theme.say("Fold its mods away"), run: () => row.ownModel.toggleSub(row.index) },
+                    { text: row.collapsed ? Theme.say("Show its mods") : Theme.say("Fold its mods away"), run: () => Hub.mods.toggleSub(row.ownModel === Mods.active, row.index) },
                     { text: Theme.say("Take this tag off these mods"), icon: "x", run: () => Mods.removeSub(row.ownModel, row.index) },
                 ])
             else if (row.isHeader)

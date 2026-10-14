@@ -27,6 +27,9 @@ FilterField {
         border.width: 1
         border.color: Theme.line
         HoverHandler { id: suggestHover }
+        // Qt hands a press taken here to the pointer handlers of the rows beneath
+        // too; holding it alone keeps them from answering.
+        TapHandler { gesturePolicy: TapHandler.WithinBounds; grabPermissions: PointerHandler.TakeOverForbidden }
         Column {
             id: suggestList
             x: 6
