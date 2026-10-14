@@ -8,7 +8,6 @@ import RimStack.Ui
 
 Rectangle {
     id: strip
-    required property KeptLists keptLists
     required property TextureTools textureTools
     // The newest launch on record: { time, errors }.
     property var lastLaunch: null
@@ -162,7 +161,6 @@ Rectangle {
                 id: historyMenu
                 x: parent.width - width
                 y: -height - 8
-                keptLists: strip.keptLists
                 textureTools: strip.textureTools
                 onUseList: ids => strip.useList(ids)
             }

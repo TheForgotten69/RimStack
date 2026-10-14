@@ -15,11 +15,13 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock, RwLockReadGuard};
 use std::time::{Duration, Instant};
 
 mod game;
+pub mod lists;
 pub mod load_order;
 pub mod logs;
 mod notes;
 mod records;
 pub mod saves;
+pub mod search;
 mod settings;
 mod upkeep;
 pub use settings::{newest_release, short_contrast};

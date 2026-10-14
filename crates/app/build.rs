@@ -80,8 +80,6 @@ fn main() {
     .files([
         "src/texture_tools.rs",
         "src/downloads.rs",
-        "src/list_store.rs",
-        "src/broken_mod_search.rs",
         "src/hub.rs",
         "src/settings_data.rs",
         "src/mod_rows.rs",
@@ -89,6 +87,8 @@ fn main() {
         "src/saves_data.rs",
         "src/logs_data.rs",
         "src/game_data.rs",
+        "src/lists_data.rs",
+        "src/search_data.rs",
     ]);
     // SAFETY: one more source for the same compiler, nothing set that the generated code relies on.
     let builder = unsafe {

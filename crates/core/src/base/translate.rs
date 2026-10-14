@@ -200,6 +200,41 @@ pub fn kept(english: &str, parts: &[serde_json::Value]) -> String {
     serde_json::Value::Array(all).to_string()
 }
 
+/// A sentence `kept` wrote, in the chosen language. `["#", n, one,
+/// many, part…]` is one with a count.
+pub fn put(sentence: &serde_json::Value) -> String {
+    use serde_json::Value;
+    let all = match sentence {
+        Value::Array(all) => all,
+        Value::String(text) => return text.clone(),
+        other => return other.to_string(),
+    };
+    let Some(Value::String(head)) = all.first() else {
+        return sentence.to_string();
+    };
+    let parts: Vec<String> = all[1..].iter().map(put).collect();
+    let shown = |from: usize| -> Vec<&dyn Display> {
+        parts.iter().skip(from).map(|p| p as &dyn Display).collect()
+    };
+    match head.as_str() {
+        "," => parts.join(", "),
+        "#" if parts.len() >= 3 => {
+            let n = parts[0].parse().unwrap_or(0);
+            several(n, &parts[1], &parts[2], &shown(3))
+        }
+        english => fill(english, &shown(0)),
+    }
+}
+
+/// What a record holds, in words: a sentence `kept` wrote, or the plain
+/// English an older record holds.
+pub fn in_words(record: &str) -> String {
+    if !record.starts_with('[') {
+        return say(record);
+    }
+    serde_json::from_str(record).map_or_else(|_| record.to_string(), |sentence| put(&sentence))
+}
+
 /// `keep!("Updated {}: {}", name, commit)`: see `kept`.
 #[macro_export]
 macro_rules! keep {
@@ -233,6 +268,30 @@ mod tests {
             "Kept for the test 1"
         );
         assert_eq!(fill("Kept for the test {}", &[&2]), "Gardé 2");
+        set(HashMap::new());
+    }
+
+    #[test]
+    fn a_kept_sentence_is_put_in_words_with_its_parts_lists_and_counts() {
+        let _alone = TABLE_IN_USE.lock();
+        set(HashMap::from([
+            (
+                "Kept, updated {}: {}".to_string(),
+                "Gardé, mis à jour {} : {}".to_string(),
+            ),
+            ("{} kept mods".to_string(), "{} mods gardés".to_string()),
+        ]));
+        let kept = kept(
+            "Kept, updated {}: {}",
+            &["Harmony".into(), "35a8963".into()],
+        );
+        assert_eq!(in_words(&kept), "Gardé, mis à jour Harmony : 35a8963");
+        let counted = serde_json::json!(["#", "1", "{} kept mod", "{} kept mods"]);
+        assert_eq!(put(&counted), "1 kept mod");
+        let listed = serde_json::json!([",", "a", ["#", 2, "{} kept mod", "{} kept mods"]]);
+        assert_eq!(put(&listed), "a, 2 mods gardés");
+        assert_eq!(in_words("Not kept as a sentence"), "Not kept as a sentence");
+        assert_eq!(in_words("[broken"), "[broken");
         set(HashMap::new());
     }
 

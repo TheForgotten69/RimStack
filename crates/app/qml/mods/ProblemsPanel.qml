@@ -29,7 +29,7 @@ Column {
         onClicked: Mods.fixAll()
     }
     Btn {
-        visible: !Theme.demo && !Mods.hunting
+        visible: !Theme.demo && !Hub.search.active
         icon: "search"
         text: Theme.say("Find the broken mod")
         tip: Theme.say("Switches half of the mods off, you play and say whether it still breaks, until one mod is left. Your list is kept and comes back at the end.")

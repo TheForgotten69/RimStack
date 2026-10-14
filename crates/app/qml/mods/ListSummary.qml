@@ -10,8 +10,7 @@ Column {
     Appear { of: summary }
     width: parent.width
     spacing: Theme.gapCard
-    // Counted again each time this panel shows, and when the lists change.
-    readonly property var facts: visible && !Theme.demo && Mods.active.count >= 0 && Hub.mods.unsaved !== undefined && Notices.journalled >= 0 ? Hub.mods.summary() : ({})
+    readonly property var facts: Hub.mods.summary || ({})
     readonly property int changed: visible && Mods.downloads && !Theme.demo ? JSON.parse(Mods.downloads.sinceLaunch()).items.length : 0
     readonly property var errors: Mods.troubles.filter(trouble => trouble.error)
     readonly property var slowest: Mods.overview.slowest || []

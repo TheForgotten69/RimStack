@@ -10,27 +10,18 @@ Popup {
     exit: PopOut {}
     id: listsMenu
 
-    required property KeptLists keptLists
     signal useList(var ids)
     // The load order now goes by this name; "" when it has none.
     signal named(string name)
 
-    property var lists: []
+    readonly property var lists: Hub.lists.saved || []
     // The load order as it was before each Sort or change of list.
-    property var snapshots: []
+    readonly property var snapshots: Hub.lists.snapshots || []
     property string problem
-
-    function reload() {
-        lists = JSON.parse(keptLists.savedLists())
-        snapshots = JSON.parse(keptLists.snapshots())
-    }
 
     width: Theme.sized(380)
     padding: Theme.gapLarge
-    onAboutToShow: {
-        problem = ""
-        reload()
-    }
+    onAboutToShow: problem = ""
     background: Rectangle { radius: Theme.cornerLarge; color: Theme.bar; border.width: 1; border.color: Theme.line }
 
     contentItem: Column {
@@ -61,18 +52,17 @@ Popup {
                     text: Theme.say("Update")
                     tip: Theme.fill("Keeps the load order as it is now under {}, in place of what it held", saved.modelData.name)
                     onClicked: {
-                        listsMenu.problem = listsMenu.keptLists.saveListAs(saved.modelData.name)
+                        listsMenu.problem = Hub.lists.keep(saved.modelData.name)
                         if (listsMenu.problem === "")
                             listsMenu.named(saved.modelData.name)
-                        listsMenu.reload()
                     }
                 }
                 Btn {
                     text: Theme.say("Use")
                     onClicked: {
-                        const ids = listsMenu.keptLists.savedList(saved.modelData.name)
-                        if (ids !== "") {
-                            listsMenu.useList(JSON.parse(ids))
+                        const ids = Hub.lists.named(saved.modelData.name)
+                        if (ids) {
+                            listsMenu.useList(ids)
                             listsMenu.named(saved.modelData.name)
                         }
                         listsMenu.close()
@@ -81,10 +71,7 @@ Popup {
                 Btn {
                     icon: "trash-2"
                     tip: Theme.fill("Delete {}", saved.modelData.name)
-                    onClicked: {
-                        listsMenu.keptLists.deleteList(saved.modelData.name)
-                        listsMenu.reload()
-                    }
+                    onClicked: Hub.lists.remove(saved.modelData.name)
                 }
             }
         }
@@ -105,12 +92,11 @@ Popup {
                 icon: "save"
                 text: Theme.say("Keep")
                 onClicked: {
-                    listsMenu.problem = listsMenu.keptLists.saveListAs(name.text)
+                    listsMenu.problem = Hub.lists.keep(name.text)
                     if (listsMenu.problem === "") {
                         listsMenu.named(name.text.trim())
                         name.text = ""
                     }
-                    listsMenu.reload()
                 }
             }
         }
@@ -118,21 +104,20 @@ Popup {
 
         Text { visible: listsMenu.snapshots.length > 0; topPadding: Theme.gapSmall; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("Earlier") }
         Repeater {
-            // The five newest fit; all ten are in RimStack's data folder.
-            model: listsMenu.snapshots.slice(0, 5)
+            model: listsMenu.snapshots
             RowLayout {
                 id: earlier
                 required property var modelData
                 width: listsMenu.availableWidth
                 height: Theme.sized(28)
                 spacing: Theme.gapSmall
-                Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.listName(earlier.modelData.name) }
+                Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink2; font.pixelSize: Theme.body; text: earlier.modelData.title }
                 Btn {
                     text: Theme.say("Use")
                     onClicked: {
-                        const ids = listsMenu.keptLists.snapshotList(earlier.modelData.name)
-                        if (ids !== "") {
-                            listsMenu.useList(JSON.parse(ids))
+                        const ids = Hub.lists.snapshotNamed(earlier.modelData.name)
+                        if (ids) {
+                            listsMenu.useList(ids)
                             listsMenu.named("")
                         }
                         listsMenu.close()
@@ -150,7 +135,7 @@ Popup {
                 text: Theme.say("Use the copied list")
                 tip: Theme.say("A list of mods copied as text or as links becomes the load order. Save writes it.")
                 onClicked: {
-                    const ids = JSON.parse(listsMenu.keptLists.idsInText(Theme.pasted()))
+                    const ids = Hub.lists.idsInText(Theme.pasted())
                     if (ids.length > 0) {
                         listsMenu.useList(ids)
                         listsMenu.named("")

@@ -14,6 +14,10 @@ pub mod qobject {
         type LogsData = crate::logs_data::qobject::LogsData;
         include!("rimstack-app/src/game_data.cxxqt.h");
         type GameData = crate::game_data::qobject::GameData;
+        include!("rimstack-app/src/lists_data.cxxqt.h");
+        type ListsData = crate::lists_data::qobject::ListsData;
+        include!("rimstack-app/src/search_data.cxxqt.h");
+        type SearchData = crate::search_data::qobject::SearchData;
 
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
@@ -31,6 +35,8 @@ pub mod qobject {
         #[qproperty(*mut SavesData, saves, READ, CONSTANT)]
         #[qproperty(*mut LogsData, logs, READ, CONSTANT)]
         #[qproperty(*mut GameData, game, READ, CONSTANT)]
+        #[qproperty(*mut ListsData, lists, READ, CONSTANT)]
+        #[qproperty(*mut SearchData, search, READ, CONSTANT)]
         type Hub = super::HubRust;
     }
 
@@ -40,7 +46,7 @@ pub mod qobject {
 use core::pin::Pin;
 use cxx::UniquePtr;
 use cxx_qt::CxxQtType;
-use qobject::{GameData, LogsData, ModsData, SavesData, SettingsData};
+use qobject::{GameData, ListsData, LogsData, ModsData, SavesData, SearchData, SettingsData};
 use std::time::Duration;
 
 pub struct HubRust {
@@ -49,11 +55,15 @@ pub struct HubRust {
     saves: *mut SavesData,
     logs: *mut LogsData,
     game: *mut GameData,
+    lists: *mut ListsData,
+    search: *mut SearchData,
     owned_settings: UniquePtr<SettingsData>,
     owned_mods: UniquePtr<ModsData>,
     owned_saves: UniquePtr<SavesData>,
     owned_logs: UniquePtr<LogsData>,
     owned_game: UniquePtr<GameData>,
+    owned_lists: UniquePtr<ListsData>,
+    owned_search: UniquePtr<SearchData>,
 }
 
 impl Default for HubRust {
@@ -64,11 +74,15 @@ impl Default for HubRust {
             saves: std::ptr::null_mut(),
             logs: std::ptr::null_mut(),
             game: std::ptr::null_mut(),
+            lists: std::ptr::null_mut(),
+            search: std::ptr::null_mut(),
             owned_settings: UniquePtr::null(),
             owned_mods: UniquePtr::null(),
             owned_saves: UniquePtr::null(),
             owned_logs: UniquePtr::null(),
             owned_game: UniquePtr::null(),
+            owned_lists: UniquePtr::null(),
+            owned_search: UniquePtr::null(),
         }
     }
 }
@@ -143,6 +157,14 @@ impl cxx_qt::Initialize for qobject::Hub {
         if let Some(game) = game.as_mut() {
             game.connect(app.clone(), demo, watch_every(demo));
         }
+        let mut lists = crate::lists_data::qobject::make_lists_data();
+        if let Some(lists) = lists.as_mut() {
+            lists.connect(app.clone(), demo);
+        }
+        let mut search = crate::search_data::qobject::make_search_data();
+        if let Some(search) = search.as_mut() {
+            search.connect(app.clone(), demo, !given("--check"));
+        }
         let mut hub = self.as_mut().rust_mut();
         hub.settings = address(&mut settings);
         hub.owned_settings = settings;
@@ -154,5 +176,9 @@ impl cxx_qt::Initialize for qobject::Hub {
         hub.owned_logs = logs;
         hub.game = address(&mut game);
         hub.owned_game = game;
+        hub.lists = address(&mut lists);
+        hub.owned_lists = lists;
+        hub.search = address(&mut search);
+        hub.owned_search = search;
     }
 }

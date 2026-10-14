@@ -10,7 +10,6 @@ Item {
     id: screen
     Appear { of: screen }
 
-    required property KeptLists keptLists
     signal useList(var ids)
     property bool allMissing: false
     property bool allAdded: false
@@ -283,7 +282,7 @@ Item {
                             enabled: listName.text.trim() !== ""
                             text: Theme.say("Keep")
                             onClicked: {
-                                screen.listProblem = screen.keptLists.saveIdsAs(listName.text, JSON.stringify(screen.save.ids))
+                                screen.listProblem = Hub.lists.keepIds(listName.text, screen.save.ids)
                                 if (screen.listProblem === "")
                                     listName.text = ""
                             }

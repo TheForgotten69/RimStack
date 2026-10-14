@@ -37,11 +37,7 @@ ApplicationWindow {
         Mods.errors > 0 ? Theme.plural(Mods.errors, "{} mod has a problem the game will trip on", "{} mods have problems the game will trip on") : "",
         Mods.dirty ? Theme.say("The list has unsaved changes; the game would start with the saved one") : "",
     ].filter(line => line !== "")
-    // Starts the search by halves; the list as it is now is kept by name
-    // first, so it can be had back whatever happens to the search.
     function findBroken() {
-        const before = Mods.snapshot("@hunt")
-        Notices.keep([Theme.kept("Began finding the broken mod")], before === "" ? "" : "list " + before)
         hunt.start()
     }
     Connections {
@@ -66,8 +62,6 @@ ApplicationWindow {
             play()
     }
 
-        BrokenModSearch { id: appHunt }
-        KeptLists { id: appLists }
         Downloads { id: appDownloads }
         TextureTools { id: appTextures }
 
@@ -105,11 +99,8 @@ ApplicationWindow {
             appDownloads.restoreUpdates()
     }
 
-    Binding { target: Mods; property: "hunter"; value: appHunt }
-    Binding { target: Mods; property: "keptLists"; value: appLists }
     Binding { target: Mods; property: "downloads"; value: appDownloads }
     Binding { target: Mods; property: "textureTools"; value: appTextures }
-    Binding { target: Notices; property: "keptLists"; value: appLists }
     // What a background task says when it ends becomes a notice; the
     // tray shows it while it runs.
     Connections {
@@ -137,7 +128,6 @@ ApplicationWindow {
         appDownloads.taskRunning ? { text: appDownloads.taskNote } : null,
     ].filter(task => task !== null)
     Binding { target: Mods; property: "behind"; value: window.behindActive }
-    Binding { target: Mods; property: "hunting"; value: !!hunt.search.active }
     Connections {
         target: Mods
         function onShowUpdates() { window.section = 1 }
@@ -185,7 +175,6 @@ ApplicationWindow {
 
             TopBar {
                 id: topBar
-                keptLists: appLists
                 Layout.fillWidth: true
                 section: window.section
                 behind: window.behindActive
@@ -199,7 +188,6 @@ ApplicationWindow {
             }
 
             HuntBar {
-                hunter: appHunt
                 id: hunt
                 Layout.fillWidth: true
                 // The round's list goes on the Mods screen; whoever is reading the log stays there.
@@ -228,7 +216,6 @@ ApplicationWindow {
                 Loader {
                     active: window.section === 3 || item !== null
                     sourceComponent: SavesScreen {
-                        keptLists: appLists
                         onUseList: ids => window.useList(ids)
                     }
                 }
@@ -239,7 +226,6 @@ ApplicationWindow {
                         onUseList: ids => window.useList(ids)
                         onShowMod: modId => window.showMod(modId)
                         onFindBroken: window.findBroken()
-                        hunting: !!hunt.search.active
                     }
                 }
                 Loader {
@@ -247,7 +233,6 @@ ApplicationWindow {
                     active: window.section === 5 || item !== null
                     sourceComponent: SettingsScreen {
                         downloads: appDownloads
-                        keptLists: appLists
                         overview: Mods.overview
                         onUseList: ids => window.useList(ids)
                         onTrust: (modId, yes) => Mods.trust(modId, yes)
@@ -257,7 +242,6 @@ ApplicationWindow {
             }
 
             StatusBar {
-                keptLists: appLists
                 textureTools: appTextures
                 id: statusBar
                 Layout.fillWidth: true
@@ -344,7 +328,7 @@ ApplicationWindow {
                 { name: Theme.say("Keyboard shortcuts"), group: Theme.say("Help"), keys: "?", run: () => keysSheet.open() },
                 { name: Theme.say("Report a problem"), group: Theme.say("Help"), run: () => Qt.openUrlExternally(Theme.issues) },
                 { name: Theme.say("Show the first-run hints again"), group: Theme.say("Help"), run: () => { Theme.stored.hintsSeen = false; window.section = 0; Mods.startHints() } },
-                { name: Theme.say("Find the broken mod"), group: Theme.say("Game"), run: () => window.findBroken(), when: !Theme.demo && !hunt.search.active },
+                { name: Theme.say("Find the broken mod"), group: Theme.say("Game"), run: () => window.findBroken(), when: !Theme.demo && !Hub.search.active },
                 { name: Theme.say("All problems"), group: Theme.say("Load order"), run: () => { window.section = 0; Mods.problemsOpen = true }, when: Mods.troubles.length > 0 },
                 { name: Theme.say("What RimStack changed"), group: Theme.say("Help"), run: () => statusBar.historyMenu.open(), when: !Theme.demo },
                 { name: Theme.say("Sort"), group: Theme.say("Load order"), run: () => { window.section = 0; Mods.previewSort() }, when: !Theme.demo },
@@ -354,7 +338,7 @@ ApplicationWindow {
                 { name: Theme.say("Play"), group: Theme.say("Game"), run: () => window.pressPlay() },
                 { name: Theme.say("Next problem"), group: Theme.say("Load order"), run: () => { window.section = 0; Mods.showNextProblem() }, when: Mods.errors + Hub.mods.warnings > 0 },
                 { name: Theme.say("Saved lists"), group: Theme.say("Load order"), run: () => topBar.listsMenu.open(), when: !Theme.demo },
-                { name: Theme.say("Use the list from before RimStack"), group: Theme.say("Load order"), run: () => { const ids = appLists.originalList(); if (ids !== "") window.useList(JSON.parse(ids)) }, when: !!folders.backup },
+                { name: Theme.say("Use the list from before RimStack"), group: Theme.say("Load order"), run: () => { const ids = Hub.lists.original(); if (ids) window.useList(ids) }, when: !!folders.backup },
 
                 { name: Theme.fill(Mods.selectedActive ? "Deactivate {}" : "Activate {}", mod ? mod.name : ""), group: Theme.say("Selected mod"), run: () => Mods.toggleSelected(), when: !!mod && !Hub.mods.previewing },
                 { name: Theme.fill("Open folder of {}", (mod ? mod.name : "")), group: Theme.say("Selected mod"), run: () => open(mod.path), when: !!mod && !!mod.path },
@@ -362,7 +346,7 @@ ApplicationWindow {
                 { name: Theme.fill("Copy package id of {}", (mod ? mod.name : "")), group: Theme.say("Selected mod"), run: () => Theme.copy(mod.packageId), when: !!mod && !!mod.packageId },
                 { name: Theme.say("Clear selection"), group: Theme.say("Selected mod"), keys: Theme.say("Esc"), run: () => Mods.select(-1, false), when: Mods.selectedId >= 0 },
 
-                { name: Theme.say("Use the list on the clipboard"), group: Theme.say("Load order"), run: () => { const ids = JSON.parse(appLists.idsInText(Theme.pasted())); if (ids.length > 0) window.useList(ids) }, when: !Theme.demo },
+                { name: Theme.say("Use the list on the clipboard"), group: Theme.say("Load order"), run: () => { const ids = Hub.lists.idsInText(Theme.pasted()); if (ids.length > 0) window.useList(ids) }, when: !Theme.demo },
                 { name: Theme.say("Copy the load order as text"), group: Theme.say("Load order"), run: () => Theme.copy(Hub.mods.listing()) },
                 { name: Theme.say("Mods with errors"), group: Theme.say("Filter"), run: () => filter("is:error"), when: Mods.errors > 0 },
                 { name: Theme.say("Mods with warnings"), group: Theme.say("Filter"), run: () => filter("is:warning"), when: Hub.mods.warnings > 0 },
@@ -507,7 +491,7 @@ ApplicationWindow {
                 window.useFont(font.substring(7))
             // `--hunt-works`: a round of the search answered "works now"
             // and saved, as it looks afterwards.
-            if (given.indexOf("--hunt-works") !== -1 && hunt.search.active) {
+            if (given.indexOf("--hunt-works") !== -1 && Hub.search.active) {
                 hunt.answer(false)
                 Mods.save()
             }

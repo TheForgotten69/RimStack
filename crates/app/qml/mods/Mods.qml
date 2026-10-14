@@ -78,8 +78,6 @@ Item {
             select(next, model.active)
     }
 
-    property BrokenModSearch hunter
-    property KeptLists keptLists
     property Downloads downloads
     property TextureTools textureTools
 
@@ -371,10 +369,8 @@ Item {
     // Downloads has asked Steam; and the request to go and see them.
     property int behind: 0
     signal showUpdates()
-    // The search for the broken mod: asked for from Problems and before
-    // Play, and whether one is under way.
+    // The search for the broken mod: asked for from Problems and before Play.
     signal findBrokenRequested()
-    property bool hunting: false
 
     property int problemRow: -1
     property int problemPlace: 0
@@ -405,20 +401,6 @@ Item {
             if (row >= 0)
                 reveal(active, row, true)
         })
-    }
-
-    // Keeps the load order as it is now among the snapshots (Lists menu),
-    // before something rearranges all of it.
-    // A kind from `Theme.keptKinds` and the time, to the second: also the file's name.
-    function keptName(kind) {
-        return kind + " " + Theme.moment(Date.now() / 1000).replace(":", ".") + "." + String(new Date().getSeconds()).padStart(2, "0")
-    }
-    function snapshot(kind) {
-        if (!keptLists || Theme.demo || checkMode !== "")
-            return ""
-        const name = keptName(kind)
-        keptLists.snapshot(name)
-        return name
     }
 
     function endSort(keep) { Hub.mods.endSort(keep) }

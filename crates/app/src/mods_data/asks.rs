@@ -232,10 +232,6 @@ impl qobject::ModsData {
         }
     }
 
-    pub(super) fn summary(&self) -> QVariant {
-        to_qml(&self.app().summary())
-    }
-
     pub(super) fn columns_toggled(&self, kept: &QString, column: &QString) -> QString {
         QString::from(&columns::toggled(&kept.to_string(), &column.to_string()))
     }

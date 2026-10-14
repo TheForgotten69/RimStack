@@ -47,10 +47,17 @@ impl App {
     /// A line in the history: `what` as `translate::kept` writes it, and
     /// the snapshot that takes it back, if there is one.
     pub fn note_change(&self, what: String, snapshot: Option<&str>) {
+        let revert = snapshot.map_or(String::new(), |name| format!("list {name}"));
+        self.note(what, revert);
+    }
+
+    /// A line in the history; `revert` is "list <snapshot>", "unhide
+    /// <mod folder>" or nothing.
+    pub fn note(&self, what: String, revert: String) {
         let entry = journal::Entry {
             time: super::now_secs(),
             what,
-            revert: snapshot.map_or(String::new(), |name| format!("list {name}")),
+            revert,
         };
         match journal::add(&self.journal_file(), entry) {
             Ok(()) => self.publish(Changes::LISTS),

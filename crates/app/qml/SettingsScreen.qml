@@ -10,7 +10,6 @@ Item {
     id: screen
     Appear { of: screen }
 
-    required property KeptLists keptLists
     required property Downloads downloads
     signal useList(var ids)
     signal trust(int modId, bool yes)
@@ -683,9 +682,9 @@ Item {
                         enabled: !!screen.info.backup
                         text: Theme.say("Use")
                         onClicked: {
-                            const ids = screen.keptLists.originalList()
-                            if (ids !== "")
-                                screen.useList(JSON.parse(ids))
+                            const ids = Hub.lists.original()
+                            if (ids)
+                                screen.useList(ids)
                         }
                     }
                     Text { visible: !screen.info.backup; color: Theme.ink3; font.pixelSize: Theme.body; text: Theme.say("None yet") }

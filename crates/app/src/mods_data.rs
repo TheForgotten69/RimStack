@@ -46,6 +46,9 @@ pub mod qobject {
         /// before mean nothing any more.
         #[qproperty(i32, library_version, cxx_name = "libraryVersion")]
         #[qproperty(QVariant, overview)]
+        /// Counts shown beside the load order: saves, snapshots,
+        /// replacements, rules of your own, the last launch.
+        #[qproperty(QVariant, summary)]
         /// The selected mod by id, -1 for none; `details` is all about it.
         #[qproperty(i32, selected)]
         #[qproperty(QVariant, details)]
@@ -248,10 +251,6 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "filesOf"]
         fn files_of(self: &ModsData, mod_id: i32) -> QVariant;
-        /// Counts shown beside the load order: saves, snapshots,
-        /// replacements, rules of your own, the last launch.
-        #[qinvokable]
-        fn summary(self: &ModsData) -> QVariant;
         #[qinvokable]
         #[cxx_name = "columnsToggled"]
         fn columns_toggled(self: &ModsData, kept: &QString, column: &QString) -> QString;
@@ -321,6 +320,7 @@ pub struct ModsDataRust {
     status_inactive: QString,
     library_version: i32,
     overview: QVariant,
+    summary: QVariant,
     selected: i32,
     details: QVariant,
     fresh: QVariant,
@@ -363,6 +363,7 @@ impl Default for ModsDataRust {
             status_inactive: QString::default(),
             library_version: 0,
             overview: QVariant::default(),
+            summary: QVariant::default(),
             selected: -1,
             details: QVariant::default(),
             fresh: QVariant::default(),
@@ -465,6 +466,7 @@ impl qobject::ModsData {
             self.as_mut().rust_mut().get_mut().order = LoadOrder::demo(2000, 300);
             self.show();
         } else {
+            self.as_mut().set_summary(to_qml(&app.summary()));
             self.load(false);
         }
     }
@@ -519,6 +521,15 @@ impl qobject::ModsData {
             return;
         }
         let app = self.app();
+        let counted = Changes::LIBRARY
+            | Changes::LISTS
+            | Changes::LAUNCHES
+            | Changes::SAVES
+            | Changes::RULES
+            | Changes::UPDATES;
+        if changes.contains(counted) {
+            self.as_mut().set_summary(to_qml(&app.summary()));
+        }
         if changes.contains(Changes::LIBRARY | Changes::LANGUAGE) {
             return self.load(changes.contains(Changes::LIBRARY));
         }

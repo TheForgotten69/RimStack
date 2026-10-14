@@ -107,33 +107,6 @@ QtObject {
             return record
         }
     }
-    // A list kept before a change is named by its kind and its time.
-    readonly property var keptKinds: ({ "@saving": "Before saving, {}", "@sorting": "Before sorting, {}", "@list": "Before using another list, {}", "@hunt": "Before finding the broken mod, {}" })
-    // A kept list's moment as its name holds it: "2026-10-13 02.56.55", or from an
-    // earlier version the system's own form, "12 oct. 2026 20.17.39".
-    readonly property var monthNames: ["jan|janv", "feb|fév|févr", "mar|mars|mär", "apr|avr", "may|mai", "jun|juin", "jul|juil", "aug|août", "sep|sept", "oct|okt", "nov", "dec|déc|dez"]
-    function stamp(text) {
-        const dated = text.match(/^(\d{4}-\d\d-\d\d) (\d\d)\.(\d\d)\.\d\d$/)
-        if (dated)
-            return dated[1] + " " + dated[2] + ":" + dated[3]
-        const older = text.match(/^(\d{1,2}) (\S+?)\.? (\d{4}) (\d\d)\.(\d\d)\.\d\d$/)
-        const month = older ? monthNames.findIndex(names => names.split("|").indexOf(older[2].toLowerCase()) >= 0) : -1
-        if (month < 0)
-            return text
-        return older[3] + "-" + String(month + 1).padStart(2, "0") + "-" + older[1].padStart(2, "0") + " " + older[4] + ":" + older[5]
-    }
-    function listName(name) {
-        const kind = name.split(" ")[0]
-        if (keptKinds[kind])
-            return fill(keptKinds[kind], stamp(name.substring(kind.length + 1)))
-        // A list kept by an earlier version has the English sentence as its name.
-        for (const sentence of Object.values(keptKinds)) {
-            const start = sentence.replace("{}", "")
-            if (name.startsWith(start))
-                return fill(sentence, stamp(name.substring(start.length)))
-        }
-        return name
-    }
     // `fill` with the count first, in the form the language uses for it:
     // the language file's "@plural" lists the counts that take the singular.
     // After a slash, the last digits that take a third form outside the

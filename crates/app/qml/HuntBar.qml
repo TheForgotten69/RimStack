@@ -8,35 +8,28 @@ import RimStack.Ui
 
 Rectangle {
     id: bar
-    required property BrokenModSearch hunter
-    // `Backend.huntState`, parsed.
-    property var search: ({ active: false })
+    readonly property SearchData search: Hub.search
     signal useList(var ids)
     signal saveAndPlay()
 
-    function show(state) {
-        search = JSON.parse(state)
-        if (search.active && !search.found && search.stuck.length === 0)
+    function tryRound() {
+        if (search.asking)
             useList(search.list)
     }
     function start() {
-        show(hunter.huntStart())
+        search.start()
+        tryRound()
     }
     function answer(broken) {
-        show(hunter.huntAnswer(broken))
+        search.answer(broken)
+        tryRound()
     }
-    // Back to the list the search began with, less `without` if given.
-    function end(without) {
-        const ids = search.original.filter(id => id !== without)
-        hunter.huntStop()
-        search = ({ active: false })
-        useList(ids)
+    function end(withoutFound) {
+        useList(search.end(withoutFound))
     }
-    Component.onCompleted: if (!Theme.demo) search = JSON.parse(hunter.huntState())
 
-    // A round is under way: neither found nor stuck.
-    readonly property bool asking: !!search.active && !search.found && (search.stuck || []).length === 0
-    visible: !!search.active
+    readonly property bool asking: search.asking
+    visible: search.active
     implicitHeight: visible ? Math.max(44, words.implicitHeight + 18) : 0
     color: Theme.banner
     RowLayout {
@@ -53,8 +46,8 @@ Rectangle {
             color: Theme.ink
             font.pixelSize: Theme.body
             text: !bar.search.active ? ""
-                : bar.search.found ? Theme.fill("{} is the mod the game breaks with.", "<b>" + Theme.plain(bar.search.found) + "</b>")
-                : (bar.search.stuck || []).length > 0 ? Theme.fill("One of these, which need each other: {}", "<b>" + Theme.plain(bar.search.stuck.join(", ")) + "</b>")
+                : bar.search.found !== "" ? Theme.fill("{} is the mod the game breaks with.", "<b>" + Theme.plain(bar.search.found) + "</b>")
+                : bar.search.stuck !== "" ? Theme.fill("One of these, which need each other: {}", "<b>" + Theme.plain(bar.search.stuck) + "</b>")
                 : "<b>" + Theme.say("Finding the broken mod.") + "</b> " + Theme.plural(bar.search.rounds, "About {} round left, {} suspects.", "About {} rounds left, {} suspects.", bar.search.suspects)
                     + " " + Theme.say("Save, play, then say how it went.")
         }
@@ -69,8 +62,8 @@ Rectangle {
         Btn { visible: bar.asking; primary: Mods.dirty; icon: "play"; text: Theme.say("Save and play"); tip: Theme.say("Writes this round's list to ModsConfig.xml and starts the game. The newest save was copied to RimStack's data folder, save-before-search, when the search began."); onClicked: bar.saveAndPlay() }
         Btn { visible: bar.asking; text: Theme.say("Still broken"); onClicked: bar.answer(true) }
         Btn { visible: bar.asking; text: Theme.say("Works now"); onClicked: bar.answer(false) }
-        Btn { visible: !!bar.search.found; primary: true; text: Theme.say("My list without it"); tip: Theme.say("The list the search began with, less this mod. Nothing is written before Save."); onClicked: bar.end(bar.search.foundId) }
-        Btn { text: bar.search.found ? Theme.say("My list as it was") : Theme.say("Stop"); tip: Theme.say("The list the search began with. Nothing is written before Save."); onClicked: bar.end("") }
+        Btn { visible: bar.search.found !== ""; primary: true; text: Theme.say("My list without it"); tip: Theme.say("The list the search began with, less this mod. Nothing is written before Save."); onClicked: bar.end(true) }
+        Btn { text: bar.search.found !== "" ? Theme.say("My list as it was") : Theme.say("Stop"); tip: Theme.say("The list the search began with. Nothing is written before Save."); onClicked: bar.end(false) }
     }
     Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.edge }
 }

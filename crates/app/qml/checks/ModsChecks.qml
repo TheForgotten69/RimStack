@@ -355,15 +355,16 @@ Item {
         Mods.leftOffRestored = false
         const columnsBefore = Mods.prefs.columns
         check("the chosen columns are read from what is kept", Mods.columns.chosen.join(",") === columnsBefore)
-        let search = JSON.parse(Mods.hunter.huntStart())
-        check("the search for the broken mod starts with some suspects off", search.active && search.list.length > 0 && search.list.length < search.original.length && search.rounds > 0)
+        const search = Hub.search
+        search.start()
+        check("the search for the broken mod starts with some suspects off", search.active && search.list.length > 0 && search.list.length < search.everything && search.rounds > 0)
         let answers = 0
-        while (search.active && !search.found && search.stuck.length === 0 && answers < 40)
-            search = JSON.parse(Mods.hunter.huntAnswer(answers++ % 2 === 0))
-        check("answers narrow it to one mod", search.found !== "" || search.stuck.length > 0)
-        check("and its state is kept between rounds", JSON.parse(Mods.hunter.huntState()).suspects === search.suspects)
-        Mods.hunter.huntStop()
-        check("stopped, nothing is left of it", !JSON.parse(Mods.hunter.huntState()).active)
+        while (search.asking && answers < 40)
+            search.answer(answers++ % 2 === 0)
+        check("answers narrow it to one mod", search.found !== "" || search.stuck !== "")
+        const began = search.everything
+        const back = search.end(false)
+        check("stopped, nothing is left of it and the list it began with is given back", !search.active && back.length === began)
         Mods.select(Mods.nthMod(Mods.active, 20), true)
         Mods.selectAlso(Mods.nthMod(Mods.active, 22), true)
         const pair = Mods.selectedIds.slice(), unmoved = order()

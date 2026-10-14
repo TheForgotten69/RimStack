@@ -113,28 +113,6 @@ pub enum ReleaseSaid {
     Failed { problem: String },
 }
 
-/// `BrokenModSearch.huntState()`: HuntBar and the search's dialog.
-#[derive(Serialize, Default)]
-pub struct HuntState {
-    pub active: bool,
-    #[serde(flatten)]
-    pub search: Option<HuntSearch>,
-}
-
-/// `list` is the load order to try now; `found` names the mod once one
-/// suspect is left; `stuck` names suspects that need each other.
-#[derive(Serialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct HuntSearch {
-    pub suspects: usize,
-    pub rounds: u32,
-    pub list: Vec<String>,
-    pub original: Vec<String>,
-    pub found: String,
-    pub found_id: String,
-    pub stuck: Vec<String>,
-}
-
 /// `TextureTools.ddsAudit()`: the Textures screen's check of DDS files.
 #[derive(Serialize, Default)]
 pub struct DdsProblem<'a> {
@@ -190,15 +168,6 @@ pub struct Database {
     pub used_for: &'static str,
     pub updated: u64,
     pub on: bool,
-}
-
-/// `KeptLists.journal()`: HistoryMenu. `revert` is empty where the
-/// entry can no longer be taken back.
-#[derive(Serialize, Default)]
-pub struct JournalRow<'a> {
-    pub time: u64,
-    pub what: &'a str,
-    pub revert: &'a str,
 }
 
 /// `Downloads.updates`: the Downloads screen's updates.
@@ -365,19 +334,6 @@ mod tests {
     }
 
     #[test]
-    fn the_broken_mod_search_keeps_its_fields() {
-        assert_eq!(fields(&HuntState::default()), ["active"]);
-        let searching = HuntState {
-            active: true,
-            search: Some(HuntSearch::default()),
-        };
-        assert_eq!(
-            fields(&searching),
-            ["active", "found", "foundId", "list", "original", "rounds", "stuck", "suspects"]
-        );
-    }
-
-    #[test]
     fn texture_answers_keep_their_fields() {
         assert_eq!(fields(&DdsProblem::default()), ["file", "mod", "why"]);
         let side = || Side {
@@ -423,7 +379,6 @@ mod tests {
             fields(&Database::default()),
             ["id", "name", "on", "updated", "use"]
         );
-        assert_eq!(fields(&JournalRow::default()), ["revert", "time", "what"]);
     }
 
     #[test]

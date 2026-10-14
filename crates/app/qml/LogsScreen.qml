@@ -16,8 +16,6 @@ Item {
     signal showMod(int modId)
     signal useList(var ids)
     signal findBroken()
-    // The search for the broken mod is under way.
-    property bool hunting: false
 
     readonly property var facts: reader.head || ({})
     // The game keeps two logs: this launch's and the one before.
@@ -252,7 +250,7 @@ Item {
                 Btn { compact: true; icon: "external-link"; text: Theme.say("Open file"); tip: screen.facts.path || ""; enabled: !!screen.facts.path; onClicked: Qt.openUrlExternally(Theme.fileUrl(screen.facts.path)) }
                 Btn { compact: true; icon: "copy"; text: Theme.say("Copy path"); enabled: !!screen.facts.path; onClicked: Theme.copy(screen.facts.path) }
                 Btn {
-                    visible: !Theme.demo && !screen.hunting
+                    visible: !Theme.demo && !Hub.search.active
                     icon: "search"
                     compact: head.tight
                     text: Theme.say("Find the broken mod")
