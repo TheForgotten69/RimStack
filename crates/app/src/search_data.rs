@@ -71,7 +71,7 @@ pub struct SearchDataRust {
     suspects: i32,
     list: QVariant,
     everything: i32,
-    app: Option<Arc<App>>,
+    app: crate::hub::Given,
     /// The list is kept among the snapshots and the start in the history.
     records: bool,
 }
@@ -82,9 +82,7 @@ fn int(n: impl TryInto<i32>) -> i32 {
 
 impl qobject::SearchData {
     fn app(&self) -> Arc<App> {
-        self.app
-            .clone()
-            .expect("connected by the Hub before QML sees it")
+        self.app.app()
     }
 
     /// `demo`: no search is read or begun for made-up mods.
@@ -95,7 +93,7 @@ impl qobject::SearchData {
         };
         let me = self.as_mut().rust_mut().get_mut();
         me.records = records && !demo;
-        me.app = Some(app);
+        me.app = crate::hub::Given::of(app);
         self.show(hunt);
     }
 

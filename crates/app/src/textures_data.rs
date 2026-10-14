@@ -108,13 +108,12 @@ use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QVariant};
 use rimstack_core::base::error::Error;
-use rimstack_core::base::locks::Held;
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::textures::Row;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct TexturesDataRust {
@@ -128,7 +127,7 @@ pub struct TexturesDataRust {
     shared_filter: QString,
     active_only: bool,
     wanted: bool,
-    app: Option<Arc<App>>,
+    app: crate::hub::Given,
     rows: Vec<Row>,
     found: Option<Vec<Refused>>,
     compared: Option<Comparison>,
@@ -142,18 +141,13 @@ fn said(done: Result<(), Error>) -> QString {
 
 impl qobject::TexturesData {
     fn app(&self) -> Arc<App> {
-        self.app
-            .clone()
-            .expect("connected by the Hub before QML sees it")
+        self.app.app()
     }
 
     pub(crate) fn connect(mut self: Pin<&mut Self>, app: Arc<App>) {
-        let thread = Mutex::new(self.qt_thread());
-        app.listen(move |changes| {
-            let _ = thread.held().queue(move |me| me.heard(changes));
-        });
+        crate::hub::hear(&app, self.qt_thread(), Self::heard);
         let me = self.as_mut().rust_mut().get_mut();
-        me.app = Some(app);
+        me.app = crate::hub::Given::of(app);
         me.stale = true;
         me.active_only = true;
         self.as_mut().on_wanted_changed(|me| me.count()).release();

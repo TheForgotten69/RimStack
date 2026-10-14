@@ -57,8 +57,7 @@ use crate::App;
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QVariant};
-use rimstack_core::base::locks::Held;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct SavesDataRust {
@@ -72,7 +71,7 @@ pub struct SavesDataRust {
     busy: bool,
     folder: QString,
     wanted: bool,
-    app: Option<Arc<App>>,
+    app: crate::hub::Given,
     report: SavesReport,
     stale: bool,
     reading: crate::jobs::Lane,
@@ -80,18 +79,13 @@ pub struct SavesDataRust {
 
 impl qobject::SavesData {
     fn app(&self) -> Arc<App> {
-        self.app
-            .clone()
-            .expect("connected by the Hub before QML sees it")
+        self.app.app()
     }
 
     pub(crate) fn connect(mut self: Pin<&mut Self>, app: Arc<App>) {
-        let thread = Mutex::new(self.qt_thread());
-        app.listen(move |changes| {
-            let _ = thread.held().queue(move |me| me.heard(changes));
-        });
+        crate::hub::hear(&app, self.qt_thread(), Self::heard);
         let me = self.as_mut().rust_mut().get_mut();
-        me.app = Some(app);
+        me.app = crate::hub::Given::of(app);
         me.stale = true;
         self.as_mut().on_wanted_changed(|me| me.read()).release();
         self.as_mut().on_folder_changed(|me| me.show()).release();

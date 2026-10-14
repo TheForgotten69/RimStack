@@ -56,10 +56,9 @@ use crate::App;
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QVariant};
-use rimstack_core::base::locks::Held;
 use rimstack_core::base::watch::{Stamps, Watcher};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Default)]
@@ -69,7 +68,7 @@ pub struct GameDataRust {
     reset_by_game: QVariant,
     held: bool,
     watching: bool,
-    app: Option<Arc<App>>,
+    app: crate::hub::Given,
     watcher: Watcher,
     /// Read by the thread that looks at the disk.
     looking: Arc<AtomicBool>,
@@ -79,9 +78,7 @@ pub struct GameDataRust {
 
 impl qobject::GameData {
     fn app(&self) -> Arc<App> {
-        self.app
-            .clone()
-            .expect("connected by the Hub before QML sees it")
+        self.app.app()
     }
 
     /// `every`: how often the game and the disk are looked at; never
@@ -92,12 +89,9 @@ impl qobject::GameData {
         demo: bool,
         every: Option<Duration>,
     ) {
-        let thread = Mutex::new(self.qt_thread());
-        app.listen(move |changes| {
-            let _ = thread.held().queue(move |me| me.heard(changes));
-        });
+        crate::hub::hear(&app, self.qt_thread(), Self::heard);
         let me = self.as_mut().rust_mut().get_mut();
-        me.app = Some(app.clone());
+        me.app = crate::hub::Given::of(app.clone());
         me.demo = demo;
         let looking = me.looking.clone();
         self.as_mut()

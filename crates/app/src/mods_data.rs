@@ -293,10 +293,9 @@ use cxx::UniquePtr;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QVariant};
 use qobject::ModRows;
-use rimstack_core::base::locks::Held;
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::library::ModId;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub struct ModsDataRust {
     active: *mut ModRows,
@@ -338,7 +337,7 @@ pub struct ModsDataRust {
     filter: QString,
     save_problem: QString,
     upkeep_problem: QString,
-    app: Option<Arc<App>>,
+    app: crate::hub::Given,
     order: LoadOrder,
     /// Made-up mods, not the installed ones: nothing is read or written.
     demo: bool,
@@ -387,7 +386,7 @@ impl Default for ModsDataRust {
             filter: QString::default(),
             save_problem: QString::default(),
             upkeep_problem: QString::default(),
-            app: None,
+            app: crate::hub::Given::default(),
             order: LoadOrder::demo(0, 0),
             demo: false,
             records: true,
@@ -406,9 +405,7 @@ fn ids(given: &QVariant) -> Vec<ModId> {
 
 impl qobject::ModsData {
     fn app(&self) -> Arc<App> {
-        self.app
-            .clone()
-            .expect("connected by the Hub before QML sees it")
+        self.app.app()
     }
 
     fn rows(self: Pin<&mut Self>, side: Side) -> Option<Pin<&mut ModRows>> {
@@ -436,14 +433,11 @@ impl qobject::ModsData {
             me.inactive = crate::hub::address(&mut inactive);
             me.owned_active = active;
             me.owned_inactive = inactive;
-            me.app = Some(app.clone());
+            me.app = crate::hub::Given::of(app.clone());
             me.demo = demo;
             me.records = records && !demo;
         }
-        let thread = Mutex::new(self.qt_thread());
-        app.listen(move |changes| {
-            let _ = thread.held().queue(move |me| me.heard(changes));
-        });
+        crate::hub::hear(&app, self.qt_thread(), Self::heard);
         self.as_mut()
             .on_selected_changed(|me| me.describe())
             .release();

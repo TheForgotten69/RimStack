@@ -64,16 +64,18 @@ pub mod qobject {
     }
 }
 
+use crate::changes::Changes;
 use crate::App;
 use core::pin::Pin;
 use cxx::UniquePtr;
-use cxx_qt::CxxQtType;
+use cxx_qt::{CxxQtThread, CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use qobject::{
     DownloadsData, GameData, ListsData, LogsData, ModsData, SavesData, SearchData, SettingsData,
     TexturesData,
 };
-use std::sync::{Arc, OnceLock};
+use rimstack_core::base::locks::Held;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 pub struct HubRust {
@@ -199,65 +201,84 @@ impl cxx_qt::Initialize for qobject::Hub {
             .get()
             .cloned()
             .expect("main hands the App over before QML is loaded");
-        let mut settings = crate::settings_data::qobject::make_settings_data();
-        if let Some(settings) = settings.as_mut() {
-            settings.connect(app.clone());
-        }
         // Made-up mods are shown and nothing is written for them; while
         // checked, no snapshot or history is kept.
         let demo = given("--demo") || given("--selftest");
-        let mut mods = crate::mods_data::qobject::make_mods_data();
-        if let Some(mods) = mods.as_mut() {
-            mods.connect(app.clone(), demo, !given("--check"));
-        }
-        let mut saves = crate::saves_data::qobject::make_saves_data();
-        if let Some(saves) = saves.as_mut() {
-            saves.connect(app.clone());
-        }
-        let mut logs = crate::logs_data::qobject::make_logs_data();
-        if let Some(logs) = logs.as_mut() {
-            logs.connect(app.clone(), !demo);
-        }
-        let mut game = crate::game_data::qobject::make_game_data();
-        if let Some(game) = game.as_mut() {
-            game.connect(app.clone(), demo, watch_every(demo));
-        }
-        let mut lists = crate::lists_data::qobject::make_lists_data();
-        if let Some(lists) = lists.as_mut() {
-            lists.connect(app.clone(), demo);
-        }
-        let mut search = crate::search_data::qobject::make_search_data();
-        if let Some(search) = search.as_mut() {
-            search.connect(app.clone(), demo, !given("--check"));
-        }
-        let mut textures = crate::textures_data::qobject::make_textures_data();
-        if let Some(textures) = textures.as_mut() {
-            textures.connect(app.clone());
-        }
-        let mut downloads = crate::downloads_data::qobject::make_downloads_data();
-        if let Some(downloads) = downloads.as_mut() {
-            downloads.connect(app.clone(), demo);
-        }
+        let records = !given("--check");
         let mut hub = self.as_mut().rust_mut();
-        hub.settings = address(&mut settings);
-        hub.owned_settings = settings;
-        hub.mods = address(&mut mods);
-        hub.owned_mods = mods;
-        hub.saves = address(&mut saves);
-        hub.owned_saves = saves;
-        hub.logs = address(&mut logs);
-        hub.owned_logs = logs;
-        hub.game = address(&mut game);
-        hub.owned_game = game;
-        hub.lists = address(&mut lists);
-        hub.owned_lists = lists;
-        hub.search = address(&mut search);
-        hub.owned_search = search;
-        hub.textures = address(&mut textures);
-        hub.owned_textures = textures;
-        hub.downloads = address(&mut downloads);
-        hub.owned_downloads = downloads;
+        (hub.settings, hub.owned_settings) =
+            made(crate::settings_data::qobject::make_settings_data(), |it| {
+                it.connect(app.clone())
+            });
+        (hub.mods, hub.owned_mods) = made(crate::mods_data::qobject::make_mods_data(), |it| {
+            it.connect(app.clone(), demo, records)
+        });
+        (hub.saves, hub.owned_saves) = made(crate::saves_data::qobject::make_saves_data(), |it| {
+            it.connect(app.clone())
+        });
+        (hub.logs, hub.owned_logs) = made(crate::logs_data::qobject::make_logs_data(), |it| {
+            it.connect(app.clone(), !demo)
+        });
+        (hub.game, hub.owned_game) = made(crate::game_data::qobject::make_game_data(), |it| {
+            it.connect(app.clone(), demo, watch_every(demo))
+        });
+        (hub.lists, hub.owned_lists) = made(crate::lists_data::qobject::make_lists_data(), |it| {
+            it.connect(app.clone(), demo)
+        });
+        (hub.search, hub.owned_search) =
+            made(crate::search_data::qobject::make_search_data(), |it| {
+                it.connect(app.clone(), demo, records)
+            });
+        (hub.textures, hub.owned_textures) =
+            made(crate::textures_data::qobject::make_textures_data(), |it| {
+                it.connect(app.clone())
+            });
+        (hub.downloads, hub.owned_downloads) = made(
+            crate::downloads_data::qobject::make_downloads_data(),
+            |it| it.connect(app.clone(), demo),
+        );
     }
+}
+
+/// An adapter made and connected, as the Hub keeps it: its address for
+/// QML, and the object.
+fn made<T>(mut object: UniquePtr<T>, connect: impl FnOnce(Pin<&mut T>)) -> (*mut T, UniquePtr<T>)
+where
+    T: cxx::memory::UniquePtrTarget,
+{
+    if let Some(object) = object.as_mut() {
+        connect(object);
+    }
+    (address(&mut object), object)
+}
+
+/// What an adapter holds of the `App`: cxx-qt makes the adapter before
+/// anything can be handed to it, so the Hub gives it the `App` just after.
+#[derive(Default)]
+pub(crate) struct Given(Option<Arc<App>>);
+
+impl Given {
+    pub(crate) fn of(app: Arc<App>) -> Self {
+        Self(Some(app))
+    }
+
+    pub(crate) fn app(&self) -> Arc<App> {
+        self.0
+            .clone()
+            .expect("connected by the Hub before QML sees it")
+    }
+}
+
+/// Runs `heard` on the adapter's own thread for each change the `App`
+/// publishes.
+pub(crate) fn hear<T>(app: &App, thread: CxxQtThread<T>, heard: fn(Pin<&mut T>, Changes))
+where
+    T: Threading + 'static,
+{
+    let thread = Mutex::new(thread);
+    app.listen(move |changes| {
+        let _ = thread.held().queue(move |me| heard(me, changes));
+    });
 }
 
 #[cfg(test)]

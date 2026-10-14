@@ -125,8 +125,7 @@ use crate::App;
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QVariant};
-use rimstack_core::base::locks::Held;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct SettingsDataRust {
@@ -142,7 +141,7 @@ pub struct SettingsDataRust {
     release: QVariant,
     release_busy: bool,
     problem: QString,
-    app: Option<Arc<App>>,
+    app: crate::hub::Given,
 }
 
 fn written(file: Result<std::path::PathBuf, rimstack_core::base::error::Error>) -> QVariant {
@@ -154,18 +153,13 @@ fn written(file: Result<std::path::PathBuf, rimstack_core::base::error::Error>) 
 
 impl qobject::SettingsData {
     fn app(&self) -> Arc<App> {
-        self.app
-            .clone()
-            .expect("connected by the Hub before QML sees it")
+        self.app.app()
     }
 
     /// Given its `App` by the Hub, before QML sees it.
     pub(crate) fn connect(mut self: Pin<&mut Self>, app: Arc<App>) {
-        let thread = Mutex::new(self.qt_thread());
-        app.listen(move |changes| {
-            let _ = thread.held().queue(move |me| me.heard(changes));
-        });
-        self.as_mut().rust_mut().app = Some(app);
+        crate::hub::hear(&app, self.qt_thread(), Self::heard);
+        self.as_mut().rust_mut().app = crate::hub::Given::of(app);
         self.as_mut().on_theme_changed(|me| me.recolour()).release();
         self.heard(Changes::SETTINGS | Changes::LANGUAGE | Changes::THEME | Changes::COMMUNITY);
     }

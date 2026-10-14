@@ -127,10 +127,9 @@ use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QVariant};
 use rimstack_core::base::error::Error;
-use rimstack_core::base::locks::Held;
 use rimstack_core::mods::library::ModId;
 use std::collections::{HashSet, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 mod notes;
 mod tasks;
@@ -151,7 +150,7 @@ pub struct DownloadsDataRust {
     task_note: QString,
     task_running: bool,
     updating: i32,
-    app: Option<Arc<App>>,
+    app: crate::hub::Given,
     /// Made-up mods: nothing is read, asked or recorded.
     demo: bool,
     checked: Updates,
@@ -185,7 +184,7 @@ impl Default for DownloadsDataRust {
             task_note: QString::default(),
             task_running: false,
             updating: -1,
-            app: None,
+            app: crate::hub::Given::default(),
             demo: false,
             checked: Updates::default(),
             looked_up: Ok(Queue::default()),
@@ -200,22 +199,17 @@ impl Default for DownloadsDataRust {
 
 impl qobject::DownloadsData {
     fn app(&self) -> Arc<App> {
-        self.app
-            .clone()
-            .expect("connected by the Hub before QML sees it")
+        self.app.app()
     }
 
     pub(crate) fn connect(mut self: Pin<&mut Self>, app: Arc<App>, demo: bool) {
         let me = self.as_mut().rust_mut().get_mut();
-        me.app = Some(app.clone());
+        me.app = crate::hub::Given::of(app.clone());
         me.demo = demo;
         if demo {
             return;
         }
-        let thread = Mutex::new(self.qt_thread());
-        app.listen(move |changes| {
-            let _ = thread.held().queue(move |me| me.heard(changes));
-        });
+        crate::hub::hear(&app, self.qt_thread(), Self::heard);
         self.as_mut()
             .on_since_only_changed(|me| me.show_since())
             .release();

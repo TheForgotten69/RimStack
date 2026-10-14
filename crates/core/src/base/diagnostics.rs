@@ -37,7 +37,10 @@ fn time_in_words(secs: u64) -> String {
     let at = i64::try_from(secs)
         .ok()
         .and_then(|secs| chrono::DateTime::from_timestamp(secs, 0));
-    at.map_or_else(|| secs.to_string(), |at| at.format("%Y-%m-%d %H:%M:%SZ").to_string())
+    at.map_or_else(
+        || secs.to_string(),
+        |at| at.format("%Y-%m-%d %H:%M:%SZ").to_string(),
+    )
 }
 
 fn line(secs: u64, level: Level, text: &str) -> String {
