@@ -134,6 +134,7 @@ Item {
         interval: 1200
         onTriggered: {
             checks.stepBegan = Date.now()
+            checks.textureCheck("the selected mod's textures are counted", Mods.textures.count === 1)
             const a = Mods.nthMod(Mods.active, 0), b = Mods.nthMod(Mods.active, 1)
             Mods.select(a, true)
             checks.textureCheck("the conflict is gone once the later file is hidden", (Mods.info.losesTo || []).length === 0)

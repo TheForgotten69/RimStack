@@ -244,7 +244,6 @@ mods.details: object
   conflictMarks: map
     {}: text
   contains: text
-  ddsMade: number
   description: text
   descriptionRich: text
   detected: list
@@ -315,7 +314,6 @@ mods.details: object
   steamPage: nothing or text
   sub: text
   tags: text
-  textureCount: number
   unreadable: nothing or text
   updated: nothing
   url: text
@@ -341,7 +339,6 @@ mods.detailsOf: object
   conflictMarks: map
     {}: text
   contains: text
-  ddsMade: number
   description: text
   descriptionRich: text
   detected: list
@@ -412,7 +409,6 @@ mods.detailsOf: object
   steamPage: nothing or text
   sub: text
   tags: text
-  textureCount: number
   unreadable: nothing or text
   updated: nothing
   url: text
@@ -541,6 +537,9 @@ mods.summary: object
   rules: number
   saves: number
   snapshots: number
+mods.textures: object
+  count: number
+  ddsMade: number
 mods.versionWarned: list
   []: number
 saves.folders: list

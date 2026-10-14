@@ -121,9 +121,6 @@ pub struct Details {
     replaced_by_versions: Option<String>,
     updated: Option<u64>,
     megabytes: Option<f64>,
-    texture_count: usize,
-    /// The DDS files RimStack made for the mod's textures.
-    dds_made: usize,
     requires: Vec<Named>,
     load_folders: Vec<Sentence>,
     code: Sentence,
@@ -150,6 +147,13 @@ pub struct Details {
     group_choices: Vec<String>,
     workshop_page: Option<String>,
     steam_page: Option<String>,
+}
+
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Textures {
+    count: usize,
+    dds_made: usize,
 }
 
 /// The problems that one kind of fix solves.
@@ -222,9 +226,6 @@ impl LoadOrder {
                 .get(&m.folder)
                 .filter(|_| workshop)
                 .map(|bytes| *bytes as f64 / 1_048_576.0),
-            texture_count: app.texture_count(&m.path),
-            dds_made: rimstack_core::mods::textures::Manifest::read(&app.texture_manifest_file())
-                .made_in(&m.path),
             requires: details::required(library.requirements(m)),
             load_folders: self.load_folders(library, m),
             code: Sentence::joined("\n", describe::code(&m.code.facts)),
@@ -306,6 +307,19 @@ impl LoadOrder {
             said.placement = near.bottom.then(|| say!("The community rules keep this mod near the bottom of the list, below everything that does not have to follow it."));
         }
         said
+    }
+
+    /// A mod's textures and the DDS files RimStack made for them. Walks
+    /// the mod's folder.
+    pub fn textures(app: &App, id: ModId) -> Textures {
+        let loaded = app.library();
+        let Some(m) = loaded.as_ref().as_ref().ok().and_then(|(l, _)| l.get(id)) else {
+            return Textures::default();
+        };
+        Textures {
+            count: app.texture_count(&m.path),
+            dds_made: app.texture_manifest().made_in(&m.path),
+        }
     }
 
     /// The folders of a mod with how many files each holds, and its

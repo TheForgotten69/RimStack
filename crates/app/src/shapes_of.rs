@@ -245,6 +245,7 @@ fn mods(app: &App, shapes: &mut Shapes) {
         shapes.add("mods.details", &order.details(app, id));
         shapes.add("mods.detailsOf", &order.details(app, id));
         shapes.add("mods.filesOf", &LoadOrder::files(app, id));
+        shapes.add("mods.textures", &LoadOrder::textures(app, id));
     }
     let ids = |found: Vec<ModId>| found.into_iter().map(ModId::to_qml).collect::<Vec<_>>();
     shapes.add("mods.versionWarned", &ids(vec![roads]));

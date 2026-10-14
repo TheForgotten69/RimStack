@@ -306,6 +306,7 @@ Item {
     property int selectedId: -1
     property bool selectedActive: false
     readonly property var info: Hub.mods.details || ({})
+    readonly property var textures: Hub.mods.textures || ({})
     // What the Files tab lists, read from the mod's folder while that tab shows.
     readonly property var files: tab === 2 && selectedId >= 0 ? (Hub.mods.filesOf(selectedId) || ({})) : ({})
 

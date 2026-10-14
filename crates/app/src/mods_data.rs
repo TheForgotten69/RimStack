@@ -54,6 +54,8 @@ pub mod qobject {
         /// The selected mod by id, -1 for none; `details` is all about it.
         #[qproperty(i32, selected)]
         #[qproperty(QVariant, details)]
+        /// The selected mod's `{ count, ddsMade }`, once its folder is walked.
+        #[qproperty(QVariant, textures)]
         /// The inactive mods installed since the game last started from here.
         #[qproperty(QVariant, fresh)]
         #[qproperty(bool, headings)]
@@ -303,6 +305,9 @@ pub struct ModsDataRust {
     owned_inactive: UniquePtr<ModRows>,
     loading: crate::jobs::Lane,
     counting: crate::jobs::Lane,
+    texturing: crate::jobs::Lane,
+    /// The mod `textures` was last asked for.
+    textures_of: i32,
     dirty: bool,
     unsaved: QString,
     can_undo: bool,
@@ -326,6 +331,7 @@ pub struct ModsDataRust {
     summary: QVariant,
     selected: i32,
     details: QVariant,
+    textures: QVariant,
     fresh: QVariant,
     headings: bool,
     by_name: bool,
@@ -349,6 +355,8 @@ impl Default for ModsDataRust {
             owned_inactive: UniquePtr::null(),
             loading: crate::jobs::Lane::default(),
             counting: crate::jobs::Lane::default(),
+            texturing: crate::jobs::Lane::default(),
+            textures_of: -1,
             dirty: false,
             unsaved: QString::default(),
             can_undo: false,
@@ -372,6 +380,7 @@ impl Default for ModsDataRust {
             summary: QVariant::default(),
             selected: -1,
             details: QVariant::default(),
+            textures: QVariant::default(),
             fresh: QVariant::default(),
             headings: true,
             by_name: false,
@@ -645,13 +654,32 @@ impl qobject::ModsData {
 
     fn describe(mut self: Pin<&mut Self>) {
         let app = self.app();
-        let details = match id(self.selected) {
-            Some(id) if self.order.is_installed() => {
-                to_qml(&self.as_mut().rust_mut().get_mut().order.details(&app, id))
-            }
-            _ => QVariant::default(),
+        let selected = id(self.selected).filter(|_| self.order.is_installed());
+        let details = match selected {
+            Some(id) => to_qml(&self.as_mut().rust_mut().get_mut().order.details(&app, id)),
+            None => QVariant::default(),
         };
-        self.set_details(details);
+        self.as_mut().set_details(details);
+        self.count_textures(app, selected);
+    }
+
+    /// Off the window's thread: the first count walks the mod's folder.
+    fn count_textures(mut self: Pin<&mut Self>, app: Arc<App>, selected: Option<ModId>) {
+        if self.textures_of != self.selected {
+            let selected = self.selected;
+            self.as_mut().rust_mut().get_mut().textures_of = selected;
+            self.as_mut().set_textures(QVariant::default());
+        }
+        let Some(id) = selected else {
+            self.texturing.cancel();
+            return;
+        };
+        self.texturing.run(
+            "textures of a mod",
+            self.qt_thread(),
+            move |_| LoadOrder::textures(&app, id),
+            |me, textures| me.set_textures(to_qml(&textures)),
+        );
     }
 
     /// After a change to the load order: shown, and told to the rest.

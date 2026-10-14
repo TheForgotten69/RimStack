@@ -85,8 +85,8 @@ Column {
         model: [
             [Theme.say("Kinds of content"), Mods.info.contains],
             [Theme.say("Assemblies"), Mods.files.assemblies || ""],
-            [Theme.say("Textures"), Mods.info.textureCount || ""],
-            [Theme.say("DDS made by RimStack"), Mods.info.ddsMade],
+            [Theme.say("Textures"), Mods.textures.count || ""],
+            [Theme.say("DDS made by RimStack"), Mods.textures.ddsMade],
         ].filter(pair => pair[1])
         Item {
             id: content

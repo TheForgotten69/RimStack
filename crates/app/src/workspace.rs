@@ -97,6 +97,7 @@ pub struct App {
     works_on: Derived<Written, HashSet<String>>,
     replacements: Derived<Written, Replacements>,
     workshop_names: Derived<Written, rimstack_core::rimworld::workshopdb::Names>,
+    texture_manifest: Derived<Written, rimstack_core::mods::textures::Manifest>,
     /// Where SteamCMD is: found by looking through `PATH`, which several
     /// screens ask after on every change.
     steamcmd: Reread<Option<PathBuf>>,
@@ -145,6 +146,7 @@ impl App {
             works_on: Derived::default(),
             replacements: Derived::default(),
             workshop_names: Derived::default(),
+            texture_manifest: Derived::default(),
             steamcmd: Reread::new(),
             conflicts: RwLock::new(None),
             behind: RwLock::new(None),
@@ -454,6 +456,15 @@ impl App {
         let file = rimstack_core::rimworld::workshopdb::file_in(&self.data_dir);
         self.workshop_names.get(written(file.clone()), || {
             rimstack_core::rimworld::workshopdb::read(&file)
+        })
+    }
+
+    /// The record of the DDS files RimStack made: 141 ms to read at
+    /// 150,000 of them, so read again only once written.
+    pub fn texture_manifest(&self) -> Arc<rimstack_core::mods::textures::Manifest> {
+        let file = self.texture_manifest_file();
+        self.texture_manifest.get(written(file.clone()), || {
+            rimstack_core::mods::textures::Manifest::read(&file)
         })
     }
 

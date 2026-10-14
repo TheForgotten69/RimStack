@@ -193,7 +193,7 @@ impl App {
         let Ok((library, _)) = &*loaded else {
             return Vec::new();
         };
-        let manifest = textures::Manifest::read(&self.texture_manifest_file());
+        let manifest = self.texture_manifest();
         let skipped = self.skipped_textures();
         let active = self.active_now(library);
         let all: Vec<_> = library.ids().collect();

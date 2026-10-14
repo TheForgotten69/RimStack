@@ -119,7 +119,7 @@ Column {
         key: "about-facts"
         Repeater {
             model: [
-                [Theme.say("Contains"), [Mods.info.contains, Mods.info.textureCount ? Theme.plural(Mods.info.textureCount, "{} texture", "{} textures") : ""].filter(s => s).join("; ")],
+                [Theme.say("Contains"), [Mods.info.contains, Mods.textures.count ? Theme.plural(Mods.textures.count, "{} texture", "{} textures") : ""].filter(s => s).join("; ")],
                 [Theme.say("Code"), Mods.info.code],
                 [Theme.say("Load time"), Mods.info.loadTime],
                 [Theme.say("Package id"), Mods.info.packageId],
