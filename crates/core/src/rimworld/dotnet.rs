@@ -309,7 +309,8 @@ impl<'a> Assembly<'a> {
     /// The methods of a type: rows of `MethodDef` from the type's first
     /// to the next type's first.
     fn methods_of(&self, type_row: usize) -> std::ops::Range<usize> {
-        let first = self.cell(TYPE_DEF, type_row, 5).unwrap_or(1);
+        // Rows count from 1: a damaged list that starts at 0 starts at the first.
+        let first = self.cell(TYPE_DEF, type_row, 5).unwrap_or(1).max(1);
         let end = match type_row < self.rows[TYPE_DEF] {
             true => self.cell(TYPE_DEF, type_row + 1, 5).unwrap_or(first),
             false => self.rows[METHOD_DEF] + 1,
@@ -372,6 +373,9 @@ impl<'a> Assembly<'a> {
 
 #[cfg(test)]
 pub(crate) mod build;
+
+#[cfg(test)]
+mod fuzz;
 
 #[cfg(test)]
 mod tests {

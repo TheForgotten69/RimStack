@@ -212,13 +212,12 @@ fn the_filter_box_takes_any_text() {
 }
 
 /// A real assembly with bytes changed at random, counts made huge, or cut
-/// short: read in full each time. Reports the slowest reading.
+/// short: read in full each time. Reports the slowest reading. The same
+/// is done on every run to an assembly made in `dotnet::fuzz`.
 #[test]
-fn a_damaged_assembly_is_refused_or_read_and_never_panics() {
-    let Some(path) = std::env::var_os("RIMSTACK_DLL") else {
-        println!("RIMSTACK_DLL not set: assembly fuzz skipped");
-        return;
-    };
+#[ignore = "needs RIMSTACK_DLL: a mod's assembly"]
+fn a_damaged_real_assembly_is_refused_or_read_and_never_panics() {
+    let path = std::env::var_os("RIMSTACK_DLL").expect("RIMSTACK_DLL names a mod's assembly");
     let sound = std::fs::read(path).unwrap();
     assert!(dotnet::Assembly::read(&sound).is_some());
     let mut random = Random(0xd11);
@@ -283,11 +282,10 @@ fn a_damaged_assembly_is_refused_or_read_and_never_panics() {
 /// How many of the assemblies named in the file `RIMSTACK_DLLS` (a path
 /// per line) are read, and the first few that are refused.
 #[test]
+#[ignore = "needs RIMSTACK_DLLS: a file listing installed assemblies"]
 fn installed_assemblies_are_read() {
-    let Some(listing) = std::env::var_os("RIMSTACK_DLLS") else {
-        println!("RIMSTACK_DLLS not set: skipped");
-        return;
-    };
+    let listing =
+        std::env::var_os("RIMSTACK_DLLS").expect("RIMSTACK_DLLS names a list of assemblies");
     let listing = std::fs::read_to_string(listing).unwrap();
     let (mut read, mut refused, mut panicked) = (0, Vec::new(), Vec::new());
     let started = Instant::now();

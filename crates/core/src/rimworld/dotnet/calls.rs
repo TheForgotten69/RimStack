@@ -121,7 +121,7 @@ impl<'a> Assembly<'a> {
         let base = |row: usize| {
             let to = self.coded(TYPE_DEF, row, 3).filter(|to| to.1 != 0);
             match to.and_then(|to| self.plain_type(to)) {
-                Some((TYPE_DEF, own)) => Base::Own(own - 1),
+                Some((TYPE_DEF, own)) => own.checked_sub(1).map_or(Base::None, Base::Own),
                 Some(other) => self.type_name(other).map_or(Base::None, Base::Other),
                 None => Base::None,
             }
@@ -144,7 +144,9 @@ impl<'a> Assembly<'a> {
             if let (Some(class), Some((TYPE_DEF, interface))) =
                 (types.get_mut(class.wrapping_sub(1)), own)
             {
-                class.implements.push(interface - 1);
+                if let Some(interface) = interface.checked_sub(1) {
+                    class.implements.push(interface);
+                }
             }
         }
         let mut methods = Vec::with_capacity(self.rows[METHOD_DEF]);

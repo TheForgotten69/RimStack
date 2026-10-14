@@ -56,7 +56,7 @@ words.update(json.loads(f'"{t}"') for t in re.findall(r"\"@\w+\": " + literal, t
 # The sentences written in Rust: `say!("…")`, `said!("…")` and `named("…")`.
 for path in glob.glob(os.path.join(root, "..", "*", "src", "**", "*.rs"), recursive=True):
     source = open(path, encoding="utf-8").read().split("#[cfg(test)]")[0]
-    words.update(json.loads(f'"{t}"') for t in re.findall(r"(?:say!|said!|keep!|named)\(\s*" + literal, source))
+    words.update(json.loads(f'"{t}"') for t in re.findall(r"(?:say!|said!|named)\(\s*" + literal, source))
     for pair in re.findall(r"say_n!\([^\"]*" + literal + r"\s*,\s*" + literal, source):
         words.update(json.loads(f'"{t}"') for t in pair)
 
