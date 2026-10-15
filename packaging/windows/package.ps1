@@ -1,6 +1,6 @@
 # Builds target\packages\RimStack-<version>-windows-x86_64.zip, and the
 # installer beside it where Inno Setup's ISCC is on PATH: rimstack.exe
-# built with the `dist` profile, with Qt's libraries, plugins and QML
+# built with the `dist` profile (or RIMSTACK_PROFILE), with Qt's libraries, plugins and QML
 # modules and the MSVC runtime beside it, put there by windeployqt.
 #
 # Run from a "x64 Native Tools" prompt, with Qt's bin folder on PATH or
@@ -13,15 +13,19 @@ Set-Location (Join-Path $PSScriptRoot "..\..")
 
 $metadata = cargo metadata --no-deps --format-version 1 | ConvertFrom-Json
 $version = ($metadata.packages | Where-Object name -eq "rimstack-app").version
-$target = "x86_64-pc-windows-msvc"
+$cargoProfile = if ($env:RIMSTACK_PROFILE) { $env:RIMSTACK_PROFILE } else { "dist" }
 
-cargo build --profile dist -p rimstack-app --target $target
+# Built for this machine, so the checks' build serves: it must be MSVC's.
+if (-not ((rustc -vV) -match "^host: x86_64-pc-windows-msvc$")) {
+    Write-Error "Build with the x86_64-pc-windows-msvc toolchain: the DDS encoder ships for MSVC alone"
+}
+cargo build --profile $cargoProfile -p rimstack-app
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
 $stage = "target\packaging\RimStack"
 Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
 New-Item -ItemType Directory $stage | Out-Null
-Copy-Item "target\$target\dist\rimstack.exe" $stage
+Copy-Item "target\$cargoProfile\rimstack.exe" $stage
 
 $deploy = if ($env:QT_BIN) { Join-Path $env:QT_BIN "windeployqt.exe" } else { "windeployqt" }
 & $deploy --release --qmldir crates\app\qml --no-translations --compiler-runtime "$stage\rimstack.exe"

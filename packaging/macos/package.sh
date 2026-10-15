@@ -20,13 +20,19 @@ app=target/packaging/RimStack.app
 out=target/packages
 mkdir -p "$out"
 
-for target in aarch64-apple-darwin x86_64-apple-darwin; do
-    cargo build --profile dist -p rimstack-app --target "$target"
-done
+# This Mac's own architecture is built as the checks build it, so their
+# build serves; the other one is cross-compiled.
+profile="${RIMSTACK_PROFILE:-dist}"
+case "$(uname -m)" in
+    arm64) other=x86_64-apple-darwin ;;
+    *) other=aarch64-apple-darwin ;;
+esac
+cargo build --profile "$profile" -p rimstack-app
+cargo build --profile "$profile" -p rimstack-app --target "$other"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 lipo -create -output "$app/Contents/MacOS/rimstack" \
-    target/aarch64-apple-darwin/dist/rimstack target/x86_64-apple-darwin/dist/rimstack
+    "target/$profile/rimstack" "target/$other/$profile/rimstack"
 sed "s/@VERSION@/$version/g" packaging/macos/Info.plist > "$app/Contents/Info.plist"
 
 iconset=target/packaging/rimstack.iconset

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Builds RimStack-<version>-x86_64.AppImage in target/packages: the
-# program built with the `dist` profile, Qt's libraries and plugins
+# program built with the `dist` profile (or RIMSTACK_PROFILE: the beta
+# workflow packs the `release` build its checks made), Qt's libraries and plugins
 # beside it, put together by linuxdeploy and its Qt plugin.
 #
 # The two tools are downloaded once into target/packaging/tools, pinned
@@ -25,7 +26,8 @@ fetch() { # name url
 fetch linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage
 fetch linuxdeploy-plugin-qt https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-qt-x86_64.AppImage
 
-cargo build --profile dist -p rimstack-app
+profile="${RIMSTACK_PROFILE:-dist}"
+cargo build --profile "$profile" -p rimstack-app
 rm -rf "$app"
 mkdir -p "$app/usr/share/icons/hicolor/scalable/apps"
 cp crates/app/assets/rimstack.svg "$app/usr/share/icons/hicolor/scalable/apps/"
@@ -66,7 +68,7 @@ export APPIMAGE_EXTRACT_AND_RUN=1
 export NO_STRIP=1
 PATH="$PWD/$tools:$PATH" linuxdeploy \
     --appdir "$app" \
-    --executable target/dist/rimstack \
+    --executable "target/$profile/rimstack" \
     --desktop-file crates/app/assets/rimstack.desktop \
     --icon-file crates/app/assets/rimstack.svg \
     --plugin qt \
