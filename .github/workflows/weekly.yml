@@ -1,0 +1,27 @@
+# Each Monday, and whenever Cargo.lock changes: the crates RimStack is
+# built from against RustSec's advisories. On the schedule a finding
+# opens an issue (or updates the open one); on a push it fails the run.
+name: weekly
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  push:
+    branches: [main]
+    paths: ["Cargo.lock", "**/Cargo.toml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
