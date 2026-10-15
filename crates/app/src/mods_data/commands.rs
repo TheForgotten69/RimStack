@@ -168,9 +168,6 @@ impl qobject::ModsData {
         }
     }
 
-    /// Starts writing the load order off the window's thread: two
-    /// copies of the file and the file itself, each waited for until on
-    /// the disk. `saved` tells how it went. False when it cannot start.
     pub(super) fn save(mut self: Pin<&mut Self>) -> bool {
         if self.saving {
             return false;

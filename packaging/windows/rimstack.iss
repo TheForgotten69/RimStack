@@ -1,7 +1,3 @@
-; The installer packaging\windows\package.ps1 makes with Inno Setup from
-; the folder windeployqt filled. Version and Stage are given by it.
-; Installed for the user alone: no administrator rights are asked.
-
 [Setup]
 AppId={{6B0E3C2A-8F4D-4C55-9E1B-2F7A9D4C1E83}
 AppName=RimStack

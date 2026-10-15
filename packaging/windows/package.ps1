@@ -1,13 +1,3 @@
-# Builds target\packages\RimStack-<version>-windows-x86_64.zip, and the
-# installer beside it where Inno Setup's ISCC is on PATH: rimstack.exe
-# built with the `dist` profile (or RIMSTACK_PROFILE), with Qt's libraries, plugins and QML
-# modules and the MSVC runtime beside it, put there by windeployqt.
-#
-# Run from a "x64 Native Tools" prompt, with Qt's bin folder on PATH or
-# QT_BIN set to it. The MSVC target is the only one: the DDS encoder
-# ships its Windows code for MSVC alone. SIGN_CERT (a .pfx) and
-# SIGN_PASSWORD sign the program and the installer; without a signature
-# SmartScreen warns on every download.
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..\..")
 
@@ -15,7 +5,6 @@ $metadata = cargo metadata --no-deps --format-version 1 | ConvertFrom-Json
 $version = ($metadata.packages | Where-Object name -eq "rimstack-app").version
 $cargoProfile = if ($env:RIMSTACK_PROFILE) { $env:RIMSTACK_PROFILE } else { "dist" }
 
-# Built for this machine, so the checks' build serves: it must be MSVC's.
 if (-not ((rustc -vV) -match "^host: x86_64-pc-windows-msvc$")) {
     Write-Error "Build with the x86_64-pc-windows-msvc toolchain: the DDS encoder ships for MSVC alone"
 }

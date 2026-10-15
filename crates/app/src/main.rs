@@ -1,6 +1,3 @@
-// Without it Windows opens a console beside the window; a debug build
-// keeps one for what it prints. Output sent to a file or a pipe still
-// reaches it either way.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 use rimstack_core::said;

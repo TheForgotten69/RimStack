@@ -81,16 +81,12 @@ pub fn game_program(game_dir: &Path) -> Option<PathBuf> {
     .find(|file| file.is_file())
 }
 
-/// A process as the system lists it.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Process {
-    /// Its program's file, where the system says.
     pub program: Option<PathBuf>,
     pub command: Vec<std::ffi::OsString>,
 }
 
-/// The processes running now, with their programs and command lines.
-/// Only those of the user are fully listed, which is where the game is.
 pub fn processes() -> Vec<Process> {
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
     let mut system = System::new();
@@ -108,8 +104,6 @@ pub fn processes() -> Vec<Process> {
         .collect()
 }
 
-/// Two names of one file. Windows and macOS do not tell a file's name
-/// by its case, and a program may be listed in either.
 fn same_file(listed: &Path, wanted: &Path) -> bool {
     if listed == wanted {
         return true;
@@ -141,7 +135,6 @@ pub fn game_among(processes: &[Process], game_dir: &Path) -> bool {
     })
 }
 
-/// Whether the game is running now.
 pub fn game_running(game_dir: &Path) -> bool {
     game_among(&processes(), game_dir)
 }
@@ -246,7 +239,6 @@ mod tests {
         assert!(!game_among(&[started], &tmp.path().join("no-game")));
     }
 
-    /// A real process, listed the way every system lists them.
     #[cfg(target_os = "linux")]
     #[test]
     fn a_game_started_now_is_seen_running_and_not_once_it_ended() {
@@ -254,8 +246,6 @@ mod tests {
         let game = tmp.path().join("game");
         std::fs::create_dir_all(&game).unwrap();
         std::fs::copy("/bin/sleep", game.join("RimWorld")).unwrap();
-        // A copy just written can be "text file busy" while another
-        // test's fork still holds it open for writing.
         let mut running = (0..50)
             .find_map(|_| {
                 match std::process::Command::new(game.join("RimWorld"))

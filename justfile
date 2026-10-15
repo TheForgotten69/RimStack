@@ -79,7 +79,6 @@ shot section out *args: build
 scroll: build
     {{app}} --selftest 2>&1 | grep -E "scroll frames|_ms="
 
-# Everything before a commit: format, lint, tests, build, the app's checks in English and in French
+# Everything before a commit: format, lint, tests, build, the app's checks (in English; the screens check switches language)
 ready: fmt lint test audit words languages
     just check
-    just check Français

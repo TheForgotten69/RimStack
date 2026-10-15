@@ -32,8 +32,6 @@ pub fn whole_tree(dir: &Path) -> std::io::Result<Vec<Entry>> {
 fn walk(dir: &Path, deepest: usize, whole: bool) -> std::io::Result<Vec<Entry>> {
     let mut found = Vec::new();
     let mut entered: Vec<PathBuf> = Vec::new();
-    // Judged once every folder link is followed: a file may be linked
-    // into a folder reached later.
     let mut file_links = Vec::new();
     let mut waiting = vec![(dir.to_path_buf(), PathBuf::new(), 0)];
     while let Some((folder, within, depth)) = waiting.pop() {
@@ -124,9 +122,6 @@ fn may_enter(began: &Path, link: &Path, entered: &mut Vec<PathBuf>) -> bool {
     new
 }
 
-/// Whether a link to a file leads into a folder the walk takes: a mod
-/// could otherwise have a copy of it take any file the user can read.
-/// A link that leads nowhere is passed over.
 fn leads_within(began: &Path, link: &Path, entered: &mut Vec<PathBuf>) -> bool {
     if entered.is_empty() {
         entered.extend(dunce::canonicalize(began));
@@ -215,8 +210,6 @@ mod tests {
         assert!(to.join("About/About.xml").is_file());
         assert!(!to.join("Textures").exists());
         assert!(!to.join("itself").exists());
-        // Counting still follows it: a mod being worked on may keep its
-        // textures elsewhere.
         assert!(names(&from).contains(&"Textures/id_ed25519".to_string()));
     }
 
@@ -257,7 +250,6 @@ mod tests {
             fs::read_to_string(to.join("About.xml")).unwrap(),
             "<ModMetaData/>"
         );
-        // Into a folder only a link reaches, which a copy does not take.
         assert!(!to.join("Textures-b.png").exists());
     }
 }

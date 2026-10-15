@@ -158,14 +158,11 @@ fn repository_of(mod_root: &Path) -> Result<std::path::PathBuf> {
 /// for it.
 fn in_checkout(mod_root: &Path) -> Result<std::process::Command> {
     let repository = repository_of(mod_root)?;
-    // A linked worktree's settings are in its main repository, named by
-    // this file: no clone from the Workshop is one.
     if repository.join("commondir").exists() {
         return Err(Error::refused(said!(
             "It is a linked Git worktree: RimStack does not run Git there"
         )));
     }
-    // Listed by Git from where it reads them, not from `<repository>/config`.
     let listed = crate::base::program::run(
         git().arg("--git-dir").arg(&repository).args([
             "config",
@@ -560,7 +557,6 @@ mod tests {
         assert!(!ran.exists());
     }
 
-    /// A clone one commit behind its origin, in `<tmp>/clone`.
     fn behind_by_one(tmp: &Path) -> std::path::PathBuf {
         let (origin, clone) = (tmp.join("origin"), tmp.join("clone"));
         std::fs::create_dir(&origin).unwrap();
@@ -577,8 +573,6 @@ mod tests {
         clone
     }
 
-    /// Git reads a repository's settings from where `commondir` points,
-    /// past a `config` that holds only what a clone writes.
     #[test]
     fn settings_reached_through_commondir_are_never_used() {
         let tmp = tempfile::tempdir().unwrap();

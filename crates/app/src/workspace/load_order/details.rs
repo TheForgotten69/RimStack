@@ -102,7 +102,6 @@ pub struct Details {
     name: String,
     source: &'static str,
     workshop: bool,
-    /// The game's own, or one of its expansions.
     official: bool,
     contains: Sentence,
     path: String,

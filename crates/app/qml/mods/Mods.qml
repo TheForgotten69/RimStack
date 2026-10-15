@@ -45,7 +45,6 @@ Item {
     readonly property var conflictMarks: info.conflictMarks || ({})
     readonly property string saveProblem: Hub.mods.saveProblem
 
-    // Run once the save started is on the disk; dropped if it fails.
     property var afterSave: null
     function save(then) {
         afterSave = then || null

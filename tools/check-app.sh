@@ -14,9 +14,6 @@ app="$(dirname "$0")/../target/release/rimstack"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-# Without a real install (a CI machine), or with RIMSTACK_FIXTURE set, the
-# checks run on a made-up one: its settings stand in for the real ones,
-# and its game and Workshop folders are the ones read.
 if [ -n "${RIMSTACK_FIXTURE:-}" ] || [ ! -f "$real/Config/ModsConfig.xml" ]; then
     "$(dirname "$0")/fixture-game.sh" "$tmp/fixture"
     real="$tmp/fixture/config"
@@ -88,7 +85,6 @@ echo "check ok    the real ModsConfig.xml was not touched"
 # Choosing between two mods' versions of a texture renames a file inside a
 # mod, so it is only ever checked on two made-up mods in the temporary folder.
 game="$tmp/game"
-# An 8×8 PNG of one colour: picture file red green blue.
 picture() {
     python3 - "$@" <<'PY'
 import struct, sys, zlib
@@ -143,8 +139,6 @@ sound "$live" "--check=live"
 rm -rf "$game/Mods/fourth" "$game/Mods/900001"
 [ "$ok" = 0 ] || fail "the live changes"
 
-# Every other section on a made-up install, each with what it must show,
-# and the language changed with the window open.
 "$(dirname "$0")/fixture-game.sh" "$tmp/screens"
 mkdir -p "$tmp/settings-screens/RimStack"
 printf '{ "language": "%s", "setupDone": "yes" }' "$language" > "$tmp/settings-screens/RimStack/settings.json"

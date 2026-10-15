@@ -128,7 +128,6 @@ impl Session {
         }
     }
 
-    /// `list` was written: it is the saved one, whatever was done since.
     pub fn mark_saved_as(&mut self, list: Vec<String>) {
         self.saved = list;
     }

@@ -376,8 +376,6 @@ ApplicationWindow {
         Repeater {
             model: question.asked.lines
             Text {
-                // A sentence, or `{ path }`: a folder or a file, shown whole
-                // and broken anywhere.
                 required property var modelData
                 readonly property bool path: !!modelData.path
                 width: parent.width

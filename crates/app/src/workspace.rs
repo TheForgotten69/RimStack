@@ -380,14 +380,11 @@ impl App {
         ]
     }
 
-    /// When the game last wrote a log, in milliseconds since 1970; 0 for
-    /// never.
     pub fn log_written(&self) -> u64 {
         let logs = self.game_logs();
         rimstack_core::base::watch::newest(logs.iter().map(PathBuf::as_path))
     }
 
-    /// The log the game wrote last, if it wrote one.
     pub fn game_log(&self) -> Option<PathBuf> {
         let logs = self.game_logs().into_iter();
         logs.filter(|log| log.is_file())

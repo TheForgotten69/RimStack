@@ -79,7 +79,6 @@ Item {
     function keys() {
         if (Mods.compareView)
             events.keyClick(Qt.Key_Escape, Qt.NoModifier, -1)
-        // The row's menu, opened above, still open where no comparison followed.
         if (screen.menuOpen)
             events.keyClick(Qt.Key_Escape, Qt.NoModifier, -1)
         probe.visible = true

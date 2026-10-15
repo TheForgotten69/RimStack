@@ -29,7 +29,12 @@ tools/check-app.sh                     # every action of the window, no window s
 
 ## Packages and systems
 
-Every push to `main` builds all three on GitHub (`.github/workflows/beta.yml`) and puts them on the [`beta` prerelease](https://github.com/TheForgotten69/RimStack/releases/tag/beta), replacing the last ones. A system whose checks or build fail keeps its previous build there, and the release notes say from which commit each system's files are.
+GitHub builds all three (`.github/workflows/release.yml`) for a version tag or when run by hand, never on a plain push:
+
+- A tag `v0.9.1` publishes that version as the latest release, which RimStack's update check offers; `v0.9.1-beta.1` publishes it as a prerelease. The tag must name the version in `Cargo.toml`.
+- Run by hand (Actions, release, Run workflow), it updates the rolling [`beta` prerelease](https://github.com/TheForgotten69/RimStack/releases/tag/beta) with the branch chosen.
+
+A system whose tests or build fail keeps its previous files on the release, and the notes say from which commit each system's files are.
 
 `just package` builds the package for the system it runs on into `target/packages`, from the `dist` profile:
 
@@ -37,7 +42,7 @@ Every push to `main` builds all three on GitHub (`.github/workflows/beta.yml`) a
 |---|---|---|---|
 | Linux | AppImage | `packaging/linux/package.sh` | Built and checked on a made-up install. Build it on the oldest Linux it is for: it needs that system's C library or a newer one. |
 | Windows | zip, and an installer with Inno Setup | `packaging/windows/package.ps1` (PowerShell 7, `pwsh`) | Not yet run. MSVC only. Unsigned, SmartScreen warns. |
-| macOS | dmg of a universal `RimStack.app` | `packaging/macos/package.sh` | Not yet run. Signing and notarization when `MAC_SIGN_IDENTITY` and `MAC_NOTARY_PROFILE` are set. |
+| macOS | dmg of `RimStack.app` for Apple silicon (Intel Macs cannot run it) | `packaging/macos/package.sh` | Not yet run. Signing and notarization when `MAC_SIGN_IDENTITY` and `MAC_NOTARY_PROFILE` are set. |
 
 The core library and its tests compile for Windows; nothing has run there or on macOS yet. On macOS RimStack does not run SteamCMD, until it is seen to keep out of Steam's own folder there.
 

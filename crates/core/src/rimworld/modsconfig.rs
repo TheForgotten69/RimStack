@@ -130,8 +130,6 @@ pub fn write(path: &Path, ids: &[String]) -> Result<()> {
     let before = std::fs::read_to_string(path).map_err(failed)?;
     let after = with_active(&before, ids).map_err(|e| e.of(path.display()))?;
 
-    // Whole or not there, as the file itself: a crash while the first
-    // copy is written must not leave half an original that is then kept.
     let original = beside(path, ".rimstack-original");
     if !original.exists() {
         crate::base::atomic_file::write(&original, &before)?;
@@ -326,8 +324,6 @@ mod tests {
         assert_eq!(read(&real).unwrap().active, ["a.b"]);
     }
 
-    /// Players make the file read-only so the game cannot empty it; a
-    /// save still writes it, and leaves it read-only.
     #[test]
     fn a_read_only_file_is_saved_and_stays_read_only() {
         let tmp = tempfile::tempdir().unwrap();

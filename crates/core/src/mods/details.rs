@@ -145,10 +145,8 @@ pub struct Clashes {
     pub marks: BTreeMap<ModId, Mark>,
 }
 
-/// How another mod's row is marked beside the selected one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Mark {
-    /// It loads earlier: the selected mod's textures are used, not its own.
     pub loses: bool,
 }
 

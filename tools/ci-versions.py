@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""Moves the versions Dependabot does not follow to the newest ones, and
-says what moved: Qt and aqtinstall in .github/workflows/beta.yml, and the
-linuxdeploy tools in packaging/linux/package.sh. Run each week by
-.github/workflows/weekly.yml, which opens a pull request with the change.
-
-    tools/ci-versions.py          rewrite the files
-    tools/ci-versions.py --check  only say what is newer
-"""
 
 import json
 import re
@@ -15,7 +7,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-WORKFLOW = ROOT / ".github/workflows/beta.yml"
+WORKFLOW = ROOT / ".github/workflows/release.yml"
 LINUX = ROOT / "packaging/linux/package.sh"
 QT_HOSTS = ["linux_x64", "windows_x86", "mac_x64"]
 
@@ -31,8 +23,6 @@ def version_key(version: str) -> tuple[int, ...]:
 
 
 def qt_versions(host: str) -> set[str]:
-    """Qt 6 releases on Qt's server for one host, from the folder names:
-    qt6_6120 is 6.12.0, qt6_690 is 6.9.0."""
     listing = fetch(f"https://download.qt.io/online/qtsdkrepository/{host}/desktop/")
     found = set()
     for digits in re.findall(r'href="qt6_6(\d+)/"', listing):
@@ -51,7 +41,6 @@ def newest_aqt() -> str:
 
 
 def newest_release(repository: str) -> str:
-    """The newest release that is not GitHub's rolling `continuous` one."""
     releases = json.loads(fetch(f"https://api.github.com/repos/{repository}/releases?per_page=20"))
     tags = [r["tag_name"] for r in releases if not r["draft"] and r["tag_name"] != "continuous"]
     return tags[0]
@@ -68,8 +57,6 @@ def main() -> int:
         workflow = workflow.replace(f'QT_VERSION: "{qt_now}"', f'QT_VERSION: "{qt}"')
         moved.append(f"Qt {qt_now} → {qt}")
 
-    # A git commit until a release reads Qt's current folders; past 3.3,
-    # the release itself.
     aqt_now = re.search(r'AQT_SOURCE: "([^"]+)"', workflow).group(1)
     aqt = newest_aqt()
     if version_key(aqt) > (3, 3, 0) and aqt_now != f"aqtinstall=={aqt}":

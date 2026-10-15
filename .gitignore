@@ -2,7 +2,6 @@
 *.swp
 .superpowers/
 crates/app/.qmlls.ini
-# Kept on disk, never committed: notes for the agent, and the documents.
 CLAUDE.md
 docs/
 .claude/

@@ -19,13 +19,8 @@ pub const NETWORK: Duration = Duration::from_secs(10 * 60);
 /// What downloads as much as mods weigh.
 pub const DOWNLOAD: Duration = Duration::from_secs(2 * 60 * 60);
 
-/// Once the program has ended, what it wrote is already in its pipes: a
-/// pipe still open past this is held by a program it started (an SSH
-/// connection kept for reuse, a Steam helper), which may run for hours.
 const AFTER_END: Duration = Duration::from_secs(1);
 
-/// A program to run. On Windows it gets no console window: RimStack has
-/// none to lend it, so each run would open one.
 pub fn command(program: impl AsRef<OsStr>) -> Command {
     let mut command = Command::new(program);
     without_window(&mut command);
@@ -42,7 +37,6 @@ fn without_window(command: &mut Command) {
 #[cfg(not(windows))]
 fn without_window(_command: &mut Command) {}
 
-/// What a pipe has given so far, and whether it has ended.
 type Gathered = Arc<(Mutex<Vec<u8>>, AtomicBool)>;
 
 fn collected(pipe: Option<impl Read + Send + 'static>) -> Gathered {

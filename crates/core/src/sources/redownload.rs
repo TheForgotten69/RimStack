@@ -17,10 +17,6 @@ pub fn steamcmd(data_dir: &Path) -> Option<PathBuf> {
     steamcmd_among(data_dir, std::env::var_os("PATH"))
 }
 
-/// On macOS SteamCMD keeps its state in the user's own Steam folder,
-/// `~/Library/Application Support/Steam`, and whether a home of its own
-/// keeps it out (as it does on Linux, see `fetch_all`) has not been seen:
-/// on Linux it wrote over Steam's list of libraries before it had one.
 fn on_this_system() -> Result<()> {
     match crate::rimworld::paths::Os::running() {
         crate::rimworld::paths::Os::Mac => Err(Error::refused(said!(

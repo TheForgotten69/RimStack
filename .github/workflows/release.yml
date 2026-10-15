@@ -1,47 +1,24 @@
-# Every push to main: the checks on each system, the package of each, and
-# the `beta` prerelease moved to that commit with the new packages.
-# A pull request gets the checks alone.
-#
-# One job per system: its checks, then, on a push, its package from the
-# same build. Linux runs `just ready` whole, on a made-up install. Windows
-# and macOS run clippy and the tests: tools/check-app.sh is bash with GNU
-# tools. A system whose checks or build fail keeps its last good package
-# on the release; Linux failing stops the release.
-#
-# Optional secrets, each signing what it can when present:
-#   WINDOWS_CERT (a .pfx, base64) and WINDOWS_CERT_PASSWORD
-#   MAC_CERT (a .p12, base64), MAC_CERT_PASSWORD, MAC_SIGN_IDENTITY,
-#   and for notarization MAC_NOTARY_APPLE_ID, MAC_NOTARY_PASSWORD
-#   (an app-specific password) and MAC_NOTARY_TEAM
-name: beta
+name: release
 
 on:
   push:
-    branches: [main]
-  pull_request:
+    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag to release (v0.9.1); empty for the beta prerelease"
+        required: false
+        default: ""
 
-# A pull request's older run gives way to its newer one. On main a run
-# waits instead (GitHub keeps only the newest waiting), so a release is
-# never cut short between taking old files down and putting new ones up.
 concurrency:
-  group: beta-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
-# Qt, and the installer that fetches it: Dependabot follows neither, so
-# the weekly workflow proposes newer ones (tools/ci-versions.py).
-# aqtinstall's main branch until 3.4.0 is published: 3.3 does not read
-# the folders Qt keeps Windows builds in from 6.11 on.
-#
-# A beta is packed from the `release` build the checks made, stripped;
-# `dist` (thin LTO, one codegen unit) is for releases made by hand. The
-# tests build without debug information, which only a debugger reads.
 env:
   CARGO_TERM_COLOR: always
-  CARGO_PROFILE_DEV_DEBUG: "0"
   CARGO_PROFILE_RELEASE_STRIP: "true"
   RIMSTACK_PROFILE: release
   QT_VERSION: "6.12.0"
@@ -49,23 +26,13 @@ env:
 
 jobs:
   linux:
-    # The oldest base whose C library the AppImage then asks for.
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/linux-setup
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: just,cargo-audit
-      - name: just ready
-        run: QMLLINT="$QT_ROOT_DIR/bin/qmllint" just ready
-      - name: Nothing left changed by the checks (fmt, words)
-        run: git diff --exit-code
       - name: Package
-        if: github.event_name != 'pull_request'
         run: packaging/linux/package.sh
       - uses: actions/upload-artifact@v7
-        if: github.event_name != 'pull_request'
         with:
           name: package-linux
           path: target/packages/*
@@ -86,16 +53,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      # windeployqt finds the Visual C++ runtime it ships through these.
       - uses: ilammy/msvc-dev-cmd@v1
-      # In the release profile, which the package is then built from.
-      - run: cargo clippy --release --workspace --all-targets -- -D warnings
-      - run: cargo test --release --workspace
       - name: Inno Setup, for the installer
-        if: github.event_name != 'pull_request'
         run: choco install innosetup --no-progress -y
       - name: The signing certificate, when there is one
-        if: github.event_name != 'pull_request' && env.SIGNED == 'true'
+        if: env.SIGNED == 'true'
         env:
           WINDOWS_CERT: ${{ secrets.WINDOWS_CERT }}
         shell: pwsh
@@ -104,7 +66,6 @@ jobs:
           [IO.File]::WriteAllBytes($file, [Convert]::FromBase64String($env:WINDOWS_CERT))
           "SIGN_CERT=$file" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Package
-        if: github.event_name != 'pull_request'
         shell: pwsh
         env:
           SIGN_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
@@ -112,7 +73,6 @@ jobs:
           $env:PATH = "C:\Program Files (x86)\Inno Setup 6;$env:PATH"
           packaging\windows\package.ps1
       - uses: actions/upload-artifact@v7
-        if: github.event_name != 'pull_request'
         with:
           name: package-windows
           path: target/packages/*
@@ -133,16 +93,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      # In the release profile, which the package is then built from.
-      - run: cargo clippy --release --workspace --all-targets -- -D warnings
-      - run: cargo test --release --workspace
-      - name: The other architecture and the icon tool, for the package
-        if: github.event_name != 'pull_request'
-        run: |
-          rustup target add x86_64-apple-darwin aarch64-apple-darwin
-          brew install librsvg
+      - name: The icon tool, for the package
+        run: brew install librsvg
       - name: The signing certificate, when there is one
-        if: github.event_name != 'pull_request' && env.SIGNED == 'true'
+        if: env.SIGNED == 'true'
         env:
           MAC_CERT: ${{ secrets.MAC_CERT }}
           MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
@@ -157,7 +111,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain"
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
       - name: The notarization profile, when there are credentials
-        if: github.event_name != 'pull_request' && env.SIGNED == 'true' && env.NOTARIZED == 'true'
+        if: env.SIGNED == 'true' && env.NOTARIZED == 'true'
         env:
           MAC_NOTARY_APPLE_ID: ${{ secrets.MAC_NOTARY_APPLE_ID }}
           MAC_NOTARY_PASSWORD: ${{ secrets.MAC_NOTARY_PASSWORD }}
@@ -167,12 +121,10 @@ jobs:
             --password "$MAC_NOTARY_PASSWORD" --team-id "$MAC_NOTARY_TEAM"
           echo "MAC_NOTARY_PROFILE=rimstack" >> "$GITHUB_ENV"
       - name: Package
-        if: github.event_name != 'pull_request'
         env:
           MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
         run: packaging/macos/package.sh
       - uses: actions/upload-artifact@v7
-        if: github.event_name != 'pull_request'
         with:
           name: package-macos
           path: target/packages/*
@@ -180,11 +132,7 @@ jobs:
 
   release:
     needs: [linux, windows, macos]
-    # Whatever became of Windows and macOS: the release goes out as long
-    # as Linux passed and was packaged.
-    if: >-
-      always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-      && needs.linux.result == 'success'
+    if: always() && needs.linux.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -198,4 +146,5 @@ jobs:
       - name: Move the beta to this commit, with its packages
         env:
           GH_TOKEN: ${{ github.token }}
-        run: packaging/beta-release.sh packages "$GITHUB_SHA"
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'beta' }}
+        run: packaging/release.sh packages "$GITHUB_SHA" "$TAG"

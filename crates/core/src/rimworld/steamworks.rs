@@ -23,9 +23,6 @@ pub enum Action {
     Download,
 }
 
-/// Where each build of the game keeps the Steamworks library, from its
-/// folder: from 1.7 in the folder itself; under Unity in `Plugins` of its
-/// data folder, and on macOS in a bundle inside the application.
 const KNOWN: [&str; 9] = [
     "libsteam_api.so",
     "steam_api64.dll",

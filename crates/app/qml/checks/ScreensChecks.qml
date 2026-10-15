@@ -1,8 +1,3 @@
-// `--check=screens`: every section besides Mods, shown in turn on the
-// made-up install tools/fixture-game.sh writes, each checked for what it
-// must show of it; then the language changed while the window is open.
-// Run through tools/check-app.sh, which fails on any QML error printed
-// meanwhile. Exits with 1 if any check failed.
 pragma ComponentBehavior: Bound
 import QtQuick
 import RimStack.Ui
@@ -14,7 +9,6 @@ Item {
     property int at: 0
     property int waited: 0
 
-    // A list a part of the window holds, as an array.
     function listed(value) {
         return Array.from(value || [])
     }
@@ -25,8 +19,6 @@ Item {
             failed += 1
     }
 
-    // Each: the section to show, what it must show, when it has had time
-    // to read what it shows, and whether it shows it.
     readonly property var steps: [
         {
             section: 3,
@@ -89,7 +81,6 @@ Item {
                 return
             }
             checks.waited += 1
-            // Ten seconds for what a screen reads off the window's thread.
             if (!step.ready() && checks.waited < 50)
                 return
             checks.check(step.what, step.ok())
@@ -97,8 +88,6 @@ Item {
         }
     }
 
-    // A language chosen with the window open is used without a restart,
-    // and English again afterwards.
     function languages() {
         Hub.settings.useLanguage("Français")
         speaking.start()

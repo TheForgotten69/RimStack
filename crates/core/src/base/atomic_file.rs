@@ -59,9 +59,6 @@ fn replace(partial: &Path, path: &Path, before: Option<&Permissions>) -> std::io
     std::fs::rename(partial, path)
 }
 
-/// Windows refuses to move a file over a read-only one, which players
-/// make ModsConfig.xml so the game cannot empty it: the flag is taken
-/// off for the move and put back on the new file.
 #[cfg(not(unix))]
 #[expect(
     clippy::permissions_set_readonly_false,
@@ -81,9 +78,6 @@ fn replace(partial: &Path, path: &Path, before: Option<&Permissions>) -> std::io
     std::fs::set_permissions(path, before.clone())
 }
 
-/// The new name is on the disk only once its folder is: without this a
-/// power cut after the move can bring back the file before it. Some file
-/// systems cannot sync a folder; the file itself is on the disk anyway.
 #[cfg(unix)]
 fn sync_folder(path: &Path) {
     let folder = path.parent().filter(|p| !p.as_os_str().is_empty());
@@ -92,7 +86,6 @@ fn sync_folder(path: &Path) {
     }
 }
 
-/// NTFS keeps a rename in its journal with the file it moves.
 #[cfg(not(unix))]
 fn sync_folder(_path: &Path) {}
 

@@ -165,7 +165,6 @@ impl LoadOrder {
         Ok(())
     }
 
-    /// What a save writes, and where: the sort on show kept first.
     pub fn to_save(&mut self, app: &App) -> Result<Saving, Error> {
         self.keep_sort(app);
         let file = app.paths().mods_config().ok_or_else(|| {
@@ -183,14 +182,12 @@ impl LoadOrder {
         })
     }
 
-    /// `list` was written: it is the saved load order now.
     pub fn saved(&mut self, app: &App, list: Vec<String>) {
         app.session().mark_saved_as(list);
         self.settle(app);
     }
 }
 
-/// A save under way: the load order as it was asked for, and as written.
 pub struct Saving {
     pub file: std::path::PathBuf,
     pub list: Vec<String>,

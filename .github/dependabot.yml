@@ -1,6 +1,3 @@
-# Each Monday: a pull request per group of updates, which the beta
-# workflow then checks on all three systems. Security fixes come as soon
-# as they are published, apart from this (the repository's own setting).
 version: 2
 updates:
   - package-ecosystem: cargo
@@ -10,7 +7,6 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     groups:
-      # cxx-qt and cxx move together: one generates code for the other.
       cxx-qt:
         patterns: ["cxx", "cxx-*", "cxxbridge-*", "cxx-qt*", "qt-build-utils"]
       icu:

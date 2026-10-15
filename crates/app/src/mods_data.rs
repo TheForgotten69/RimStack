@@ -63,7 +63,6 @@ pub mod qobject {
         #[qproperty(QString, filter)]
         /// Why the last save, bin or copy did not work; empty when it did.
         #[qproperty(QString, save_problem, cxx_name = "saveProblem")]
-        /// A save is being written: `saved` follows.
         #[qproperty(bool, saving)]
         #[qproperty(QString, upkeep_problem, cxx_name = "upkeepProblem")]
         type ModsData = super::ModsDataRust;
@@ -85,7 +84,6 @@ pub mod qobject {
         /// Something to say that nothing takes back; `tone` is "ok" or "err".
         #[qsignal]
         fn told(self: Pin<&mut ModsData>, said: QString, tone: QString);
-        /// The save `save` started is written, or failed: `saveProblem` says why.
         #[qsignal]
         fn saved(self: Pin<&mut ModsData>, ok: bool);
     }

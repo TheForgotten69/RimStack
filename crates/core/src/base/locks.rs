@@ -48,7 +48,6 @@ impl<T> Held<T> for Mutex<T> {
     }
 }
 
-/// For the diagnostics' own lock, which cannot say anything of itself.
 pub(crate) fn quietly<T>(poisoned: PoisonError<T>) -> T {
     poisoned.into_inner()
 }

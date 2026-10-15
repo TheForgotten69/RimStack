@@ -4,10 +4,6 @@
 
 use std::path::Path;
 
-/// The program the entry should start, from the environment RimStack
-/// was started in: none where a package (Flatpak, Snap) brings its own
-/// entry, the AppImage file rather than the folder it is mounted at for
-/// this run, or else the program itself.
 pub fn program_to_list(
     exe: &Path,
     var: impl Fn(&str) -> Option<std::ffi::OsString>,

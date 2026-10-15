@@ -1,13 +1,3 @@
-# Each Monday, and whenever Cargo.lock changes: the crates RimStack is
-# built from against RustSec's advisories. On the schedule a finding
-# opens an issue (or updates the open one); on a push it fails the run.
-#
-# Each Monday as well: what Dependabot does not follow (Qt, aqtinstall,
-# linuxdeploy) moved to the newest by tools/ci-versions.py, as a pull
-# request. Opened with CI_BOT_TOKEN (a fine-grained token with contents
-# and pull requests write) the checks run on it; with the workflow's own
-# token they do not, and Settings, Actions must let workflows open pull
-# requests.
 name: weekly
 
 on:

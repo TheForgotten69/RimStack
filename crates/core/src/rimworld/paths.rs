@@ -190,8 +190,6 @@ pub fn app_dirs(os: Os, home: &Path, env: Env) -> (PathBuf, PathBuf) {
             set("APPDATA").unwrap_or_else(|| home.join("AppData/Roaming")),
             set("LOCALAPPDATA").unwrap_or_else(|| home.join("AppData/Local")),
         ),
-        // One folder for both, as macOS programs keep them: a file of the
-        // settings and one of the data must never share a name.
         Os::Mac => {
             let support = home.join("Library/Application Support");
             (support.clone(), support)
