@@ -19,5 +19,6 @@ runs:
     - uses: jurplel/install-qt-action@v4
       with:
         version: ${{ env.QT_VERSION }}
+        aqtsource: ${{ env.AQT_SOURCE }}
         cache: true
     - uses: Swatinem/rust-cache@v2

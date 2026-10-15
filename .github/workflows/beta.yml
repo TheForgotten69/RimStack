@@ -30,16 +30,21 @@ concurrency:
 permissions:
   contents: read
 
+# Qt, and the installer that fetches it: Dependabot follows neither, so
+# the weekly workflow proposes newer ones (tools/ci-versions.py).
+# aqtinstall's main branch until 3.4.0 is published: 3.3 does not read
+# the folders Qt keeps Windows builds in from 6.11 on.
 env:
   CARGO_TERM_COLOR: always
   QT_VERSION: "6.12.0"
+  AQT_SOURCE: "git+https://github.com/miurahr/aqtinstall.git@076e1659807d0b362a3ed684d54c2e9c775eb9c7"
 
 jobs:
   check-linux:
     # The oldest base whose C library the AppImage then asks for.
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/linux-setup
       - uses: taiki-e/install-action@v2
         with:
@@ -52,10 +57,11 @@ jobs:
   check-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
+          aqtsource: ${{ env.AQT_SOURCE }}
           arch: win64_msvc2022_64
           cache: true
       - uses: Swatinem/rust-cache@v2
@@ -65,10 +71,11 @@ jobs:
   check-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
+          aqtsource: ${{ env.AQT_SOURCE }}
           cache: true
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
@@ -79,10 +86,10 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/linux-setup
       - run: packaging/linux/package.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: package-linux
           path: target/packages/*
@@ -95,10 +102,11 @@ jobs:
     env:
       SIGNED: ${{ secrets.WINDOWS_CERT != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
+          aqtsource: ${{ env.AQT_SOURCE }}
           arch: win64_msvc2022_64
           cache: true
       - uses: Swatinem/rust-cache@v2
@@ -122,7 +130,7 @@ jobs:
         run: |
           $env:PATH = "C:\Program Files (x86)\Inno Setup 6;$env:PATH"
           packaging\windows\package.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: package-windows
           path: target/packages/*
@@ -136,10 +144,11 @@ jobs:
       SIGNED: ${{ secrets.MAC_CERT != '' }}
       NOTARIZED: ${{ secrets.MAC_NOTARY_APPLE_ID != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
+          aqtsource: ${{ env.AQT_SOURCE }}
           cache: true
       - uses: Swatinem/rust-cache@v2
       - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
@@ -173,7 +182,7 @@ jobs:
         env:
           MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
         run: packaging/macos/package.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: package-macos
           path: target/packages/*
@@ -190,8 +199,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: package-*
           path: packages

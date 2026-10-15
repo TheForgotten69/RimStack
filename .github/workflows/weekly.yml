@@ -1,6 +1,13 @@
 # Each Monday, and whenever Cargo.lock changes: the crates RimStack is
 # built from against RustSec's advisories. On the schedule a finding
 # opens an issue (or updates the open one); on a push it fails the run.
+#
+# Each Monday as well: what Dependabot does not follow (Qt, aqtinstall,
+# linuxdeploy) moved to the newest by tools/ci-versions.py, as a pull
+# request. Opened with CI_BOT_TOKEN (a fine-grained token with contents
+# and pull requests write) the checks run on it; with the workflow's own
+# token they do not, and Settings, Actions must let workflows open pull
+# requests.
 name: weekly
 
 on:
@@ -21,7 +28,35 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  versions:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - id: moved
+        run: |
+          {
+            echo "said<<END"
+            python3 -I tools/ci-versions.py
+            echo "END"
+          } >> "$GITHUB_OUTPUT"
+      - uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.CI_BOT_TOKEN || github.token }}
+          branch: ci-versions
+          delete-branch: true
+          commit-message: "CI: newer Qt, aqtinstall or linuxdeploy"
+          title: "CI: newer Qt, aqtinstall or linuxdeploy"
+          body: |
+            Moved by `tools/ci-versions.py`:
+
+            ${{ steps.moved.outputs.said }}
+          labels: dependencies
