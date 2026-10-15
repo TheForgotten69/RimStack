@@ -26,8 +26,8 @@ Item {
             entries.push({ text: Theme.plural(Hub.downloads.behindActive, "{} update", "{} updates"), icon: "download", run: () => Mods.showUpdates() })
         if (entries.length > 0)
             entries.push({ line: true })
-        entries.push({ text: Theme.say("Undo (Ctrl + Z)"), icon: "undo-2", off: !Hub.mods.canUndo || Hub.mods.previewing, run: () => Mods.undo() })
-        entries.push({ text: Theme.say("Redo (Ctrl + Shift + Z)"), icon: "redo-2", off: !Hub.mods.canRedo || Hub.mods.previewing, run: () => Mods.redo() })
+        entries.push({ text: Theme.say("Undo (Ctrl + Z)"), icon: "undo-2", off: !Hub.mods.canUndo || Hub.mods.previewing, run: () => Hub.mods.undo() })
+        entries.push({ text: Theme.say("Redo (Ctrl + Shift + Z)"), icon: "redo-2", off: !Hub.mods.canRedo || Hub.mods.previewing, run: () => Hub.mods.redo() })
         return entries
     }
     // The mods whose one trouble is the game version they list.
@@ -113,8 +113,8 @@ Item {
             Row {
                 visible: !Theme.demo && !activePane.tight
                 spacing: Theme.gapLine
-                Btn { enabled: Hub.mods.canUndo && !Hub.mods.previewing; icon: "undo-2"; tip: Theme.say("Undo (Ctrl + Z)"); onClicked: Mods.undo() }
-                Btn { enabled: Hub.mods.canRedo && !Hub.mods.previewing; icon: "redo-2"; tip: Theme.say("Redo (Ctrl + Shift + Z)"); onClicked: Mods.redo() }
+                Btn { enabled: Hub.mods.canUndo && !Hub.mods.previewing; icon: "undo-2"; tip: Theme.say("Undo (Ctrl + Z)"); onClicked: Hub.mods.undo() }
+                Btn { enabled: Hub.mods.canRedo && !Hub.mods.previewing; icon: "redo-2"; tip: Theme.say("Redo (Ctrl + Shift + Z)"); onClicked: Hub.mods.redo() }
             }
             // Sort follows what the mods' files say, so it waits until they are read.
             Btn {
@@ -161,7 +161,7 @@ Item {
                 Rectangle { implicitWidth: 7; implicitHeight: 7; radius: Math.min(width, height) / 2; color: Theme.warn }
                 Text { Layout.fillWidth: true; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: Theme.fill("Not saved: {}", Hub.mods.unsaved) }
                 Btn { text: Theme.say("Show"); tip: Theme.say("Only the mods moved or activated since the last save"); onClicked: activePane.toggleTerm("is:changed") }
-                Btn { text: Theme.say("Discard"); tip: Theme.say("Back to the saved list. Undo brings the changes back."); onClicked: Mods.discardChanges() }
+                Btn { text: Theme.say("Discard"); tip: Theme.say("Back to the saved list. Undo brings the changes back."); onClicked: Hub.mods.discardChanges() }
                 Btn { primary: true; text: Theme.say("Save"); onClicked: Mods.save() }
             }
         }

@@ -279,8 +279,8 @@ Rectangle {
 
     // Opened over the load order, the drawer's box answers it instead.
     Shortcut { sequences: [StandardKey.Find]; enabled: !drawerLoader.active; onActivated: Mods.filterFocusRequested() }
-    Shortcut { sequences: [StandardKey.Undo]; onActivated: Mods.undo() }
-    Shortcut { sequences: [StandardKey.Redo]; onActivated: Mods.redo() }
+    Shortcut { sequences: [StandardKey.Undo]; onActivated: Hub.mods.undo() }
+    Shortcut { sequences: [StandardKey.Redo]; onActivated: Hub.mods.redo() }
     Shortcut { sequences: [StandardKey.Save]; onActivated: if (Hub.mods.dirty) Mods.save() }
     Shortcut { sequence: "Escape"; enabled: Mods.comparing === null && !subPrompt.opened; onActivated: screen.drawerOpen ? screen.drawerOpen = false : Mods.picking !== "" ? Mods.picking = "" : Mods.select(-1, false) }
 
@@ -315,7 +315,7 @@ Timer {
     interval: 1500
     running: picked >= 0
     onTriggered: {
-        Mods.select(Mods.idAt(Mods.active, picked), true)
+        Mods.select(Mods.active.modIdAt(picked), true)
         Mods.reveal(Mods.active, picked, true)
         Mods.tab = Hub.number("--tab", 0)
         // `--notes` asks for the picked mod's change notes, as its Fetch button does.

@@ -128,8 +128,9 @@ impl Session {
         }
     }
 
-    pub fn mark_saved(&mut self) {
-        self.saved = self.current().to_vec();
+    /// `list` was written: it is the saved one, whatever was done since.
+    pub fn mark_saved_as(&mut self, list: Vec<String>) {
+        self.saved = list;
     }
 }
 
@@ -160,7 +161,7 @@ mod tests {
             changes.said().to_kept().to_string(),
             r#"[",",["{} moved","1"],["{} activated","1"],["{} deactivated","1"]]"#
         );
-        s.mark_saved();
+        s.mark_saved_as(s.current().to_vec());
         assert!(s.changes().is_empty());
     }
 
@@ -210,7 +211,7 @@ mod tests {
     fn saving_makes_the_current_list_clean_and_undo_makes_it_dirty_again() {
         let mut s = Session::new(ids(&["a"]));
         s.record(ids(&["b"]));
-        s.mark_saved();
+        s.mark_saved_as(s.current().to_vec());
         assert!(!s.is_dirty());
         s.undo();
         assert!(s.is_dirty());

@@ -367,18 +367,31 @@ impl App {
         }
     }
 
-    /// When the game last wrote a log, in milliseconds since 1970; 0 for
-    /// never. Up to 1.6 in the settings folder, from 1.7 in `Logs` there.
-    pub fn log_written(&self) -> u64 {
+    /// Where the game writes its log: up to 1.6 in the settings folder,
+    /// from 1.7 in `Logs` there.
+    fn game_logs(&self) -> Vec<PathBuf> {
         let paths = self.paths();
         let Some(config) = paths.config.as_ref() else {
-            return 0;
+            return Vec::new();
         };
-        let logs = [
+        vec![
             config.join("Player.log"),
             config.join("Logs").join("Player.log"),
-        ];
+        ]
+    }
+
+    /// When the game last wrote a log, in milliseconds since 1970; 0 for
+    /// never.
+    pub fn log_written(&self) -> u64 {
+        let logs = self.game_logs();
         rimstack_core::base::watch::newest(logs.iter().map(PathBuf::as_path))
+    }
+
+    /// The log the game wrote last, if it wrote one.
+    pub fn game_log(&self) -> Option<PathBuf> {
+        let logs = self.game_logs().into_iter();
+        logs.filter(|log| log.is_file())
+            .max_by_key(|log| rimstack_core::base::watch::changed_at(log))
     }
 
     /// When each thing RimStack shows was last changed on disk: compared

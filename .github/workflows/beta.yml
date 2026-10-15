@@ -1,0 +1,202 @@
+# Every push to main: the checks on each system, the package of each, and
+# the `beta` prerelease moved to that commit with the new packages.
+# A pull request gets the checks alone.
+#
+# Linux runs `just ready` whole, on a made-up install. Windows and macOS
+# run clippy and the tests: tools/check-app.sh is bash with GNU tools.
+# A system whose checks or build fail keeps its last good package on the
+# release; Linux failing stops the release.
+#
+# Optional secrets, each signing what it can when present:
+#   WINDOWS_CERT (a .pfx, base64) and WINDOWS_CERT_PASSWORD
+#   MAC_CERT (a .p12, base64), MAC_CERT_PASSWORD, MAC_SIGN_IDENTITY,
+#   and for notarization MAC_NOTARY_APPLE_ID, MAC_NOTARY_PASSWORD
+#   (an app-specific password) and MAC_NOTARY_TEAM
+name: beta
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A pull request's older run gives way to its newer one. On main a run
+# waits instead (GitHub keeps only the newest waiting), so a release is
+# never cut short between taking old files down and putting new ones up.
+concurrency:
+  group: beta-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  QT_VERSION: "6.12.0"
+
+jobs:
+  check-linux:
+    # The oldest base whose C library the AppImage then asks for.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/linux-setup
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-audit
+      - name: just ready
+        run: QMLLINT="$QT_ROOT_DIR/bin/qmllint" just ready
+      - name: Nothing left changed by the checks (fmt, words)
+        run: git diff --exit-code
+
+  check-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          cache: true
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  check-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  package-linux:
+    needs: check-linux
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/linux-setup
+      - run: packaging/linux/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-linux
+          path: target/packages/*
+          if-no-files-found: error
+
+  package-windows:
+    needs: check-windows
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    env:
+      SIGNED: ${{ secrets.WINDOWS_CERT != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          cache: true
+      - uses: Swatinem/rust-cache@v2
+      # windeployqt finds the Visual C++ runtime it ships through these.
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Inno Setup, for the installer
+        run: choco install innosetup --no-progress -y
+      - name: The signing certificate, when there is one
+        if: env.SIGNED == 'true'
+        env:
+          WINDOWS_CERT: ${{ secrets.WINDOWS_CERT }}
+        shell: pwsh
+        run: |
+          $file = Join-Path $env:RUNNER_TEMP "sign.pfx"
+          [IO.File]::WriteAllBytes($file, [Convert]::FromBase64String($env:WINDOWS_CERT))
+          "SIGN_CERT=$file" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Package
+        shell: pwsh
+        env:
+          SIGN_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $env:PATH = "C:\Program Files (x86)\Inno Setup 6;$env:PATH"
+          packaging\windows\package.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-windows
+          path: target/packages/*
+          if-no-files-found: error
+
+  package-macos:
+    needs: check-macos
+    if: github.event_name != 'pull_request'
+    runs-on: macos-latest
+    env:
+      SIGNED: ${{ secrets.MAC_CERT != '' }}
+      NOTARIZED: ${{ secrets.MAC_NOTARY_APPLE_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+      - uses: Swatinem/rust-cache@v2
+      - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - run: brew install librsvg
+      - name: The signing certificate, when there is one
+        if: env.SIGNED == 'true'
+        env:
+          MAC_CERT: ${{ secrets.MAC_CERT }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password=$(uuidgen)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$MAC_CERT" | base64 --decode > "$RUNNER_TEMP/sign.p12"
+          security import "$RUNNER_TEMP/sign.p12" -P "$MAC_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+      - name: The notarization profile, when there are credentials
+        if: env.SIGNED == 'true' && env.NOTARIZED == 'true'
+        env:
+          MAC_NOTARY_APPLE_ID: ${{ secrets.MAC_NOTARY_APPLE_ID }}
+          MAC_NOTARY_PASSWORD: ${{ secrets.MAC_NOTARY_PASSWORD }}
+          MAC_NOTARY_TEAM: ${{ secrets.MAC_NOTARY_TEAM }}
+        run: |
+          xcrun notarytool store-credentials rimstack --apple-id "$MAC_NOTARY_APPLE_ID" \
+            --password "$MAC_NOTARY_PASSWORD" --team-id "$MAC_NOTARY_TEAM"
+          echo "MAC_NOTARY_PROFILE=rimstack" >> "$GITHUB_ENV"
+      - name: Package
+        env:
+          MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+        run: packaging/macos/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-macos
+          path: target/packages/*
+          if-no-files-found: error
+
+  release:
+    needs: [check-linux, package-linux, package-windows, package-macos]
+    # After every package job, whatever became of Windows' and macOS':
+    # the release goes out as long as Linux passed.
+    if: >-
+      always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+      && needs.check-linux.result == 'success' && needs.package-linux.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          path: packages
+          merge-multiple: true
+      - name: Move the beta to this commit, with its packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: packaging/beta-release.sh packages "$GITHUB_SHA"

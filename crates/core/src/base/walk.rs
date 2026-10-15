@@ -20,8 +20,11 @@ pub fn tree(dir: &Path, deepest: usize) -> Vec<Entry> {
     walk(dir, deepest, false).unwrap_or_default()
 }
 
-/// As `tree`, failing on a folder or entry that cannot be read: for a
-/// copy, which must not be missing a part.
+/// What a copy takes: everything under `dir`, failing on a folder or
+/// entry that cannot be read. A link is taken only where it leads within
+/// `dir`; a link to a folder never is. What is copied is a stranger's
+/// mod, and a link of its own could otherwise bring any of the user's
+/// files with it.
 pub fn whole_tree(dir: &Path) -> std::io::Result<Vec<Entry>> {
     walk(dir, usize::MAX, true)
 }
@@ -29,6 +32,9 @@ pub fn whole_tree(dir: &Path) -> std::io::Result<Vec<Entry>> {
 fn walk(dir: &Path, deepest: usize, whole: bool) -> std::io::Result<Vec<Entry>> {
     let mut found = Vec::new();
     let mut entered: Vec<PathBuf> = Vec::new();
+    // Judged once every folder link is followed: a file may be linked
+    // into a folder reached later.
+    let mut file_links = Vec::new();
     let mut waiting = vec![(dir.to_path_buf(), PathBuf::new(), 0)];
     while let Some((folder, within, depth)) = waiting.pop() {
         let entries = match std::fs::read_dir(&folder) {
@@ -46,10 +52,18 @@ fn walk(dir: &Path, deepest: usize, whole: bool) -> std::io::Result<Vec<Entry>> 
             let is_dir = match entry.file_type() {
                 Ok(kind) if kind.is_dir() => true,
                 Ok(kind) if kind.is_symlink() && path.is_dir() => {
-                    if !may_enter(dir, &path, &mut entered) {
+                    if whole || !may_enter(dir, &path, &mut entered) {
                         continue;
                     }
                     true
+                }
+                Ok(kind) if kind.is_symlink() => {
+                    file_links.push(Entry {
+                        path,
+                        within: inside,
+                        is_dir: false,
+                    });
+                    continue;
                 }
                 _ => false,
             };
@@ -63,6 +77,10 @@ fn walk(dir: &Path, deepest: usize, whole: bool) -> std::io::Result<Vec<Entry>> 
             });
         }
     }
+    let within = file_links
+        .into_iter()
+        .filter(|link| leads_within(dir, &link.path, &mut entered));
+    found.extend(within);
     Ok(found)
 }
 
@@ -74,8 +92,8 @@ pub fn files(dir: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Copies everything under `from` into `to`: what a link points at is
-/// copied in its place, and a link back into what is copied is left out.
+/// Copies what `whole_tree` takes under `from` into `to`; a link to a
+/// file within it is copied as the file it points at.
 pub fn copy(from: &Path, to: &Path) -> std::io::Result<()> {
     let all = whole_tree(from)?;
     std::fs::create_dir_all(to)?;
@@ -93,9 +111,9 @@ pub fn copy(from: &Path, to: &Path) -> std::io::Result<()> {
 /// leads, with no link left in the path; filled when the first link is met.
 fn may_enter(began: &Path, link: &Path, entered: &mut Vec<PathBuf>) -> bool {
     if entered.is_empty() {
-        entered.extend(std::fs::canonicalize(began));
+        entered.extend(dunce::canonicalize(began));
     }
-    let Ok(leads_to) = std::fs::canonicalize(link) else {
+    let Ok(leads_to) = dunce::canonicalize(link) else {
         return false;
     };
     let apart = |walked: &PathBuf| !leads_to.starts_with(walked) && !walked.starts_with(&leads_to);
@@ -104,6 +122,17 @@ fn may_enter(began: &Path, link: &Path, entered: &mut Vec<PathBuf>) -> bool {
         entered.push(leads_to);
     }
     new
+}
+
+/// Whether a link to a file leads into a folder the walk takes: a mod
+/// could otherwise have a copy of it take any file the user can read.
+/// A link that leads nowhere is passed over.
+fn leads_within(began: &Path, link: &Path, entered: &mut Vec<PathBuf>) -> bool {
+    if entered.is_empty() {
+        entered.extend(dunce::canonicalize(began));
+    }
+    dunce::canonicalize(link)
+        .is_ok_and(|leads_to| entered.iter().any(|walked| leads_to.starts_with(walked)))
 }
 
 #[cfg(all(test, unix))]
@@ -172,25 +201,63 @@ mod tests {
     }
 
     #[test]
-    fn a_linked_folder_is_copied_as_what_it_points_at_and_a_loop_ends() {
+    fn a_copy_takes_no_linked_folder_and_a_loop_ends() {
         let tmp = tempfile::tempdir().unwrap();
-        let (from, shared) = (tmp.path().join("mod"), tmp.path().join("shared"));
-        std::fs::create_dir_all(&from).unwrap();
-        std::fs::create_dir_all(&shared).unwrap();
-        std::fs::write(shared.join("a.png"), "png").unwrap();
-        symlink(&shared, from.join("Textures")).unwrap();
+        let (from, private) = (tmp.path().join("mod"), tmp.path().join(".ssh"));
+        std::fs::create_dir_all(from.join("About")).unwrap();
+        std::fs::create_dir_all(&private).unwrap();
+        std::fs::write(private.join("id_ed25519"), "key").unwrap();
+        std::fs::write(from.join("About/About.xml"), "<ModMetaData/>").unwrap();
+        symlink(&private, from.join("Textures")).unwrap();
+        symlink(&from, from.join("itself")).unwrap();
         let to = tmp.path().join("copy");
         copy(&from, &to).unwrap();
-        assert_eq!(
-            std::fs::read_to_string(to.join("Textures/a.png")).unwrap(),
-            "png"
-        );
-        assert!(!to.join("Textures").is_symlink());
+        assert!(to.join("About/About.xml").is_file());
+        assert!(!to.join("Textures").exists());
+        assert!(!to.join("itself").exists());
+        // Counting still follows it: a mod being worked on may keep its
+        // textures elsewhere.
+        assert!(names(&from).contains(&"Textures/id_ed25519".to_string()));
+    }
 
-        symlink(&from, from.join("itself")).unwrap();
-        let again = tmp.path().join("again");
-        copy(&from, &again).unwrap();
-        assert!(again.join("Textures/a.png").is_file());
-        assert!(!again.join("itself").exists());
+    #[test]
+    fn a_link_to_a_file_is_followed_only_into_what_is_walked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (from, shared) = (tmp.path().join("mod"), tmp.path().join("shared"));
+        fs::create_dir_all(from.join("About")).unwrap();
+        fs::create_dir_all(&shared).unwrap();
+        fs::write(tmp.path().join("private.txt"), "not the mod's").unwrap();
+        fs::write(from.join("About/About.xml"), "<ModMetaData/>").unwrap();
+        fs::write(shared.join("b.png"), "png").unwrap();
+        symlink(
+            tmp.path().join("private.txt"),
+            from.join("About/Preview.png"),
+        )
+        .unwrap();
+        symlink(from.join("About/About.xml"), from.join("About.xml")).unwrap();
+        symlink(&shared, from.join("Textures")).unwrap();
+        symlink(shared.join("b.png"), from.join("Textures-b.png")).unwrap();
+        symlink(tmp.path().join("gone"), from.join("broken")).unwrap();
+
+        let mut found = names(&from);
+        found.sort();
+        assert_eq!(
+            found,
+            [
+                "About.xml",
+                "About/About.xml",
+                "Textures-b.png",
+                "Textures/b.png"
+            ]
+        );
+        let to = tmp.path().join("copy");
+        copy(&from, &to).unwrap();
+        assert!(!to.join("About/Preview.png").exists());
+        assert_eq!(
+            fs::read_to_string(to.join("About.xml")).unwrap(),
+            "<ModMetaData/>"
+        );
+        // Into a folder only a link reaches, which a copy does not take.
+        assert!(!to.join("Textures-b.png").exists());
     }
 }

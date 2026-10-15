@@ -11,9 +11,23 @@ use std::path::{Path, PathBuf};
 use crate::rimworld::paths::APP_ID as GAME;
 
 /// SteamCMD: the one RimStack installed under `data_dir`, or the one
-/// the system's `PATH` has.
+/// the system's `PATH` has. None on macOS, where it is not run.
 pub fn steamcmd(data_dir: &Path) -> Option<PathBuf> {
+    on_this_system().ok()?;
     steamcmd_among(data_dir, std::env::var_os("PATH"))
+}
+
+/// On macOS SteamCMD keeps its state in the user's own Steam folder,
+/// `~/Library/Application Support/Steam`, and whether a home of its own
+/// keeps it out (as it does on Linux, see `fetch_all`) has not been seen:
+/// on Linux it wrote over Steam's list of libraries before it had one.
+fn on_this_system() -> Result<()> {
+    match crate::rimworld::paths::Os::running() {
+        crate::rimworld::paths::Os::Mac => Err(Error::refused(said!(
+            "RimStack does not run SteamCMD on macOS yet: it could write over Steam's own files there"
+        ))),
+        _ => Ok(()),
+    }
 }
 
 fn steamcmd_among(data_dir: &Path, path: Option<std::ffi::OsString>) -> Option<PathBuf> {
@@ -31,10 +45,10 @@ fn steamcmd_among(data_dir: &Path, path: Option<std::ffi::OsString>) -> Option<P
 /// network and the system's `tar`. SteamCMD fetches the rest of itself
 /// the first time it runs.
 pub fn install(data_dir: &Path) -> Result<PathBuf> {
+    on_this_system()?;
     // Windows has shipped a tar that also reads zip files since 2018.
     let (archive, program) = match std::env::consts::OS {
         "linux" => ("steamcmd_linux.tar.gz", "steamcmd.sh"),
-        "macos" => ("steamcmd_osx.tar.gz", "steamcmd.sh"),
         "windows" => ("steamcmd.zip", "steamcmd.exe"),
         other => {
             return Err(Error::refused(said!(
@@ -60,7 +74,7 @@ pub fn install(data_dir: &Path) -> Result<PathBuf> {
     std::fs::write(&packed, bytes)
         .map_err(|e| Error::caused(Kind::File, said!("the download could not be kept"), e))?;
     let listed = crate::base::program::run(
-        std::process::Command::new("tar").arg("-tf").arg(&packed),
+        crate::base::program::command("tar").arg("-tf").arg(&packed),
         crate::base::program::LOCAL,
     )
     .map_err(|e| Error::caused(Kind::Program, said!("tar could not be run"), e))?;
@@ -69,7 +83,7 @@ pub fn install(data_dir: &Path) -> Result<PathBuf> {
         return Err(problem);
     }
     let unpacked = crate::base::program::run(
-        std::process::Command::new("tar")
+        crate::base::program::command("tar")
             .arg("-xf")
             .arg(&packed)
             .arg("-C")
@@ -133,6 +147,12 @@ pub fn fetch_all(
     ids: &[String],
     scratch: &Path,
 ) -> Vec<(String, Result<PathBuf>)> {
+    if let Err(problem) = on_this_system() {
+        return ids
+            .iter()
+            .map(|id| (id.clone(), Err(problem.clone())))
+            .collect();
+    }
     let (asked, refused): (Vec<&String>, Vec<&String>) =
         ids.iter().partition(|id| is_workshop_id(id));
     // A home of its own: with the user's, SteamCMD finds their Steam
@@ -140,7 +160,7 @@ pub fn fetch_all(
     // library folders included (it did, twice, on 2026-10-12).
     let home = scratch.join("home");
     let _ = std::fs::create_dir_all(&home);
-    let mut command = std::process::Command::new(steamcmd);
+    let mut command = crate::base::program::command(steamcmd);
     command
         .env("HOME", &home)
         .env_remove("XDG_DATA_HOME")

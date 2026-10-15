@@ -159,23 +159,40 @@ impl LoadOrder {
 
     /// Writes the load order to the game's `ModsConfig.xml`.
     pub fn save(&mut self, app: &App) -> Result<(), Error> {
+        let saving = self.to_save(app)?;
+        modsconfig::write(&saving.file, &saving.written)?;
+        self.saved(app, saving.list);
+        Ok(())
+    }
+
+    /// What a save writes, and where: the sort on show kept first.
+    pub fn to_save(&mut self, app: &App) -> Result<Saving, Error> {
         self.keep_sort(app);
-        let path = app.paths().mods_config().ok_or_else(|| {
+        let file = app.paths().mods_config().ok_or_else(|| {
             Error::refused(rimstack_core::said!(
                 "RimWorld's settings folder was not found."
             ))
         })?;
+        let list = app.session().current().to_vec();
         // An id is empty for a folder that is not a readable mod.
-        let ids: Vec<String> = app
-            .session()
-            .current()
-            .iter()
-            .filter(|id| !id.is_empty())
-            .cloned()
-            .collect();
-        modsconfig::write(&path, &ids)?;
-        app.session().mark_saved();
-        self.settle(app);
-        Ok(())
+        let written = list.iter().filter(|id| !id.is_empty()).cloned().collect();
+        Ok(Saving {
+            file,
+            list,
+            written,
+        })
     }
+
+    /// `list` was written: it is the saved load order now.
+    pub fn saved(&mut self, app: &App, list: Vec<String>) {
+        app.session().mark_saved_as(list);
+        self.settle(app);
+    }
+}
+
+/// A save under way: the load order as it was asked for, and as written.
+pub struct Saving {
+    pub file: std::path::PathBuf,
+    pub list: Vec<String>,
+    pub written: Vec<String>,
 }

@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
-/// One entry of a mod's change notes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Note {
     /// Seconds since 1970.
@@ -23,7 +22,6 @@ pub struct AtLaunch {
 }
 
 impl AtLaunch {
-    /// No file, or one that cannot be read, is no record.
     pub fn read(file: &Path) -> Option<Self> {
         serde_json::from_str(&std::fs::read_to_string(file).ok()?).ok()
     }

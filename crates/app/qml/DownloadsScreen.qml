@@ -350,10 +350,10 @@ Item {
                         visible: screen.wanted.length > 0 && screen.steamcmd
                         icon: "download"
                         text: Theme.say("Download with SteamCMD…")
-                        tip: Theme.fill("Into the game's own Mods folder, {}/Mods, without subscribing: Steam will not update these.", (screen.info.game || ""))
+                        tip: Theme.fill("Into the game's own Mods folder, {}, without subscribing: Steam will not update these.", (screen.info.localMods || ""))
                         onClicked: Notices.ask({
                             title: Theme.plural(screen.wanted.length, "Download {} mod with SteamCMD", "Download {} mods with SteamCMD"),
-                            lines: [Theme.say("Each is downloaded and copied into the game's own Mods folder:"), (screen.info.game || "") + "/Mods", Theme.say("Steam does not update mods installed this way.")],
+                            lines: [Theme.say("Each is downloaded and copied into the game's own Mods folder:"), { path: screen.info.localMods || "" }, Theme.say("Steam does not update mods installed this way.")],
                             label: Theme.say("Download"), run: () => screen.downloads.downloadWanted() })
                     }
                 ]
@@ -379,7 +379,7 @@ Item {
                             tip: screen.info.git ? Theme.say("git clone into the game's own Mods folder; Check for updates then asks its repository") : Theme.say("Git is not installed")
                             onClicked: Notices.ask({
                                 title: Theme.fill("Clone {}", repository.modelData.name),
-                                lines: [Theme.say("git clone, from"), repository.modelData.link, Theme.say("Into"), repository.modelData.into],
+                                lines: [Theme.say("git clone, from"), { path: repository.modelData.link }, Theme.say("Into"), { path: repository.modelData.into }],
                                 label: Theme.say("Clone"), run: () => screen.downloads.cloneRepository(repository.index) })
                         }
                     }
@@ -488,7 +488,7 @@ Item {
                     text: Theme.say("Install…")
                     onClicked: Notices.ask({
                         title: Theme.say("Install SteamCMD"),
-                        lines: [Theme.say("Valve's own downloader is fetched from Valve into"), (screen.info.dataFolder || "") + "/steamcmd", Theme.say("It runs with a home folder of its own there, apart from Steam's settings.")],
+                        lines: [Theme.say("Valve's own downloader is fetched from Valve into"), { path: screen.info.steamcmdFolder || "" }, Theme.say("It runs with a home folder of its own there, apart from Steam's settings.")],
                         label: Theme.say("Install"), run: () => screen.downloads.installSteamcmd() })
                 }
                 Item { Layout.fillWidth: true }

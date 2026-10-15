@@ -63,7 +63,7 @@ pub fn links_in(text: &str) -> Vec<String> {
 /// `in_checkout` never reads; `in_checkout` refuses the rest.
 fn git() -> std::process::Command {
     let nowhere = if cfg!(windows) { "NUL" } else { "/dev/null" };
-    let mut git = std::process::Command::new("git");
+    let mut git = crate::base::program::command("git");
     git.args(["-c", "core.fsmonitor=false"])
         .args(["-c", &format!("core.hooksPath={nowhere}")])
         .args(["-c", "core.sshCommand=ssh"])
@@ -125,30 +125,55 @@ fn beyond_a_clone(key: &str) -> Option<String> {
     (!PLAIN_CLONE.contains(&pattern.as_str())).then_some(key)
 }
 
-/// Where the checkout's repository is: `.git`, or where a `.git` file
-/// points.
-fn repository_of(mod_root: &Path) -> std::path::PathBuf {
+/// Where the checkout's repository is: `.git`, or the folder a `.git`
+/// file points to, which must lie inside the mod: a stranger's pointer
+/// could otherwise name another repository of the user's.
+fn repository_of(mod_root: &Path) -> Result<std::path::PathBuf> {
     let dot_git = mod_root.join(".git");
-    match std::fs::read_to_string(&dot_git) {
-        Ok(pointer) => match pointer.trim().strip_prefix("gitdir:") {
-            Some(dir) => mod_root.join(dir.trim()),
-            None => dot_git,
-        },
-        Err(_) => dot_git,
+    let Ok(pointer) = std::fs::read_to_string(&dot_git) else {
+        return Ok(dot_git);
+    };
+    let Some(dir) = pointer.trim().strip_prefix("gitdir:") else {
+        return Ok(dot_git);
+    };
+    let repository = mod_root.join(dir.trim());
+    let inside = match (
+        dunce::canonicalize(&repository),
+        dunce::canonicalize(mod_root),
+    ) {
+        (Ok(repository), Ok(root)) => repository.starts_with(root),
+        _ => false,
+    };
+    match inside {
+        true => Ok(repository),
+        false => Err(Error::refused(said!(
+            "Its .git file points outside the mod: RimStack does not run Git there"
+        ))),
     }
 }
 
-/// Git for the checkout at `mod_root`, once Git itself has listed its
-/// settings and each is one a plain clone writes. The repository is named, so Git
-/// never takes a folder above the mod's for it.
+/// Git for the checkout at `mod_root`, once Git itself has listed the
+/// settings it would read there and each is one a plain clone writes.
+/// The repository is named, so Git never takes a folder above the mod's
+/// for it.
 fn in_checkout(mod_root: &Path) -> Result<std::process::Command> {
-    let repository = repository_of(mod_root);
+    let repository = repository_of(mod_root)?;
+    // A linked worktree's settings are in its main repository, named by
+    // this file: no clone from the Workshop is one.
+    if repository.join("commondir").exists() {
+        return Err(Error::refused(said!(
+            "It is a linked Git worktree: RimStack does not run Git there"
+        )));
+    }
+    // Listed by Git from where it reads them, not from `<repository>/config`.
     let listed = crate::base::program::run(
-        git()
-            .arg("config")
-            .arg("--file")
-            .arg(repository.join("config"))
-            .args(["--no-includes", "--name-only", "--list"]),
+        git().arg("--git-dir").arg(&repository).args([
+            "config",
+            "--local",
+            "--no-includes",
+            "--name-only",
+            "--list",
+        ]),
         crate::base::program::LOCAL,
     )
     .map_err(not_run)?;
@@ -283,8 +308,12 @@ mod tests {
 
     fn checkout(config: &str) -> tempfile::TempDir {
         let tmp = tempfile::tempdir().unwrap();
-        std::fs::create_dir(tmp.path().join(".git")).unwrap();
-        std::fs::write(tmp.path().join(".git/config"), config).unwrap();
+        let repository = tmp.path().join(".git");
+        for dir in ["objects", "refs"] {
+            std::fs::create_dir_all(repository.join(dir)).unwrap();
+        }
+        std::fs::write(repository.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+        std::fs::write(repository.join("config"), config).unwrap();
         tmp
     }
 
@@ -529,6 +558,84 @@ mod tests {
         let refused = behind(&clone).unwrap_err();
         assert_eq!(refused.kind(), crate::base::error::Kind::Refused);
         assert!(!ran.exists());
+    }
+
+    /// A clone one commit behind its origin, in `<tmp>/clone`.
+    fn behind_by_one(tmp: &Path) -> std::path::PathBuf {
+        let (origin, clone) = (tmp.join("origin"), tmp.join("clone"));
+        std::fs::create_dir(&origin).unwrap();
+        git(&origin, &["init", "--quiet", "-b", "main"]);
+        git(
+            &origin,
+            &["commit", "--quiet", "--allow-empty", "-m", "first"],
+        );
+        git(tmp, &["clone", "--quiet", "origin", "clone"]);
+        git(
+            &origin,
+            &["commit", "--quiet", "--allow-empty", "-m", "second"],
+        );
+        clone
+    }
+
+    /// Git reads a repository's settings from where `commondir` points,
+    /// past a `config` that holds only what a clone writes.
+    #[test]
+    fn settings_reached_through_commondir_are_never_used() {
+        let tmp = tempfile::tempdir().unwrap();
+        let clone = behind_by_one(tmp.path());
+        let (repository, common) = (clone.join(".git"), clone.join(".common"));
+        std::fs::rename(&repository, &common).unwrap();
+        std::fs::create_dir(&repository).unwrap();
+        std::fs::copy(common.join("HEAD"), repository.join("HEAD")).unwrap();
+        std::fs::copy(common.join("config"), repository.join("config")).unwrap();
+        std::fs::write(repository.join("commondir"), "../.common\n").unwrap();
+        let ran = tmp.path().join("ran");
+        let program = format!("touch '{}'; git-upload-pack", ran.display());
+        git(
+            &clone,
+            &[
+                "config",
+                "--file",
+                ".common/config",
+                "remote.origin.uploadpack",
+                &program,
+            ],
+        );
+
+        let refused = behind(&clone).unwrap_err();
+        assert_eq!(refused.kind(), crate::base::error::Kind::Refused);
+        assert!(update(&clone).is_err());
+        assert!(!ran.exists());
+
+        std::fs::remove_file(repository.join("commondir")).unwrap();
+        std::fs::remove_dir_all(&repository).unwrap();
+        std::fs::rename(&common, &repository).unwrap();
+        let refused = behind(&clone).unwrap_err();
+        assert!(refused.to_string().contains("remote.origin.uploadpack"));
+        assert!(!ran.exists());
+    }
+
+    #[test]
+    fn a_git_file_pointing_outside_the_mod_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let elsewhere = behind_by_one(tmp.path());
+        let mod_root = tmp.path().join("Mods/stranger");
+        std::fs::create_dir_all(&mod_root).unwrap();
+        let pointer = format!("gitdir: {}\n", elsewhere.join(".git").display());
+        std::fs::write(mod_root.join(".git"), pointer).unwrap();
+        assert_eq!(
+            behind(&mod_root).unwrap_err().kind(),
+            crate::base::error::Kind::Refused
+        );
+        std::fs::write(mod_root.join(".git"), "gitdir: ../../clone/.git\n").unwrap();
+        assert!(behind(&mod_root).is_err());
+        assert!(update(&mod_root).is_err());
+
+        let inside = tmp.path().join("inside");
+        std::fs::rename(&elsewhere, &inside).unwrap();
+        std::fs::rename(inside.join(".git"), inside.join("repository")).unwrap();
+        std::fs::write(inside.join(".git"), "gitdir: repository\n").unwrap();
+        assert_eq!(behind(&inside), Ok(1));
     }
 
     /// Clones Harmony's repository into RIMSTACK_SCRATCH, then asks its

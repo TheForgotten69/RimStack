@@ -350,7 +350,7 @@ Item {
                         }
                     }
                     Chip {
-                        visible: screen.info.languageInUse !== "English"
+                        visible: !screen.info.english
                         tone: language.translated > 0 ? Theme.ink2 : Theme.warn
                         text: language.translated > 0 ? Theme.fill("{} texts translated", Theme.count(language.translated)) : Theme.say("Not translated yet")
                     }
@@ -420,7 +420,7 @@ Item {
                         enter: PopIn {}
                         exit: PopOut {}
                         id: fontPicker
-                        readonly property var shown: ["System font"].concat(Qt.fontFamilies()).filter(name => name.toLowerCase().indexOf(fontFilter.text.toLowerCase()) !== -1)
+                        readonly property var shown: [""].concat(Qt.fontFamilies()).filter(name => (name || Theme.say("System font")).toLowerCase().indexOf(fontFilter.text.toLowerCase()) !== -1)
                         parent: fontButton
                         y: fontButton.height + 4
                         width: Theme.sized(320)
@@ -442,7 +442,7 @@ Item {
                                 delegate: Rectangle {
                                     id: family
                                     required property string modelData
-                                    readonly property bool system: modelData === "System font"
+                                    readonly property bool system: !modelData
                                     width: ListView.view.width
                                     height: Theme.sized(30)
                                     radius: Theme.corner
@@ -460,7 +460,7 @@ Item {
                                     HoverHandler { id: familyHover }
                                     TapHandler {
                                         onTapped: {
-                                            screen.font(family.system ? "" : family.modelData)
+                                            screen.font(family.modelData)
                                             fontPicker.close()
                                         }
                                     }
@@ -667,7 +667,7 @@ Item {
                         text: Theme.say("Set aside…")
                         onClicked: Notices.ask({
                             title: Theme.say("Set the mods' settings aside"),
-                            lines: [Theme.say("Every Mod_*.xml is moved out of"), (screen.info.config || "") + "/Config", Theme.say("into a new folder, named mod-settings and the time, in"), screen.info.dataFolder || "", Theme.say("Mods start from their defaults. Moving the files back restores them.")],
+                            lines: [Theme.say("Every Mod_*.xml is moved out of"), { path: screen.info.configFolder || "" }, Theme.say("into a new folder, named mod-settings and the time, in"), { path: screen.info.dataFolder || "" }, Theme.say("Mods start from their defaults. Moving the files back restores them.")],
                             label: Theme.say("Set aside"), run: () => modSettings.said = Hub.settings.setModSettingsAside() })
                     }
                     Text { Layout.fillWidth: true; elide: Text.ElideMiddle; color: Theme.ink2; font.pixelSize: Theme.body; text: modSettings.said }

@@ -11,8 +11,6 @@ Status: early, usable. Every section has a working version laid out as in the mo
 - **Logs.** Errors in the game's last two logs, grouped, with the mods in each stack trace; a record of launches.
 - **Settings.** Every folder and file RimStack uses.
 
-What is not built, and where the window differs from the mockup, is listed under "Where things stand" in the roadmap.
-
 ## Build and run
 
 Needs Rust 1.85 or later, Qt 6 (base and declarative) and a C++ compiler.
@@ -24,8 +22,24 @@ cargo build -p rimstack-app --release
 ./target/release/rimstack --demo       # 2,300 made-up mods instead
 ./target/release/rimstack --selftest   # drives the demo, measures, and quits
 ./target/release/rimstack --section=3 --shot=/tmp/saves.png   # open on a section, save a picture, quit
-tools/check-app.sh                     # every Mods-screen action on your real mods, no window; saves only to a copy
+tools/check-app.sh                     # every action of the window, no window shown; saves only to a copy
 ```
+
+`tools/check-app.sh` drives the window from QML on a copy of your game's settings, or on a made-up install where there is none (`RIMSTACK_FIXTURE=1` asks for it): the Mods screen action by action, the mouse, every other section on a made-up install (`--check=screens`), what changes on disk while the window is open, and broken setups. It fails on any QML error. `RIMSTACK_LANGUAGE=Français` runs it in that language.
+
+## Packages and systems
+
+Every push to `main` builds all three on GitHub (`.github/workflows/beta.yml`) and puts them on the [`beta` prerelease](https://github.com/TheForgotten69/RimStack/releases/tag/beta), replacing the last ones. A system whose checks or build fail keeps its previous build there, and the release notes say from which commit each system's files are.
+
+`just package` builds the package for the system it runs on into `target/packages`, from the `dist` profile:
+
+| System | Package | Script | State |
+|---|---|---|---|
+| Linux | AppImage | `packaging/linux/package.sh` | Built and checked on a made-up install. Build it on the oldest Linux it is for: it needs that system's C library or a newer one. |
+| Windows | zip, and an installer with Inno Setup | `packaging/windows/package.ps1` (PowerShell 7, `pwsh`) | Not yet run. MSVC only. Unsigned, SmartScreen warns. |
+| macOS | dmg of a universal `RimStack.app` | `packaging/macos/package.sh` | Not yet run. Signing and notarization when `MAC_SIGN_IDENTITY` and `MAC_NOTARY_PROFILE` are set. |
+
+The core library and its tests compile for Windows; nothing has run there or on macOS yet. On macOS RimStack does not run SteamCMD, until it is seen to keep out of Steam's own folder there.
 
 The game is found through Steam's library list. If it isn't, set `RIMSTACK_GAME` (the game folder), `RIMSTACK_CONFIG` (the folder holding `Config/` and `Saves/`) or `RIMSTACK_WORKSHOP`. Timings print to the terminal:
 
@@ -55,15 +69,8 @@ To correct a language for everyone, edit `crates/app/assets/languages/<Language>
 - Never change the English text on the left: it is how the text is found.
 - `{}` stands for a number or a name. Keep as many as the English has, in the same order.
 - Keep a leading or trailing space, and a final `…`.
-- A counted text comes as a pair, `"{} mod"` and `"{} mods"`. The line `"@plural"` says which counts take the first form: `"1"` in English, `"0 1"` in French. Polish has a third form, for counts ending in 2, 3 and 4: its `"@plural"` is `"1 / 2 3 4"` and it writes that form before the plural's with a bar, `"{} mody|{} modów"`.
+- A counted text comes as a pair, `"{} mod"` and `"{} mods"`. Which form a count takes comes from the plural rules of the file's `"@locale"` (`"fr"`, `"pl"`): the first form is for "one", and the second holds a form for each of the language's other categories, with a bar between. Polish writes `"{} mody|{} modów"`.
 - After changing a text in the code, `tools/words.py` writes `crates/app/assets/words.json` again, the list of every English text; a language file lacking one of them shows that text in English.
-
-## Where to start
-
-| Document | What it is |
-|---|---|
-| [`docs/specs/2026-10-11-rimstack-design.md`](docs/specs/2026-10-11-rimstack-design.md) | What RimStack is and does. The source of truth for behaviour. |
-| [`docs/specs/2026-10-14-architecture.md`](docs/specs/2026-10-14-architecture.md) | How it is built: the Hub, its adapters, the `Changes` bus, what QML may do. |
 
 ## Licence
 

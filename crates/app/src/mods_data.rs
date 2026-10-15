@@ -63,6 +63,8 @@ pub mod qobject {
         #[qproperty(QString, filter)]
         /// Why the last save, bin or copy did not work; empty when it did.
         #[qproperty(QString, save_problem, cxx_name = "saveProblem")]
+        /// A save is being written: `saved` follows.
+        #[qproperty(bool, saving)]
         #[qproperty(QString, upkeep_problem, cxx_name = "upkeepProblem")]
         type ModsData = super::ModsDataRust;
     }
@@ -83,6 +85,9 @@ pub mod qobject {
         /// Something to say that nothing takes back; `tone` is "ok" or "err".
         #[qsignal]
         fn told(self: Pin<&mut ModsData>, said: QString, tone: QString);
+        /// The save `save` started is written, or failed: `saveProblem` says why.
+        #[qsignal]
+        fn saved(self: Pin<&mut ModsData>, ok: bool);
     }
 
     extern "RustQt" {
@@ -336,6 +341,7 @@ pub struct ModsDataRust {
     by_name: bool,
     filter: QString,
     save_problem: QString,
+    saving: bool,
     upkeep_problem: QString,
     app: crate::hub::Given,
     order: LoadOrder,
@@ -385,6 +391,7 @@ impl Default for ModsDataRust {
             by_name: false,
             filter: QString::default(),
             save_problem: QString::default(),
+            saving: false,
             upkeep_problem: QString::default(),
             app: crate::hub::Given::default(),
             order: LoadOrder::demo(0, 0),

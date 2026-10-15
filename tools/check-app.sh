@@ -14,6 +14,16 @@ app="$(dirname "$0")/../target/release/rimstack"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
+# Without a real install (a CI machine), or with RIMSTACK_FIXTURE set, the
+# checks run on a made-up one: its settings stand in for the real ones,
+# and its game and Workshop folders are the ones read.
+if [ -n "${RIMSTACK_FIXTURE:-}" ] || [ ! -f "$real/Config/ModsConfig.xml" ]; then
+    "$(dirname "$0")/fixture-game.sh" "$tmp/fixture"
+    real="$tmp/fixture/config"
+    export RIMSTACK_GAME="$tmp/fixture/game" RIMSTACK_WORKSHOP="$tmp/fixture/workshop"
+    echo "check on a made-up install of $(ls "$RIMSTACK_GAME/Mods" | wc -l) mods"
+fi
+
 mkdir -p "$tmp/config/Config" "$tmp/data/RimStack"
 language="${RIMSTACK_LANGUAGE:-English}"
 for settings in settings settings2; do
@@ -78,10 +88,23 @@ echo "check ok    the real ModsConfig.xml was not touched"
 # Choosing between two mods' versions of a texture renames a file inside a
 # mod, so it is only ever checked on two made-up mods in the temporary folder.
 game="$tmp/game"
+# An 8×8 PNG of one colour: picture file red green blue.
+picture() {
+    python3 - "$@" <<'PY'
+import struct, sys, zlib
+path, colour = sys.argv[1], bytes(int(c) for c in sys.argv[2:5])
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+header = struct.pack(">IIBBBBB", 8, 8, 8, 2, 0, 0, 0)
+pixels = zlib.compress((b"\0" + colour * 8) * 8)
+with open(path, "wb") as out:
+    out.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", pixels) + chunk(b"IEND", b""))
+PY
+}
 for m in first second; do
     mkdir -p "$game/Mods/$m/About" "$game/Mods/$m/Textures/Things"
     printf '<ModMetaData><name>%s</name><packageId>check.%s</packageId><supportedVersions><li>1.6</li></supportedVersions></ModMetaData>' "$m" "$m" > "$game/Mods/$m/About/About.xml"
-    magick -size 8x8 "xc:$([ $m = first ] && echo red || echo blue)" "$game/Mods/$m/Textures/Things/Shared.png"
+    picture "$game/Mods/$m/Textures/Things/Shared.png" $([ $m = first ] && echo 255 0 0 || echo 0 0 255)
 done
 echo "1.6.4871 rev598" > "$game/Version.txt"
 mkdir -p "$tmp/empty-workshop" "$tmp/config2/Config"
@@ -105,7 +128,7 @@ printf '<ModMetaData><name>third</name><packageId>check.third</packageId><suppor
 cp "$tmp/config2/Config/ModsConfig.xml" "$tmp/config3/Config/"
 printf '{ "workshop": "%s", "setupDone": "yes", "language": "%s" }' "$tmp/empty-workshop" "$language" > "$tmp/settings3/RimStack/settings.json"
 live="$tmp/live.log"
-RIMSTACK_GAME="$game" RIMSTACK_CONFIG="$tmp/config3" XDG_DATA_HOME="$tmp/data3" XDG_CONFIG_HOME="$tmp/settings3" \
+env -u RIMSTACK_WORKSHOP RIMSTACK_GAME="$game" RIMSTACK_CONFIG="$tmp/config3" XDG_DATA_HOME="$tmp/data3" XDG_CONFIG_HOME="$tmp/settings3" \
     QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 timeout 60 "$app" --check=live "--live-folder=$tmp/workshop-b" > "$live" 2>&1 &
 shown=$!
 for _ in $(seq 60); do grep -q 'check live-ready' "$live" && break; sleep 0.5; done
@@ -119,6 +142,18 @@ sound "$live" "--check=live"
 [ -f "$game/Mods/900001/About/About.xml" ] || fail "the copied mod is not in the game's own Mods folder"
 rm -rf "$game/Mods/fourth" "$game/Mods/900001"
 [ "$ok" = 0 ] || fail "the live changes"
+
+# Every other section on a made-up install, each with what it must show,
+# and the language changed with the window open.
+"$(dirname "$0")/fixture-game.sh" "$tmp/screens"
+mkdir -p "$tmp/settings-screens/RimStack"
+printf '{ "language": "%s", "setupDone": "yes" }' "$language" > "$tmp/settings-screens/RimStack/settings.json"
+RIMSTACK_GAME="$tmp/screens/game" RIMSTACK_WORKSHOP="$tmp/screens/workshop" RIMSTACK_CONFIG="$tmp/screens/config" \
+    XDG_DATA_HOME="$tmp/data-screens" XDG_CONFIG_HOME="$tmp/settings-screens" \
+    QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 timeout 90 "$app" --check=screens >| "$tmp/screens.log" 2>&1 && ok=0 || ok=$?
+shown "$tmp/screens.log"
+sound "$tmp/screens.log" "--check=screens"
+[ "$ok" = 0 ] || fail "the screen checks"
 
 # Closing the window as a person does, while work runs, and starting with
 # something missing or broken: each must end with 0, no panic, no QML error.

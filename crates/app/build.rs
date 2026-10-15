@@ -64,6 +64,7 @@ fn main() {
                 "qml/mods/SortMoves.qml",
                 "qml/checks/ModsChecks.qml",
                 "qml/checks/PointerChecks.qml",
+                "qml/checks/ScreensChecks.qml",
                 "qml/SavesScreen.qml",
                 "qml/LogsScreen.qml",
                 "qml/TexturesScreen.qml",

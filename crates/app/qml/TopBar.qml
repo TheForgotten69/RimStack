@@ -258,7 +258,7 @@ Rectangle {
                             Text { width: beforePlay.availableWidth - 15; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; text: way.modelData }
                         }
                     }
-                    Btn { visible: Mods.dirty; width: parent.width; primary: true; text: Theme.say("Save and play"); onClicked: { beforePlay.close(); if (Mods.save()) bar.play() } }
+                    Btn { visible: Mods.dirty; width: parent.width; primary: true; text: Theme.say("Save and play"); onClicked: { beforePlay.close(); Mods.save(() => bar.play()) } }
                     Btn { visible: Mods.errors > 0; width: parent.width; text: Theme.say("Show the problems"); onClicked: { beforePlay.close(); bar.go(0); Mods.problemsRequested() } }
                     Btn { visible: !Theme.demo && !Hub.search.active; width: parent.width; icon: "search"; text: Theme.say("Find the broken mod"); onClicked: { beforePlay.close(); Mods.findBrokenRequested() } }
                     Btn { width: parent.width; text: Mods.dirty ? Theme.say("Play with the saved list") : Theme.say("Play anyway"); onClicked: { beforePlay.close(); bar.play() } }

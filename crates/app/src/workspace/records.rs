@@ -24,14 +24,19 @@ impl App {
     }
 
     /// Keeps `list` among the snapshots, named by its kind ("@saving",
-    /// "@sorting", "@list", "@hunt") and the local time to the second;
-    /// gives the name, or nothing when it could not be kept.
+    /// "@sorting", "@list", "@hunt") and the local time to the second,
+    /// and a number after it for a second one in that second; gives the
+    /// name, or nothing when it could not be kept.
     pub fn snapshot(&self, kind: &str, list: &[String]) -> Option<String> {
-        let name = format!(
+        let dir = self.snapshots_dir();
+        let at = format!(
             "{kind} {}",
             chrono::Local::now().format("%Y-%m-%d %H.%M.%S")
         );
-        let dir = self.snapshots_dir();
+        let numbered = (2..).map(|n| format!("{at} {n}"));
+        let name = std::iter::once(at.clone())
+            .chain(numbered)
+            .find(|name| !lists::taken(&dir, name))?;
         match lists::save(&dir, &name, list) {
             Ok(()) => {
                 lists::prune(&dir, SNAPSHOTS_KEPT);
@@ -85,5 +90,16 @@ mod tests {
         let kept = journal::read(&app.journal_file());
         assert_eq!(kept.len(), 1);
         assert_eq!(kept[0].revert, format!("list {name}"));
+    }
+
+    #[test]
+    fn two_snapshots_in_one_second_are_both_kept() {
+        let (_tmp, app) = installed();
+        let first = app.snapshot("@saving", &["a".to_string()]).unwrap();
+        let second = app.snapshot("@saving", &["b".to_string()]).unwrap();
+        let dir = app.snapshots_dir();
+        assert_ne!(first, second);
+        assert_eq!(lists::load(&dir, &first).unwrap(), ["a"]);
+        assert_eq!(lists::load(&dir, &second).unwrap(), ["b"]);
     }
 }

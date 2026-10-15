@@ -136,13 +136,20 @@ pub struct Clash {
 }
 
 /// The mods sharing textures with one mod: those loading later, whose
-/// version the game shows, those loading earlier, and "-" or "+" by
-/// library id for marking their rows.
+/// version the game shows, those loading earlier, and a mark by library
+/// id for each of their rows.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Clashes {
     pub loses: Vec<Clash>,
     pub wins: Vec<Clash>,
-    pub marks: BTreeMap<ModId, &'static str>,
+    pub marks: BTreeMap<ModId, Mark>,
+}
+
+/// How another mod's row is marked beside the selected one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Mark {
+    /// It loads earlier: the selected mod's textures are used, not its own.
+    pub loses: bool,
 }
 
 /// `members` are the mods `overlaps` was worked out for, ascending; `listed` gives a mod's place in the load order and its
@@ -167,12 +174,12 @@ pub fn clashes(
             name,
             textures,
         };
-        let (side, mark) = match theirs > mine {
-            true => (&mut found.loses, "-"),
-            false => (&mut found.wins, "+"),
+        let (side, loses) = match theirs > mine {
+            true => (&mut found.loses, false),
+            false => (&mut found.wins, true),
         };
         side.push(clash);
-        found.marks.insert(other_id, mark);
+        found.marks.insert(other_id, Mark { loses });
     }
     found
 }
@@ -308,7 +315,11 @@ mod tests {
             (id(30), 1)
         );
         assert_eq!((found.wins[0].mod_id, found.wins[0].textures), (id(40), 2));
-        assert_eq!(found.marks, BTreeMap::from([(id(30), "-"), (id(40), "+")]));
+        let mark = |loses| Mark { loses };
+        assert_eq!(
+            found.marks,
+            BTreeMap::from([(id(30), mark(false)), (id(40), mark(true))])
+        );
         assert_eq!(
             clashes(&members, &overlaps, id(50), &listed),
             Clashes::default()

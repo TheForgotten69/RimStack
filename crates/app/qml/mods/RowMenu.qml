@@ -34,13 +34,13 @@ QtObject {
                 { text: Theme.say("Copy link"), icon: "copy", run: () => Theme.copy(page) },
                 { text: Theme.say("Copy to the game's Mods folder…"), icon: "copy", run: () => Notices.ask({
                     title: Theme.fill("Copy {} to the game's Mods folder", (about.name || "")),
-                    lines: [Theme.say("From"), about.path, Theme.say("Into"), (Hub.settings.report.game || "") + "/Mods", Theme.say("The Workshop copy stays where it is; Steam keeps updating that one, not this.")],
+                    lines: [Theme.say("From"), { path: about.path }, Theme.say("Into"), { path: Hub.settings.report.localMods || "" }, Theme.say("The Workshop copy stays where it is; Steam keeps updating that one, not this.")],
                     label: Theme.say("Copy"), run: () => Mods.copyToLocal(row.modId) }) },
             ]
             if (Hub.settings.report.steamcmd)
                 steam.push({ text: Theme.say("Download again with SteamCMD…"), icon: "download", run: () => Notices.ask({
                     title: Theme.fill("Download {} again", (about.name || "")),
-                    lines: [Theme.say("SteamCMD downloads the mod anew, and the fresh copy replaces this folder:"), about.path],
+                    lines: [Theme.say("SteamCMD downloads the mod anew, and the fresh copy replaces this folder:"), { path: about.path }],
                     label: Theme.say("Download"), run: () => Hub.downloads.redownload(row.modId) }) })
             if (!inActive)
                 steam.push({ text: Theme.say("Unsubscribe…"), icon: "minus", danger: true, run: () => Mods.unsubscribe(row.modId) })

@@ -4,6 +4,23 @@
 
 use std::path::Path;
 
+/// The program the entry should start, from the environment RimStack
+/// was started in: none where a package (Flatpak, Snap) brings its own
+/// entry, the AppImage file rather than the folder it is mounted at for
+/// this run, or else the program itself.
+pub fn program_to_list(
+    exe: &Path,
+    var: impl Fn(&str) -> Option<std::ffi::OsString>,
+) -> Option<std::path::PathBuf> {
+    if var("FLATPAK_ID").is_some() || var("SNAP").is_some() {
+        return None;
+    }
+    match var("APPIMAGE") {
+        Some(image) => Some(image.into()),
+        None => Some(exe.to_path_buf()),
+    }
+}
+
 /// Writes the entry and the icon under `data_home` (`~/.local/share`),
 /// pointing at `exe`; leaves files that already say the same alone.
 /// Returns whether the desktop has to be told its icons changed: the
@@ -112,5 +129,23 @@ mod tests {
         let icon = theme.join("scalable/apps/rimstack.svg");
         let at = |path: &Path| std::fs::metadata(path).unwrap().modified().unwrap();
         assert!(at(&theme) >= at(&icon));
+    }
+
+    #[test]
+    fn a_package_s_own_entry_is_left_alone_and_an_appimage_is_listed_by_its_file() {
+        let exe = Path::new("/tmp/.mount_RimStaXyz/usr/bin/rimstack");
+        let set = |name: &'static str, value: &'static str| {
+            move |asked: &str| (asked == name).then(|| value.into())
+        };
+        assert_eq!(program_to_list(exe, |_| None), Some(exe.to_path_buf()));
+        assert_eq!(
+            program_to_list(exe, set("FLATPAK_ID", "io.github.RimStack")),
+            None
+        );
+        assert_eq!(program_to_list(exe, set("SNAP", "/snap/rimstack/1")), None);
+        assert_eq!(
+            program_to_list(exe, set("APPIMAGE", "/home/a/RimStack.AppImage")),
+            Some("/home/a/RimStack.AppImage".into())
+        );
     }
 }

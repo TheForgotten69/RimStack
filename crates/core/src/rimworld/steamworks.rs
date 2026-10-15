@@ -23,9 +23,31 @@ pub enum Action {
     Download,
 }
 
-/// The Steamworks library in the game's folder: in the folder itself from
-/// 1.7; under Unity in `Plugins` of its data folder, or a folder below.
+/// Where each build of the game keeps the Steamworks library, from its
+/// folder: from 1.7 in the folder itself; under Unity in `Plugins` of its
+/// data folder, and on macOS in a bundle inside the application.
+const KNOWN: [&str; 9] = [
+    "libsteam_api.so",
+    "steam_api64.dll",
+    "libsteam_api.dylib",
+    "RimWorldLinux_Data/Plugins/libsteam_api.so",
+    "RimWorldLinux_Data/Plugins/x86_64/libsteam_api.so",
+    "RimWorldWin64_Data/Plugins/steam_api64.dll",
+    "RimWorldWin64_Data/Plugins/x86_64/steam_api64.dll",
+    "Contents/Plugins/steam_api.bundle/Contents/MacOS/libsteam_api.dylib",
+    "RimWorldMac.app/Contents/Plugins/steam_api.bundle/Contents/MacOS/libsteam_api.dylib",
+];
+
+/// The Steamworks library in the game's folder: where a build keeps it,
+/// or else the nearest one found near the top of the folder.
 pub fn library(game_dir: &Path) -> Option<PathBuf> {
+    if let Some(known) = KNOWN
+        .iter()
+        .map(|at| game_dir.join(at))
+        .find(|at| at.is_file())
+    {
+        return Some(known);
+    }
     const NAMES: [&str; 3] = ["libsteam_api.so", "steam_api64.dll", "libsteam_api.dylib"];
     // Near the top of the game's folder: the walk need not go further.
     const DEEPEST: usize = 4;
@@ -179,6 +201,17 @@ mod tests {
         std::fs::create_dir_all(&plugins).unwrap();
         std::fs::write(plugins.join("libsteam_api.so"), "").unwrap();
         assert_eq!(library(tmp.path()), Some(plugins.join("libsteam_api.so")));
+    }
+
+    #[test]
+    fn the_library_is_found_inside_a_mac_application_deeper_than_the_walk_goes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let inside = tmp
+            .path()
+            .join("RimWorldMac.app/Contents/Plugins/steam_api.bundle/Contents/MacOS");
+        std::fs::create_dir_all(&inside).unwrap();
+        std::fs::write(inside.join("libsteam_api.dylib"), "").unwrap();
+        assert_eq!(library(tmp.path()), Some(inside.join("libsteam_api.dylib")));
     }
 
     /// Loads the real library and finds what `act` calls, without

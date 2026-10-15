@@ -354,7 +354,7 @@ Item {
                             tip: Theme.say("Renames each to .dds.rimstack-bad, so the game loads the PNG beside it.")
                             onClicked: Notices.ask({
                                 title: Theme.fill("Set {} DDS files aside", ddsAudit.found.length),
-                                lines: [Theme.say("Each is renamed to .dds.rimstack-bad inside its own mod's folder, so the game loads the PNG beside it. The first of them:"), ddsAudit.found[0].file],
+                                lines: [Theme.say("Each is renamed to .dds.rimstack-bad inside its own mod's folder, so the game loads the PNG beside it. The first of them:"), { path: ddsAudit.found[0].file }],
                                 label: Theme.say("Set aside"),
                                 run: () => screen.tools.setRefusedAside() })
                         }

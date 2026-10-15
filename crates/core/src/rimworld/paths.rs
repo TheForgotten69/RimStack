@@ -95,7 +95,10 @@ impl Paths {
 /// folder is commonly reachable through two or three symlinks.
 fn existing(candidates: impl IntoIterator<Item = PathBuf>) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = Vec::new();
-    for path in candidates.into_iter().filter_map(|p| p.canonicalize().ok()) {
+    for path in candidates
+        .into_iter()
+        .filter_map(|p| dunce::canonicalize(p).ok())
+    {
         if path.is_dir() && !out.contains(&path) {
             out.push(path);
         }
@@ -150,7 +153,7 @@ fn steam_in_registry() -> Option<PathBuf> {
         "HKLM\\SOFTWARE\\Valve\\Steam",
     ];
     keys.iter().find_map(|key| {
-        let asked = std::process::Command::new("reg")
+        let asked = crate::base::program::command("reg")
             .args(["query", key, "/v", "InstallPath"])
             .output()
             .ok()?;
@@ -187,6 +190,8 @@ pub fn app_dirs(os: Os, home: &Path, env: Env) -> (PathBuf, PathBuf) {
             set("APPDATA").unwrap_or_else(|| home.join("AppData/Roaming")),
             set("LOCALAPPDATA").unwrap_or_else(|| home.join("AppData/Local")),
         ),
+        // One folder for both, as macOS programs keep them: a file of the
+        // settings and one of the data must never share a name.
         Os::Mac => {
             let support = home.join("Library/Application Support");
             (support.clone(), support)
@@ -421,6 +426,7 @@ mod tests {
         assert_eq!(sources, [Source::Official, Source::Local, Source::Workshop]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn game_in_a_second_library_is_found_and_symlinked_roots_count_once() {
         let home = tempfile::tempdir().unwrap();

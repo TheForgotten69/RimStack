@@ -3,6 +3,7 @@
 //! place.
 
 use crate::base::error::Error;
+use std::fs::Permissions;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -25,7 +26,7 @@ pub fn write(path: &Path, contents: impl AsRef<[u8]>) -> Result<(), Error> {
 /// The file a name stands for: where the name is a link, a file moved
 /// onto it would take the link's place and leave what it pointed at.
 pub(crate) fn through_links(path: &Path) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+    dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// Writes `partial`, waits for it to be on the disk, then gives it the
@@ -34,20 +35,66 @@ pub(crate) fn through_links(path: &Path) -> PathBuf {
 /// file would be there, and empty. A write that fails leaves no `partial`.
 pub(crate) fn put(partial: &Path, path: &Path, contents: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
+    let before = std::fs::metadata(path).ok().map(|m| m.permissions());
     let written = (|| {
         let mut file = std::fs::File::create(partial)?;
         file.write_all(contents)?;
-        if let Ok(before) = std::fs::metadata(path) {
-            file.set_permissions(before.permissions())?;
-        }
         file.sync_all()?;
-        std::fs::rename(partial, path)
+        drop(file);
+        replace(partial, path, before.as_ref())
     })();
     if written.is_err() && partial.is_file() {
         let _ = std::fs::remove_file(partial);
     }
-    written
+    written?;
+    sync_folder(path);
+    Ok(())
 }
+
+#[cfg(unix)]
+fn replace(partial: &Path, path: &Path, before: Option<&Permissions>) -> std::io::Result<()> {
+    if let Some(before) = before {
+        std::fs::set_permissions(partial, before.clone())?;
+    }
+    std::fs::rename(partial, path)
+}
+
+/// Windows refuses to move a file over a read-only one, which players
+/// make ModsConfig.xml so the game cannot empty it: the flag is taken
+/// off for the move and put back on the new file.
+#[cfg(not(unix))]
+#[expect(
+    clippy::permissions_set_readonly_false,
+    reason = "on Windows this clears the read-only attribute only; nothing becomes writable by others"
+)]
+fn replace(partial: &Path, path: &Path, before: Option<&Permissions>) -> std::io::Result<()> {
+    let Some(before) = before.filter(|before| before.readonly()) else {
+        return std::fs::rename(partial, path);
+    };
+    let mut writable = before.clone();
+    writable.set_readonly(false);
+    std::fs::set_permissions(path, writable)?;
+    if let Err(problem) = std::fs::rename(partial, path) {
+        let _ = std::fs::set_permissions(path, before.clone());
+        return Err(problem);
+    }
+    std::fs::set_permissions(path, before.clone())
+}
+
+/// The new name is on the disk only once its folder is: without this a
+/// power cut after the move can bring back the file before it. Some file
+/// systems cannot sync a folder; the file itself is on the disk anyway.
+#[cfg(unix)]
+fn sync_folder(path: &Path) {
+    let folder = path.parent().filter(|p| !p.as_os_str().is_empty());
+    if let Ok(folder) = std::fs::File::open(folder.unwrap_or(Path::new("."))) {
+        let _ = folder.sync_all();
+    }
+}
+
+/// NTFS keeps a rename in its journal with the file it moves.
+#[cfg(not(unix))]
+fn sync_folder(_path: &Path) {}
 
 fn damaged(path: &Path) -> PathBuf {
     let mut name = path.as_os_str().to_os_string();

@@ -7,13 +7,13 @@ use std::path::{Path, PathBuf};
 
 /// The most there may be; lower them as QML loses some, never raise them.
 const MOST: [(&str, usize); 7] = [
-    ("functions", 179),
+    ("functions", 176),
     ("timers", 11),
     ("arrow functions", 269),
-    ("ifs", 236),
-    ("ternaries", 755),
+    ("ifs", 231),
+    ("ternaries", 753),
     ("array callbacks", 64),
-    ("comparisons with a text", 45),
+    ("comparisons with a text", 32),
 ];
 
 fn qml_files(dir: &Path, into: &mut Vec<PathBuf>) {

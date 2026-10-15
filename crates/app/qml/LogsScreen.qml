@@ -276,27 +276,16 @@ Item {
                     anchors.margins: Theme.gapMedium
                     anchors.leftMargin: Theme.gapLarge
                     spacing: Theme.gap
-                    Text {
+                    ColumnLayout {
                         id: sinceText
                         Layout.fillWidth: true
-                        wrapMode: Text.WordWrap
-                        textFormat: Text.StyledText
-                        color: Theme.ink
-                        font.pixelSize: Theme.body
-                        lineHeight: 1.35
-                        text: {
-                            const plain = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
-                            const dim = s => "<font color=\"" + Theme.ink2 + "\">" + s + "</font>"
-                            const parts = []
-                            if (since.info.added !== "")
-                                parts.push(dim(Theme.say("Added")) + " " + plain(since.info.added))
-                            if (since.info.removed !== "")
-                                parts.push(dim(Theme.say("Removed")) + " " + plain(since.info.removed))
-                            if (since.info.reordered)
-                                parts.push(dim(Theme.say("Order changed")))
-                            return "<b>" + Theme.say("Since the last clean launch") + "</b> " + dim("(" + screen.when(since.info.time) + ")") + "<br>"
-                                + (since.same ? dim(Theme.say("Same load order")) : parts.join(" &nbsp; "))
-                        }
+                        spacing: 2
+                        Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.ink; font.pixelSize: Theme.body; font.weight: Font.DemiBold; text: Theme.say("Since the last clean launch") }
+                        Text { color: Theme.ink2; font.pixelSize: Theme.small; text: screen.when(since.info.time) }
+                        Text { visible: since.same; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say("Same load order") }
+                        Text { visible: !since.same && since.info.added !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap; textFormat: Text.PlainText; color: Theme.ink; font.pixelSize: Theme.body; text: Theme.say("Added") + " " + since.info.added }
+                        Text { visible: !since.same && since.info.removed !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap; textFormat: Text.PlainText; color: Theme.ink; font.pixelSize: Theme.body; text: Theme.say("Removed") + " " + since.info.removed }
+                        Text { visible: !since.same && since.info.reordered; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say("Order changed") }
                     }
                     Btn { visible: !since.same; text: Theme.say("Use"); tip: Theme.say("Makes the load order of the last clean launch the list on the Mods screen. Save writes it."); onClicked: screen.useList(since.info.ids) }
                 }

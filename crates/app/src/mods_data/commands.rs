@@ -168,25 +168,58 @@ impl qobject::ModsData {
         }
     }
 
+    /// Starts writing the load order off the window's thread: two
+    /// copies of the file and the file itself, each waited for until on
+    /// the disk. `saved` tells how it went. False when it cannot start.
     pub(super) fn save(mut self: Pin<&mut Self>) -> bool {
+        if self.saving {
+            return false;
+        }
         if self.order.previewing() {
             self.as_mut().end_sort(true);
         }
         let app = self.app();
+        let saving = match self.as_mut().order_mut().to_save(&app) {
+            Ok(saving) => saving,
+            Err(problem) => {
+                self.as_mut()
+                    .set_save_problem(crate::words::said_of(&problem));
+                self.as_mut().saved(false);
+                return false;
+            }
+        };
         let records = self.records;
         let changes = app.session().changes().said();
-        let before = records
-            .then(|| app.snapshot("@saving", app.session().saved()))
-            .flatten();
-        let saved = self.as_mut().order_mut().save(&app);
-        self.as_mut()
-            .set_save_problem(crate::words::why_not(&saved));
-        if saved.is_ok() && records {
-            let saved = say!("Saved the load order: {}", changes.inside());
-            app.note_change(saved, before.as_deref());
-        }
-        self.changed();
-        saved.is_ok()
+        let before = app.session().saved().to_vec();
+        self.as_mut().set_saving(true);
+        let worker = app.clone();
+        crate::jobs::run(
+            "save",
+            self.qt_thread(),
+            move || {
+                let snapshot = records
+                    .then(|| worker.snapshot("@saving", &before))
+                    .flatten();
+                let written =
+                    rimstack_core::rimworld::modsconfig::write(&saving.file, &saving.written);
+                if written.is_ok() && records {
+                    let said = say!("Saved the load order: {}", changes.inside());
+                    worker.note_change(said, snapshot.as_deref());
+                }
+                (saving.list, written)
+            },
+            move |mut me, (list, written)| {
+                if written.is_ok() {
+                    me.as_mut().order_mut().saved(&app, list);
+                }
+                me.as_mut()
+                    .set_save_problem(crate::words::why_not(&written));
+                me.as_mut().set_saving(false);
+                me.as_mut().changed();
+                me.saved(written.is_ok());
+            },
+        );
+        true
     }
 
     pub(super) fn preview_sort(mut self: Pin<&mut Self>) {

@@ -1,5 +1,5 @@
 // A line icon by name, in any colour. The drawings are from Lucide
-// (lucide.dev), ISC licence; see docs/licences/lucide.txt.
+// (lucide.dev), ISC licence; see licences/lucide.txt.
 import QtQuick
 import RimStack.Ui
 

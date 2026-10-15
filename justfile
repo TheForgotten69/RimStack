@@ -34,6 +34,10 @@ lint: build
 test *filter:
     cargo test --workspace -q {{filter}}
 
+# The package for this system, into target/packages: an AppImage, a zip and installer, or a dmg
+package:
+    {{ if os() == "windows" { "pwsh packaging/windows/package.ps1" } else { "packaging/" + os() + "/package.sh" } }}
+
 # Known advisories against the crates in Cargo.lock
 audit:
     cargo audit

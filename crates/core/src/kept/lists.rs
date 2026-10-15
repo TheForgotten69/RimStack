@@ -99,6 +99,11 @@ pub fn prune(dir: &Path, keep: usize) {
     }
 }
 
+/// Whether a list of this name, or one kept under the same file, is there.
+pub fn taken(dir: &Path, name: &str) -> bool {
+    file_for(dir, name).exists()
+}
+
 pub fn load(dir: &Path, name: &str) -> Result<Vec<String>, Error> {
     let path = file_for(dir, name);
     read(&path)

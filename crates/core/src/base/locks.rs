@@ -1,21 +1,36 @@
-//! Locks taken whatever became of the thread that last held them. What
-//! RimStack keeps behind a lock is replaced whole, never left half
-//! changed, so a panic elsewhere leaves it fit to read.
+//! Locks taken whatever became of the thread that last held them: one
+//! failure must not stop every later action. What a lock guards may then
+//! be half changed, so the first taking after a panic is said in the
+//! diagnostics, beside the panic itself.
 
-use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 pub trait Shared<T> {
     fn reading(&self) -> RwLockReadGuard<'_, T>;
     fn writing(&self) -> RwLockWriteGuard<'_, T>;
 }
 
+fn taken_after_a_panic() {
+    crate::problem!(
+        "a lock was taken after its holder panicked: what it guards may be half changed"
+    );
+}
+
 impl<T> Shared<T> for RwLock<T> {
     fn reading(&self) -> RwLockReadGuard<'_, T> {
-        self.read().unwrap_or_else(|e| e.into_inner())
+        self.read().unwrap_or_else(|poisoned| {
+            self.clear_poison();
+            taken_after_a_panic();
+            poisoned.into_inner()
+        })
     }
 
     fn writing(&self) -> RwLockWriteGuard<'_, T> {
-        self.write().unwrap_or_else(|e| e.into_inner())
+        self.write().unwrap_or_else(|poisoned| {
+            self.clear_poison();
+            taken_after_a_panic();
+            poisoned.into_inner()
+        })
     }
 }
 
@@ -25,8 +40,17 @@ pub trait Held<T> {
 
 impl<T> Held<T> for Mutex<T> {
     fn held(&self) -> MutexGuard<'_, T> {
-        self.lock().unwrap_or_else(|e| e.into_inner())
+        self.lock().unwrap_or_else(|poisoned| {
+            self.clear_poison();
+            taken_after_a_panic();
+            poisoned.into_inner()
+        })
     }
+}
+
+/// For the diagnostics' own lock, which cannot say anything of itself.
+pub(crate) fn quietly<T>(poisoned: PoisonError<T>) -> T {
+    poisoned.into_inner()
 }
 
 #[cfg(test)]
@@ -44,5 +68,6 @@ mod tests {
         .join();
         *kept.0.writing() += 1;
         assert_eq!((*kept.0.reading(), *kept.1.held()), (2, 2));
+        assert!(!kept.0.is_poisoned() && !kept.1.is_poisoned());
     }
 }

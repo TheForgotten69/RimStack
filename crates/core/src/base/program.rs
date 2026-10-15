@@ -2,10 +2,14 @@
 //! waits on a network or a prompt that never answers would otherwise
 //! hold its task for as long as RimStack runs.
 
-use crate::{say, say_n};
+use crate::base::locks::Held;
+use crate::say_n;
 
+use std::ffi::OsStr;
 use std::io::Read;
 use std::process::{Command, Output, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// What a program on this computer answers at once.
@@ -15,20 +19,57 @@ pub const NETWORK: Duration = Duration::from_secs(10 * 60);
 /// What downloads as much as mods weigh.
 pub const DOWNLOAD: Duration = Duration::from_secs(2 * 60 * 60);
 
-fn collected(pipe: Option<impl Read + Send + 'static>) -> std::thread::JoinHandle<Vec<u8>> {
+/// Once the program has ended, what it wrote is already in its pipes: a
+/// pipe still open past this is held by a program it started (an SSH
+/// connection kept for reuse, a Steam helper), which may run for hours.
+const AFTER_END: Duration = Duration::from_secs(1);
+
+/// A program to run. On Windows it gets no console window: RimStack has
+/// none to lend it, so each run would open one.
+pub fn command(program: impl AsRef<OsStr>) -> Command {
+    let mut command = Command::new(program);
+    without_window(&mut command);
+    command
+}
+
+#[cfg(windows)]
+fn without_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn without_window(_command: &mut Command) {}
+
+/// What a pipe has given so far, and whether it has ended.
+type Gathered = Arc<(Mutex<Vec<u8>>, AtomicBool)>;
+
+fn collected(pipe: Option<impl Read + Send + 'static>) -> Gathered {
+    let gathered: Gathered = Arc::default();
+    let into = gathered.clone();
     std::thread::spawn(move || {
-        let mut all = Vec::new();
         if let Some(mut pipe) = pipe {
-            // What was read before a failure is still what it said.
-            let _ = pipe.read_to_end(&mut all);
+            let mut chunk = [0; 8192];
+            loop {
+                match pipe.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(read) => into.0.held().extend_from_slice(&chunk[..read]),
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                    // What was read before a failure is still what it said.
+                    Err(_) => break,
+                }
+            }
         }
-        all
-    })
+        into.1.store(true, Ordering::Release);
+    });
+    gathered
 }
 
 /// Runs the program with nothing to read, and gives what it wrote. Past
 /// `limit` it is killed and the error is `TimedOut`. Only the program
-/// itself is killed: what it started in turn is left to end by itself.
+/// itself is killed: what it started in turn is left to end by itself,
+/// and is not waited for.
 pub fn run(command: &mut Command, limit: Duration) -> std::io::Result<Output> {
     let mut child = command
         .stdin(Stdio::null())
@@ -49,11 +90,11 @@ pub fn run(command: &mut Command, limit: Duration) -> std::io::Result<Output> {
         if started.elapsed() >= limit {
             child.kill()?;
             child.wait()?;
-            // The pipes are not waited for: a program it started may hold them open.
+            let seconds = usize::try_from(limit.as_secs()).unwrap_or(usize::MAX);
             return Err(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
                 say_n!(
-                    limit.as_secs() as usize,
+                    seconds,
                     "no answer after {} second",
                     "no answer after {} seconds"
                 )
@@ -63,15 +104,17 @@ pub fn run(command: &mut Command, limit: Duration) -> std::io::Result<Output> {
         std::thread::sleep(pause);
         pause = (pause * 2).min(Duration::from_millis(50));
     };
-    let read = |pipe: std::thread::JoinHandle<Vec<u8>>| {
-        let lost =
-            |_| std::io::Error::other(say!("what the program wrote could not be read").to_string());
-        pipe.join().map_err(lost)
-    };
+    let ended = Instant::now();
+    let until = (started + limit).min(ended + AFTER_END);
+    let done = |pipe: &Gathered| pipe.1.load(Ordering::Acquire);
+    while !(done(&stdout) && done(&stderr)) && Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let taken = |pipe: &Gathered| std::mem::take(&mut *pipe.0.held());
     Ok(Output {
         status,
-        stdout: read(stdout)?,
-        stderr: read(stderr)?,
+        stdout: taken(&stdout),
+        stderr: taken(&stderr),
     })
 }
 
@@ -109,5 +152,22 @@ mod tests {
         let ran = run(Command::new("sleep").arg("30"), Duration::from_millis(150));
         assert_eq!(ran.unwrap_err().kind(), std::io::ErrorKind::TimedOut);
         assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[test]
+    fn a_program_it_started_that_keeps_the_output_open_is_not_waited_for() {
+        let started = Instant::now();
+        let ran = run(
+            Command::new("sh").args(["-c", "sleep 6 & echo started"]),
+            LOCAL,
+        )
+        .unwrap();
+        assert!(ran.status.success());
+        assert_eq!(ran.stdout, b"started\n");
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "{:?}",
+            started.elapsed()
+        );
     }
 }

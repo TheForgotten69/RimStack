@@ -242,7 +242,8 @@ mods.details: object
   categoryChosen: text
   code: text
   conflictMarks: map
-    {}: text
+    {}: object
+      loses: bool
   contains: text
   description: text
   descriptionRich: text
@@ -280,6 +281,7 @@ mods.details: object
   name: text
   note: text
   offerTrust: bool
+  official: bool
   packageId: text
   patches: list
     []: never seen
@@ -338,7 +340,8 @@ mods.detailsOf: object
   categoryChosen: text
   code: text
   conflictMarks: map
-    {}: text
+    {}: object
+      loses: bool
   contains: text
   description: text
   descriptionRich: text
@@ -376,6 +379,7 @@ mods.detailsOf: object
   name: text
   note: text
   offerTrust: bool
+  official: bool
   packageId: text
   patches: list
     []: never seen
@@ -606,11 +610,14 @@ settings.report: object
   backup: nothing or text
   communityRules: bool
   config: text
+  configFolder: text
   dataFolder: text
   diagnosticsFile: text
+  english: bool
   fileHints: bool
   font: text
   game: text
+  gameLog: text
   gameVersion: text
   git: text
   gitForWorkshop: bool
@@ -619,6 +626,7 @@ settings.report: object
   languageInUse: text
   launchArguments: text
   launchDirectly: bool
+  localMods: text
   logsKept: number
   logsKeptNow: number
   modsConfig: text
@@ -632,6 +640,7 @@ settings.report: object
   settingsFile: text
   setupDone: bool
   steamcmd: bool
+  steamcmdFolder: text
   version: text
   versionAsideFor: text
   versionWarnings: bool

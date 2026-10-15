@@ -130,11 +130,13 @@ pub fn write(path: &Path, ids: &[String]) -> Result<()> {
     let before = std::fs::read_to_string(path).map_err(failed)?;
     let after = with_active(&before, ids).map_err(|e| e.of(path.display()))?;
 
+    // Whole or not there, as the file itself: a crash while the first
+    // copy is written must not leave half an original that is then kept.
     let original = beside(path, ".rimstack-original");
     if !original.exists() {
-        std::fs::write(&original, &before).map_err(failed)?;
+        crate::base::atomic_file::write(&original, &before)?;
     }
-    std::fs::write(beside(path, ".rimstack-backup"), &before).map_err(failed)?;
+    crate::base::atomic_file::write(&beside(path, ".rimstack-backup"), &before)?;
     let real = crate::base::atomic_file::through_links(path);
     let partial = beside(&real, ".rimstack-part");
     crate::base::atomic_file::put(&partial, &real, after.as_bytes()).map_err(failed)
@@ -322,5 +324,30 @@ mod tests {
         let mode = std::fs::metadata(&link).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
         assert_eq!(read(&real).unwrap().active, ["a.b"]);
+    }
+
+    /// Players make the file read-only so the game cannot empty it; a
+    /// save still writes it, and leaves it read-only.
+    #[test]
+    fn a_read_only_file_is_saved_and_stays_read_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("ModsConfig.xml");
+        std::fs::write(&path, TYPICAL).unwrap();
+        let mut locked = std::fs::metadata(&path).unwrap().permissions();
+        locked.set_readonly(true);
+        std::fs::set_permissions(&path, locked).unwrap();
+        write(&path, &ids(&["a.b"])).unwrap();
+        assert_eq!(read(&path).unwrap().active, ["a.b"]);
+        assert!(std::fs::metadata(&path).unwrap().permissions().readonly());
+        assert_eq!(
+            std::fs::read_to_string(beside(&path, ".rimstack-original")).unwrap(),
+            TYPICAL
+        );
+        let left: Vec<_> = std::fs::read_dir(tmp.path())
+            .unwrap()
+            .flatten()
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with("part"))
+            .collect();
+        assert!(left.is_empty());
     }
 }

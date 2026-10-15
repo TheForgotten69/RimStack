@@ -42,6 +42,8 @@ pub struct SettingsReport {
     /// The language chosen in Settings, if one is.
     pub language: Option<String>,
     pub language_in_use: String,
+    /// That language is English, which has nothing to translate.
+    pub english: bool,
     pub steamcmd: bool,
     pub interface_scale: String,
     pub font: Option<String>,
@@ -58,6 +60,15 @@ pub struct SettingsReport {
     pub setup_done: bool,
     pub rimsort_rules: bool,
     pub data_folder: String,
+    /// The game's own `Mods` folder.
+    pub local_mods: Option<String>,
+    /// The `Config` folder in the settings folder: ModsConfig.xml and
+    /// the mods' own settings.
+    pub config_folder: Option<String>,
+    /// The log the game wrote last.
+    pub game_log: Option<String>,
+    /// Where RimStack installs SteamCMD.
+    pub steamcmd_folder: String,
     pub settings_file: String,
     pub diagnostics_file: String,
     pub version: &'static str,

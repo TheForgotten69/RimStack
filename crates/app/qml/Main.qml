@@ -172,7 +172,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 // The round's list goes on the Mods screen; whoever is reading the log stays there.
                 onUseList: ids => Mods.useList(ids, true)
-                onSaveAndPlay: if (Mods.save()) window.play(true)
+                onSaveAndPlay: Mods.save(() => window.play(true))
             }
 
             StackLayout {
@@ -292,8 +292,8 @@ ApplicationWindow {
                 { name: Theme.say("What RimStack changed"), group: Theme.say("Help"), run: () => statusBar.historyMenu.open(), when: !Theme.demo },
                 { name: Theme.say("Sort"), group: Theme.say("Load order"), run: () => { window.section = 0; Mods.previewSort() }, when: !Theme.demo },
                 { name: Theme.say("Save"), group: Theme.say("Load order"), keys: Theme.say("Ctrl + S"), run: () => Mods.save(), when: Mods.dirty },
-                { name: Theme.say("Undo"), group: Theme.say("Load order"), keys: Theme.say("Ctrl + Z"), run: () => Mods.undo(), when: Hub.mods.canUndo },
-                { name: Theme.say("Redo"), group: Theme.say("Load order"), keys: Theme.say("Ctrl + Shift + Z"), run: () => Mods.redo(), when: Hub.mods.canRedo },
+                { name: Theme.say("Undo"), group: Theme.say("Load order"), keys: Theme.say("Ctrl + Z"), run: () => Hub.mods.undo(), when: Hub.mods.canUndo },
+                { name: Theme.say("Redo"), group: Theme.say("Load order"), keys: Theme.say("Ctrl + Shift + Z"), run: () => Hub.mods.redo(), when: Hub.mods.canRedo },
                 { name: Theme.say("Play"), group: Theme.say("Game"), run: () => window.pressPlay() },
                 { name: Theme.say("Next problem"), group: Theme.say("Load order"), run: () => { window.section = 0; Mods.showNextProblem() }, when: Mods.errors + Hub.mods.warnings > 0 },
                 { name: Theme.say("Saved lists"), group: Theme.say("Load order"), run: () => topBar.listsMenu.open(), when: !Theme.demo },
@@ -301,7 +301,7 @@ ApplicationWindow {
 
                 { name: Theme.fill(Mods.selectedActive ? "Deactivate {}" : "Activate {}", mod ? mod.name : ""), group: Theme.say("Selected mod"), run: () => Mods.toggleSelected(), when: !!mod && !Hub.mods.previewing },
                 { name: Theme.fill("Open folder of {}", (mod ? mod.name : "")), group: Theme.say("Selected mod"), run: () => open(mod.path), when: !!mod && !!mod.path },
-                { name: Theme.fill("Workshop page of {}", (mod ? mod.name : "")), group: Theme.say("Selected mod"), run: () => Theme.openWorkshop(mod.folder), when: !!mod && mod.source === "Workshop" },
+                { name: Theme.fill("Workshop page of {}", (mod ? mod.name : "")), group: Theme.say("Selected mod"), run: () => Theme.openWorkshop(mod.folder), when: !!mod && mod.workshop },
                 { name: Theme.fill("Copy package id of {}", (mod ? mod.name : "")), group: Theme.say("Selected mod"), run: () => Theme.copy(mod.packageId), when: !!mod && !!mod.packageId },
                 { name: Theme.say("Clear selection"), group: Theme.say("Selected mod"), keys: Theme.say("Esc"), run: () => Mods.select(-1, false), when: Mods.selectedId >= 0 },
 
@@ -345,7 +345,7 @@ ApplicationWindow {
                 { name: Theme.say("RimWorld folder"), group: Theme.say("Open"), run: () => open(folders.game), when: !!folders.game },
                 { name: Theme.say("Workshop mods folder"), group: Theme.say("Open"), run: () => open(folders.workshop), when: !!folders.workshop },
                 { name: Theme.say("Config and saves folder"), group: Theme.say("Open"), run: () => open(folders.config), when: !!folders.config },
-                { name: Theme.say("Game log"), group: Theme.say("Open"), run: () => open(folders.config + "/Player.log"), when: !!folders.config },
+                { name: Theme.say("Game log"), group: Theme.say("Open"), run: () => open(folders.gameLog), when: !!folders.gameLog },
                 { name: Theme.say("RimStack data folder"), group: Theme.say("Open"), run: () => open(folders.dataFolder), when: !!folders.dataFolder },
                 { name: Theme.say("RimWorld store page"), group: Theme.say("Open"), run: () => Qt.openUrlExternally("steam://store/294100") },
             ])
@@ -376,14 +376,16 @@ ApplicationWindow {
         Repeater {
             model: question.asked.lines
             Text {
-                required property string modelData
+                // A sentence, or `{ path }`: a folder or a file, shown whole
+                // and broken anywhere.
+                required property var modelData
+                readonly property bool path: !!modelData.path
                 width: parent.width
-                // A folder is shown whole, broken anywhere; a sentence by words.
-                wrapMode: modelData.charAt(0) === "/" ? Text.WrapAnywhere : Text.WordWrap
-                color: modelData.charAt(0) === "/" ? Theme.ink : Theme.ink2
-                font.pixelSize: modelData.charAt(0) === "/" ? Theme.small : Theme.body
-                font.family: modelData.charAt(0) === "/" ? "monospace" : Qt.application.font.family
-                text: modelData
+                text: path ? modelData.path : modelData
+                wrapMode: path ? Text.WrapAnywhere : Text.WordWrap
+                color: path ? Theme.ink : Theme.ink2
+                font.pixelSize: path ? Theme.small : Theme.body
+                font.family: path ? "monospace" : Qt.application.font.family
             }
         }
         buttons: [
@@ -458,7 +460,7 @@ ApplicationWindow {
             if (window.opened && open !== "ask")
                 window.opened.open()
             if (open === "ask")
-                Notices.ask({ title: Theme.say("Set the mods' settings aside"), lines: [Theme.say("Every Mod_*.xml is moved out of"), "/home/example/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios/Config", Theme.say("Mods start from their defaults. Moving the files back restores them.")], label: Theme.say("Set aside"), run: () => {} })
+                Notices.ask({ title: Theme.say("Set the mods' settings aside"), lines: [Theme.say("Every Mod_*.xml is moved out of"), { path: "/home/example/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios/Config" }, Theme.say("Mods start from their defaults. Moving the files back restores them.")], label: Theme.say("Set aside"), run: () => {} })
             if (Hub.given("--several")) {
                 Mods.select(Mods.nthMod(Mods.active, 14), true)
                 for (const at of [15, 16, 19])

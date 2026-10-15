@@ -14,6 +14,16 @@ Item {
     required property ListView view
 
     Connections {
+        target: Hub.mods
+        function onSaved(ok) {
+            if (!ok) {
+                console.log("check FAIL saving: " + Mods.saveProblem)
+                Qt.exit(1)
+            }
+        }
+    }
+
+    Connections {
         target: Mods
         function onFirstFrameShown() {
             if (Theme.selfTest)
@@ -37,6 +47,15 @@ Item {
             if (!Hub.mods.filesRead)
                 return
             stop()
+            if (Mods.checkMode === "screens") {
+                const made = Qt.createComponent("qrc:/qt/qml/RimStack/Ui/qml/checks/ScreensChecks.qml")
+                if (made.status !== Component.Ready) {
+                    console.log("check FAIL the screen checks did not load: " + made.errorString())
+                    Qt.exit(1)
+                }
+                made.createObject(checks, { window: checks.Window.window })
+                return
+            }
             Mods.checkMode === "textures" ? checks.checkTextures() : Mods.checkMode === "live" ? checks.checkLive() : checks.runChecks()
         }
     }
@@ -90,6 +109,8 @@ Item {
                 checks.textureCheck("a ModsConfig.xml written outside is offered, not taken", !!offer && Mods.active.count === 2)
                 if (offer)
                     offer.run()
+                checks.liveStep = 4
+            } else if (checks.liveStep === 4 && (late || !Hub.mods.saving)) {
                 checks.textureCheck("and used when asked for", Mods.active.count === 1 && !Hub.mods.dirty)
                 Qt.exit(checks.textureFailures > 0 ? 1 : 0)
             }
@@ -172,12 +193,12 @@ Item {
         const order = () => { const ids = []; for (let i = 0; i < Mods.active.count; i++) ids.push(Mods.nthMod(Mods.active, i)); return ids.join(",") }
         if (Mods.checkMode === "restore") {
             Hub.mods.moveMod(true, 3, 0)
-            check("moved back and saved", Mods.save() && !Hub.mods.dirty)
-            return Qt.exit(failed > 0 ? 1 : 0)
+            Mods.save(() => { check("moved back and saved", !Hub.mods.dirty); Qt.exit(failed > 0 ? 1 : 0) })
+            return
         }
         const start = order()
         const counts = [Mods.active.count, Mods.inactive.count]
-        const shownNames = () => { const names = []; for (let r = 0; r < Mods.inactive.rows() && names.length < 40; r++) if (Mods.idAt(Mods.inactive, r) >= 0) names.push(Mods.inactive.at(r).name.toLowerCase()); return names }
+        const shownNames = () => { const names = []; for (let r = 0; r < Mods.inactive.rows() && names.length < 40; r++) if (Mods.inactive.modIdAt(r) >= 0) names.push(Mods.inactive.at(r).name.toLowerCase()); return names }
         const byName = () => { const names = shownNames(); return names.every((n, i) => i === 0 || names[i - 1].localeCompare(n) <= 0 || names[i - 1] <= n) }
         const wasByName = Mods.prefs.inactiveByName, hadHeadings = Mods.prefs.headings
         Mods.prefs.inactiveByName = true
@@ -199,7 +220,7 @@ Item {
             check("sorting a sorted list moves nothing", !Hub.mods.previewing)
             check("and says so in the language chosen", Hub.mods.sortNote.startsWith(Theme.say("Already in order.")))
             Hub.mods.sortNote = ""
-            Mods.undo()
+            Hub.mods.undo()
             check("undo takes the sort back", order() === start)
         }
 
@@ -207,13 +228,13 @@ Item {
         Hub.mods.moveMod(true, 0, 3)
         check("a move makes the list dirty", Hub.mods.dirty && Hub.mods.canUndo && order() !== start)
         check("what is unsaved is said in the language chosen", Hub.mods.unsaved === Theme.fill("{} moved", 1))
-        Mods.undo()
+        Hub.mods.undo()
         check("undo puts it back", !Hub.mods.dirty && order() === start && Hub.mods.canRedo)
         check("and the inactive mods are still in name order", byName() && Mods.inactive.rows() === Mods.inactive.count)
         Mods.prefs.headings = 0
         check("one numbered list has no headings", Mods.active.rows() === Mods.active.count)
         Hub.mods.moveMod(true, 0, 3)
-        Mods.undo()
+        Hub.mods.undo()
         check("and stays one list after undo", Mods.active.rows() === Mods.active.count)
         Mods.prefs.headings = 1
         check("always under headings has headings", Mods.active.rows() > Mods.active.count)
@@ -221,9 +242,9 @@ Item {
         Mods.prefs.inactiveByName = false
         check("by category, the inactive mods sit under headings", Mods.inactive.rows() > Mods.inactive.count)
         Mods.prefs.inactiveByName = true
-        Mods.redo()
+        Hub.mods.redo()
         check("redo moves it again", Hub.mods.dirty && order() !== start)
-        Mods.undo()
+        Hub.mods.undo()
 
         const second = Mods.nthMod(Mods.active, 1)
         Hub.mods.take(true, 1, -1)
@@ -231,7 +252,7 @@ Item {
         Hub.mods.take(false, Mods.inactive.indexOf(second), -1)
         check("activating brings it back", Mods.active.count === counts[0] && Mods.active.indexOf(second) >= 0)
         while (Hub.mods.canUndo)
-            Mods.undo()
+            Hub.mods.undo()
         check("undo all the way is the saved list", !Hub.mods.dirty && order() === start)
 
         Mods.select(Mods.nthMod(Mods.active, 0), true)
@@ -241,7 +262,7 @@ Item {
         check("ctrl takes one out", Mods.selectedCount === 2)
         Mods.moveSelected()
         check("the selected mods move together", Mods.active.count === counts[0] - 2 && Mods.selectedCount === 0)
-        Mods.undo()
+        Hub.mods.undo()
         check("and come back with one undo", Mods.active.count === counts[0] && order() === start && !Hub.mods.canUndo)
 
         const warned = [...new Set(Mods.troubles.filter(t => t.fix.action === "trust").map(t => t.modId))].slice(0, 3)
@@ -284,14 +305,14 @@ Item {
         const below = Mods.nthMod(Mods.active, 1)
         Mods.activateSelected(Mods.active)
         check("Enter moves the mod to the other list and selects the one below it", Mods.active.count === counts[0] - 1 && Mods.selectedId === below && Mods.selectedActive)
-        Mods.undo()
+        Hub.mods.undo()
         check("and one undo brings it back", Mods.active.count === counts[0] && order() === start)
         Mods.select(Mods.nthMod(Mods.active, 0), true)
         Mods.nudge(Mods.active, -1)
         check("Alt+Up on the first mod moves nothing", order() === start)
         Mods.nudge(Mods.active, 1)
         check("Alt+Down moves the mod one place down", Mods.active.indexOf(Mods.selectedId) === 1 && order() !== start)
-        Mods.undo()
+        Hub.mods.undo()
         check("and one undo puts it back", order() === start)
         Mods.select(Mods.nthMod(Mods.active, 0), true)
 
@@ -344,7 +365,7 @@ Item {
         check("tags and a note are kept", Mods.info.tags === "check-tag, second" && Mods.info.note === "a note" && Mods.active.at(Mods.active.rowOf(0)).tags === "check-tag, second")
         Mods.filtered = "tag:check"
         // Rows that are mods, not headings: the list may be grouped.
-        const shown = () => { let n = 0; for (let r = 0; r < Mods.active.rows(); r++) if (Mods.idAt(Mods.active, r) >= 0) n += 1; return n }
+        const shown = () => { let n = 0; for (let r = 0; r < Mods.active.rows(); r++) if (Mods.active.modIdAt(r) >= 0) n += 1; return n }
         check("tag: narrows the list to the tagged mod", shown() === 1)
         Mods.filtered = "author:zzzz-nobody"
         check("author: with no match shows nothing", Mods.active.rows() === 0)
@@ -367,11 +388,11 @@ Item {
         Mods.filtered = "is:changed"
         check("is:changed shows only what changed", Mods.active.rows() >= 1 && Mods.active.rows() < every)
         Mods.filtered = ""
-        Mods.discardChanges()
+        Hub.mods.discardChanges()
         check("discarding goes back to the saved list, and Undo brings the change back", order() !== changedOrder && Hub.mods.canUndo)
-        Mods.undo()
+        Hub.mods.undo()
         check("undo after a discard restores the change", order() === changedOrder)
-        Mods.undo()
+        Hub.mods.undo()
         check("and once more, the list before it", order() === asItWas)
         let undone = false
         Notices.offer("Done", "Undo", () => undone = true)
@@ -410,12 +431,13 @@ Item {
         Mods.selectAlso(Mods.nthMod(Mods.active, 22), true)
         const pair = Mods.selectedIds.slice(), unmoved = order()
         Mods.selectedToEdge(true)
-        check("selected mods go to the top of their category in one step", order() !== unmoved || Mods.active.indexOf(pair[0]) === 20)
-        Mods.undo()
+        const toEdge = order() !== unmoved
+        check("selected mods go to the top of their category in one step", toEdge || Mods.active.indexOf(pair[0]) === 20)
+        if (toEdge)
+            Hub.mods.undo()
         check("which one Undo takes back", order() === unmoved)
         Mods.select(-1, false)
-        check("the changed list is saved", Mods.save() && !Hub.mods.dirty && Mods.saveProblem === "")
-        Qt.exit(failed > 0 ? 1 : 0)
+        check("a save is written off the window's thread", Mods.save(() => { check("the changed list is saved", !Hub.mods.dirty && Mods.saveProblem === ""); Qt.exit(failed > 0 ? 1 : 0) }) && Hub.mods.saving)
     }
 
     property int frames: 0

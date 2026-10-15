@@ -1,3 +1,8 @@
+// Without it Windows opens a console beside the window; a debug build
+// keeps one for what it prints. Output sent to a file or a pipe still
+// reaches it either way.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 use rimstack_core::said;
 
 mod changes;
@@ -32,6 +37,11 @@ fn put_among_applications() {
         .map(std::path::PathBuf::from)
         .or_else(|| Some(std::path::PathBuf::from(std::env::var_os("HOME")?).join(".local/share")));
     let (Some(home), Ok(exe)) = (home, std::env::current_exe()) else {
+        return;
+    };
+    let Some(exe) =
+        rimstack_core::kept::desktop::program_to_list(&exe, |name| std::env::var_os(name))
+    else {
         return;
     };
     let entry = include_str!("../assets/rimstack.desktop");

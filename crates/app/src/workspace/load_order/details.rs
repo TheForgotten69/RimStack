@@ -102,6 +102,8 @@ pub struct Details {
     name: String,
     source: &'static str,
     workshop: bool,
+    /// The game's own, or one of its expansions.
+    official: bool,
     contains: Sentence,
     path: String,
     repository: String,
@@ -137,7 +139,7 @@ pub struct Details {
     detected: Vec<Detected>,
     loses_to: Vec<Clash>,
     wins_over: Vec<Clash>,
-    conflict_marks: std::collections::BTreeMap<ModId, &'static str>,
+    conflict_marks: std::collections::BTreeMap<ModId, rimstack_core::mods::details::Mark>,
     loads_after: Vec<Named>,
     loads_before: Vec<Named>,
     /// The mods of `loads_after` that `requires` already lists.
@@ -219,6 +221,7 @@ impl LoadOrder {
         let (times, sizes) = &*steam_record;
         let mut said = Details {
             workshop,
+            official: m.source == Source::Official,
             name: m.display_name().to_string(),
             source: m.source_label(),
             contains: m.contains(),

@@ -5,7 +5,6 @@
 //! A line is `2026-10-14 19:37:35Z problem the text`; what a text has
 //! after its first line is indented under it.
 
-use crate::base::locks::Held;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -88,13 +87,17 @@ fn now() -> u64 {
 /// the file cannot be opened, it only prints.
 pub fn start(path: &Path) -> std::io::Result<()> {
     let record = Record::open(path, MOST_BYTES)?;
-    *RECORD.held() = Some(record);
+    *RECORD.lock().unwrap_or_else(crate::base::locks::quietly) = Some(record);
     Ok(())
 }
 
 pub fn note(level: Level, text: &str) {
     eprintln!("{text}");
-    if let Some(record) = RECORD.held().as_mut() {
+    if let Some(record) = RECORD
+        .lock()
+        .unwrap_or_else(crate::base::locks::quietly)
+        .as_mut()
+    {
         // Nowhere left to say that the record itself cannot be written.
         let _ = record.write(now(), level, text);
     }

@@ -195,7 +195,7 @@ Item {
         anchors.leftMargin: Theme.gapWide
         anchors.rightMargin: Theme.gapWide
         spacing: Theme.gapLarge
-        readonly property string mark: row.columns ? (Mods.conflictMarks[row.modId] || "") : ""
+        readonly property var mark: row.columns ? (Mods.conflictMarks[row.modId] || null) : null
         Text {
             visible: row.columns
             Layout.preferredWidth: Theme.sized(28)
@@ -336,7 +336,7 @@ Item {
             Layout.fillHeight: true
             Chip {
                 id: saying
-                readonly property int kind: row.movedFrom > 0 ? 1 : cells.mark !== "" ? 2 : row.trouble > 0 ? 3 : 0
+                readonly property int kind: row.movedFrom > 0 ? 1 : cells.mark ? 2 : row.trouble > 0 ? 3 : 0
                 // A mark alone where there is no room, and for the one
                 // warning most rows share.
                 readonly property bool bare: !row.listView.wide || (kind === 3 && row.troubleQuiet)
@@ -350,9 +350,9 @@ Item {
                 // The warning the banner above already counts stays grey, so one of a row's own stands out.
                 tone: kind === 1 ? Theme.moved : kind === 3 && row.trouble === 2 ? Theme.err : kind === 3 && row.troubleQuiet ? Theme.ink3 : Theme.warn
                 icon: kind === 1 ? (row.movedFrom > row.number ? "arrow-up" : "arrow-down") : kind === 2 ? "image" : row.trouble === 2 ? "circle-alert" : "triangle-alert"
-                text: bare && kind !== 1 ? "" : kind === 1 ? Theme.count(row.movedBy) : cells.mark === "+" ? Theme.say("loses textures") : cells.mark === "-" ? Theme.say("wins textures") : row.troubleText
+                text: bare && kind !== 1 ? "" : kind === 1 ? Theme.count(row.movedBy) : kind !== 2 ? row.troubleText : cells.mark.loses ? Theme.say("loses textures") : Theme.say("wins textures")
                 tip: kind === 1 ? Theme.fill(row.whyMoved.length > 0 ? "Sort moves it from {} to {}: {}" : "Sort moves it from {} to {}", row.movedFrom, row.number, row.whyMoved)
-                    : kind === 2 ? (cells.mark === "+" ? Theme.say("The selected mod loads later and its textures are used") : Theme.say("This mod loads later than the selected one and its textures are used"))
+                    : kind === 2 ? (cells.mark.loses ? Theme.say("The selected mod loads later and its textures are used") : Theme.say("This mod loads later than the selected one and its textures are used"))
                     : row.troubleText
             }
         }

@@ -6,4 +6,13 @@ members = ["crates/core", "crates/app"]
 edition = "2021"
 rust-version = "1.85"
 license = "GPL-3.0-or-later"
-version = "1.0.0"
+version = "0.9.0"
+
+# What is shipped: `cargo build --profile dist`, as the packaging scripts
+# do. `release` stays quick to build for `just check`. Panics unwind:
+# the diagnostics record them and a lock is still taken afterwards.
+[profile.dist]
+inherits = "release"
+lto = "thin"
+codegen-units = 1
+strip = true

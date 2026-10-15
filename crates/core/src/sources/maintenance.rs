@@ -81,36 +81,69 @@ pub fn game_program(game_dir: &Path) -> Option<PathBuf> {
     .find(|file| file.is_file())
 }
 
-/// Whether the game is running: a process started from its folder whose
-/// program is the game's, or the .NET host given the game's `RimWorld.dll`.
-/// `proc` is `/proc`; anywhere it cannot be read, the answer is no.
-pub fn game_running(proc: &Path, game_dir: &Path) -> bool {
+/// A process as the system lists it.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Process {
+    /// Its program's file, where the system says.
+    pub program: Option<PathBuf>,
+    pub command: Vec<std::ffi::OsString>,
+}
+
+/// The processes running now, with their programs and command lines.
+/// Only those of the user are fully listed, which is where the game is.
+pub fn processes() -> Vec<Process> {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    let mut system = System::new();
+    let wanted = ProcessRefreshKind::nothing()
+        .with_exe(UpdateKind::Always)
+        .with_cmd(UpdateKind::Always);
+    system.refresh_processes_specifics(ProcessesToUpdate::All, true, wanted);
+    system
+        .processes()
+        .values()
+        .map(|process| Process {
+            program: process.exe().map(Path::to_path_buf),
+            command: process.cmd().to_vec(),
+        })
+        .collect()
+}
+
+/// Two names of one file. Windows and macOS do not tell a file's name
+/// by its case, and a program may be listed in either.
+fn same_file(listed: &Path, wanted: &Path) -> bool {
+    if listed == wanted {
+        return true;
+    }
+    let lower = |path: &Path| path.to_string_lossy().to_lowercase();
+    !cfg!(target_os = "linux") && lower(listed) == lower(wanted)
+}
+
+/// Whether one of `processes` is the game: started from its program, or
+/// the .NET host given the game's `RimWorld.dll`.
+pub fn game_among(processes: &[Process], game_dir: &Path) -> bool {
     let Some(program) = game_program(game_dir) else {
         return false;
     };
+    let program = dunce::canonicalize(&program).unwrap_or(program);
     let code = game_dir.join("RimWorld.dll");
-    let is_game = |command: &[u8]| {
-        // The parts of a command line are divided by zero bytes.
-        let mut parts = command
-            .split(|byte| *byte == 0)
-            .map(String::from_utf8_lossy);
-        parts.any(|part| Path::new(part.as_ref()) == program || Path::new(part.as_ref()) == code)
-    };
-    let processes = std::fs::read_dir(proc).into_iter().flatten().flatten();
-    processes
-        .filter(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .bytes()
-                .all(|b| b.is_ascii_digit())
-        })
-        .any(|entry| {
-            // A program started as "./RimWorld" still links to its file.
-            let linked =
-                std::fs::read_link(entry.path().join("exe")).is_ok_and(|exe| exe == program);
-            linked || matches!(std::fs::read(entry.path().join("cmdline")), Ok(command) if is_game(&command))
-        })
+    let code = dunce::canonicalize(&code).unwrap_or(code);
+    processes.iter().any(|process| {
+        // A program started as "./RimWorld" is still listed by its file.
+        let started = process
+            .program
+            .as_deref()
+            .is_some_and(|listed| same_file(listed, &program));
+        let named = process.command.iter().map(Path::new);
+        started
+            || named
+                .into_iter()
+                .any(|part| same_file(part, &program) || same_file(part, &code))
+    })
+}
+
+/// Whether the game is running now.
+pub fn game_running(game_dir: &Path) -> bool {
+    game_among(&processes(), game_dir)
 }
 
 /// A line of launch options as its arguments: divided at spaces, but
@@ -177,40 +210,71 @@ mod tests {
     #[test]
     fn the_game_runs_when_a_process_was_started_from_its_program_or_its_code() {
         let tmp = tempfile::tempdir().unwrap();
-        let (game, proc) = (tmp.path().join("game"), tmp.path().join("proc"));
+        let game = dunce::canonicalize(tmp.path()).unwrap().join("game");
         std::fs::create_dir_all(&game).unwrap();
         std::fs::write(game.join("RimWorld"), "").unwrap();
-        let process = |id: &str, command: String| {
-            std::fs::create_dir_all(proc.join(id)).unwrap();
-            std::fs::write(proc.join(id).join("cmdline"), command.replace(' ', "\0")).unwrap();
+        let process = |program: Option<PathBuf>, command: String| Process {
+            program,
+            command: command.split(' ').map(Into::into).collect(),
         };
-        assert!(!game_running(&proc, &game));
-        process("12", "/usr/bin/editor notes-about-RimWorld.txt".to_string());
-        process("self", format!("{}", game.join("RimWorld").display()));
-        assert!(!game_running(&proc, &game));
-        process(
-            "40",
+        let editor = process(
+            Some("/usr/bin/editor".into()),
+            "/usr/bin/editor notes-about-RimWorld.txt".to_string(),
+        );
+        assert!(!game_among(&[], &game));
+        assert!(!game_among(std::slice::from_ref(&editor), &game));
+        let dotnet = process(
+            Some("/runtime/dotnet".into()),
             format!(
                 "/runtime/dotnet {} -quicktest",
                 game.join("RimWorld.dll").display()
             ),
         );
-        assert!(game_running(&proc, &game));
-        std::fs::remove_dir_all(proc.join("40")).unwrap();
-        process(
-            "41",
+        assert!(game_among(&[editor.clone(), dotnet], &game));
+        let named = process(
+            None,
             format!("{} -popupwindow", game.join("RimWorld").display()),
         );
-        assert!(game_running(&proc, &game));
-        std::fs::remove_dir_all(proc.join("41")).unwrap();
-        process("42", "./RimWorld".to_string());
-        assert!(!game_running(&proc, &game));
-        #[cfg(unix)]
-        {
-            std::os::unix::fs::symlink(game.join("RimWorld"), proc.join("42/exe")).unwrap();
-            assert!(game_running(&proc, &game));
-        }
-        assert!(!game_running(&proc, &tmp.path().join("no-game")));
+        assert!(game_among(&[named], &game));
+        let relative = process(None, "./RimWorld".to_string());
+        assert!(!game_among(std::slice::from_ref(&relative), &game));
+        let started = Process {
+            program: Some(game.join("RimWorld")),
+            ..relative
+        };
+        assert!(game_among(std::slice::from_ref(&started), &game));
+        assert!(!game_among(&[started], &tmp.path().join("no-game")));
+    }
+
+    /// A real process, listed the way every system lists them.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_game_started_now_is_seen_running_and_not_once_it_ended() {
+        let tmp = tempfile::tempdir().unwrap();
+        let game = tmp.path().join("game");
+        std::fs::create_dir_all(&game).unwrap();
+        std::fs::copy("/bin/sleep", game.join("RimWorld")).unwrap();
+        // A copy just written can be "text file busy" while another
+        // test's fork still holds it open for writing.
+        let mut running = (0..50)
+            .find_map(|_| {
+                match std::process::Command::new(game.join("RimWorld"))
+                    .arg("30")
+                    .spawn()
+                {
+                    Err(e) if e.raw_os_error() == Some(26) => {
+                        std::thread::sleep(std::time::Duration::from_millis(20));
+                        None
+                    }
+                    other => Some(other.unwrap()),
+                }
+            })
+            .unwrap();
+        let seen = game_running(&game);
+        running.kill().unwrap();
+        running.wait().unwrap();
+        assert!(seen);
+        assert!(!game_running(&game));
     }
 
     #[test]

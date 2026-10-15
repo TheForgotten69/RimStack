@@ -73,7 +73,7 @@ impl App {
         };
         let ran = program.and_then(|program| {
             rimstack_core::base::program::run(
-                std::process::Command::new(program).arg(&request),
+                rimstack_core::base::program::command(program).arg(&request),
                 rimstack_core::base::program::NETWORK,
             )
         });

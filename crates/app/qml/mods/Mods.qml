@@ -41,17 +41,15 @@ Item {
     readonly property bool dirty: Hub.mods.dirty
     readonly property int errors: Hub.mods.errors
     // For the selected mod: the library ids of the mods it shares
-    // textures with, each "+" if the selected mod wins or "-" if it loses.
+    // textures with, each `{ loses }`: whether that mod loses them to it.
     readonly property var conflictMarks: info.conflictMarks || ({})
     readonly property string saveProblem: Hub.mods.saveProblem
 
-    function undo() { Hub.mods.undo() }
-    function redo() { Hub.mods.redo() }
-    function discardChanges() { Hub.mods.discardChanges() }
-    function save() { return Hub.mods.save() }
-
-    function idAt(model, row) {
-        return model.modIdAt(row)
+    // Run once the save started is on the disk; dropped if it fails.
+    property var afterSave: null
+    function save(then) {
+        afterSave = then || null
+        return Hub.mods.save()
     }
 
     function about(modId) {
@@ -62,7 +60,7 @@ Item {
         const row = Hub.mods.stepFrom(model.active, selectedId, by)
         if (row < 0)
             return
-        select(idAt(model, row), model.active)
+        select(model.modIdAt(row), model.active)
         reveal(model, row, false)
     }
 
@@ -192,6 +190,12 @@ Item {
         function onTold(said, tone) {
             Notices.say(said, tone)
         }
+        function onSaved(ok) {
+            const then = mods.afterSave
+            mods.afterSave = null
+            if (ok && then)
+                then()
+        }
     }
     property Connections countWatch: Connections {
         target: Hub.mods.active
@@ -245,7 +249,7 @@ Item {
         const mod = about(modId)
         Notices.ask({
             title: Theme.fill("Unsubscribe from {}", mod.name || ""),
-            lines: [Theme.say("Steam, which must be running, unsubscribes and then deletes the mod's folder:"), mod.path || ""],
+            lines: [Theme.say("Steam, which must be running, unsubscribes and then deletes the mod's folder:"), { path: mod.path || "" }],
             label: Theme.say("Unsubscribe"), danger: true, run: () => Hub.downloads.unsubscribe(modId) })
     }
 
@@ -432,7 +436,7 @@ Item {
 
     function nthMod(model, position) {
         const row = model.rowOf(position)
-        return row < 0 ? -1 : idAt(model, row)
+        return row < 0 ? -1 : model.modIdAt(row)
     }
     readonly property string checkMode: {
         return Hub.given("--check") ? Hub.argument("--check") || "all" : ""

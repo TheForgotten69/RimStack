@@ -123,6 +123,7 @@ impl App {
             launch_arguments: owned("launchArguments"),
             launch_directly: settings.launch_directly(),
             language: owned("language"),
+            english: self.language_in_use() == "English",
             language_in_use: self.language_in_use(),
             steamcmd: self.steamcmd().is_some(),
             interface_scale: settings.get("interfaceScale").unwrap_or("1").to_string(),
@@ -143,6 +144,14 @@ impl App {
             setup_done: settings.get("setupDone").is_some(),
             rimsort_rules: self.rimsort_rules_file().is_file(),
             data_folder: self.data_dir().to_string_lossy().into_owned(),
+            local_mods: shown(&paths.local_mods()),
+            config_folder: shown(&paths.config.as_ref().map(|c| c.join("Config"))),
+            game_log: shown(&self.game_log()),
+            steamcmd_folder: self
+                .data_dir()
+                .join("steamcmd")
+                .to_string_lossy()
+                .into_owned(),
             settings_file: self.settings_file().to_string_lossy().into_owned(),
             diagnostics_file: self.diagnostics_file().to_string_lossy().into_owned(),
             version: env!("CARGO_PKG_VERSION"),

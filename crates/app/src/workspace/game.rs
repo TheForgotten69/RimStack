@@ -38,9 +38,8 @@ pub fn steam_address(arguments: &str) -> String {
 impl App {
     pub fn game_running(&self) -> bool {
         let paths = self.paths();
-        paths.game.as_deref().is_some_and(|dir| {
-            rimstack_core::sources::maintenance::game_running(std::path::Path::new("/proc"), dir)
-        })
+        let game = paths.game.as_deref();
+        game.is_some_and(rimstack_core::sources::maintenance::game_running)
     }
 
     /// Before a launch from here: the newest save copied, the launch

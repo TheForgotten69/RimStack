@@ -110,7 +110,7 @@ Column {
         Row {
             spacing: Theme.gapSmall
             Btn { visible: Mods.selectedActive && !Hub.mods.previewing; icon: "minus"; text: Theme.say("Deactivate this one"); onClicked: Mods.toggleSelected() }
-            Btn { visible: Mods.info.source === "Workshop"; danger: true; text: Theme.say("Unsubscribe…"); onClicked: Mods.unsubscribe(Mods.info.name || "", Mods.info.folder, Mods.info.path) }
+            Btn { visible: !!Mods.info.workshop; danger: true; text: Theme.say("Unsubscribe…"); onClicked: Mods.unsubscribe(Mods.info.name || "", Mods.info.folder, Mods.info.path) }
         }
     }
 
