@@ -430,6 +430,7 @@
  "Load order": "Load order",
  "Load orders kept under a name, and the order as it was before each Sort": "Load orders kept under a name, and the order as it was before each Sort",
  "Load time": "Load time",
+ "Load times come from the Loading Progress mod: activate it, tick “Track startup loading impact” and “Automatically save startup impact report” in its settings, then start the game.": "Load times come from the Loading Progress mod: activate it, tick “Track startup loading impact” and “Automatically save startup impact report” in its settings, then start the game.",
  "Load-order rules kept by players (RimSort's Community Rules Database), for mods whose own files do not say enough.": "Load-order rules kept by players (RimSort's Community Rules Database), for mods whose own files do not say enough.",
  "Load-order rules, for Sort": "Load-order rules, for Sort",
  "Loaders": "Loaders",

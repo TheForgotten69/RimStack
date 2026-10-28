@@ -198,6 +198,7 @@ Item {
     readonly property Columns columns: Columns {
         prefs: mods.prefs
         loadTimes: mods.overview.loadTimes === true
+        loadTimesHow: mods.overview.loadTimesHow || ""
         onShownByAsked: Hub.mods.showBy(shownBy, descending)
     }
     function categoryMenu(item, x, y, category) {

@@ -154,7 +154,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 currentIndex: window.section
-                ModsScreen {}
+                ModsScreen { id: modsScreen }
                 Loader {
                     active: window.section === 1 || item !== null
                     sourceComponent: DownloadsScreen {
@@ -422,7 +422,7 @@ ApplicationWindow {
         }
     }
 
-    readonly property var openable: ({ play: topBar.beforePlay, history: statusBar.historyMenu, keys: keysSheet, search: commands, lists: topBar.listsMenu, tray: statusBar.trayMenu, ask: question })
+    readonly property var openable: ({ play: topBar.beforePlay, history: statusBar.historyMenu, keys: keysSheet, search: commands, lists: topBar.listsMenu, view: modsScreen.viewMenu, columns: modsScreen.popMenu, tray: statusBar.trayMenu, ask: question })
     property var opened: null
     property bool readyMarked: false
     onFrameSwapped: {

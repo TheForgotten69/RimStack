@@ -430,6 +430,7 @@
  "Load order": "Ordem de carregamento",
  "Load orders kept under a name, and the order as it was before each Sort": "Ordens de carregamento salvas com um nome, e a ordem como estava antes de cada Ordenar",
  "Load time": "Tempo de carregamento",
+ "Load times come from the Loading Progress mod: activate it, tick “Track startup loading impact” and “Automatically save startup impact report” in its settings, then start the game.": "Os tempos de carregamento vêm do mod Loading Progress: ative-o, marque “Track startup loading impact” e “Automatically save startup impact report” nas configurações dele e depois inicie o jogo.",
  "Load-order rules kept by players (RimSort's Community Rules Database), for mods whose own files do not say enough.": "Regras de ordem de carregamento mantidas por jogadores (Community Rules Database do RimSort), para mods cujos próprios arquivos não dizem o suficiente.",
  "Load-order rules, for Sort": "Regras de ordem de carregamento, para Ordenar",
  "Loaders": "Carregadores",

@@ -291,7 +291,7 @@ Item {
                     Accessible.name: text
                     Keys.onReturnPressed: Mods.columns.showBy(heading.column)
                     Keys.onSpacePressed: Mods.columns.showBy(heading.column)
-                    Keys.onMenuPressed: Mods.menuRequested(heading, 0, heading.height + 2, Mods.columns.menu())
+                    Keys.onMenuPressed: Mods.menuRequested(heading, 0, heading.height + 2, Mods.columns.entries)
                     Keys.onPressed: event => {
                         const by = event.key === Qt.Key_Left ? -1 : event.key === Qt.Key_Right ? 1 : 0
                         const held = (event.modifiers & Qt.ControlModifier) && (event.modifiers & Qt.AltModifier)
@@ -304,7 +304,7 @@ Item {
                     HoverHandler { cursorShape: Qt.PointingHandCursor }
                     Tip { text: heading.column === "" ? Theme.say("The load order itself") : Theme.say("Click to show the list by this column; again to turn it round. Right-click to choose the columns. Drag it, or Ctrl + Alt + Left or Right, to move it.") }
                     TapHandler { onTapped: Mods.columns.showBy(heading.column) }
-                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: point => Mods.menuRequested(heading, point.position.x, heading.height + 2, Mods.columns.menu()) }
+                    TapHandler { acceptedButtons: Qt.RightButton; onTapped: point => Mods.menuRequested(heading, point.position.x, heading.height + 2, Mods.columns.entries) }
                 }
                 Heading { Layout.preferredWidth: view.numberWidth; horizontalAlignment: Text.AlignRight; column: ""; text: "#" }
                 Heading { Layout.fillWidth: true; column: "name"; text: Theme.say("Name") + (Mods.columns.shownBy === "name" ? (Mods.columns.descending ? " ▾" : " ▴") : "") }
@@ -363,9 +363,10 @@ Item {
                         id: viewMenu
                         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
                         x: parent.width - width
-                        y: parent.height + 6
-                        width: Theme.sized(250)
+                        y: parent.height + Theme.gapSmall
+                        width: viewWords.averageCharacterWidth * 40 + 2 * padding
                         padding: Theme.gapMedium
+                        FontMetrics { id: viewWords; font.pixelSize: Theme.caption }
                         background: Rectangle { radius: Theme.cornerLarge; color: Theme.bar; border.width: 1; border.color: Theme.line }
                         contentItem: Column {
                             spacing: Theme.gapSmall
@@ -374,15 +375,17 @@ Item {
                             Btn { width: parent.width; icon: Mods.prefs.headings === 0 ? "check" : ""; text: Theme.say("One numbered list"); onClicked: Mods.prefs.headings = 0 }
                             Text { topPadding: Theme.gapTiny; color: Theme.ink2; font.pixelSize: Theme.small; font.weight: Font.DemiBold; text: Theme.say("Columns") }
                             Repeater {
-                                model: Object.keys(Mods.columns.labels)
+                                model: Mods.columns.entries
                                 Btn {
-                                    required property string modelData
+                                    required property var modelData
                                     width: parent.width
-                                    icon: Mods.columns.shown.indexOf(modelData) >= 0 ? "check" : ""
-                                    text: Theme.say(Mods.columns.labels[modelData])
-                                    onClicked: Mods.columns.toggle(modelData)
+                                    icon: modelData.on ? "check" : ""
+                                    text: modelData.label
+                                    tip: modelData.note
+                                    onClicked: modelData.run()
                                 }
                             }
+                            Text { visible: !Mods.columns.loadTimes; width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink3; font.pixelSize: Theme.caption; text: Mods.columns.loadTimesHow }
                             Text { width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink3; font.pixelSize: Theme.caption; text: Theme.say("A heading orders the list when clicked and moves when dragged.") }
                         }
                     }

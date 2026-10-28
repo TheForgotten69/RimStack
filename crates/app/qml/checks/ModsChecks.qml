@@ -318,8 +318,9 @@ Item {
         Mods.columns.size("author", 9999)
         check("within what a column may take", Mods.columns.chosenWidths.author === 420)
         Mods.prefs.columnSizes = sizesBefore
-        const listed = Mods.columns.menu()
-        check("the column menu lists every column, the shown ones marked", listed.length === 3 && listed[0].text.startsWith("✓"))
+        const listed = Mods.columns.entries
+        check("the column menu lists every column, the chosen ones marked", listed.length === 3 && listed[0].text.startsWith("✓"))
+        check("and Load says what its times need while none are known", Mods.columns.loadTimes || listed[2].note.length > 0)
 
         const subRows = () => { let n = 0; for (let r = 0; r < Mods.active.rows(); r++) if (Mods.active.at(r).isSub === true) n += 1; return n }
         const before = subRows()

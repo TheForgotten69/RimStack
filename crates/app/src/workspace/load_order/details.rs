@@ -197,6 +197,7 @@ pub struct Overview {
     other_warnings: usize,
     slowest: Vec<Slow>,
     load_times: bool,
+    load_times_how: Sentence,
     installed: usize,
     missing: usize,
     unreadable: usize,
@@ -517,6 +518,7 @@ impl LoadOrder {
             .collect();
         let community = app.community();
         let tally = describe::tally(&self.troubles);
+        let load_times = mods.iter().any(|m| m.load_micros.is_some());
         Overview {
             game_version: library.game_version.clone(),
             categories: Category::ALL
@@ -531,7 +533,14 @@ impl LoadOrder {
             version_only: tally.version_only,
             other_warnings: tally.other_warnings,
             slowest: details::slowest(mods, 5),
-            load_times: mods.iter().any(|m| m.load_micros.is_some()),
+            load_times,
+            load_times_how: if load_times {
+                Sentence::default()
+            } else {
+                say!(
+                    "Load times come from the Loading Progress mod: activate it, tick “Track startup loading impact” and “Automatically save startup impact report” in its settings, then start the game."
+                )
+            },
             installed: library.installed.len(),
             missing: library.missing,
             unreadable: library.unreadable,

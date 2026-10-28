@@ -9,7 +9,7 @@ Item {
 
     readonly property var sizes: [[1440, 860], []]
     readonly property var scales: [1.6, 1.3, 1, 0.85]
-    readonly property var popups: ["keys", "search", "lists", "history", "tray", "play", "ask"]
+    readonly property var popups: ["keys", "search", "lists", "history", "tray", "play", "view", "columns", "ask"]
 
     readonly property var scenes: {
         const all = []
@@ -135,6 +135,8 @@ Item {
         const popup = scene.popup !== "" ? checks.window.openable[scene.popup] : null
         if (scene.popup === "ask")
             Notices.ask({ title: "Set the mods' settings aside", lines: ["Every Mod_*.xml is moved out of", { path: "/home/example/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios/Config" }, "Mods start from their defaults. Moving the files back restores them."], label: "Set aside", run: () => {} })
+        else if (scene.popup === "columns")
+            popup.openAt(checks.window.contentItem, 0, 0, Mods.columns.entries)
         else if (popup)
             popup.open()
     }

@@ -490,6 +490,7 @@ mods.overview: object
   gameVersion: text
   installed: number
   loadTimes: bool
+  loadTimesHow: text
   missing: number
   needed: list
     []: text
