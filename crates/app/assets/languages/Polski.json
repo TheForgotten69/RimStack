@@ -792,6 +792,7 @@
  "Shows the order the rules ask for, to keep or discard. Nothing is written before Save.": "Pokazuje kolejność wymaganą przez reguły, do zachowania lub odrzucenia. Przed Zapisz nic nie jest zapisywane.",
  "Side by side": "Obok siebie",
  "Since the last clean launch": "Od ostatniego uruchomienia bez błędów",
+ "Sits among {} because {} has to load after it.": "Stoi wśród {}, bo {} musi się wczytywać po nim.",
  "Skip": "Pomiń",
  "Skip this mod": "Pomiń ten mod",
  "Skip to Start": "Przejdź do Uruchom",

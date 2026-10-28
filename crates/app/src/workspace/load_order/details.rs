@@ -133,6 +133,7 @@ pub struct Details {
     sub: String,
     patches: Vec<Patched>,
     category: Option<&'static str>,
+    held: Sentence,
     problems: Vec<ProblemSaid>,
     your_rules: Vec<OwnRule>,
     detected: Vec<Detected>,
@@ -348,7 +349,15 @@ impl LoadOrder {
             .collect();
         if let Some(at) = self.active.position_of(id) {
             let listed = &self.active.mods()[at];
-            said.category = Some(listed.category.label());
+            said.category = Some(listed.filed.label());
+            if !listed.held_by.is_empty() {
+                let among = Sentence::named(listed.category.label());
+                said.held = say!(
+                    "Sits among {} because {} has to load after it.",
+                    among.inside(),
+                    listed.held_by
+                );
+            }
             let own = self.troubles.get(at).map(Vec::as_slice).unwrap_or_default();
             said.problems = own.iter().map(|t| ProblemSaid::of(listed, t)).collect();
             said.offer_trust = said.problems.iter().any(|t| t.trust);

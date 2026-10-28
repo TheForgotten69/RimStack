@@ -792,6 +792,7 @@
  "Shows the order the rules ask for, to keep or discard. Nothing is written before Save.": "Mostra l'ordine richiesto dalle regole, da mantenere o scartare. Nulla viene scritto prima di Salva.",
  "Side by side": "Affiancati",
  "Since the last clean launch": "Dall'ultimo avvio senza errori",
+ "Sits among {} because {} has to load after it.": "Sta tra {} perché {} deve caricarsi dopo.",
  "Skip": "Salta",
  "Skip this mod": "Salta questo mod",
  "Skip to Start": "Salta ad Avvia",

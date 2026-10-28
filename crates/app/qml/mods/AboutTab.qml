@@ -189,6 +189,7 @@ Column {
                 onClicked: Mods.menuRequested(fileUnder, 0, fileUnder.height + 2, Mods.categoryChoices(Mods.selectedId))
             }
         }
+        Text { visible: !!Mods.info.held; width: parent.width; leftPadding: side.labelWidth + Theme.gap; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; text: Mods.info.held || "" }
         RowLayout {
             width: parent.width
             spacing: Theme.gap

@@ -792,6 +792,7 @@
  "Shows the order the rules ask for, to keep or discard. Nothing is written before Save.": "Показывает порядок, которого требуют правила, чтобы принять или отбросить. До сохранения ничего не записывается.",
  "Side by side": "Рядом",
  "Since the last clean launch": "С последнего чистого запуска",
+ "Sits among {} because {} has to load after it.": "Стоит среди {}, потому что {} должен загружаться после него.",
  "Skip": "Пропустить",
  "Skip this mod": "Пропустить этот мод",
  "Skip to Start": "Перейти к началу",

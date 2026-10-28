@@ -792,6 +792,7 @@
  "Shows the order the rules ask for, to keep or discard. Nothing is written before Save.": "Zeigt die von den Regeln verlangte Reihenfolge zum Behalten oder Verwerfen. Vor dem Sichern wird nichts geschrieben.",
  "Side by side": "Nebeneinander",
  "Since the last clean launch": "Seit dem letzten fehlerfreien Start",
+ "Sits among {} because {} has to load after it.": "Steht bei {}, weil {} danach geladen werden muss.",
  "Skip": "Überspringen",
  "Skip this mod": "Diesen Mod überspringen",
  "Skip to Start": "Zu Start springen",

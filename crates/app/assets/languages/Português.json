@@ -792,6 +792,7 @@
  "Shows the order the rules ask for, to keep or discard. Nothing is written before Save.": "Mostra a ordem que as regras pedem, para manter ou descartar. Nada é gravado antes de Salvar.",
  "Side by side": "Lado a lado",
  "Since the last clean launch": "Desde a última inicialização sem erros",
+ "Sits among {} because {} has to load after it.": "Fica entre {} porque {} precisa carregar depois dele.",
  "Skip": "Pular",
  "Skip this mod": "Pular este mod",
  "Skip to Start": "Pular para Iniciar",

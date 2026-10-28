@@ -215,6 +215,9 @@ mod tests {
             patched: Default::default(),
             sub: String::new(),
             load_micros: None,
+            filed: Category::Content,
+            chosen: false,
+            held_by: String::new(),
         };
         names.iter().enumerate().map(one).collect()
     }

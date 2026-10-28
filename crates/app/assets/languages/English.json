@@ -792,6 +792,7 @@
  "Shows the order the rules ask for, to keep or discard. Nothing is written before Save.": "Shows the order the rules ask for, to keep or discard. Nothing is written before Save.",
  "Side by side": "Side by side",
  "Since the last clean launch": "Since the last clean launch",
+ "Sits among {} because {} has to load after it.": "Sits among {} because {} has to load after it.",
  "Skip": "Skip",
  "Skip this mod": "Skip this mod",
  "Skip to Start": "Skip to Start",
