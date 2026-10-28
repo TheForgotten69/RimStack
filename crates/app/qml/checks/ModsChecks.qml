@@ -208,6 +208,13 @@ Item {
             Hub.mods.undo()
             check("undo takes the sort back", order() === start)
         }
+        const outOfOrder = (Mods.overview.troubles || []).find(t => t.fix.action === "sort")
+        if (outOfOrder) {
+            Mods.applyFix(outOfOrder.modId, outOfOrder.fix)
+            check("Sort on a mod out of its own order gives the preview", Hub.mods.previewing)
+            Mods.endSort(false)
+            check("and discarding it leaves the order as it was", order() === start && !Hub.mods.dirty)
+        }
 
         Hub.mods.moveMod(true, 0, 3)
         check("a move makes the list dirty", Hub.mods.dirty && Hub.mods.canUndo && order() !== start)
