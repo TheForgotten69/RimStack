@@ -108,6 +108,8 @@ fn main() {
     .qrc_resources(["assets/rimstack.svg"])
     .qt_module("Quick")
     .qt_module("QuickControls2")
+    .crate_include_root(None)
+    .include_dir(std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets the manifest folder"))
     .files([
         "src/hub.rs",
         "src/settings_data.rs",
