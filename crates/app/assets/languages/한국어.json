@@ -327,7 +327,7 @@
   "Game version warnings are ignored for RimWorld {}": "RimWorld {}의 게임 버전 경고를 무시합니다",
   "Get {}": "{} 가져오기",
   "Git": "Git",
-  "Git for Workshop mods": "창작마당 모드에 Git 사용",
+  "Git for Workshop mods": "창작마당 모드에도 Git 사용",
   "Git is not installed": "Git이 설치되어 있지 않습니다",
   "Git is not installed: a mod kept as a Git checkout cannot be checked or updated": "Git이 설치되어 있지 않습니다: Git으로 복제한 모드는 상태를 확인하거나 업데이트할 수 없습니다",
   "Give the list a name.": "목록 이름을 입력하세요.",
