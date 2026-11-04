@@ -38,6 +38,10 @@ test *filter:
 package:
     {{ if os() == "windows" { "pwsh packaging/windows/package.ps1" } else { "packaging/" + os() + "/package.sh" } }}
 
+# The Flatpak, into target/packages: needs flatpak-builder, and the KDE runtime from Flathub
+flatpak:
+    packaging/flatpak/package.sh
+
 # Known advisories against the crates in Cargo.lock
 audit:
     cargo audit
