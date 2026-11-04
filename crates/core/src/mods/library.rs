@@ -9,7 +9,7 @@ use crate::rimworld::about::{self, About};
 use crate::rimworld::id;
 use crate::rimworld::paths::{ModRoot, Paths, Source};
 use rayon::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 pub use crate::mods::classify::Kinds;
@@ -251,6 +251,7 @@ pub struct Library {
     pub unreadable: usize,
     names: HashMap<String, String>,
     pub categories: Vec<Category>,
+    pub game_assemblies: HashSet<String>,
 }
 
 impl Library {
@@ -525,7 +526,9 @@ pub fn load(paths: &Paths) -> Result<Library, Error> {
         || paths.game.as_deref().and_then(Game::find),
     );
     read_code(&mut mods, game.as_ref(), version);
-    Ok(build(mods, &active, version))
+    let mut library = build(mods, &active, version);
+    library.game_assemblies = game.as_ref().map(|g| g.ships().clone()).unwrap_or_default();
+    Ok(library)
 }
 
 mod copies;

@@ -90,7 +90,7 @@ fn is_name(s: &str) -> bool {
     !s.is_empty() && s.len() < 120 && s.chars().all(|c| c.is_alphanumeric() || "_-.".contains(c))
 }
 
-pub fn scan(load_folders: &[PathBuf]) -> Scanned {
+pub fn scan(load_folders: &[PathBuf], game: &HashSet<String>) -> Scanned {
     let mut found = Scanned::default();
     for folder in load_folders {
         let mut files = Vec::new();
@@ -144,19 +144,35 @@ pub fn scan(load_folders: &[PathBuf]) -> Scanned {
             }
         }
     }
+    // A parent from the mod's own defs is no one else's to wait for.
+    let own = found.bases.clone();
+    found.parents.retain(|(parent, _)| !own.contains(parent));
+
+    // Game wasn't found, bail out, so we don't sort incorrectly
+    if game.is_empty() {
+        return found;
+    }
+
     for dll in dlls_of(load_folders) {
         let stem = dll
             .file_stem()
             .unwrap_or_default()
             .to_string_lossy()
             .to_lowercase();
-        found.assemblies.insert(stem);
+
+        // A mod's `Assemblies` folder may hold copies of the game's or engine's
+        // own assemblies, from a build that copied its references. They are the
+        // game's, not the mod's. Counting them would produce incorrect results.
+        if game.contains(&stem) {
+            continue;
+        }
         let Ok(bytes) = std::fs::read(&dll) else {
             continue;
         };
         let Some(assembly) = crate::rimworld::dotnet::Assembly::read(&bytes) else {
             continue;
         };
+        found.assemblies.insert(stem);
         for name in assembly.references() {
             found.uses.push((name.to_lowercase(), dll.clone()));
         }
@@ -176,8 +192,6 @@ pub fn scan(load_folders: &[PathBuf]) -> Scanned {
     found
         .uses
         .retain(|(name, _)| !own_assemblies.contains(name));
-    let own = found.bases.clone();
-    found.parents.retain(|(parent, _)| !own.contains(parent));
     found
 }
 
@@ -340,7 +354,7 @@ mod tests {
             ("1.6/Patches/p.xml", PATCH),
             ("About/About.xml", "<x Name=\"NotADef\"/>"),
         ]);
-        let found = scan(&[root.clone(), root.join("1.6")]);
+        let found = scan(&[root.clone(), root.join("1.6")], &HashSet::new());
         assert_eq!(
             found.defines,
             ["Oak_Chair", "Oak_Table"].map(String::from).into()
@@ -491,6 +505,70 @@ mod tests {
         let roots = vec![PathBuf::from("/m"); 2];
         let borrowed: Vec<&Scanned> = mods.iter().collect();
         assert!(infer(&borrowed, &names, &[true, false], &roots).is_empty());
+    }
+
+    /// A build that copied its references into `Assemblies` must not look like
+    /// the code everything else is built on - but a bundled library it ships is
+    /// still the mod's, and still orders the mods that use it.
+    #[test]
+    fn a_mod_shipping_the_games_own_assemblies_is_not_what_everything_uses() {
+        use crate::rimworld::dotnet::build::Builder;
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mine = root.join("praise/Assemblies");
+        fs::create_dir_all(&mine).unwrap();
+        let mut own = Builder::new();
+        own.reference("Assembly-CSharp");
+        fs::write(mine.join("Praise.dll"), own.finish()).unwrap();
+        // The game's own, copied beside it by the build.
+        let mut copied = Builder::new();
+        copied.reference("UnityEngine.CoreModule");
+        fs::write(mine.join("Assembly-CSharp.dll"), copied.finish()).unwrap();
+        let mut unity = Builder::new();
+        unity.reference("netstandard");
+        fs::write(mine.join("UnityEngine.CoreModule.dll"), unity.finish()).unwrap();
+        // A library it bundles: not the game's, so the mod's own.
+        let mut bundled = Builder::new();
+        bundled.reference("netstandard");
+        fs::write(mine.join("Newtonsoft.Json.dll"), bundled.finish()).unwrap();
+        // Another mod, whose code uses that library.
+        let other = root.join("other/Assemblies");
+        fs::create_dir_all(&other).unwrap();
+        let mut theirs = Builder::new();
+        theirs.reference("Assembly-CSharp");
+        theirs.reference("Newtonsoft.Json");
+        fs::write(other.join("Other.dll"), theirs.finish()).unwrap();
+
+        let ships: HashSet<String> = ["assembly-csharp", "unityengine.coremodule"]
+            .map(String::from)
+            .into();
+        let praise = scan(&[root.join("praise")], &ships);
+        assert_eq!(
+            praise.assemblies,
+            ["praise".to_string(), "newtonsoft.json".to_string()].into()
+        );
+        // Without the game's own list nothing is read: a copy cannot be told from code.
+        let blind = scan(&[root.join("praise")], &HashSet::new());
+        assert!(blind.assemblies.is_empty());
+
+        let other = scan(&[root.join("other")], &ships);
+        let roots = [root.join("praise"), root.join("other")];
+        let found = infer(
+            &[&praise, &other],
+            &["Praise".to_string(), "Other".to_string()],
+            &[false, false],
+            &roots,
+        );
+        let pairs: Vec<(usize, usize)> = found.iter().map(|r| (r.first, r.then)).collect();
+        assert_eq!(
+            pairs,
+            [(0, 1)],
+            "only the library it ships orders another mod"
+        );
+        assert_eq!(
+            found[0].why.to_string(),
+            "Assemblies/Other.dll uses its code"
+        );
     }
 
     #[test]

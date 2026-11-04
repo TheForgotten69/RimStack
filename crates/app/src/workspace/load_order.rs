@@ -459,7 +459,10 @@ impl App {
                     &library.game_version,
                     &|m| active.contains(m),
                 );
-                (conflicts::provided(&loaded), infer::scan(&loaded))
+                (
+                    conflicts::provided(&loaded),
+                    infer::scan(&loaded, &library.game_assemblies),
+                )
             })
             .collect();
         let (provided, scanned): (Vec<_>, Vec<_>) = read.into_iter().unzip();
