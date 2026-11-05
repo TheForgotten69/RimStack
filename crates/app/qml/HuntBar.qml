@@ -59,8 +59,8 @@ Rectangle {
         Btn { visible: bar.asking; primary: Mods.dirty; icon: "play"; text: Theme.say("Save and play"); tip: Theme.say("Writes this round's list to ModsConfig.xml and starts the game. The newest save was copied to RimStack's data folder, save-before-search, when the search began."); onClicked: bar.saveAndPlay() }
         Btn { visible: bar.asking; text: Theme.say("Still broken"); onClicked: bar.answer(true) }
         Btn { visible: bar.asking; text: Theme.say("Works now"); onClicked: bar.answer(false) }
-        Btn { visible: bar.search.found !== ""; primary: true; text: Theme.say("My list without it"); tip: Theme.say("The list the search began with, less this mod. Nothing is written before Save."); onClicked: bar.end(true) }
-        Btn { text: bar.search.found !== "" ? Theme.say("My list as it was") : Theme.say("Stop"); tip: Theme.say("The list the search began with. Nothing is written before Save."); onClicked: bar.end(false) }
+        Btn { visible: bar.search.found !== ""; primary: true; text: Theme.say("My list without it"); tip: Theme.say("The list the search started with, excluding this mod. Nothing is written until Save."); onClicked: bar.end(true) }
+        Btn { text: bar.search.found !== "" ? Theme.say("My list as it was") : Theme.say("Stop"); tip: Theme.say("The list the search started with, including this mod. Nothing is written until Save."); onClicked: bar.end(false) }
     }
     Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.edge }
 }
