@@ -66,7 +66,6 @@ pub struct Game {
     ships: HashSet<String>,
 }
 
-/// The names of the assemblies in the folder, as a mod ships copies of them.
 fn beside(dir: &Path) -> HashSet<String> {
     std::fs::read_dir(dir)
         .into_iter()
@@ -170,7 +169,7 @@ impl Game {
         Some(game)
     }
 
-    /// The game's own assemblies, by lower-case name: a mod's copy of one is not the mod's.
+    /// By lower-case name.
     pub fn ships(&self) -> &HashSet<String> {
         &self.ships
     }
