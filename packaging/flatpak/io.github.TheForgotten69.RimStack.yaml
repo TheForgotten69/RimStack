@@ -62,7 +62,9 @@ modules:
       # Flatpak shows the icon and the name it files the application under.
       - desktop-file-edit --set-key=Icon --set-value=$FLATPAK_ID /app/share/applications/$FLATPAK_ID.desktop
       - desktop-file-edit --set-key=StartupWMClass --set-value=$FLATPAK_ID /app/share/applications/$FLATPAK_ID.desktop
-      - install -Dm644 packaging/flatpak/$FLATPAK_ID.metainfo.xml /app/share/metainfo/$FLATPAK_ID.metainfo.xml
+      # The release is the version Cargo.toml names, so the two cannot disagree.
+      - packaging/flatpak/metainfo-version.py packaging/flatpak/$FLATPAK_ID.metainfo.xml $FLATPAK_ID.metainfo.xml
+      - install -Dm644 $FLATPAK_ID.metainfo.xml /app/share/metainfo/$FLATPAK_ID.metainfo.xml
     sources:
       - generated-sources.json
       # This repository. `target` is the build's own; the .git folder gives the
