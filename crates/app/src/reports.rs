@@ -47,6 +47,8 @@ pub struct SettingsReport {
     pub set_workshop: Option<String>,
     pub launch_arguments: Option<String>,
     pub launch_directly: bool,
+    /// A Flatpak: the game is started through Steam, not from here.
+    pub sandboxed: bool,
     pub language: Option<String>,
     pub language_in_use: String,
     pub english: bool,

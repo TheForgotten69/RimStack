@@ -31,6 +31,12 @@ pub fn steam_address(arguments: &str) -> String {
     }
 }
 
+/// Whether Steam is to start the game: always in a Flatpak, whose sandbox a program
+/// started from here would run in.
+fn through_steam(sandboxed: bool, directly: bool) -> bool {
+    sandboxed || !directly
+}
+
 impl App {
     pub fn game_running(&self) -> bool {
         let paths = self.paths();
@@ -73,7 +79,7 @@ impl App {
             let arguments = settings.get("launchArguments").unwrap_or_default();
             (settings.launch_directly(), arguments.to_string())
         };
-        if !directly {
+        if through_steam(rimstack_core::base::sandbox::sandboxed(), directly) {
             return Ok(Some(steam_address(&arguments)));
         }
         let paths = self.paths();
@@ -125,6 +131,14 @@ mod tests {
             steam_address("-logfile /tmp/a b.txt é"),
             "steam://run/294100//-logfile%20%2Ftmp%2Fa%20b.txt%20%C3%A9/"
         );
+    }
+
+    #[test]
+    fn steam_starts_the_game_in_a_flatpak_whatever_the_setting_says() {
+        assert!(through_steam(false, false));
+        assert!(!through_steam(false, true));
+        assert!(through_steam(true, false));
+        assert!(through_steam(true, true));
     }
 
     #[test]
