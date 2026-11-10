@@ -29,6 +29,8 @@ finish-args:
   # The game, its Mods folder, Steam's workshop library, its settings and the
   # saves are all somewhere in the user's home, game, mods can be on separate drive too
   - --filesystem=home
+  # A Steam from Flathub keeps its library, workshop items and settings in its own sandbox.
+  - --filesystem=~/.var/app/com.valvesoftware.Steam
   - --filesystem=/media
   - --filesystem=/run/media
   - --filesystem=/mnt
