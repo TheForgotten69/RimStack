@@ -1,4 +1,5 @@
 use super::operations::wanted_by;
+use super::types::Types;
 use super::{Active, DefKey};
 use libxml::readonly::RoNode;
 use libxml::tree::NodeType;
@@ -91,7 +92,7 @@ impl Slot {
 
 /// Each source after inheritance, and the elements named twice in the own XML of a node that has a
 /// parent (`CheckForDuplicateNodes`).
-pub(super) fn resolve(sources: &[Source]) -> (Vec<Slot>, Vec<(DefKey, String)>) {
+pub(super) fn resolve(sources: &[Source], types: &Types) -> (Vec<Slot>, Vec<(DefKey, String)>) {
     let mut by_name: HashMap<&str, Vec<usize>> = HashMap::new();
     let mut registered = Vec::new();
     for (at, source) in sources.iter().enumerate() {
@@ -119,7 +120,7 @@ pub(super) fn resolve(sources: &[Source]) -> (Vec<Slot>, Vec<(DefKey, String)>) 
             parents.insert(at, parent);
             if let Some(key) = &sources[at].key {
                 let mut found = Vec::new();
-                repeated(&sources[at].elem, &mut found);
+                repeated(&sources[at].elem, types, &mut found);
                 duplicates.extend(found.into_iter().map(|name| (key.clone(), name)));
             }
         }
@@ -127,7 +128,7 @@ pub(super) fn resolve(sources: &[Source]) -> (Vec<Slot>, Vec<(DefKey, String)>) 
     let mut resolved: Vec<Slot> = sources.iter().map(|_| Slot::Own).collect();
     let mut state = vec![0u8; sources.len()];
     for &at in &registered {
-        settle(at, sources, &parents, &mut resolved, &mut state);
+        settle(at, sources, &parents, types, &mut resolved, &mut state);
     }
     (resolved, duplicates)
 }
@@ -163,6 +164,7 @@ fn settle(
     at: usize,
     sources: &[Source],
     parents: &HashMap<usize, usize>,
+    types: &Types,
     resolved: &mut Vec<Slot>,
     state: &mut Vec<u8>,
 ) -> bool {
@@ -177,12 +179,12 @@ fn settle(
     }
     state[at] = 1;
     if let Some(&parent) = parents.get(&at) {
-        if settle(parent, sources, parents, resolved, state) && sound(resolved, at) {
+        if settle(parent, sources, parents, types, resolved, state) && sound(resolved, at) {
             let mut merged = resolved[parent]
                 .get(&sources[parent].elem)
                 .expect("a settled parent")
                 .clone();
-            overwrite(&sources[at].elem, &mut merged);
+            overwrite(&sources[at].elem, &mut merged, types);
             resolved[at] = Slot::Merged(merged);
         } else {
             resolved[at] = Slot::Cyclic;
@@ -192,22 +194,23 @@ fn settle(
     sound(resolved, at)
 }
 
-fn is_list(elem: &Elem) -> bool {
-    elem.name == "li"
+/// `IsListElement`.
+fn is_list(elem: &Elem, within: &Elem, types: &Types) -> bool {
+    elem.name == "li" || types.repeats(&within.name)
 }
 
-fn repeated(elem: &Elem, found: &mut Vec<String>) {
+fn repeated(elem: &Elem, types: &Types, found: &mut Vec<String>) {
     let mut used = HashSet::new();
     for child in elem.elements() {
-        if !is_list(child) && !used.insert(child.name.as_str()) {
+        if !is_list(child, elem, types) && !used.insert(child.name.as_str()) {
             found.push(child.name.clone());
         }
-        repeated(child, found);
+        repeated(child, types, found);
     }
 }
 
 /// `RecursiveNodeCopyOverwriteElements`.
-fn overwrite(child: &Elem, current: &mut Elem) {
+fn overwrite(child: &Elem, current: &mut Elem, types: &Types) {
     if child
         .attrs
         .get("Inherit")
@@ -233,7 +236,7 @@ fn overwrite(child: &Elem, current: &mut Elem) {
         return;
     }
     for item in child.elements() {
-        if is_list(item) {
+        if is_list(item, child, types) {
             current.children.push(Child::Element(item.clone()));
             continue;
         }
@@ -242,7 +245,7 @@ fn overwrite(child: &Elem, current: &mut Elem) {
             _ => None,
         });
         match same {
-            Some(existing) => overwrite(item, existing),
+            Some(existing) => overwrite(item, existing, types),
             None => current.children.push(Child::Element(item.clone())),
         }
     }

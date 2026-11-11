@@ -1,10 +1,12 @@
 use crate::rimworld::dotnet::{Assembly, Field, FieldType, Type};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 #[derive(Debug, Default)]
 pub struct Types {
     known: HashMap<String, Known>,
+    /// `XmlInheritance.allowDuplicateNodesFieldNames`: by name, whatever type declares it.
+    repeating: HashSet<String>,
 }
 
 #[derive(Debug)]
@@ -24,6 +26,7 @@ impl Types {
     /// An assembly that cannot be read is left out; a type found twice keeps its first.
     pub fn read(dlls: &[PathBuf]) -> Types {
         let mut known = HashMap::new();
+        let mut repeating = HashSet::new();
         for dll in dlls {
             let Ok(bytes) = std::fs::read(dll) else {
                 continue;
@@ -38,10 +41,12 @@ impl Types {
                 ..
             } in assembly.types()
             {
+                let marked = fields.iter().filter(|f| f.repeats);
+                repeating.extend(marked.map(|f| f.name.clone()));
                 known.entry(name).or_insert(Known { extends, fields });
             }
         }
-        Types { known }
+        Types { known, repeating }
     }
 
     #[cfg(test)]
@@ -54,13 +59,28 @@ impl Types {
                     .map(|(name, of)| Field {
                         name: name.to_string(),
                         of: of.clone(),
+                        repeats: false,
                     })
                     .collect();
                 let extends = extends.map(str::to_string);
                 (name.to_string(), Known { extends, fields })
             })
             .collect();
-        Types { known }
+        Types {
+            known,
+            repeating: HashSet::new(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn repeating(mut self, fields: &[&str]) -> Types {
+        self.repeating = fields.iter().map(|f| f.to_string()).collect();
+        self
+    }
+
+    /// The elements a field of this name holds may share a name, as `li` do.
+    pub fn repeats(&self, field: &str) -> bool {
+        self.repeating.contains(field)
     }
 
     /// A `Class` attribute wins; its name may leave out `Verse.` or `RimWorld.`.
@@ -181,5 +201,7 @@ mod tests {
             Some(&FieldType::ListOf("Verse.GeneDef".into()))
         );
         assert!(types.is_def("Verse.GeneDef"));
+        assert!(types.repeats("descriptionHyperlinks"));
+        assert!(!types.repeats("genes"));
     }
 }

@@ -401,6 +401,7 @@ mod tests {
                 &[("comps", FieldType::Other)],
             ),
         ])
+        .repeating(&["descriptionHyperlinks"])
     }
 
     /// Each mod is its defs and its patch operations.
@@ -527,6 +528,28 @@ mod tests {
         };
         assert_eq!(mods("Kid").run(&[0, 1, 2], None).failures, [duplicate]);
         assert_eq!(mods("Solo").run(&[0, 1, 2], None).failures, []);
+    }
+
+    #[test]
+    fn a_field_that_allows_duplicate_nodes_holds_them_without_a_duplicate() {
+        let defs = |field: &str| {
+            format!(
+                "<ThingDef Name=\"Base\" Abstract=\"True\"><{field}><ThingDef>A</ThingDef></{field}></ThingDef>\
+                 <ThingDef ParentName=\"Base\"><defName>Kid</defName>\
+                 <{field}><ThingDef>B</ThingDef><ThingDef>C</ThingDef></{field}></ThingDef>"
+            )
+        };
+        let links = defs("descriptionHyperlinks");
+        assert_eq!(loaded(&[(&links, "")]).run(&[0], None).failures, []);
+        let duplicate = Failure::Duplicate {
+            def: key("ThingDef", "Kid"),
+            element: "ThingDef".into(),
+        };
+        let other = defs("others");
+        assert_eq!(
+            loaded(&[(&other, "")]).run(&[0], None).failures,
+            [duplicate]
+        );
     }
 
     #[test]

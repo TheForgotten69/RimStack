@@ -145,6 +145,16 @@ impl Builder {
         );
     }
 
+    /// `constructor` is a `MethodDef` row when `defined_here`, else a `MemberRef` row.
+    pub fn attribute_on_field(&mut self, field: u32, constructor: u32, defined_here: bool) {
+        let constructor = constructor << 3 | if defined_here { 2 } else { 3 };
+        let value = self.blob(&[0x01, 0x00, 0x00, 0x00]);
+        self.row(
+            super::CUSTOM_ATTRIBUTE,
+            &[field << 5 | 1, constructor, value],
+        );
+    }
+
     pub fn reference(&mut self, name: &str) {
         let name = self.string(name);
         self.row(ASSEMBLY_REF, &[0, 0, 0, name, 0, 0]);

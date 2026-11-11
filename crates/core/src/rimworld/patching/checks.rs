@@ -39,7 +39,7 @@ pub(super) fn find(
             Some((source, any.is_none_or(|list| active.any_id(&list))))
         })
         .unzip();
-    let (resolved, duplicates) = resolve(&sources);
+    let (resolved, duplicates) = resolve(&sources, types);
     let mut failures = Vec::new();
     let mut seen = HashSet::new();
     let mut duplicate = |def: &DefKey, element: &str, failures: &mut Vec<Failure>| {

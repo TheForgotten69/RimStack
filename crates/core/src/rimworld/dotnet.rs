@@ -8,6 +8,7 @@ mod tables;
 
 pub use calls::{Base, Callee, How, Layout, MethodDef, Step, TypeDef};
 pub use harmony::{Does, Patch};
+use std::collections::HashSet;
 use tables::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,6 +24,8 @@ pub struct Type {
 pub struct Field {
     pub name: String,
     pub of: FieldType,
+    /// Marked `[XmlInheritanceAllowDuplicateNodes]`: the elements it holds may share a name.
+    pub repeats: bool,
 }
 
 /// Names are full, `Namespace.Outer+Inner`.
@@ -375,8 +378,41 @@ impl<'a> Assembly<'a> {
             .collect()
     }
 
+    fn fields_marked(&self, attribute: &str) -> HashSet<usize> {
+        (1..=self.rows[CUSTOM_ATTRIBUTE])
+            .filter_map(|row| match self.coded(CUSTOM_ATTRIBUTE, row, 0)? {
+                (FIELD, field) => (self.attribute_type(row)? == attribute).then_some(field),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The name of the attribute's type, defined here or referred to.
+    fn attribute_type(&self, row: usize) -> Option<&'a str> {
+        let (owner_table, owner) = match self.coded(CUSTOM_ATTRIBUTE, row, 1)? {
+            (METHOD_DEF, constructor) => (TYPE_DEF, self.type_of_method(constructor)?),
+            (_, constructor) => self.coded(MEMBER_REF, constructor, 0)?,
+        };
+        matches!(owner_table, TYPE_DEF | TYPE_REF).then_some(())?;
+        self.name(owner_table, owner, 1)
+    }
+
+    /// Method lists start in row order: the owner is the last type starting at or before `method`.
+    fn type_of_method(&self, method: usize) -> Option<usize> {
+        let (mut low, mut high) = (1, self.rows[TYPE_DEF] + 1);
+        while low < high {
+            let middle = (low + high) / 2;
+            match self.cell(TYPE_DEF, middle, 5)? <= method {
+                true => low = middle + 1,
+                false => high = middle,
+            }
+        }
+        (low > 1).then(|| low - 1)
+    }
+
     /// Names with `<` (compiler-made types) are left out.
     pub fn types(&self) -> Vec<Type> {
+        let repeating = self.fields_marked("XmlInheritanceAllowDuplicateNodes");
         let rect = self.rect_marker();
         let takes_rect = |row: usize| {
             let (Some(rect), Some(signature)) = (&rect, self.blob(METHOD_DEF, row, 4)) else {
@@ -412,6 +448,7 @@ impl<'a> Assembly<'a> {
                         Some(Field {
                             name: self.name(FIELD, f, 1)?.to_string(),
                             of: self.field_type(self.blob(FIELD, f, 2)?),
+                            repeats: repeating.contains(&f),
                         })
                     })
                     .collect();
@@ -544,6 +581,7 @@ mod tests {
         let field = |name: &str, of: FieldType| Field {
             name: name.into(),
             of,
+            repeats: false,
         };
         assert_eq!(
             types[0].fields,
@@ -556,6 +594,39 @@ mod tests {
         assert_eq!(
             types[1].fields,
             [field("size", FieldType::Named("RimWorld.GeneDef".into()))]
+        );
+    }
+
+    #[test]
+    fn a_field_marked_to_allow_duplicate_nodes_says_so() {
+        let mut b = Builder::new();
+        let string = [0x06, 0x0e];
+        b.type_def("Verse", "XmlInheritanceAllowDuplicateNodes", 0);
+        let own = b.method(".ctor", &[0x20, 0, 0x01]);
+        b.type_def("Verse", "Def", 0);
+        let links = b.field_of("descriptionHyperlinks", 0x06, &string);
+        b.field_of("label", 0x06, &string);
+        let referred = b.type_ref("Verse", "XmlInheritanceAllowDuplicateNodes");
+        let constructor = b.constructor(referred, &[0x20, 0, 0x01]);
+        b.type_def("Mod", "Props", 0);
+        let extras = b.field_of("extras", 0x06, &string);
+        b.attribute_on_field(links, own, true);
+        b.attribute_on_field(extras, constructor, false);
+        let dll = b.finish();
+        let marked: Vec<(String, bool)> = Assembly::read(&dll)
+            .unwrap()
+            .types()
+            .into_iter()
+            .flat_map(|t| t.fields)
+            .map(|f| (f.name, f.repeats))
+            .collect();
+        assert_eq!(
+            marked,
+            [
+                ("descriptionHyperlinks".to_string(), true),
+                ("label".to_string(), false),
+                ("extras".to_string(), true),
+            ]
         );
     }
 }
