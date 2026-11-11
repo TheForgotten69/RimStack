@@ -25,6 +25,7 @@ pub mod qobject {
         #[qproperty(bool, active, READ, CONSTANT)]
         #[qproperty(i32, count)]
         #[qproperty(i32, matching)]
+        #[qproperty(bool, dimmed)]
         type ModRows = super::ModRowsRust;
     }
 
@@ -62,6 +63,11 @@ pub mod qobject {
         #[cxx_name = "rowOf"]
         fn row_of(self: &ModRows, position: i32) -> i32;
 
+        /// -1 for a main heading, a list without headings, or none.
+        #[qinvokable]
+        #[cxx_name = "categoryAt"]
+        fn category_at(self: &ModRows, row: i32) -> i32;
+
         /// -1 when it is not in it.
         #[qinvokable]
         #[cxx_name = "indexOf"]
@@ -71,6 +77,16 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "modIdAt"]
         fn mod_id_at(self: &ModRows, row: i32) -> i32;
+
+        /// -1 when no mod is shown.
+        #[qinvokable]
+        #[cxx_name = "firstModId"]
+        fn first_mod_id(self: &ModRows) -> i32;
+
+        /// -1 when no mod is shown.
+        #[qinvokable]
+        #[cxx_name = "lastModId"]
+        fn last_mod_id(self: &ModRows) -> i32;
     }
 
     unsafe extern "RustQt" {
@@ -124,16 +140,10 @@ pub mod qobject {
         #[inherit]
         #[cxx_name = "endMoveRows"]
         unsafe fn end_move_rows(self: Pin<&mut ModRows>);
-        #[inherit]
-        #[cxx_name = "beginResetModel"]
-        unsafe fn begin_reset_model(self: Pin<&mut ModRows>);
-        #[inherit]
-        #[cxx_name = "endResetModel"]
-        unsafe fn end_reset_model(self: Pin<&mut ModRows>);
     }
 }
 
-use crate::qml::diff::{Step, steps};
+use crate::qml::diff::steps;
 use crate::qml::values::to_qml;
 use crate::workspace::load_order::RowView;
 use core::pin::Pin;
@@ -143,17 +153,20 @@ use cxx_qt_lib::{
 };
 use rimstack_core::base::sentence::Sentence;
 use serde_json::{Value, json};
+use std::collections::HashSet;
 
 #[derive(Default)]
 pub struct ModRowsRust {
     active: bool,
     count: i32,
     matching: i32,
+    dimmed: bool,
     shown: Vec<RowView>,
+    chosen: HashSet<i32>,
 }
 
 /// From the first role Qt leaves free.
-const ROLES: [&str; 28] = [
+const ROLES: [&str; 37] = [
     "isHeader",
     "isSub",
     "again",
@@ -182,7 +195,17 @@ const ROLES: [&str; 28] = [
     "twin",
     "outdated",
     "madeFor",
+    "orderedBy",
+    "updatedAgo",
+    "sizeText",
+    "downloadedAgo",
+    "activatedAgo",
+    "accessibleName",
+    "loadSeconds",
+    "versionLine",
+    "selected",
 ];
+const SELECTED: usize = 36;
 const FIRST_ROLE: i32 = 257;
 
 enum Cell<'a> {
@@ -232,6 +255,14 @@ fn cell(row: &RowView, field: usize) -> Option<Cell<'_>> {
         25 => Flag(row.twin),
         26 => Flag(row.outdated),
         27 => Text(&row.made_for),
+        28 => Said(&row.ordered_by),
+        29 => Said(&row.updated_ago),
+        30 => Said(&row.size_text),
+        31 => Said(&row.downloaded_ago),
+        32 => Said(&row.activated_ago),
+        33 => Said(&row.accessible_name),
+        34 => Part(row.load_seconds),
+        35 => Said(&row.version_line),
         _ => return None,
     })
 }
@@ -262,9 +293,36 @@ fn held(found: Option<usize>) -> i32 {
     found.map_or(-1, |at| at as i32)
 }
 
+crate::qml::apply::shown_rows!(qobject::ModRows, RowView);
+
 impl qobject::ModRows {
     pub(crate) fn set_side(mut self: Pin<&mut Self>, active: bool) {
         self.as_mut().rust_mut().active = active;
+    }
+
+    pub(crate) fn choose(mut self: Pin<&mut Self>, ids: &[i32]) {
+        let next: HashSet<i32> = ids.iter().copied().filter(|id| *id >= 0).collect();
+        let flipped: HashSet<i32> = next.symmetric_difference(&self.chosen).copied().collect();
+        self.as_mut().rust_mut().chosen = next;
+        let rows: Vec<i32> = (0..self.shown.len() as i32)
+            .filter(|&at| flipped.contains(&self.shown[at as usize].mod_id))
+            .collect();
+        let mut roles = QVector::<i32>::default();
+        roles.append(FIRST_ROLE + SELECTED as i32);
+        let root = QModelIndex::default();
+        let mut from = 0;
+        while from < rows.len() {
+            let mut to = from;
+            while to + 1 < rows.len() && rows[to + 1] == rows[to] + 1 {
+                to += 1;
+            }
+            let (top, bottom) = (
+                self.index(rows[from], 0, &root),
+                self.index(rows[to], 0, &root),
+            );
+            self.as_mut().data_changed(&top, &bottom, &roles);
+            from = to + 1;
+        }
     }
 
     fn row(&self, row: i32) -> Option<&RowView> {
@@ -276,7 +334,10 @@ impl qobject::ModRows {
         let found = self
             .row(index.row())
             .zip(field)
-            .and_then(|(row, f)| cell(row, f));
+            .and_then(|(row, f)| match f {
+                SELECTED => Some(Cell::Flag(self.chosen.contains(&row.mod_id))),
+                _ => cell(row, f),
+            });
         found.map_or_else(QVariant::default, |found| found.variant())
     }
 
@@ -311,6 +372,14 @@ impl qobject::ModRows {
         )
     }
 
+    fn category_at(&self, row: i32) -> i32 {
+        let headed = self.shown.first().is_some_and(|r| r.is_header);
+        match self.row(row) {
+            Some(r) if headed && (r.is_sub || !r.is_header) => r.category,
+            _ => -1,
+        }
+    }
+
     fn index_of(&self, mod_id: i32) -> i32 {
         let found = self
             .shown
@@ -323,67 +392,43 @@ impl qobject::ModRows {
         self.row(row).map_or(-1, |r| r.mod_id)
     }
 
+    fn first_mod_id(&self) -> i32 {
+        self.shown
+            .iter()
+            .map(|r| r.mod_id)
+            .find(|id| *id >= 0)
+            .unwrap_or(-1)
+    }
+
+    fn last_mod_id(&self) -> i32 {
+        self.shown
+            .iter()
+            .rev()
+            .map(|r| r.mod_id)
+            .find(|id| *id >= 0)
+            .unwrap_or(-1)
+    }
+
     /// Told before a change is made, or the list resets past too many steps.
     pub(crate) fn show(
         mut self: Pin<&mut Self>,
         rows: Vec<RowView>,
         count: usize,
         matching: usize,
+        dimmed: bool,
     ) {
         let before: Vec<_> = self.shown.iter().map(|r| r.key.clone()).collect();
         let after: Vec<_> = rows.iter().map(|r| r.key.clone()).collect();
         match steps(&before, &after) {
             Some(steps) => {
-                self.as_mut().step(&steps, &rows);
+                crate::qml::apply::apply(self.as_mut(), &steps, &rows);
                 self.as_mut().changed_rows(rows);
             }
-            None => self.as_mut().renew(rows),
+            None => crate::qml::apply::renew(self.as_mut(), rows),
         }
         self.as_mut().set_count(count as i32);
-        self.set_matching(matching as i32);
-    }
-
-    fn renew(mut self: Pin<&mut Self>, rows: Vec<RowView>) {
-        // SAFETY: the reset ends below, after the rows changed.
-        unsafe { self.as_mut().begin_reset_model() };
-        self.as_mut().rust_mut().shown = rows;
-        // SAFETY: ends the reset begun above.
-        unsafe { self.as_mut().end_reset_model() };
-    }
-
-    fn step(mut self: Pin<&mut Self>, steps: &[Step], rows: &[RowView]) {
-        let root = QModelIndex::default();
-        for step in steps {
-            // SAFETY: each change is announced before `shown` changes and
-            // ended right after, with the rows it names.
-            unsafe {
-                match *step {
-                    Step::Remove { first, last } => {
-                        self.as_mut()
-                            .begin_remove_rows(&root, first as i32, last as i32);
-                        self.as_mut().rust_mut().shown.drain(first..=last);
-                        self.as_mut().end_remove_rows();
-                    }
-                    Step::Insert { first, last } => {
-                        self.as_mut()
-                            .begin_insert_rows(&root, first as i32, last as i32);
-                        let coming = rows[first..=last].iter().cloned();
-                        self.as_mut().rust_mut().shown.splice(first..first, coming);
-                        self.as_mut().end_insert_rows();
-                    }
-                    Step::Move { from, to } => {
-                        // Qt names the place as the row it goes before, counted before the move.
-                        let before = if to > from { to + 1 } else { to };
-                        let (from, before) = (from as i32, before as i32);
-                        self.as_mut()
-                            .begin_move_rows(&root, from, from, &root, before);
-                        let row = self.as_mut().rust_mut().shown.remove(from as usize);
-                        self.as_mut().rust_mut().shown.insert(to, row);
-                        self.as_mut().end_move_rows();
-                    }
-                }
-            }
-        }
+        self.as_mut().set_matching(matching as i32);
+        self.set_dimmed(dimmed);
     }
 
     fn changed_rows(mut self: Pin<&mut Self>, rows: Vec<RowView>) {

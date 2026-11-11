@@ -51,7 +51,7 @@ impl Detected {
                 let loaded = loadfolders::folders(&found.path, &library.game_version, &|k| {
                     active.contains(k)
                 });
-                read_now.push((at, infer::scan(&loaded)));
+                read_now.push((at, infer::scan(&loaded, &library.game_assemblies)));
             }
         }
         let nothing = infer::Scanned::default();

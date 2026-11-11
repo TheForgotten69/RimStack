@@ -25,11 +25,15 @@ impl Changes {
     pub const LOGS: Self = Self(1 << 12);
     pub const SAVES: Self = Self(1 << 13);
     pub const LISTS: Self = Self(1 << 14);
-    pub const SEARCH: Self = Self(1 << 15);
     pub const LAUNCHES: Self = Self(1 << 16);
     pub const FOLDERS: Self = Self(1 << 17);
     pub const MOD_FILES: Self = Self(1 << 18);
-    pub const PATCHES: Self = Self(1 << 19);
+    pub const FIND: Self = Self(1 << 19);
+    pub const FACTS: Self = Self(1 << 20);
+    pub const DOWNLOAD_LIST: Self = Self(1 << 21);
+    pub const KEY: Self = Self(1 << 22);
+    pub const SOURCE: Self = Self(1 << 23);
+    pub const PATCHES: Self = Self(1 << 24);
 
     pub fn contains(self, any_of: Self) -> bool {
         self.0 & any_of.0 != 0

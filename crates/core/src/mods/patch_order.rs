@@ -40,7 +40,7 @@ pub fn decide(
     let first = loaded.run(order, None);
     let firm: Vec<Rule> = rules
         .iter()
-        .filter(|r| r.kind.strength() > Kind::Inferred.strength())
+        .filter(|r| r.kind.strength() > Kind::Hint.strength())
         .copied()
         .collect();
     let reaches = reach(names.len(), &firm);

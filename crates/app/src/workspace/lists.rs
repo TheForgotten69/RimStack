@@ -3,9 +3,13 @@ use crate::changes::Changes;
 use rimstack_core::base::error::Error;
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::kept::{journal, lists};
+use rimstack_core::mods::share;
 use rimstack_core::rimworld::modsconfig;
 use rimstack_core::say;
+use rimstack_core::sources::rentry;
 use serde::Serialize;
+
+const CORE: &str = "ludeon.rimworld";
 
 const SNAPSHOTS_SHOWN: usize = 5;
 
@@ -186,6 +190,34 @@ impl App {
         lists::load(&self.snapshots_dir(), name).ok()
     }
 
+    pub fn fresh_list(&self, with_expansions: bool) -> Vec<String> {
+        let mut ids = vec![CORE.to_string()];
+        if with_expansions {
+            let found = self.install().official();
+            ids.extend(
+                found
+                    .iter()
+                    .map(|o| o.package_id.clone())
+                    .filter(|id| id != CORE),
+            );
+        }
+        ids
+    }
+
+    /// Blocks on the network for a link.
+    pub fn ids_in_copied(&self, text: &str) -> Result<Vec<String>, Error> {
+        let text = match rentry::link_id(text) {
+            Some(page) => rentry::fetch(&page)?,
+            None => text.to_string(),
+        };
+        Ok(share::ids_in(&text))
+    }
+
+    /// Blocks on the network.
+    pub fn publish_list(&self, listing: &str) -> Result<rentry::Published, Error> {
+        rentry::publish(listing)
+    }
+
     pub fn original_list(&self) -> Option<Vec<String>> {
         let config = self.paths().mods_config()?;
         let original = config.with_file_name("ModsConfig.xml.rimstack-original");
@@ -215,6 +247,23 @@ mod tests {
         );
         assert_eq!(title("@list someday"), "Before using another list, someday");
         assert_eq!(title("My own list"), "My own list");
+    }
+
+    #[test]
+    fn a_fresh_list_is_the_game_alone_or_with_its_expansions() {
+        let (tmp, app) = installed();
+        let about = tmp.path().join("game/Data/Royalty/About");
+        std::fs::create_dir_all(&about).unwrap();
+        std::fs::write(
+            about.join("About.xml"),
+            "<ModMetaData><packageId>Ludeon.RimWorld.Royalty</packageId></ModMetaData>",
+        )
+        .unwrap();
+        assert_eq!(app.fresh_list(false), ["ludeon.rimworld"]);
+        assert_eq!(
+            app.fresh_list(true),
+            ["ludeon.rimworld", "ludeon.rimworld.royalty"]
+        );
     }
 
     #[test]

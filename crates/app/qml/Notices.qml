@@ -11,6 +11,9 @@ QtObject {
     property var earlier: []
     property int counted: 0
     property string hint
+    property var tipped: null
+    property bool tipShown: false
+    readonly property string tipText: tipped?.text ?? ""
 
     function add(notice) {
         notice.key = ++counted

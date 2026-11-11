@@ -42,11 +42,11 @@ pub(super) fn scratch_app() -> (tempfile::TempDir, App) {
 #[ignore = "reads the installed game and mods; run by name"]
 fn patch_simulation_timing_on_this_install() {
     let (_tmp, app) = scratch_app();
-    let order = LoadOrder::read(&app, true, false);
+    let order = LoadOrder::read(&app, true, None);
     if let Some(members) = order.files_to_read(&app) {
         app.read_active_files(members);
     }
-    let order = LoadOrder::read(&app, true, false);
+    let order = LoadOrder::read(&app, true, None);
     let mods = order.list(Side::Active).mods().to_vec();
     let loaded = app.library();
     let Ok((library, _)) = &*loaded else {
@@ -156,11 +156,11 @@ fn patch_simulation_timing_on_this_install() {
 fn patch_result_key_and_reuse_on_this_install() {
     use super::patches_key::{Made, Part, key_of};
     let (_tmp, app) = scratch_app();
-    let order = LoadOrder::read(&app, true, false);
+    let order = LoadOrder::read(&app, true, None);
     if let Some(members) = order.files_to_read(&app) {
         app.read_active_files(members);
     }
-    let order = LoadOrder::read(&app, true, false);
+    let order = LoadOrder::read(&app, true, None);
     let mods = order.list(Side::Active).mods().to_vec();
     let turn = || crate::jobs::Lane::default().next();
 

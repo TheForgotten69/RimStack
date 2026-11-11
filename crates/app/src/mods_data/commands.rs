@@ -60,22 +60,58 @@ impl qobject::ModsData {
         self.done_said(said);
     }
 
-    pub(super) fn take_all(mut self: Pin<&mut Self>, from_active: bool, given: &QVariant) {
+    pub(super) fn take_all(self: Pin<&mut Self>, from_active: bool, given: &QVariant) {
         let Some(ids) = ids(given) else {
             return self.refuse_list();
         };
+        self.take_ids(Side::of(from_active), &ids, None);
+    }
+
+    fn take_ids(mut self: Pin<&mut Self>, from: Side, ids: &[ModId], to: Option<usize>) {
         if ids.is_empty() {
             return;
         }
-        let from = Side::of(from_active);
         let app = self.app();
-        self.as_mut().order_mut().take_all(&app, from, &ids);
+        self.as_mut().order_mut().take_all(&app, from, ids, to);
         self.as_mut().changed();
         let said = match from {
             Side::Inactive => say_n!(ids.len(), "Activated {} mod", "Activated {} mods"),
             Side::Active => say_n!(ids.len(), "Deactivated {} mod", "Deactivated {} mods"),
         };
         self.done_said(said);
+    }
+
+    /// `to` is the place dropped on, the list's length for its end. More than one `held`
+    /// move together; one alone moves by `index`, so a missing mod does as well.
+    pub(super) fn drop(
+        mut self: Pin<&mut Self>,
+        from_active: bool,
+        index: i32,
+        held: &QVariant,
+        to_active: bool,
+        to: i32,
+    ) {
+        let held = ids(held).unwrap_or_default();
+        let (from, into) = (Side::of(from_active), Side::of(to_active));
+        match (usize::try_from(to), held.len() > 1, from == into) {
+            (Err(_), ..) => {}
+            (Ok(to), true, true) => {
+                let app = self.app();
+                if self.as_mut().order_mut().move_mods(&app, from, &held, to) {
+                    self.as_mut().changed();
+                    self.as_mut()
+                        .done_said(say_n!(held.len(), "Moved {} mod", "Moved {} mods"));
+                }
+            }
+            (Ok(to), true, false) => self.as_mut().take_ids(from, &held, Some(to)),
+            (Ok(to), false, true) => {
+                let place = self.place_alone(from, to);
+                if index != place {
+                    self.as_mut().move_mod(from_active, index, place);
+                }
+            }
+            (Ok(_), false, false) => self.as_mut().take(from_active, index, to),
+        }
     }
 
     pub(super) fn to_edge(mut self: Pin<&mut Self>, given: &QVariant, top: bool) {
@@ -122,13 +158,6 @@ impl qobject::ModsData {
         let app = self.app();
         app.remove_tag(&ids, &tag);
         self.as_mut().order_mut().sync(&app);
-        self.show();
-    }
-
-    pub(super) fn show_by(mut self: Pin<&mut Self>, column: &QString, descending: bool) {
-        self.as_mut()
-            .order_mut()
-            .show_by(&column.to_string(), descending);
         self.show();
     }
 
@@ -214,7 +243,7 @@ impl qobject::ModsData {
                 let snapshot = records
                     .then(|| worker.snapshot("@saving", &before))
                     .flatten();
-                let written = modsconfig::write(&saving.file, &saving.written, &saving.expected);
+                let written = worker.write_list(&saving.file, &saving.written, &saving.expected);
                 if written.is_ok() && records {
                     let said = say!("Saved the load order: {}", changes.inside());
                     worker.note_change(said, snapshot.as_deref());
@@ -435,6 +464,25 @@ impl qobject::ModsData {
                     .trust(&crate::qml::values::to_qml(&[mod_id]), true);
                 true
             }
+            "sort" => {
+                self.preview_sort();
+                true
+            }
+            "subscribe" => {
+                let app = self.app();
+                crate::jobs::run(
+                    "add missing mod to the download list",
+                    self.qt_thread(),
+                    move || app.add_missing_to_list(&target).note(),
+                    |me, note| {
+                        if let Some((said, failed)) = note {
+                            let tone = if failed { "err" } else { "ok" };
+                            me.told(crate::words::said(&said), QString::from(tone));
+                        }
+                    },
+                );
+                true
+            }
             _ => false,
         }
     }
@@ -448,7 +496,7 @@ impl qobject::ModsData {
         let app = self.app();
         self.as_mut()
             .order_mut()
-            .take_all(&app, Side::Inactive, &ids);
+            .take_all(&app, Side::Inactive, &ids, None);
         self.as_mut().changed();
         self.done_said(say!("Activated the needed mods"));
     }
@@ -461,7 +509,7 @@ impl qobject::ModsData {
         }
         self.as_mut()
             .order_mut()
-            .take_all(&app, Side::Inactive, &fresh);
+            .take_all(&app, Side::Inactive, &fresh, None);
         self.as_mut().changed();
         self.done_said(say_n!(
             fresh.len(),
@@ -482,19 +530,22 @@ impl qobject::ModsData {
         }
     }
 
-    pub(super) fn copy_to_local(mut self: Pin<&mut Self>, mod_id: i32) {
-        let Some(id) = id(mod_id) else {
-            return;
+    pub(super) fn copy_to_local(mut self: Pin<&mut Self>, given: &QVariant) {
+        let Some(ids) = ids(given) else {
+            return self.refuse_list();
         };
         self.as_mut().set_upkeep_problem(QString::default());
         let app = self.app();
         crate::jobs::run(
             "copy to the game folder",
             self.qt_thread(),
-            move || app.copy_to_local(id).err(),
-            |mut me, problem| match problem {
-                Some(problem) => me.set_upkeep_problem(crate::words::said_of(&problem)),
-                None => me.as_mut().rescan(),
+            move || app.copy_to_local(&ids).err(),
+            |mut me, problem| {
+                if let Some(problem) = problem {
+                    me.as_mut()
+                        .set_upkeep_problem(crate::words::said_of(&problem));
+                }
+                me.rescan();
             },
         );
     }

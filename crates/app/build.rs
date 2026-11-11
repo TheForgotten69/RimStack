@@ -47,6 +47,7 @@ fn main() {
                 "qml/Dots.qml",
                 "qml/Slide.qml",
                 "qml/Hint.qml",
+                "qml/Scroller.qml",
                 "qml/KeyCap.qml",
                 "qml/KeysSheet.qml",
                 "qml/Toasts.qml",
@@ -67,6 +68,16 @@ fn main() {
                 "qml/FilterField.qml",
                 "qml/GroupTitle.qml",
                 "qml/NameList.qml",
+                "qml/browse/BrowseView.qml",
+                "qml/browse/BrowseDetails.qml",
+                "qml/DescriptionView.qml",
+                "qml/browse/ResultCard.qml",
+                "qml/browse/FacetRow.qml",
+                "qml/browse/FilterSidebar.qml",
+                "qml/browse/SortMenu.qml",
+                "qml/browse/Stars.qml",
+                "qml/browse/Tick.qml",
+                "qml/browse/ListPane.qml",
                 "qml/mods/ModsScreen.qml",
                 "qml/mods/ModsPrefs.qml",
                 "qml/mods/ModList.qml",
@@ -87,12 +98,23 @@ fn main() {
                 "qml/mods/ListSummary.qml",
                 "qml/EmptyState.qml",
                 "qml/Prompt.qml",
+                "qml/Scrolled.qml",
                 "qml/mods/SortMoves.qml",
                 "qml/checks/ModsChecks.qml",
                 "qml/checks/PointerChecks.qml",
                 "qml/checks/ScreensChecks.qml",
+                "qml/checks/LayoutChecks.qml",
+                "qml/checks/FindChecks.qml",
+                "qml/checks/FindTapChecks.qml",
                 "qml/SavesScreen.qml",
                 "qml/LogsScreen.qml",
+                "qml/FindScreen.qml",
+                "qml/find/FindPick.qml",
+                "qml/find/FindSidebar.qml",
+                "qml/find/FindKeys.qml",
+                "qml/find/FindRow.qml",
+                "qml/find/FindPreview.qml",
+                "qml/find/FindRecent.qml",
                 "qml/TexturesScreen.qml",
                 "qml/DownloadsScreen.qml",
                 "qml/SettingsScreen.qml",
@@ -105,6 +127,8 @@ fn main() {
     .qrc_resources(["assets/rimstack.svg"])
     .qt_module("Quick")
     .qt_module("QuickControls2")
+    .crate_include_root(None)
+    .include_dir(std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets the manifest folder"))
     .files([
         "src/hub.rs",
         "src/settings_data.rs",
@@ -117,6 +141,9 @@ fn main() {
         "src/search_data.rs",
         "src/textures_data.rs",
         "src/downloads_data.rs",
+        "src/find_data.rs",
+        "src/workshop_rows.rs",
+        "src/workshop_data.rs",
     ]);
     let msvc = std::env::var("CARGO_CFG_TARGET_ENV").is_ok_and(|env| env == "msvc");
     // SAFETY: one more source for the same compiler, nothing set that the generated code relies on.

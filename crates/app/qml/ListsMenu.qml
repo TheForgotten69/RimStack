@@ -19,13 +19,36 @@ Popup {
 
     width: Theme.sized(380)
     padding: Theme.gapLarge
-    onAboutToShow: problem = ""
+    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+    onAboutToShow: { problem = ""; Hub.lists.clipboardProblem = "" }
+    Component.onCompleted: {
+        Hub.lists.found.connect(listsMenu.useList)
+        Hub.lists.found.connect(listsMenu.close)
+        Hub.lists.renamed.connect(listsMenu.named)
+        Hub.lists.shared.connect(Theme.copy)
+        Hub.lists.told.connect(Notices.say)
+    }
     background: Rectangle { radius: Theme.cornerLarge; color: Theme.bar; border.width: 1; border.color: Theme.line }
 
     contentItem: Column {
         spacing: Theme.gapSmall
 
-        Text { color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("Saved lists") }
+        RowLayout {
+            width: parent.width
+            spacing: Theme.gapSmall
+            Text { Layout.fillWidth: true; Layout.preferredWidth: 0; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("Saved lists") }
+            Btn {
+                id: newList
+                icon: "plus"
+                text: Theme.say("New")
+                tip: Theme.say("Start a load order from the game alone or with its expansions; one Undo brings the old one back")
+                onClicked: freshMenu.openAt(newList, 0, newList.height, [
+                    { text: Theme.say("Only the game"), run: Hub.lists.startWithGame },
+                    { text: Theme.say("The game and its expansions"), run: Hub.lists.startWithExpansions }
+                ])
+            }
+        }
+        PopMenu { id: freshMenu }
         Text {
             visible: listsMenu.lists.length === 0
             width: parent.width
@@ -47,7 +70,7 @@ Popup {
                     compact: Mods.prefs.listName !== saved.modelData.name
                     icon: "save"
                     text: Theme.say("Update")
-                    tip: Theme.fill("Keeps the load order as it is now under {}, in place of what it held", saved.modelData.name)
+                    tip: Theme.fill("Saves the current load order as {}, replacing what it held", saved.modelData.name)
                     onClicked: {
                         listsMenu.problem = Hub.lists.keep(saved.modelData.name)
                         if (listsMenu.problem === "")
@@ -123,25 +146,29 @@ Popup {
             }
         }
 
-        Text { topPadding: Theme.gapSmall; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("Clipboard") }
+        Text { topPadding: Theme.gapSmall; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("Clipboard and Rentry.co") }
         Flow {
             width: parent.width
             spacing: Theme.gapSmall
             Btn { icon: "copy"; text: Theme.say("Copy the load order"); tip: Theme.say("The active mods as text, one a line"); onClicked: { Theme.copy(Hub.mods.listing()); listsMenu.close() } }
             Btn {
+                enabled: !Hub.lists.busy
                 text: Theme.say("Use the copied list")
-                tip: Theme.say("A list of mods copied as text or as links becomes the load order. Save writes it.")
-                onClicked: {
-                    const ids = Hub.lists.idsInText(Theme.pasted())
-                    if (ids.length > 0) {
-                        listsMenu.useList(ids)
-                        listsMenu.named("")
-                        listsMenu.close()
-                    } else {
-                        listsMenu.problem = Theme.say("No mod found on the clipboard")
-                    }
-                }
+                tip: Theme.say("A list of mods copied as text or as links, or a link to a Rentry.co page, becomes the load order. Save writes it.")
+                onClicked: Hub.lists.useCopied(Theme.pasted())
+            }
+            Btn {
+                enabled: !Hub.lists.busy
+                icon: "share-2"
+                text: Theme.say("Share on Rentry.co")
+                tip: Theme.say("Publishes the load order as a page at Rentry.co and copies its link")
+                onClicked: Notices.ask({
+                    title: Theme.say("Share on Rentry.co"),
+                    lines: [Theme.say("The load order is published at a public link on Rentry.co that anyone who has it can open. RimStack does not keep the code that edits the page; the message that follows shows it.")],
+                    label: Theme.say("Publish"), run: () => Hub.lists.share(Hub.mods.listing()) })
             }
         }
+        Text { visible: Hub.lists.busy; width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say("Waiting for Rentry.co…") }
+        Text { visible: Hub.lists.clipboardProblem !== ""; width: parent.width; wrapMode: Text.WordWrap; color: Theme.err; font.pixelSize: Theme.body; text: Hub.lists.clipboardProblem }
     }
 }

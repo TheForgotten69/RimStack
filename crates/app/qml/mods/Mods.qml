@@ -63,7 +63,7 @@ Item {
         if (position < 0 || Hub.mods.previewing)
             return
         const next = Hub.mods.besideMod(model.active, selectedId)
-        moveAcross(model, position, selectedId)
+        moveAcross(model, position)
         if (next >= 0)
             select(next, model.active)
     }
@@ -119,13 +119,16 @@ Item {
     function applyFix(modId, fix) {
         if (Hub.mods.fix(modId, fix.action, fix.target))
             return
-        if (fix.page)
-            Qt.openUrlExternally(fix.page)
-        else
+        if (fix.page) {
+            Hub.workshop.browse(fix.target)
+            showSection(Theme.sections.workshop)
+        } else
             Theme.openWorkshop(fix.target)
     }
 
-    function fixAll() { Hub.mods.fixAll() }
+    property bool browseFilters: false
+    property bool findFilters: false
+    property bool browseList: false
     function winAll(otherId) { Hub.mods.winOver(selectedId, otherId) }
 
     // No warning about the game version while the game stays on `version`;
@@ -149,7 +152,7 @@ Item {
     function removeSub(model, row) { Hub.mods.removeSub(model.active, row) }
     signal subNameRequested(int modId)
     signal bulkRequested(string what)
-    readonly property var selectedIds: selectedId < 0 ? [] : [selectedId].concat(Object.keys(also).map(Number))
+    readonly property var selectedIds: Hub.mods.selectedIds
 
     function tagSelected(tag) { Hub.mods.addTag(selectedIds, tag) }
     function subSelected(name) { Hub.mods.group(selectedIds, name) }
@@ -161,7 +164,6 @@ Item {
     property Connections sortWatch: Connections {
         target: Hub.mods
         function onLibraryVersionChanged() {
-            mods.select(-1, false)
             mods.rescanned()
         }
         function onDone(said) {
@@ -183,19 +185,20 @@ Item {
     }
     property Binding filterHeld: Binding { target: Hub.mods; property: "filter"; value: mods.filtered }
     property Binding headingsHeld: Binding { target: Hub.mods; property: "headings"; value: mods.prefs.headings !== 0 }
-    property Binding byNameHeld: Binding { target: Hub.mods; property: "byName"; value: mods.prefs.inactiveByName }
-    property Binding selectedHeld: Binding { target: Hub.mods; property: "selected"; value: mods.selectedId }
+    property Binding inactiveOrderHeld: Binding { target: Hub.mods; property: "inactiveOrder"; value: mods.prefs.inactiveOrder }
+    readonly property var orders: Hub.mods.orders || ({ active: [], activeBy: {}, activeKey: "", inactive: [], inactiveSaid: "", widest: {} })
+    property Binding activeOrderHeld: Binding { target: Hub.mods; property: "activeOrder"; value: mods.columns.order }
 
     signal binRequested(string name, string folder, int modId)
 
     readonly property string upkeepProblem: Hub.mods.upkeepProblem
-    function copyToLocal(modId) { Hub.mods.copyToLocal(modId) }
-    function binMod(modId) { Hub.mods.bin(modId) }
+    function copyToLocal(modIds) { Hub.mods.copyToLocal(modIds) }
 
     readonly property Columns columns: Columns {
         prefs: mods.prefs
         loadTimes: mods.overview.loadTimes === true
-        onShownByAsked: Hub.mods.showBy(shownBy, descending)
+        loadTimesHow: mods.overview.loadTimesHow || ""
+        orders: mods.orders
     }
     function categoryMenu(item, x, y, category) {
         const chosen = Theme.chosenSwatches[category] || Theme.swatches[category][0]
@@ -226,7 +229,7 @@ Item {
         const mod = about(modId)
         Notices.ask({
             title: Theme.fill("Unsubscribe from {}", mod.name || ""),
-            lines: [Theme.say("Steam, which must be running, unsubscribes and then deletes the mod's folder:"), { path: mod.path || "" }],
+            lines: [Theme.say("Steam must be running. It unsubscribes and then deletes the mod's folder:"), { path: mod.path || "" }],
             label: Theme.say("Unsubscribe"), danger: true, run: () => Hub.downloads.unsubscribe(modId) })
     }
 
@@ -245,7 +248,7 @@ Item {
     function nudge(model, by) {
         const at = model.indexOf(selectedId)
         const to = Hub.mods.nudgeTo(model.active, selectedId, by)
-        if (to < 0 || Hub.mods.previewing || (model.active && columns.shownBy !== ""))
+        if (to < 0 || Hub.mods.previewing || (model.active && columns.order !== ""))
             return
         slide(selectedId, -by)
         Hub.mods.moveMod(model.active, at, to)
@@ -275,16 +278,14 @@ Item {
     function useList(ids, quiet) { Hub.mods.useList(ids, !!quiet) }
 
     // By library id; -1 for none.
-    property int selectedId: -1
-    property bool selectedActive: false
+    readonly property int selectedId: Hub.mods.selected
+    readonly property bool selectedActive: Hub.mods.selectedActive
     readonly property var info: Hub.mods.details || ({})
     readonly property var textures: Hub.mods.textures || ({})
     readonly property var files: tab === 2 && selectedId >= 0 ? (Hub.mods.filesOf(selectedId) || ({})) : ({})
 
     function select(modId, inActive) {
-        selectedId = modId
-        selectedActive = inActive
-        also = ({})
+        Hub.mods.select(modId, inActive)
         if (leftOffRestored)
             prefs.lastMod = modId >= 0 ? String(info.packageId || "").toLowerCase() : ""
     }
@@ -292,34 +293,11 @@ Item {
     // Which tab of the details panel shows: 0 About, 1 Load order, 2 Files.
     property int tab: 0
 
-    // Library id -> true.
-    property var also: ({})
-    readonly property int selectedCount: selectedId < 0 ? 0 : 1 + Object.keys(also).length
+    readonly property int selectedCount: Hub.mods.selectedCount
 
-    function selectAlso(modId, inActive) {
-        if (selectedId < 0 || inActive !== selectedActive)
-            return select(modId, inActive)
-        if (modId === selectedId)
-            return
-        const next = Object.assign({}, also)
-        if (next[modId])
-            delete next[modId]
-        else
-            next[modId] = true
-        also = next
-    }
-
-    function selectThrough(modId, inActive) {
-        if (selectedId < 0 || inActive !== selectedActive)
-            return select(modId, inActive)
-        const others = Hub.mods.othersThrough(inActive, selectedId, modId)
-        if (!others)
-            return
-        const next = {}
-        for (const id of others)
-            next[id] = true
-        also = next
-    }
+    function selectAlso(modId, inActive) { Hub.mods.selectAlso(modId, inActive) }
+    function selectThrough(modId, inActive) { Hub.mods.selectThrough(modId, inActive) }
+    function invertSelection(inActive) { Hub.mods.invertSelection(inActive) }
 
     function moveSelected() {
         Hub.mods.takeAll(selectedActive, selectedIds)
@@ -362,34 +340,23 @@ Item {
 
     function endSort(keep) { Hub.mods.endSort(keep) }
 
-    function moveAcross(fromModel, modIndex, modId) {
+    function moveAcross(fromModel, modIndex) {
         Hub.mods.take(fromModel.active, modIndex, -1)
-        if (modId >= 0 && modId === selectedId)
-            selectedActive = !fromModel.active
     }
 
     function toggleSelected() {
         const from = selectedActive ? active : inactive
         const index = from.indexOf(selectedId)
         if (index >= 0)
-            moveAcross(from, index, selectedId)
+            moveAcross(from, index)
     }
 
     readonly property Dragging drag: Dragging {
         onDropped: (from, to) => mods.drop(from, to)
     }
     function drop(from, to) {
-        if (from.model === to.model) {
-            const place = Math.min(to.modIndex, to.model.count - 1)
-            if (from.modIndex !== place) {
-                slide(from.modId, from.modIndex - place)
-                Hub.mods.moveMod(to.model.active, from.modIndex, place)
-            }
-        } else {
-            Hub.mods.take(from.model.active, from.modIndex, to.modIndex)
-            if (from.modId >= 0 && from.modId === selectedId)
-                selectedActive = to.model.active
-        }
+        slide(from.modId, Hub.mods.slideOf(from.model.active, from.modIndex, from.ids, to.model.active, to.modIndex))
+        Hub.mods.drop(from.model.active, from.modIndex, from.ids, to.model.active, to.modIndex)
     }
 
     // `{ earlier, later }` by library id; null when the lists are showing.

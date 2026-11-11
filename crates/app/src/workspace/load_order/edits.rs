@@ -3,7 +3,6 @@ use crate::App;
 use rimstack_core::base::error::Error;
 use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::list::{Category, Mod, Row, edge_of_run};
-use rimstack_core::rimworld::modsconfig;
 
 impl LoadOrder {
     pub fn move_mod(&mut self, app: &App, side: Side, from: usize, to: usize) {
@@ -28,7 +27,11 @@ impl LoadOrder {
         self.settle(app);
     }
 
-    fn put(&mut self, app: &App, into: Side, m: Mod, to: Option<usize>) {
+    fn put(&mut self, app: &App, into: Side, mut m: Mod, to: Option<usize>) {
+        if into == Side::Inactive {
+            m.category = m.filed;
+            m.held_by.clear();
+        }
         let at = self.list_mut(into).insert_in_category(m);
         match (into, to) {
             (_, Some(to)) => {
@@ -37,14 +40,14 @@ impl LoadOrder {
             }
             (Side::Active, None) => self.settle_one(app, at),
             (Side::Inactive, None) => {
-                let by_name = self.by_name;
-                self.inactive.arrange(by_name);
+                let order = self.inactive_by;
+                self.inactive.arrange(order);
             }
         }
     }
 
     fn settle_one(&mut self, app: &App, at: usize) {
-        let loaded = app.library();
+        let loaded = self.reading(app);
         let Ok((library, _)) = &*loaded else {
             return;
         };
@@ -53,20 +56,35 @@ impl LoadOrder {
         self.active.move_mod(at, to);
     }
 
-    pub fn take_all(&mut self, app: &App, from: Side, ids: &[ModId]) {
+    /// `None` for `to`: each where its category and rules put it; else side by side from `to`.
+    pub fn take_all(&mut self, app: &App, from: Side, ids: &[ModId], to: Option<usize>) {
         self.end_preview();
         let mut ids: Vec<ModId> = ids.to_vec();
         ids.sort_by_key(|&id| self.list(from).position_of(id));
         self.batching = true;
+        let mut put = 0;
         for id in ids {
             if let Some(at) = self.list(from).position_of(id)
                 && let Some(m) = self.list_mut(from).remove(at)
             {
-                self.put(app, from.other(), m, None);
+                self.put(app, from.other(), m, to.map(|to| to + put));
+                put += 1;
             }
         }
         self.batching = false;
         self.settle(app);
+    }
+
+    /// Whether the order changed.
+    pub fn move_mods(&mut self, app: &App, side: Side, ids: &[ModId], to: usize) -> bool {
+        let list = self.list(side);
+        let positions: Vec<usize> = ids.iter().filter_map(|&id| list.position_of(id)).collect();
+        self.end_preview();
+        let moved = self.list_mut(side).move_mods(&positions, to);
+        if moved {
+            self.settle(app);
+        }
+        moved
     }
 
     pub fn to_edge(&mut self, app: &App, ids: &[ModId], top: bool) {
@@ -145,7 +163,7 @@ impl LoadOrder {
 
     pub fn save(&mut self, app: &App) -> Result<(), Error> {
         let saving = self.to_save(app)?;
-        modsconfig::write(&saving.file, &saving.written, &saving.expected)?;
+        app.write_list(&saving.file, &saving.written, &saving.expected)?;
         self.saved(app, saving.list);
         Ok(())
     }
@@ -180,6 +198,7 @@ impl LoadOrder {
             return;
         };
         app.session().mark_saved_as(on_disk.clone());
+        self.follow_saved(app, &on_disk, app.list_written_at());
         if take {
             app.session().record(on_disk);
         }
@@ -188,8 +207,19 @@ impl LoadOrder {
     }
 
     pub fn saved(&mut self, app: &App, list: Vec<String>) {
+        self.follow_saved(app, &list, crate::workspace::now_secs());
         app.session().mark_saved_as(list);
+        let mut mods = self.active.mods().to_vec();
+        super::date(&mut mods, &self.activated);
+        self.active.set_mods(mods);
         self.settle(app);
+    }
+
+    fn follow_saved(&mut self, app: &App, saved: &[String], at: u64) {
+        let loaded = self.reading(app);
+        if let Ok((library, _)) = &*loaded {
+            self.activated = app.activated_since(library, saved, at);
+        }
     }
 }
 

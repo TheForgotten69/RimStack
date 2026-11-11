@@ -11,8 +11,6 @@ Settings {
     property real textScale: 1
     property bool hintsSeen: false
     property string folded: ""
-    property int windowWidth: 1440
-    property int windowHeight: 860
     property bool workshopInSteam: false
     // Add new preferences last: a file written before one existed gives those declared
     // after it their defaults.

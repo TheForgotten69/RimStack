@@ -1,11 +1,13 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import RimStack.Ui
 
 Rectangle {
     id: pane
     readonly property alias list: inactiveView
+    readonly property alias orderMenu: orderMenu
     property bool drawer: false
     color: Theme.panel
     Shortcut { sequences: [StandardKey.Find]; enabled: pane.drawer; onActivated: mirror.focusInput() }
@@ -28,7 +30,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: Theme.header
             spacing: Theme.gap
-            Text { color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("Inactive") }
+            Text { color: Theme.ink; font.pixelSize: Theme.heading; font.weight: Font.DemiBold; text: Theme.say("Inactive") }
             Text { color: Theme.ink3; font.pixelSize: Theme.body; text: Theme.count(Mods.inactive.count) }
             Chip {
                 visible: Mods.fresh.length > 0
@@ -47,12 +49,36 @@ Rectangle {
             spacing: Theme.gap
             Btn {
                 icon: "arrow-up-down"
-                text: Mods.prefs.inactiveByName ? Theme.say("Name") : Theme.say("Category")
-                spoken: Mods.prefs.inactiveByName ? Theme.say("Order the inactive mods by category") : Theme.say("Order the inactive mods by name")
+                menu: true
+                text: Mods.orders.inactiveSaid
+                spoken: Theme.say("Order the inactive mods")
                 tip: spoken
-                onClicked: Mods.prefs.inactiveByName = !Mods.prefs.inactiveByName
+                onClicked: orderMenu.visible = !orderMenu.visible
+                Popup {
+                    id: orderMenu
+                    enter: PopIn {}
+                    exit: PopOut {}
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+                    x: parent.width - width
+                    y: parent.height + Theme.gapSmall
+                    padding: Theme.gapMedium
+                    background: Rectangle { radius: Theme.cornerLarge; color: Theme.bar; border.width: 1; border.color: Theme.line }
+                    contentItem: Column {
+                        spacing: Theme.gapSmall
+                        Repeater {
+                            model: Mods.orders.inactive
+                            Btn {
+                                required property var modelData
+                                width: Math.max(implicitWidth, parent.width)
+                                icon: modelData.icon
+                                text: modelData.label
+                                onClicked: Mods.prefs.inactiveOrder = modelData.then
+                            }
+                        }
+                    }
+                }
             }
-            Btn { visible: !pane.drawer; text: Theme.say("Hide"); tip: Theme.say("To a rail at the left edge; its button opens the list over the load order"); onClicked: Mods.prefs.inactiveHidden = true }
+            Btn { visible: !pane.drawer; text: Theme.say("Hide"); tip: Theme.say("Folds the list into a bar at the left edge; its button opens the list over the load order"); onClicked: Mods.prefs.inactiveHidden = true }
             Btn { visible: pane.drawer; text: Theme.say("Pin"); tip: Theme.say("Beside the load order, always open"); onClicked: Mods.prefs.inactiveHidden = false }
             }
         }

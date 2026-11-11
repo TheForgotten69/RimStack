@@ -6,10 +6,12 @@ use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Kind {
-    /// Hints, weakest first: from files, from a patch simulation, from compiled code.
-    Inferred,
+    /// Inferred from patches, which the game applies after reading every mod: only a tidy order.
+    Hint,
+    /// From a simulation of the mods' patches: the other order leaves an error in what the game loads.
     Patches,
-    Code,
+    /// From compiled code or a parent def: the game needs this order.
+    Inferred,
     CommunityBottom,
     /// The game only checks that a required mod is active; RimStack also loads it first.
     Requires,
@@ -26,9 +28,9 @@ impl Kind {
     pub fn strength(self) -> u8 {
         match self {
             // A hint gives way to everything else, even "at the bottom".
-            Kind::Inferred => 0,
+            Kind::Hint => 0,
             Kind::Patches => 1,
-            Kind::Code => 2,
+            Kind::Inferred => 2,
             Kind::CommunityBottom => 3,
             Kind::Requires => 4,
             Kind::LoadAfter | Kind::LoadBefore => 5,
@@ -57,13 +59,17 @@ impl Rule {
             | Kind::CommunityBottom
             | Kind::Yours
             | Kind::Inferred
-            | Kind::Patches
-            | Kind::Code => None,
+            | Kind::Hint
+            | Kind::Patches => None,
         }
     }
 
     pub fn broken(&self) -> bool {
         self.first > self.then
+    }
+
+    pub fn troubled(&self) -> bool {
+        self.broken() && self.kind != Kind::Hint
     }
 }
 
@@ -128,9 +134,9 @@ mod tests {
 
     #[test]
     fn hints_rank_by_what_they_rest_on_and_below_every_other_rule() {
-        assert!(Kind::Inferred.strength() < Kind::Patches.strength());
-        assert!(Kind::Patches.strength() < Kind::Code.strength());
-        assert!(Kind::Code.strength() < Kind::CommunityBottom.strength());
+        assert!(Kind::Hint.strength() < Kind::Patches.strength());
+        assert!(Kind::Patches.strength() < Kind::Inferred.strength());
+        assert!(Kind::Inferred.strength() < Kind::CommunityBottom.strength());
     }
     use crate::rimworld::about::Versioned;
 

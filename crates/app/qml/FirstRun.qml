@@ -26,7 +26,7 @@ Rectangle {
         default property alias lines: inside.data
         width: parent.width
         topPadding: Theme.gapWide
-        Text { x: 12; bottomPadding: Theme.gapSmall; color: Theme.ink2; font.pixelSize: Theme.small; font.weight: Font.DemiBold; text: block.title }
+        Text { x: Theme.gapLarge; bottomPadding: Theme.gapSmall; color: Theme.ink2; font.pixelSize: Theme.small; font.weight: Font.DemiBold; text: block.title }
         Rectangle {
             width: parent.width
             height: inside.implicitHeight
@@ -45,7 +45,7 @@ Rectangle {
         property bool sentence: false
         property bool note: false
         width: parent.width
-        height: Math.max(36, said.implicitHeight + 14)
+        height: Math.max(Theme.sized(36), said.implicitHeight + 2 * Theme.gapSmall)
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: Theme.gapLarge
@@ -67,15 +67,15 @@ Rectangle {
         property bool last: false
         signal toggled()
         width: parent.width
-        height: Math.max(36, said.implicitHeight + 14)
+        height: Math.max(Theme.sized(36), said.implicitHeight + 2 * Theme.gapSmall)
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: Theme.gapLarge
             anchors.rightMargin: Theme.gapLarge
             spacing: Theme.gap
             Rectangle {
-                implicitWidth: 15
-                implicitHeight: 15
+                implicitWidth: Theme.sized(15)
+                implicitHeight: implicitWidth
                 radius: 3
                 color: choice.on ? Theme.accent : Theme.well
                 border.width: 1
@@ -88,7 +88,7 @@ Rectangle {
                 Accessible.onToggleAction: choice.toggled()
                 Keys.onSpacePressed: choice.toggled()
                 FocusRing { corner: 3 }
-                Text { visible: choice.on; anchors.centerIn: parent; color: Theme.onSelected; font.pixelSize: Theme.caption; font.weight: Font.DemiBold; text: "✓" }
+                Text { visible: choice.on; anchors.centerIn: parent; color: Theme.accentInk; font.pixelSize: Theme.caption; font.weight: Font.DemiBold; text: "✓" }
             }
             Text {
                 id: said
@@ -110,9 +110,10 @@ Rectangle {
         property bool last: false
         default property alias control: held.data
         width: parent.width
-        height: Math.max(44, held.implicitHeight + 16, named.implicitHeight + 16)
-        Text { id: named; x: 12; width: Theme.sized(190); anchors.verticalCenter: parent.verticalCenter; wrapMode: Text.WordWrap; color: Theme.ink; font.pixelSize: Theme.body; text: pick.what }
-        Flow { id: held; x: 214; width: parent.width - 226; anchors.verticalCenter: parent.verticalCenter; spacing: Theme.gapSmall }
+        height: Math.max(Theme.sized(44), held.implicitHeight + 2 * Theme.gap, named.implicitHeight + 2 * Theme.gap)
+        TextMetrics { id: measure; font.pixelSize: Theme.body; text: pick.what }
+        Text { id: named; x: Theme.gapLarge; width: Math.min(Math.max(Theme.sized(190), measure.advanceWidth), pick.width / 2); anchors.verticalCenter: parent.verticalCenter; wrapMode: Text.WordWrap; color: Theme.ink; font.pixelSize: Theme.body; text: pick.what }
+        Flow { id: held; anchors.left: named.right; anchors.leftMargin: Theme.gapLarge; anchors.right: parent.right; anchors.rightMargin: Theme.gapLarge; anchors.verticalCenter: parent.verticalCenter; spacing: Theme.gapSmall }
         Rectangle { visible: !pick.last; anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
     }
 
@@ -124,18 +125,17 @@ Rectangle {
 
     RowLayout {
         anchors.centerIn: parent
-        width: Math.min(Theme.sized(940), parent.width - 80)
-        height: Math.min(Theme.sized(580), parent.height - 40)
+        width: Math.min(Theme.sized(940), parent.width - 4 * Theme.gapPage)
+        height: Math.min(Theme.sized(580), parent.height - 2 * Theme.gapPage)
         spacing: Theme.gapWide * 3
 
         Column {
             Layout.alignment: Qt.AlignTop
-            Layout.preferredWidth: Theme.sized(250)
             spacing: Theme.gapSmall
-            Image { width: 112; height: 112; sourceSize.width: 224; sourceSize.height: 224; source: "qrc:/qt/qml/RimStack/Ui/assets/rimstack.svg" }
+            Image { width: Theme.sized(112); height: width; sourceSize.width: 2 * width; sourceSize.height: 2 * height; source: "qrc:/qt/qml/RimStack/Ui/assets/rimstack.svg" }
             Text { topPadding: Theme.gap; color: Theme.brand; font.pixelSize: Theme.display; font.weight: Font.DemiBold; text: Theme.say("RimStack") }
             Text { color: Theme.ink; font.pixelSize: Theme.title; text: Theme.say("A mod manager for RimWorld") }
-            Item { width: 1; height: 18 }
+            Item { width: 1; height: Theme.gapPage }
             Repeater {
                 model: page.steps
                 Row {
@@ -148,7 +148,7 @@ Rectangle {
                         height: Theme.sized(22)
                         radius: Math.min(width, height) / 2
                         color: mark.index === page.step ? Theme.accent : mark.index < page.step ? Theme.ok : Theme.ctl
-                        Text { anchors.centerIn: parent; color: mark.index <= page.step ? Theme.onSelected : Theme.ink2; font.pixelSize: Theme.small; font.weight: Font.DemiBold; text: mark.index < page.step ? "✓" : mark.index + 1 }
+                        Text { anchors.centerIn: parent; color: mark.index <= page.step ? Theme.accentInk : Theme.ink2; font.pixelSize: Theme.small; font.weight: Font.DemiBold; text: mark.index < page.step ? "✓" : mark.index + 1 }
                     }
                     Text { anchors.verticalCenter: parent.verticalCenter; color: mark.index === page.step ? Theme.ink : Theme.ink2; font.pixelSize: Theme.body; font.weight: mark.index === page.step ? Font.DemiBold : Font.Normal; text: Theme.say(mark.modelData) }
                     HoverHandler { cursorShape: Qt.PointingHandCursor }
@@ -177,7 +177,7 @@ Rectangle {
                 topPadding: Theme.gapHair
                 color: Theme.ink2
                 font.pixelSize: Theme.body
-                text: [Theme.say("Found automatically; changeable in Settings"), Theme.say("Fetched from GitHub on Start, and again only on request"), Theme.say("What Sort follows beside each mod's own rules"), Theme.say("Changeable in Settings at any time"), Theme.say("Nothing is written to the game before Save")][page.step]
+                text: [Theme.say("Found automatically; changeable in Settings"), Theme.say("Fetched from GitHub on Start, and again only on request"), Theme.say("What Sort follows besides each mod's own rules"), Theme.say("Changeable in Settings at any time"), Theme.say("Nothing is written to the game before Save")][page.step]
             }
 
             Block {
@@ -220,12 +220,13 @@ Rectangle {
                 Found { visible: !!page.info.git; what: "Git"; where: page.info.git ? Theme.fill("version {}", page.info.git) : ""; sentence: true }
                 Found { visible: !page.info.git; note: true; sentence: true; what: Theme.say("Git is not installed: a mod kept as a Git checkout cannot be checked or updated") }
                 Found { visible: !!page.info.steamcmd; what: "SteamCMD"; where: Theme.say("installed"); sentence: true; last: true }
-                Found { visible: !page.info.steamcmd; note: true; sentence: true; last: true; what: Theme.say("SteamCMD is not installed: Downloads can install it, to fetch a mod without subscribing") }
+                Found { visible: !page.info.steamcmd && !page.info.steamcmdRefused; note: true; sentence: true; last: true; what: Theme.say("SteamCMD is not installed: Downloads can install it, to fetch a mod without subscribing") }
+                Found { visible: !!page.info.steamcmdRefused; note: true; sentence: true; last: true; what: page.info.steamcmdRefused || "" }
             }
             Block {
                 visible: page.step === 1 && !!page.info.rimsortRules
                 title: Theme.say("Import from RimSort")
-                Tick { last: true; text: Theme.say("Own load order rules"); detail: Theme.say("(RimSort's file is only read)"); on: page.withRimSort; onToggled: page.withRimSort = !page.withRimSort }
+                Tick { last: true; text: Theme.say("Your load order rules"); detail: Theme.say("(RimSort's file is only read)"); on: page.withRimSort; onToggled: page.withRimSort = !page.withRimSort }
             }
             Block {
                 visible: page.step === 1
@@ -251,7 +252,7 @@ Rectangle {
                 Found { note: true; sentence: true; what: Theme.say("Each mod's own rules, and the code it uses or patches in another mod: always") }
                 Tick {
                     text: Theme.say("Community rules")
-                    detail: Theme.say("load-order rules kept by players, for mods whose files do not say enough")
+                    detail: Theme.say("load-order rules written by players, for mods whose files do not say enough")
                     on: !!page.info.communityRules
                     onToggled: Hub.settings.keep("communityRules", page.info.communityRules ? "off" : "on")
                 }
@@ -267,19 +268,19 @@ Rectangle {
                 visible: page.step === 2
                 title: Theme.say("Either way")
                 Found { note: true; sentence: true; what: Theme.say("Sort shows every move and the rule behind it before anything changes") }
-                Found { note: true; sentence: true; last: true; what: Theme.say("Hints left out of Sort still show in a mod's Load order tab") }
+                Found { note: true; sentence: true; last: true; what: Theme.say("Hints that Sort does not use still show in a mod's Load order tab") }
             }
             Block {
                 visible: page.step === 3 && page.info.official.length > 0
                 title: Theme.say("As it will look")
                 Item {
                     width: parent.width
-                    height: glance.height + 16
+                    height: glance.height + 2 * Theme.gap
                     Column {
                         id: glance
-                        x: 8
-                        y: 8
-                        width: parent.width - 16
+                        x: Theme.gap
+                        y: Theme.gap
+                        width: parent.width - 2 * Theme.gap
                         Repeater {
                             model: page.info.official
                             Rectangle {
@@ -290,7 +291,7 @@ Rectangle {
                                 width: glance.width
                                 height: Theme.stored.comfortable ? Theme.sized(46) : Theme.row
                                 radius: Theme.corner
-                                color: chosen ? Theme.accent : "transparent"
+                                color: chosen ? Theme.chosen : "transparent"
                                 RowLayout {
                                     anchors.fill: parent
                                     anchors.leftMargin: Theme.gapMedium
@@ -305,7 +306,7 @@ Rectangle {
                                         radius: Theme.corner
                                         color: Theme.ctl
                                         clip: true
-                                        Image { anchors.fill: parent; anchors.margins: Theme.gapLine; visible: status === Image.Ready; fillMode: Image.PreserveAspectCrop; asynchronous: true; sourceSize.width: 192; source: sample.modelData.picture ? Theme.fileUrl(sample.modelData.picture) : "" }
+                                        Image { anchors.fill: parent; anchors.margins: Theme.gapLine; visible: status === Image.Ready; fillMode: Image.PreserveAspectCrop; asynchronous: true; sourceSize.width: 3 * width; source: sample.modelData.picture ? Theme.fileUrl(sample.modelData.picture) : "" }
                                     }
                                     Text { Layout.fillWidth: true; elide: Text.ElideRight; color: sample.chosen ? Theme.onSelected : Theme.ink; font.pixelSize: Theme.body; text: sample.modelData.name }
                                     Text { color: sample.chosen ? Theme.onSelectedDim : Theme.ink2; font.pixelSize: Theme.body; text: sample.modelData.author }

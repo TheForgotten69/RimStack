@@ -1,6 +1,6 @@
 use super::*;
 
-fn id(n: usize) -> ModId {
+pub(super) fn id(n: usize) -> ModId {
     ModId::new(0, n)
 }
 
@@ -15,6 +15,13 @@ fn m(name: &str, author: &str, category: Category) -> Mod {
         patched: Default::default(),
         sub: String::new(),
         load_micros: None,
+        updated: None,
+        size: None,
+        downloaded: None,
+        activated: None,
+        filed: category,
+        chosen: false,
+        held_by: String::new(),
         name: name.into(),
         author: author.into(),
         version: "1.0".into(),
@@ -271,27 +278,69 @@ fn source_terms_tell_the_workshop_from_git_checkouts_and_the_game() {
     assert!(names(&list).is_empty());
 }
 
+fn shown(list: &GroupedList) -> usize {
+    let rows = list.rows().iter();
+    rows.filter(|r| matches!(r, Row::Mod { .. })).count()
+}
+
+fn dimmed() -> GroupedList {
+    let mut list = sample();
+    list.set_left_out(LeftOut::Dimmed);
+    list
+}
+
 #[test]
-fn a_side_term_empties_the_other_list_and_both_empty_both() {
-    let mut active = sample();
-    let mut inactive = sample();
+fn a_side_term_leaves_the_other_list_out_and_both_leave_both() {
+    let mut active = dimmed();
+    let mut inactive = dimmed();
     let count = |list: &GroupedList| list.matching();
+    let out = |list: &GroupedList| list.left_out().is_some();
 
     active.set_filter_on(Side::Active, "is:active");
     inactive.set_filter_on(Side::Inactive, "is:active");
     assert_eq!((count(&active), count(&inactive)), (6, 0));
-    assert!(inactive.rows().is_empty());
+    assert_eq!((out(&active), out(&inactive)), (false, true));
+    assert_eq!(shown(&inactive), 6);
 
     active.set_filter_on(Side::Active, "is:inactive royalty");
     inactive.set_filter_on(Side::Inactive, "is:inactive royalty");
     assert_eq!((count(&active), count(&inactive)), (0, 1));
+    assert_eq!((shown(&active), shown(&inactive)), (6, 1));
 
     active.set_filter_on(Side::Active, "is:active is:inactive");
     inactive.set_filter_on(Side::Inactive, "is:inactive is:active");
     assert_eq!((count(&active), count(&inactive)), (0, 0));
+    assert!(out(&active) && out(&inactive));
 
     active.set_filter("is:inactive");
     assert_eq!(count(&active), 6);
+    assert!(!out(&active));
+}
+
+#[test]
+fn any_filter_that_matches_nothing_in_a_list_leaves_it_out() {
+    let mut list = dimmed();
+    list.set_filter("dub");
+    assert_eq!(
+        (list.matching(), shown(&list), list.left_out()),
+        (2, 2, None)
+    );
+    list.set_filter("author:nobody");
+    assert_eq!((list.matching(), shown(&list)), (0, 6));
+    assert_eq!(list.left_out(), Some(LeftOut::Dimmed));
+    list.set_filter("");
+    assert_eq!((list.matching(), list.left_out()), (6, None));
+}
+
+#[test]
+fn a_list_left_out_hidden_shows_nothing_and_dimmed_again_shows_all() {
+    let mut list = sample();
+    list.set_filter("author:nobody");
+    assert!(list.rows().is_empty());
+    assert_eq!(list.left_out(), Some(LeftOut::Hidden));
+    list.set_left_out(LeftOut::Dimmed);
+    assert_eq!(shown(&list), 6);
+    assert_eq!(list.left_out(), Some(LeftOut::Dimmed));
 }
 
 #[test]
@@ -317,9 +366,28 @@ fn is_terms_ask_about_the_flags_given_and_forget_them_when_the_order_changes() {
 }
 
 #[test]
+fn in_search_keeps_the_mods_flagged_by_a_search_and_none_when_there_were_none() {
+    let mut list = GroupedList::flat(sample().mods().to_vec());
+    list.set_filter("in:search");
+    list.set_flags(vec![0; 6]);
+    assert!(list.rows().is_empty());
+    list.set_flags(vec![
+        0,
+        flag::IN_SEARCH,
+        0,
+        0,
+        flag::IN_SEARCH | flag::ERROR,
+        0,
+    ]);
+    assert_eq!(list.rows(), &[Row::Mod { index: 1 }, Row::Mod { index: 4 }]);
+    list.set_filter("in:search is:error");
+    assert_eq!(list.rows(), &[Row::Mod { index: 4 }]);
+}
+
+#[test]
 fn a_list_can_be_arranged_by_name_or_by_category() {
     let mut list = sample();
-    list.arrange(true);
+    list.arrange(Some((SortKey::Name, false)));
     let names: Vec<&str> = list.mods().iter().map(|m| m.name.as_str()).collect();
     assert_eq!(
         names,
@@ -333,9 +401,51 @@ fn a_list_can_be_arranged_by_name_or_by_category() {
         ]
     );
     assert!(!list.is_grouped() && list.rows().len() == 6);
-    list.arrange(false);
+    list.arrange(None);
     assert_eq!(list.mods()[0].name, "Harmony");
     assert!(list.is_grouped());
+}
+
+fn names(list: &GroupedList) -> Vec<&str> {
+    list.mods().iter().map(|m| m.name.as_str()).collect()
+}
+
+#[test]
+fn a_mod_without_the_value_comes_last_either_way_and_a_tie_goes_by_name() {
+    let mut mods = vec![
+        m("Local", "", Category::Content),
+        m("Old", "b", Category::Content),
+        m("new", "a", Category::Content),
+        m("Also new", "c", Category::Content),
+    ];
+    mods[1].updated = Some(100);
+    mods[2].updated = Some(900);
+    mods[3].updated = Some(900);
+    let mut list = GroupedList::new(mods);
+    list.arrange(Some((SortKey::Updated, true)));
+    assert_eq!(names(&list), ["Also new", "new", "Old", "Local"]);
+    assert!(!list.is_grouped());
+    list.arrange(Some((SortKey::Updated, false)));
+    assert_eq!(names(&list), ["Old", "Also new", "new", "Local"]);
+    list.arrange(Some((SortKey::Author, true)));
+    assert_eq!(names(&list), ["Also new", "Old", "new", "Local"]);
+}
+
+#[test]
+fn mods_go_by_package_id_and_by_size() {
+    let mut mods = vec![
+        m("Zeta", "", Category::Content),
+        m("Alpha", "", Category::Content),
+    ];
+    mods[0].id = "a.zeta".into();
+    mods[1].id = "B.alpha".into();
+    mods[0].size = Some(10);
+    mods[1].size = Some(2_000);
+    let mut list = GroupedList::new(mods);
+    list.arrange(Some((SortKey::PackageId, false)));
+    assert_eq!(names(&list), ["Zeta", "Alpha"]);
+    list.arrange(Some((SortKey::Size, true)));
+    assert_eq!(names(&list), ["Alpha", "Zeta"]);
 }
 
 #[test]
@@ -570,7 +680,7 @@ fn mods_that_share_a_name_are_twins_whatever_the_case() {
     assert_eq!(twins(&mods), [true, false, true]);
 }
 
-fn installed_sample() -> GroupedList {
+pub(super) fn installed_sample() -> GroupedList {
     let mut mods = sample().mods().to_vec();
     for (at, m) in mods.iter_mut().enumerate() {
         m.installed = (m.name != "Royalty").then_some(id(100 + at));
@@ -680,4 +790,68 @@ fn a_mod_goes_below_another_only_when_that_one_loads_after_it() {
     assert_eq!(list.below(id(100), id(104)), Some((0, 4)));
     assert_eq!(list.below(id(104), id(100)), None);
     assert_eq!(list.below(id(100), id(999)), None);
+}
+
+fn read_with(files: &[(&str, &str)]) -> Arc<Facts> {
+    let tmp = tempfile::tempdir().unwrap();
+    for (file, text) in files {
+        let path = tmp.path().join(file);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
+    let folders = crate::rimworld::loadfolders::every_folder(tmp.path(), "1.6");
+    Arc::new(Facts::read(folders, &HashSet::new()))
+}
+
+fn installed_list() -> GroupedList {
+    let mods = (0..3).map(|n| {
+        let mut one = m(&format!("Mod {n}"), "x", Category::Content);
+        one.installed = Some(id(n));
+        one
+    });
+    GroupedList::flat(mods.collect())
+}
+
+#[test]
+fn file_words_keep_the_mods_read_that_have_them_and_count_those_not_read_yet() {
+    let gold = read_with(&[
+        (
+            "Defs/a.xml",
+            "<Defs><ThingDef><defName>Gold</defName></ThingDef></Defs>",
+        ),
+        ("Textures/a.png", "x"),
+    ]);
+    let patcher = read_with(&[(
+        "Patches/p.xml",
+        r#"<Patch><Operation><xpath>Defs/ThingDef[defName="Gold"]</xpath></Operation></Patch>"#,
+    )]);
+    let mut list = installed_list();
+    list.set_filter("has:defs");
+    assert_eq!((list.rows().len(), list.unread()), (0, 3));
+    list.set_facts(Arc::new(HashMap::from([(id(0), gold), (id(1), patcher)])));
+    assert_eq!(
+        (list.rows(), list.unread()),
+        (&[Row::Mod { index: 0 }][..], 1)
+    );
+    list.set_filter("has:patches");
+    assert_eq!(list.rows(), &[Row::Mod { index: 1 }]);
+    list.set_filter("has:textures defines:GOLD");
+    assert_eq!(list.rows(), &[Row::Mod { index: 0 }]);
+    list.set_filter("patchesdef:gold");
+    assert_eq!(list.rows(), &[Row::Mod { index: 1 }]);
+    list.set_filter("defines:gold patchesdef:gold");
+    assert!(list.rows().is_empty());
+    list.set_filter("has:sounds");
+    assert!(list.rows().is_empty());
+    list.set_filter("has:code");
+    assert_eq!(list.unread(), 0);
+    list.set_filter("has:nothing");
+    assert_eq!((list.rows().len(), list.unread()), (0, 0));
+}
+
+#[test]
+fn a_mod_that_is_not_installed_is_never_unread() {
+    let mut list = GroupedList::flat(vec![m("Gone", "x", Category::Content)]);
+    list.set_filter("has:defs");
+    assert_eq!(list.unread(), 0);
 }

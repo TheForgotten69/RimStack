@@ -1,26 +1,35 @@
 use crate::App;
 use rimstack_core::base::locks::Shared;
 use rimstack_core::base::sentence::Sentence;
+use rimstack_core::kept::settings::Switch;
+use rimstack_core::kept::{activated, launches};
 use rimstack_core::mods::describe::Trouble;
 use rimstack_core::mods::library::{Library, ModId};
 pub use rimstack_core::mods::list::Side;
-use rimstack_core::mods::list::{Category, GroupedList, Mod, SortKey, flag};
+use rimstack_core::mods::list::{Category, GroupedList, LeftOut, Mod, SortKey, flag};
 use rimstack_core::mods::{demo, sort_reasons};
-use rimstack_core::say;
+use rimstack_core::rimworld::paths::Source;
+use rimstack_core::{say, say_n};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
 mod details;
 mod edits;
+mod menu;
+mod orders;
 mod patches;
 mod patches_key;
 mod rows;
 mod rules;
 mod sorting;
+mod summary;
 
 pub use details::{Details, Files, Overview};
+pub use menu::{Clicked, Entry};
+pub use orders::Orders;
 pub use patches::Patched;
 pub use rows::RowView;
+pub use summary::SelectionSummary;
 
 pub struct Preview {
     before: Vec<Mod>,
@@ -45,8 +54,12 @@ pub struct LoadOrder {
     sort_waiting: Option<Vec<String>>,
     batching: bool,
     headings: bool,
-    by_name: bool,
-    installed: bool,
+    /// `None` by category.
+    inactive_by: Option<(SortKey, bool)>,
+    activated: activated::Since,
+    /// The reading its `ModId`s come from: after a rescan, `App::library` is a newer one.
+    /// `None` for a made-up list or one that could not be read.
+    reading: Option<std::sync::Arc<crate::workspace::Loaded>>,
     detected: rules::Detected,
     pub status: [Sentence; 2],
     /// Empty for none.
@@ -62,6 +75,14 @@ fn side_index(side: Side) -> usize {
     }
 }
 
+fn date(mods: &mut [Mod], since: &activated::Since) {
+    for m in mods {
+        m.activated = since
+            .get(&rimstack_core::rimworld::id::fold(&m.id))
+            .copied();
+    }
+}
+
 fn arranged(app: &App, library: &Library) -> rimstack_core::mods::library::Arranged {
     let mut now = library.arrange(app.session().current());
     let measured = app.startup();
@@ -70,14 +91,22 @@ fn arranged(app: &App, library: &Library) -> rimstack_core::mods::library::Arran
         m.load_micros = took.map(|ms| (ms * 1000.0) as u32);
     }
     let notes = app.notes().reading();
+    let steam_record = app.steam_record();
+    let (times, sizes) = &*steam_record;
     for m in now.active.iter_mut().chain(now.inactive.iter_mut()) {
-        let key = m.installed.and_then(|i| library.get(i)?.key());
+        let installed = m.installed.and_then(|i| library.get(i));
+        if let Some(i) = installed.filter(|i| i.source == Source::Workshop) {
+            m.updated = times.get(&i.folder).copied();
+            m.size = sizes.get(&i.folder).copied();
+        }
+        let key = installed.and_then(|i| i.key());
         if let Some(note) = key.and_then(|k| notes.get(&k)) {
             m.tags = note.tags.clone();
             m.sub = note.group().to_string();
-            // Filed by hand: that stands over what RimStack worked out.
             if let Some(chosen) = Category::from_kept(&note.category) {
                 m.category = chosen;
+                m.filed = chosen;
+                m.chosen = true;
             }
         }
     }
@@ -85,7 +114,7 @@ fn arranged(app: &App, library: &Library) -> rimstack_core::mods::library::Arran
 }
 
 impl LoadOrder {
-    fn empty(installed: bool) -> Self {
+    fn empty() -> Self {
         Self {
             active: GroupedList::new(Vec::new()),
             inactive: GroupedList::new(Vec::new()),
@@ -100,8 +129,9 @@ impl LoadOrder {
             sort_waiting: None,
             batching: false,
             headings: true,
-            by_name: false,
-            installed,
+            inactive_by: None,
+            activated: activated::Since::new(),
+            reading: None,
             detected: rules::Detected::default(),
             status: [Sentence::default(), Sentence::default()],
             problem: Sentence::default(),
@@ -110,7 +140,7 @@ impl LoadOrder {
     }
 
     pub fn demo(active: usize, inactive: usize) -> Self {
-        let mut order = Self::empty(false);
+        let mut order = Self::empty();
         order.active = GroupedList::new(demo::generate(active));
         order.inactive = GroupedList::new(demo::generate(inactive));
         order.twins = [
@@ -120,25 +150,30 @@ impl LoadOrder {
         order
     }
 
-    pub fn read(app: &App, headings: bool, by_name: bool) -> Self {
+    pub fn read(app: &App, headings: bool, inactive_by: Option<(SortKey, bool)>) -> Self {
         let loaded = app.library();
         let (library, took) = match &*loaded {
             Ok(read) => read,
             Err(problem) => {
-                let mut order = Self::empty(false);
+                let mut order = Self::empty();
                 order.problem = problem.sentence().clone();
                 return order;
             }
         };
-        let mut order = Self::empty(true);
+        let mut order = Self::empty();
+        order.reading = Some(loaded.clone());
         order.headings = headings;
-        order.by_name = by_name;
-        let now = arranged(app, library);
+        order.inactive_by = inactive_by;
+        let saved = app.session().saved().to_vec();
+        order.activated = app.activated_since(library, &saved, app.list_written_at());
+        let mut now = arranged(app, library);
+        date(&mut now.active, &order.activated);
         let (mods, _) = rules::sorted_by_category(app, &mut order.detected, library, now.active);
         order.active = GroupedList::flat(mods);
         order.active.set_grouped(headings);
         order.inactive = GroupedList::new(now.inactive);
-        order.inactive.arrange(by_name);
+        order.inactive.arrange(inactive_by);
+        order.follow_left_out(app);
         order.status = [
             match library.missing {
                 0 => say!("{} active", library.active.len()),
@@ -155,7 +190,12 @@ impl LoadOrder {
     }
 
     pub fn is_installed(&self) -> bool {
-        self.installed
+        self.reading.is_some()
+    }
+
+    /// The order's own reading; a made-up list has none and is given the current one.
+    fn reading(&self, app: &App) -> std::sync::Arc<crate::workspace::Loaded> {
+        self.reading.clone().unwrap_or_else(|| app.library())
     }
 
     pub fn list(&self, side: Side) -> &GroupedList {
@@ -188,8 +228,15 @@ impl LoadOrder {
         self.headings
     }
 
-    pub fn by_name(&self) -> bool {
-        self.by_name
+    pub fn inactive_by(&self) -> Option<(SortKey, bool)> {
+        self.inactive_by
+    }
+
+    pub fn order_of(&self, side: Side) -> Option<(SortKey, bool)> {
+        match side {
+            Side::Active => self.active.shown_by(),
+            Side::Inactive => self.inactive_by,
+        }
     }
 
     pub fn errors_and_warnings(&self) -> (usize, usize) {
@@ -202,7 +249,7 @@ impl LoadOrder {
 
     /// `None` when what was read still holds.
     pub fn files_to_read(&self, app: &App) -> Option<Vec<ModId>> {
-        if !self.installed {
+        if !self.is_installed() {
             return None;
         }
         let mut members: Vec<ModId> = self.checked_order.iter().flatten().copied().collect();
@@ -224,10 +271,10 @@ impl LoadOrder {
             .iter()
             .filter_map(|m| m.load_micros)
             .max();
-        if !self.installed {
+        if !self.is_installed() {
             return;
         }
-        let loaded = app.library();
+        let loaded = self.reading(app);
         let Ok((library, _)) = &*loaded else {
             return;
         };
@@ -260,6 +307,35 @@ impl LoadOrder {
             let flags = self.flags(app, library, side);
             self.list_mut(side).set_flags(flags);
         }
+        self.share_facts(app);
+    }
+
+    fn share_facts(&mut self, app: &App) {
+        let facts = app.mod_facts(&self.reading(app));
+        self.active.set_facts(facts.clone());
+        self.inactive.set_facts(facts);
+    }
+
+    pub fn facts_read(&mut self, app: &App) {
+        self.share_facts(app);
+    }
+
+    pub fn needs_facts(&self) -> bool {
+        self.active.needs_facts() || self.inactive.needs_facts()
+    }
+
+    pub fn filter_summary(&self) -> Sentence {
+        let (active, inactive) = (self.active.matching(), self.inactive.matching());
+        match self.active.unread() + self.inactive.unread() {
+            0 => say!("{} active, {} inactive", active, inactive),
+            n => say_n!(
+                n,
+                "{} mod not read yet: {} active, {} inactive",
+                "{} mods not read yet: {} active, {} inactive",
+                active,
+                inactive
+            ),
+        }
     }
 
     pub fn recheck(&mut self, app: &App) {
@@ -273,26 +349,28 @@ impl LoadOrder {
         let Ok((library, _)) = &*loaded else {
             return;
         };
-        if !self.installed {
+        if !self.is_installed() {
             return;
         }
         self.preview = None;
         self.sort_note.clear();
-        let now = arranged(app, library);
+        let mut now = arranged(app, library);
+        date(&mut now.active, &self.activated);
         let (mods, _) = rules::sorted_by_category(app, &mut self.detected, library, now.active);
         self.active.set_grouped(self.headings);
         self.active.set_mods(mods);
         self.inactive.set_mods(now.inactive);
-        self.inactive.arrange(self.by_name);
+        self.inactive.arrange(self.inactive_by);
+        self.reading = Some(loaded.clone());
         self.settle(app);
     }
 
     pub fn refile(&mut self, app: &App) {
-        let loaded = app.library();
+        let loaded = self.reading(app);
         let (Ok((library, _)), None) = (&*loaded, &self.preview) else {
             return;
         };
-        if !self.installed {
+        if !self.is_installed() {
             return;
         }
         let mods = self.active.mods().to_vec();
@@ -309,10 +387,19 @@ impl LoadOrder {
         }
     }
 
-    pub fn set_by_name(&mut self, app: &App, by_name: bool) {
-        self.by_name = by_name;
-        self.inactive.arrange(by_name);
+    pub fn set_inactive_by(&mut self, app: &App, order: Option<(SortKey, bool)>) {
+        self.inactive_by = order;
+        self.inactive.arrange(order);
         self.settle(app);
+    }
+
+    pub fn follow_left_out(&mut self, app: &App) {
+        let left_out = match app.settings().switch(Switch::DimLeftOut) {
+            true => LeftOut::Dimmed,
+            false => LeftOut::Hidden,
+        };
+        self.active.set_left_out(left_out);
+        self.inactive.set_left_out(left_out);
     }
 
     pub fn set_filter(&mut self, text: &str) {
@@ -320,16 +407,9 @@ impl LoadOrder {
         self.inactive.set_filter_on(Side::Inactive, text);
     }
 
-    /// "name", "author", "version" or "load"; anything else is load order.
-    pub fn show_by(&mut self, column: &str, descending: bool) {
-        let key = match column {
-            "name" => Some(SortKey::Name),
-            "author" => Some(SortKey::Author),
-            "version" => Some(SortKey::Version),
-            "load" => Some(SortKey::Load),
-            _ => None,
-        };
-        self.active.show_by(key.map(|key| (key, descending)));
+    /// `None` shows the load order itself.
+    pub fn set_active_by(&mut self, order: Option<(SortKey, bool)>) {
+        self.active.show_by(order);
     }
 
     fn flags(&self, app: &App, library: &Library, side: Side) -> Vec<u16> {
@@ -346,6 +426,7 @@ impl LoadOrder {
             .as_ref()
             .filter(|_| side == Side::Active);
         let steam_record = app.steam_record();
+        let found = app.find_mods();
         let seen = app.seen().reading();
         let session = app.session();
         let changes = session.changes();
@@ -393,6 +474,10 @@ impl LoadOrder {
                     flag::NEW,
                 ),
                 (changed.contains(m.id.as_str()), flag::CHANGED),
+                (
+                    m.installed.is_some_and(|i| found.contains(&i)),
+                    flag::IN_SEARCH,
+                ),
             ];
             marks
                 .iter()
@@ -414,7 +499,7 @@ impl LoadOrder {
     }
 
     pub fn fresh(&self, app: &App, side: Side) -> Vec<ModId> {
-        let loaded = app.library();
+        let loaded = self.reading(app);
         let Ok((library, _)) = &*loaded else {
             return Vec::new();
         };
@@ -431,11 +516,55 @@ impl LoadOrder {
 }
 
 impl App {
+    /// Since when each mod of `saved` has been in the saved list; one that joined since it was
+    /// last asked is dated `at`. A list the game emptied to its own mods dates nothing.
+    pub fn activated_since(
+        &self,
+        library: &Library,
+        saved: &[String],
+        at: u64,
+    ) -> activated::Since {
+        static KEEPING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _held = KEEPING
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let file = self.activated_file();
+        let saved: Vec<String> = saved.iter().filter(|id| !id.is_empty()).cloned().collect();
+        let launched = launches::read(&self.launches_file());
+        let emptied = launched
+            .last()
+            .is_some_and(|last| super::game::emptied_by_game(library, &saved, last));
+        let kept = activated::read(&file);
+        if emptied {
+            return kept.unwrap_or_default();
+        }
+        let (mut since, mut changed) = kept.map_or_else(
+            || (activated::first(&saved, &launched, at), true),
+            |kept| (kept, false),
+        );
+        changed |= activated::follow(&mut since, &saved, at);
+        if changed && let Err(problem) = activated::write(&file, &since) {
+            rimstack_core::problem!("when mods were activated was not kept: {problem}");
+        }
+        since
+    }
+
+    /// When ModsConfig.xml was last written; now without one.
+    pub fn list_written_at(&self) -> u64 {
+        let file = self.paths().mods_config();
+        match file.map_or(0, |f| rimstack_core::base::watch::changed_at(&f)) {
+            0 => super::now_secs(),
+            millis => millis / 1000,
+        }
+    }
+
     /// Off the window's thread.
     pub fn read_active_files(&self, members: Vec<ModId>) {
         use rayon::prelude::*;
-        use rimstack_core::mods::{conflicts, infer};
+        use rimstack_core::kept::mod_facts::ModFacts;
+        use rimstack_core::mods::conflicts;
         let generation = self.conflicts_generation();
+        let run = self.begin_facts_run();
         let loaded = self.library();
         let Ok((library, _)) = &*loaded else {
             return;
@@ -444,27 +573,50 @@ impl App {
             .iter()
             .filter_map(|&i| library.get(i)?.key())
             .collect();
-        let read: Vec<(Vec<String>, infer::Scanned)> = members
-            .par_iter()
+        let jobs: Vec<super::mod_facts::Job> = members
+            .iter()
             .map(|&i| {
-                let Some(root) = library.get(i).map(|m| &m.path) else {
-                    return Default::default();
-                };
+                let root = library.get(i).map(|m| m.path.clone()).unwrap_or_default();
                 let loaded = rimstack_core::rimworld::loadfolders::folders(
-                    root,
+                    &root,
                     &library.game_version,
                     &|m| active.contains(m),
                 );
-                (conflicts::provided(&loaded), infer::scan(&loaded))
+                super::mod_facts::Job {
+                    root,
+                    loaded,
+                    whole: true,
+                }
             })
             .collect();
-        let (provided, scanned): (Vec<_>, Vec<_>) = read.into_iter().unzip();
+        let mut record = ModFacts::read(&self.facts_file(), &library.game_version);
+        let (facts, read) = super::mod_facts::gather(&mut record, &jobs, &library.game_assemblies);
+        self.count_mods_read(read);
+        let provided: Vec<Vec<String>> = jobs
+            .par_iter()
+            .map(|job| conflicts::provided(&job.loaded))
+            .collect();
+        let scanned = members
+            .iter()
+            .copied()
+            .zip(facts.iter().map(|f| f.scanned.clone()));
         let found = super::Conflicts {
             overlaps: conflicts::overlaps(&provided),
-            scanned: members.iter().copied().zip(scanned).collect(),
-            members,
+            scanned: scanned.collect(),
+            members: members.clone(),
         };
+        if !self.keep_facts(run, &loaded, members.iter().copied().zip(facts)) {
+            return;
+        }
         self.keep_files_read(generation, found);
+        let installed: HashSet<String> = library
+            .ids()
+            .map(|(_, m)| m.path.to_string_lossy().into_owned())
+            .collect();
+        if read > 0 {
+            self.keep_record(run, &mut record, &installed);
+        }
+        self.read_inactive_facts(run, &loaded, &mut record, &members);
     }
 
     /// Dropped when `textures_changed` ran since `generation`.
@@ -489,7 +641,7 @@ pub struct FoundMod {
 
 impl LoadOrder {
     pub fn found(&self, app: &App, text: &str, most: usize) -> Vec<FoundMod> {
-        let loaded = app.library();
+        let loaded = self.reading(app);
         let Ok((library, _)) = &*loaded else {
             return Vec::new();
         };
@@ -506,10 +658,86 @@ impl LoadOrder {
             })
             .collect()
     }
+
+    pub fn same_mods_in(&self, newer: &LoadOrder) -> HashMap<ModId, ModId> {
+        let (Some(old), Some(new)) = (self.held(), newer.held()) else {
+            return HashMap::new();
+        };
+        let by_folder: HashMap<&std::path::Path, ModId> =
+            new.ids().map(|(id, m)| (m.path.as_path(), id)).collect();
+        let found = |(id, m): (ModId, &rimstack_core::mods::library::Installed)| {
+            Some((id, *by_folder.get(m.path.as_path())?))
+        };
+        old.ids().filter_map(found).collect()
+    }
+
+    fn held(&self) -> Option<&Library> {
+        self.reading.as_deref()?.as_ref().ok().map(|(l, _)| l)
+    }
+
+    /// `selected` of the earlier reading, in this one: what is gone is left out.
+    pub fn carried(&self, same: &HashMap<ModId, ModId>, selected: &[ModId]) -> Carried {
+        let kept: Vec<ModId> = selected
+            .iter()
+            .filter_map(|id| same.get(id).copied())
+            .collect();
+        let active = kept
+            .first()
+            .is_some_and(|&first| self.active.position_of(first).is_some());
+        Carried::of(&kept, active)
+    }
+
+    /// The mods `side` shows that are not selected there.
+    pub fn inverted(&self, side: Side, selected_on: Side, selected: &[ModId]) -> Carried {
+        let selected = if selected_on == side { selected } else { &[] };
+        Carried::of(
+            &self.list(side).shown_except(selected),
+            side == Side::Active,
+        )
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Carried {
+    pub ids: Vec<ModId>,
+    pub active: bool,
+}
+
+impl Carried {
+    fn of(ids: &[ModId], active: bool) -> Carried {
+        Carried {
+            ids: ids.to_vec(),
+            active: active && !ids.is_empty(),
+        }
+    }
+}
+
+/// What a drag of one mod takes along: the whole selection when it is part of it.
+#[derive(Debug, Serialize, PartialEq)]
+pub struct Holding {
+    pub ids: Vec<i32>,
+    pub name: Sentence,
+}
+
+impl Holding {
+    pub fn of(id: Option<ModId>, name: &str, selected: &[ModId]) -> Holding {
+        match id {
+            Some(id) if selected.len() > 1 && selected.contains(&id) => Holding {
+                ids: selected.iter().map(|id| id.to_qml()).collect(),
+                name: say_n!(selected.len(), "{} mod", "{} mods"),
+            },
+            _ => Holding {
+                ids: id.iter().map(|id| id.to_qml()).collect(),
+                name: Sentence::Plain(name.to_string()),
+            },
+        }
+    }
 }
 
 #[cfg(test)]
 mod coverage;
+#[cfg(test)]
+mod simulation_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

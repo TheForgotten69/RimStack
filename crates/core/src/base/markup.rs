@@ -128,6 +128,41 @@ pub fn rich(text: &str) -> String {
     html.trim().replace('\n', "<br>")
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Piece {
+    Html(String),
+    Image(String),
+}
+
+/// Pictures past `most`, and any whose address is not `https`, are left out.
+pub fn pieces(text: &str, most: usize) -> Vec<Piece> {
+    let lower = text.to_ascii_lowercase();
+    let mut found = Vec::new();
+    let (mut at, mut images) = (0, 0);
+    let html = |chunk: &str, found: &mut Vec<Piece>| {
+        let html = rich(chunk);
+        if !html.is_empty() {
+            found.push(Piece::Html(html));
+        }
+    };
+    while let Some(open) = lower[at..].find("[img]").map(|o| o + at) {
+        let from = open + "[img]".len();
+        let Some(close) = lower[from..].find("[/img]").map(|c| c + from) else {
+            break;
+        };
+        html(&text[at..open], &mut found);
+        let url = text[from..close].trim();
+        let plain = url.starts_with("https://") && !url.contains(char::is_whitespace);
+        if plain && images < most {
+            found.push(Piece::Image(url.to_string()));
+            images += 1;
+        }
+        at = close + "[/img]".len();
+    }
+    html(&text[at..], &mut found);
+    found
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -175,5 +210,31 @@ mod tests {
         );
         assert_eq!(rich("a < b & c"), "a &lt; b &amp; c");
         assert_eq!(rich("x [script]y"), "x [script]y");
+    }
+
+    #[test]
+    fn a_description_is_cut_at_its_https_pictures_up_to_a_count() {
+        let text = "[b]Hi[/b]\n[IMG] https://a.example/1.png [/IMG]\nMid[img]http://a.example/2.png[/img][img]https://a.example/3.png[/img] end";
+        assert_eq!(
+            pieces(text, 5),
+            [
+                Piece::Html("<b>Hi</b>".into()),
+                Piece::Image("https://a.example/1.png".into()),
+                Piece::Html("Mid".into()),
+                Piece::Image("https://a.example/3.png".into()),
+                Piece::Html("end".into()),
+            ]
+        );
+        let images = |most| {
+            pieces(text, most)
+                .iter()
+                .filter(|p| matches!(p, Piece::Image(_)))
+                .count()
+        };
+        assert_eq!((images(1), images(0)), (1, 0));
+        assert_eq!(
+            pieces("[img]https://x/y", 3),
+            [Piece::Html("https://x/y".into())]
+        );
     }
 }

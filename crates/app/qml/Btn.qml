@@ -17,7 +17,8 @@ Rectangle {
     property bool compact: false
     readonly property bool bare: compact && icon !== ""
     signal clicked()
-    implicitWidth: btnContent.implicitWidth + (large ? 36 : (text === "" || bare) && !menu ? 14 : 20)
+    readonly property real fullWidth: btnLabel.implicitWidth + Number(icon !== "") * (Theme.icon + btnContent.spacing) + Theme.sized(20)
+    implicitWidth: btnContent.implicitWidth + (large ? Theme.sized(36) : (text === "" || bare) && !menu ? Theme.sized(14) : Theme.sized(20))
     implicitHeight: large ? Theme.controlLarge : Theme.control
     radius: Theme.corner
     readonly property real frame: enabled ? 1 : 0.4
@@ -25,7 +26,7 @@ Rectangle {
     Keys.onSpacePressed: btn.clicked()
     Keys.onReturnPressed: btn.clicked()
     Keys.onEnterPressed: btn.clicked()
-    border.width: primary ? 0 : 1
+    border.width: Theme.outline
     border.color: toned ? Qt.rgba(tone.r, tone.g, tone.b, frame) : Qt.rgba(Theme.fieldLine.r, Theme.fieldLine.g, Theme.fieldLine.b, frame)
     FocusRing {}
     Accessible.role: Accessible.Button
@@ -45,11 +46,11 @@ Rectangle {
         anchors.centerIn: parent
         spacing: Theme.gapSmall
         opacity: btn.enabled ? 1 : 0.5
-        Icon { visible: btn.icon !== ""; name: btn.icon; size: Theme.icon; color: btnLabel.color; anchors.verticalCenter: parent.verticalCenter }
+        Icon { visible: btn.icon !== ""; name: btn.icon; color: btnLabel.color; anchors.verticalCenter: parent.verticalCenter }
         Text {
             id: btnLabel
             visible: text !== "" && !btn.bare
-            color: btn.primary ? Theme.onSelected : btn.danger && btn.enabled ? Theme.err : btn.toned ? btn.tone : Theme.ink
+            color: btn.primary ? Theme.accentInk : btn.danger && btn.enabled ? Theme.err : btn.toned ? btn.tone : Theme.ink
             font.pixelSize: btn.large ? Theme.body : Theme.small
             font.weight: btn.large ? Font.DemiBold : btn.primary || btn.toned ? Font.Medium : Font.Normal
         }
@@ -57,5 +58,10 @@ Rectangle {
     }
     HoverHandler { id: btnHover }
     Tip { text: btn.bare && btn.tip === "" ? btn.text : btn.tip; over: btnHover.hovered || btn.activeFocus }
-    TapHandler { id: btnPress; onTapped: btn.clicked() }
+    TapHandler {
+        id: btnPress
+        gesturePolicy: TapHandler.ReleaseWithinBounds
+        grabPermissions: PointerHandler.CanTakeOverFromAnything | PointerHandler.ApprovesTakeOverByItems
+        onTapped: btn.clicked()
+    }
 }

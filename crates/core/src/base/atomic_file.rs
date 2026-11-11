@@ -12,6 +12,27 @@ pub fn write(path: &Path, contents: impl AsRef<[u8]>) -> Result<(), Error> {
     put(&partial_beside(&real), &real, contents.as_ref()).map_err(failed)
 }
 
+pub fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<(), Error> {
+    let text = serde_json::to_vec(value)
+        .map_err(|e| Error::format(crate::said!("{}: {}", path.display(), e)))?;
+    write(path, text)
+}
+
+/// One JSON value per line.
+pub fn write_lines<T: serde::Serialize>(
+    path: &Path,
+    lines: impl IntoIterator<Item = T>,
+) -> Result<(), Error> {
+    let mut text = String::new();
+    for line in lines {
+        let one = serde_json::to_string(&line)
+            .map_err(|e| Error::format(crate::said!("{}: {}", path.display(), e)))?;
+        text.push_str(&one);
+        text.push('\n');
+    }
+    write(path, text)
+}
+
 /// Two writes must not share a partial name: each would write over the other's bytes.
 pub(crate) fn partial_beside(real: &Path) -> PathBuf {
     static WRITES: AtomicU64 = AtomicU64::new(0);

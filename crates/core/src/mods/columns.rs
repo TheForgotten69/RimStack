@@ -1,5 +1,6 @@
 //! Kept as `author,version,load` (the columns) and `author=180,load=70` (widths at 100% text).
 
+use crate::mods::list::SortKey;
 use std::collections::BTreeMap;
 
 const NARROWEST: f64 = 48.0;
@@ -44,14 +45,30 @@ pub fn sized(kept: &str, column: &str, width: f64) -> String {
     pairs.join(",")
 }
 
-/// The empty column is the load order.
-pub fn pressed<'a>(by: &str, descending: bool, asked: &'a str) -> (&'a str, bool) {
-    match (by == asked, descending) {
-        _ if asked.is_empty() => ("", false),
-        (true, true) => ("", false),
-        (true, false) => (asked, true),
-        (false, _) => (asked, false),
+/// `None` is the list's own order: the load order, or the inactive mods by category.
+/// A key starts the way `SortKey::starts_descending` says, turns round when asked again,
+/// and goes back to `None` the third time.
+pub fn pressed(now: Option<(SortKey, bool)>, asked: Option<SortKey>) -> Option<(SortKey, bool)> {
+    let asked = asked?;
+    let first = asked.starts_descending();
+    match now {
+        Some((by, descending)) if by == asked => (descending == first).then_some((asked, !first)),
+        _ => Some((asked, first)),
     }
+}
+
+/// Kept as "" for the list's own order, "name", or "name down".
+pub fn kept(order: Option<(SortKey, bool)>) -> String {
+    match order {
+        None => String::new(),
+        Some((key, false)) => key.key().to_string(),
+        Some((key, true)) => format!("{} down", key.key()),
+    }
+}
+
+pub fn from_kept(kept: &str) -> Option<(SortKey, bool)> {
+    let (key, way) = kept.split_once(' ').unwrap_or((kept, ""));
+    SortKey::from_key(key).map(|key| (key, way == "down"))
 }
 
 #[cfg(test)]
@@ -92,14 +109,51 @@ mod tests {
 
     #[test]
     fn a_heading_pressed_three_times_comes_back_to_the_load_order() {
-        let first = pressed("", false, "name");
-        let second = pressed(first.0, first.1, "name");
-        let third = pressed(second.0, second.1, "name");
+        let name = Some(SortKey::Name);
+        let first = pressed(None, name);
+        let second = pressed(first, name);
+        let third = pressed(second, name);
         assert_eq!(
             [first, second, third],
-            [("name", false), ("name", true), ("", false)]
+            [
+                Some((SortKey::Name, false)),
+                Some((SortKey::Name, true)),
+                None
+            ]
         );
-        assert_eq!(pressed("name", true, "author"), ("author", false));
-        assert_eq!(pressed("name", true, ""), ("", false));
+        let by_name = Some((SortKey::Name, true));
+        assert_eq!(
+            pressed(by_name, Some(SortKey::Author)),
+            Some((SortKey::Author, false))
+        );
+        assert_eq!(pressed(by_name, None), None);
+    }
+
+    #[test]
+    fn the_newest_and_largest_come_first_then_last() {
+        let updated = Some(SortKey::Updated);
+        let first = pressed(Some((SortKey::Name, false)), updated);
+        let second = pressed(first, updated);
+        assert_eq!(
+            [first, second, pressed(second, updated)],
+            [
+                Some((SortKey::Updated, true)),
+                Some((SortKey::Updated, false)),
+                None
+            ]
+        );
+    }
+
+    #[test]
+    fn an_order_is_kept_as_its_key_and_way_and_read_back() {
+        for order in [
+            None,
+            Some((SortKey::Size, true)),
+            Some((SortKey::PackageId, false)),
+        ] {
+            assert_eq!(from_kept(&kept(order)), order);
+        }
+        assert_eq!(kept(Some((SortKey::Size, true))), "size down");
+        assert_eq!(from_kept("colour down"), None);
     }
 }

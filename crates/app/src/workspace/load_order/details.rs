@@ -14,12 +14,14 @@ use serde::Serialize;
 
 const MOST_PATCHES: usize = 200;
 
-#[derive(Serialize)]
+const FIRST_ERRORS: usize = 4;
+
+#[derive(Serialize, Clone)]
 pub struct FixSaid {
-    action: &'static str,
-    target: String,
-    label: &'static str,
-    page: Option<String>,
+    pub(super) action: &'static str,
+    pub(super) target: String,
+    pub(super) label: &'static str,
+    pub(super) page: Option<String>,
 }
 
 impl FixSaid {
@@ -33,7 +35,7 @@ impl FixSaid {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ProblemSaid {
     /// -1 for a mod that is not installed.
@@ -96,58 +98,60 @@ pub struct Patched {
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Details {
-    name: String,
-    source: &'static str,
-    workshop: bool,
-    official: bool,
-    contains: Sentence,
-    path: String,
-    repository: String,
-    folder: String,
-    preview: Option<String>,
-    author: String,
-    package_id: String,
-    version: String,
-    game_versions: String,
-    description: String,
-    description_rich: String,
-    url: String,
-    load_time: String,
-    unreadable: Option<Sentence>,
-    tags: String,
-    note: String,
-    category_chosen: String,
-    version_ok: bool,
-    problems_ignored: usize,
-    made_for: Option<String>,
-    replaced_by: Option<String>,
-    replaced_by_id: Option<String>,
-    replaced_by_versions: Option<String>,
-    copies: Option<Sentence>,
-    bin_local_copy: Option<LocalCopy>,
-    updated: Option<u64>,
-    megabytes: Option<f64>,
-    requires: Vec<Named>,
-    load_folders: Vec<Sentence>,
-    code: Sentence,
-    sub: String,
-    patches: Vec<Patched>,
-    category: Option<&'static str>,
-    problems: Vec<ProblemSaid>,
-    your_rules: Vec<OwnRule>,
-    detected: Vec<Detected>,
-    loses_to: Vec<Clash>,
-    wins_over: Vec<Clash>,
-    conflict_marks: std::collections::BTreeMap<ModId, rimstack_core::mods::details::Mark>,
-    loads_after: Vec<Named>,
-    loads_before: Vec<Named>,
-    required_above: usize,
-    placement: Option<Sentence>,
-    offer_trust: bool,
-    can_bin: bool,
-    group_choices: Vec<String>,
-    workshop_page: Option<String>,
-    steam_page: Option<String>,
+    pub(super) name: String,
+    pub(super) source: &'static str,
+    pub(super) workshop: bool,
+    pub(super) official: bool,
+    pub(super) contains: Sentence,
+    pub(super) path: String,
+    pub(super) repository: String,
+    pub(super) folder: String,
+    pub(super) preview: Option<String>,
+    pub(super) author: String,
+    pub(super) package_id: String,
+    pub(super) version: String,
+    pub(super) game_versions: String,
+    pub(super) description: String,
+    pub(super) description_rich: String,
+    pub(super) url: String,
+    pub(super) load_time: String,
+    pub(super) unreadable: Option<Sentence>,
+    pub(super) tags: String,
+    pub(super) note: String,
+    pub(super) category_chosen: String,
+    pub(super) version_ok: bool,
+    pub(super) problems_ignored: usize,
+    pub(super) made_for: Option<String>,
+    pub(super) replaced_by: Option<String>,
+    pub(super) replaced_by_id: Option<String>,
+    pub(super) replaced_by_versions: Option<String>,
+    pub(super) copies: Option<Sentence>,
+    pub(super) bin_local_copy: Option<LocalCopy>,
+    pub(super) updated: Option<u64>,
+    pub(super) megabytes: Option<f64>,
+    pub(super) requires: Vec<Named>,
+    pub(super) load_folders: Vec<Sentence>,
+    pub(super) code: Sentence,
+    pub(super) sub: String,
+    pub(super) patches: Vec<Patched>,
+    pub(super) category: Option<&'static str>,
+    pub(super) held: Sentence,
+    pub(super) problems: Vec<ProblemSaid>,
+    pub(super) your_rules: Vec<OwnRule>,
+    pub(super) detected: Vec<Detected>,
+    pub(super) loses_to: Vec<Clash>,
+    pub(super) wins_over: Vec<Clash>,
+    pub(super) conflict_marks:
+        std::collections::BTreeMap<ModId, rimstack_core::mods::details::Mark>,
+    pub(super) loads_after: Vec<Named>,
+    pub(super) loads_before: Vec<Named>,
+    pub(super) required_above: usize,
+    pub(super) placement: Option<Sentence>,
+    pub(super) offer_trust: bool,
+    pub(super) can_bin: bool,
+    pub(super) group_choices: Vec<String>,
+    pub(super) workshop_page: Option<String>,
+    pub(super) steam_page: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -161,11 +165,11 @@ pub struct LocalCopy {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NotInstalled {
-    name: String,
-    take_off: Sentence,
-    package_id: String,
-    fixes: Vec<FixSaid>,
-    resubscribe: Vec<String>,
+    pub(super) name: String,
+    pub(super) take_off: Sentence,
+    pub(super) package_id: String,
+    pub(super) fixes: Vec<FixSaid>,
+    pub(super) resubscribe: Vec<String>,
 }
 
 #[derive(Serialize, Default)]
@@ -190,6 +194,9 @@ pub struct Overview {
     game_version: String,
     categories: Vec<&'static str>,
     troubles: Vec<ProblemSaid>,
+    error_count: usize,
+    first_errors: Vec<ProblemSaid>,
+    more_errors: usize,
     to_get: Vec<ProblemSaid>,
     trouble_groups: Vec<ProblemGroup>,
     needed: Vec<String>,
@@ -197,6 +204,7 @@ pub struct Overview {
     other_warnings: usize,
     slowest: Vec<Slow>,
     load_times: bool,
+    load_times_how: Sentence,
     installed: usize,
     missing: usize,
     unreadable: usize,
@@ -228,7 +236,7 @@ impl LoadOrder {
     }
 
     pub fn details(&mut self, app: &App, id: ModId) -> Details {
-        let loaded = app.library();
+        let loaded = self.reading(app);
         let Ok((library, _)) = &*loaded else {
             return Details::default();
         };
@@ -347,7 +355,15 @@ impl LoadOrder {
             .collect();
         if let Some(at) = self.active.position_of(id) {
             let listed = &self.active.mods()[at];
-            said.category = Some(listed.category.label());
+            said.category = Some(listed.filed.label());
+            if !listed.held_by.is_empty() {
+                let among = Sentence::named(listed.category.label());
+                said.held = say!(
+                    "Sits among {} because {} has to load after it.",
+                    among.inside(),
+                    listed.held_by
+                );
+            }
             let own = self.troubles.get(at).map(Vec::as_slice).unwrap_or_default();
             said.problems = own.iter().map(|t| ProblemSaid::of(listed, t)).collect();
             said.offer_trust = said.problems.iter().any(|t| t.trust);
@@ -462,7 +478,7 @@ impl LoadOrder {
     }
 
     pub fn overview(&self, app: &App) -> Overview {
-        let loaded = app.library();
+        let loaded = self.reading(app);
         let Ok((library, took)) = &*loaded else {
             return Overview::default();
         };
@@ -517,6 +533,12 @@ impl LoadOrder {
             .collect();
         let community = app.community();
         let tally = describe::tally(&self.troubles);
+        let load_times = mods.iter().any(|m| m.load_micros.is_some());
+        let errors = || troubles.iter().filter(|t| t.error);
+        let (error_count, first_errors): (usize, Vec<ProblemSaid>) = (
+            errors().count(),
+            errors().take(FIRST_ERRORS).cloned().collect(),
+        );
         Overview {
             game_version: library.game_version.clone(),
             categories: Category::ALL
@@ -525,13 +547,23 @@ impl LoadOrder {
                 .map(Category::label)
                 .collect(),
             troubles,
+            error_count,
+            more_errors: error_count - first_errors.len(),
+            first_errors,
             to_get,
             trouble_groups,
             needed: tally.needed,
             version_only: tally.version_only,
             other_warnings: tally.other_warnings,
             slowest: details::slowest(mods, 5),
-            load_times: mods.iter().any(|m| m.load_micros.is_some()),
+            load_times,
+            load_times_how: if load_times {
+                Sentence::default()
+            } else {
+                say!(
+                    "Load times come from the Loading Progress mod: activate it, tick “Track startup loading impact” and “Automatically save startup impact report” in its settings, then start the game."
+                )
+            },
             installed: library.installed.len(),
             missing: library.missing,
             unreadable: library.unreadable,

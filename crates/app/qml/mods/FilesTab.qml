@@ -66,7 +66,7 @@ Column {
             color: Theme.ink
             font.pixelSize: Theme.body
             lineHeight: 1.3
-            text: Theme.plural(hiddenHere.count, "{} texture set aside: renamed with .rimstack-hidden, so the game skips them.", "{} textures set aside: renamed with .rimstack-hidden, so the game skips them.")
+            text: Theme.plural(hiddenHere.count, "{} texture set aside: renamed with .rimstack-hidden, so the game skips it.", "{} textures set aside: renamed with .rimstack-hidden, so the game skips them.")
         }
         Btn {
             icon: "eye-off"
@@ -91,8 +91,8 @@ Column {
             required property var modelData
             width: side.width
             implicitHeight: contentValue.implicitHeight + 4
-            Text { width: Theme.sized(150); color: Theme.ink2; font.pixelSize: Theme.body; text: content.modelData[0] }
-            Text { id: contentValue; x: 158; width: parent.width - 158; wrapMode: Text.WrapAnywhere; color: Theme.ink; font.pixelSize: Theme.body; text: content.modelData[1] }
+            Text { id: contentName; width: Theme.sized(150); color: Theme.ink2; font.pixelSize: Theme.body; text: content.modelData[0] }
+            Text { id: contentValue; anchors.left: contentName.right; anchors.leftMargin: 8; anchors.right: parent.right; wrapMode: Text.WrapAnywhere; color: Theme.ink; font.pixelSize: Theme.body; text: content.modelData[1] }
         }
     }
 }

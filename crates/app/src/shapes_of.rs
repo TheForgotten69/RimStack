@@ -3,12 +3,13 @@ use crate::reports::{Answer, ReleaseSaid, Written};
 use crate::shapes::Shapes;
 use crate::workspace::changed::{NotesState, Only, since_shown};
 use crate::workspace::downloads::{Checkout, Queue, Updates, updates_shown};
-use crate::workspace::load_order::{LoadOrder, Side};
+use crate::workspace::load_order::{Clicked, Holding, LoadOrder, Side};
 use crate::workspace::tests::installed;
 use crate::workspace::{logs, saves, textures};
 use rimstack_core::kept::launches;
 use rimstack_core::mods::columns;
 use rimstack_core::mods::library::ModId;
+use rimstack_core::mods::list::{Row, SortKey};
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -159,6 +160,8 @@ pub(crate) fn every() -> Shapes {
     textures(&app, &mut shapes);
     search(&app, &mut shapes);
     downloads(&app, &mut shapes);
+    find(&app, &mut shapes);
+    workshop(&mut shapes);
     settings_once_set(&app, &mut shapes);
     shapes
 }
@@ -188,6 +191,7 @@ fn settings(app: &App, shapes: &mut Shapes) {
     app.version_warnings(1).unwrap();
     shapes.add("settings.report", &app.settings_report());
     shapes.add("settings.databases", &app.databases());
+    settings_key(shapes);
     let checked = std::collections::BTreeMap::from([(
         "game",
         crate::workspace::judge_folder("game", "/nowhere"),
@@ -195,6 +199,11 @@ fn settings(app: &App, shapes: &mut Shapes) {
     shapes.add("settings.folderChecks", &checked);
     shapes.add("settings.languages", &app.languages());
     shapes.add("settings.words", &app.speak());
+    let (area, maximized) = app.window_start(&[]);
+    shapes.add(
+        "settings.windowStart",
+        &crate::reports::WindowStart::of(area, maximized),
+    );
     let colours = serde_json::json!({ "accent": "#336699" });
     let written = app.start_own_theme("light", &colours);
     shapes.add("settings.ownColours", &app.own_colours("light"));
@@ -244,7 +253,7 @@ fn mods(app: &App, shapes: &mut Shapes) {
         &rimstack_core::rimworld::workshopdb::file_in(app.data_dir()),
         "pulled.mod\t900009\tPulled",
     );
-    let mut order = LoadOrder::read(app, true, false);
+    let mut order = LoadOrder::read(app, true, None);
     order.settle(app);
     if let Some(members) = order.files_to_read(app) {
         app.read_active_files(members);
@@ -256,6 +265,13 @@ fn mods(app: &App, shapes: &mut Shapes) {
     for at in 0..order.list(Side::Active).mods().len() {
         if let Some(gone) = order.not_installed(app, Side::Active, at) {
             shapes.add("mods.notInstalled", &gone);
+            let missing = Clicked {
+                active: true,
+                index: at,
+                id: None,
+                selected: &[],
+            };
+            shapes.add("mods.rowMenu", &order.row_menu(app, &missing));
         }
     }
     for id in [roads, a, b, shop, broken, hats, subscribed_hats] {
@@ -265,13 +281,61 @@ fn mods(app: &App, shapes: &mut Shapes) {
         shapes.add("mods.textures", &LoadOrder::textures(app, id));
     }
     let ids = |found: Vec<ModId>| found.into_iter().map(ModId::to_qml).collect::<Vec<_>>();
+    let menu_of = |order: &mut LoadOrder, key: ModId, selected: &[ModId]| {
+        let list = |side| {
+            order
+                .list(side)
+                .mods()
+                .iter()
+                .position(|m| m.installed == Some(key))
+        };
+        let (active, index) = match (list(Side::Active), list(Side::Inactive)) {
+            (Some(index), _) => (true, index),
+            (_, index) => (false, index.unwrap_or(0)),
+        };
+        let at = Clicked {
+            active,
+            index,
+            id: Some(key),
+            selected,
+        };
+        order.row_menu(app, &at)
+    };
+    for (key, selected) in [
+        (shop, vec![shop]),
+        (a, vec![a, b]),
+        (subscribed_hats, vec![subscribed_hats]),
+        (roads, vec![roads]),
+    ] {
+        shapes.add("mods.rowMenu", &menu_of(&mut order, key, &selected));
+    }
+    if let Some(first) = order
+        .list(Side::Active)
+        .rows()
+        .iter()
+        .position(|r| matches!(r, Row::Sub { .. }))
+    {
+        shapes.add("mods.subMenu", &order.sub_menu(true, first));
+    }
+    shapes.add(
+        "mods.selectionSummary",
+        &order.selection_summary(true, &[a, b, broken, roads]),
+    );
+    shapes.add(
+        "mods.selectionSummary",
+        &order.selection_summary(false, &[roads, hats]),
+    );
     shapes.add("mods.versionWarned", &ids(vec![roads]));
+    shapes.add("mods.copyOffer", &app.copy_offer(&[shop]));
+    shapes.add("mods.copyOffer", &app.copy_offer(&[shop, roads]));
     shapes.add("mods.packageMods", &ids(vec![a, b]));
     shapes.add("mods.findMods", &order.found(app, "Ann", 5));
     order.preview_sort(app);
     shapes.add("mods.sortMoves", &order.sort_moves());
     let list = order.list(Side::Active);
-    shapes.add("mods.othersThrough", &list.others_through(a, b).map(ids));
+    shapes.add("mods.selectedIds", &ids(vec![a, b]));
+    shapes.add("mods.holding", &Holding::of(Some(a), "", &[a, b]));
+    shapes.add("mods.holding", &Holding::of(None, "Missing", &[]));
     let ordered = list.in_load_order(a, b);
     shapes.add(
         "mods.inLoadOrder",
@@ -286,10 +350,8 @@ fn mods(app: &App, shapes: &mut Shapes) {
         .category;
     shapes.add("mods.subsBeside", &list.subs(category));
     shapes.add("mods.columnWidths", &columns::widths("name=200,author=90"));
-    shapes.add(
-        "mods.columnPressed",
-        &columns::pressed("name", false, "name"),
-    );
+    order.set_inactive_by(app, Some((SortKey::Updated, true)));
+    shapes.add("mods.orders", &order.orders());
     for row in order.rows(app, Side::Active) {
         shapes.add("mod_rows.at", &crate::mod_rows::fields_of(&row));
     }
@@ -307,15 +369,11 @@ fn lists(app: &App, shapes: &mut Shapes) {
     let snapshot = app.recent_snapshots().first().map(|s| s.name.clone());
     let snapshot = snapshot.unwrap_or_default();
     shapes.add("lists.snapshotNamed", &app.snapshot_named(&snapshot));
-    shapes.add(
-        "lists.idsInText",
-        &rimstack_core::mods::share::ids_in("ludeon.rimworld\nann.a"),
-    );
     shapes.add("lists.original", &app.original_list());
 }
 
 fn game(app: &App, shapes: &mut Shapes) {
-    shapes.add("game.lastStart", &app.last_start());
+    shapes.add("game.lastStart", &app.last_start_said());
     shapes.add("game.resetByGame", &app.mods_config_list());
 }
 
@@ -366,6 +424,63 @@ fn textures(app: &App, shapes: &mut Shapes) {
     shapes.add("textures.comparison", &again);
     shapes.add("textures.shared", &again.named(""));
     shapes.add("lists.history", &app.history());
+}
+
+fn find(app: &App, shapes: &mut Shapes) {
+    use crate::workspace::find::{Look, Place, Request};
+    let a = by_folder(app, "a");
+    let gone = app
+        .library()
+        .as_ref()
+        .as_ref()
+        .unwrap()
+        .0
+        .get(a)
+        .unwrap()
+        .path
+        .join("Defs/Gone.xml");
+    write(&gone, "<Defs>\nRock\n</Defs>");
+    let mut request = Request {
+        text: "rock".into(),
+        place: Place::Installed,
+        ..Request::default()
+    };
+    app.find_remember(&request, false);
+    shapes.add("find.recent", &app.find_recent());
+    shapes.add("find.options", &app.find_options(&request));
+    request.selected = Some(a);
+    shapes.add("find.options", &app.find_options(&request));
+    request.types = "xml, a/b".into();
+    shapes.add("find.options", &app.find_options(&request));
+    request.types = "xml".into();
+    let counts = app.find_extensions(&request);
+    shapes.add(
+        "find.typeSuggestions",
+        &crate::workspace::find::type_offers(&counts, ""),
+    );
+    let started = app.find_start(&request).unwrap();
+    let summary = app.find_search(&started, |batch| {
+        app.find_add(started.generation, batch);
+    });
+    app.find_finish(started.generation, summary);
+    let hit = app.find_results(|r| {
+        r.refs()
+            .into_iter()
+            .rfind(|at| !at.is_mod() && !at.is_file())
+    });
+    let hit = hit.unwrap();
+    let previewed = |at| {
+        let (file, line) = app.find_located(at).unwrap();
+        app.find_preview(&file, line, Look::default()).shown
+    };
+    shapes.add("find.preview", &previewed(hit));
+    shapes.add("find.mods", &app.find_results(|r| r.found_mods()));
+    std::fs::remove_file(&gone).unwrap();
+    for at in app.find_results(|r| r.refs()) {
+        if app.find_file(at).is_some_and(|f| f == gone) {
+            shapes.add("find.preview", &previewed(at));
+        }
+    }
 }
 
 fn search(app: &App, shapes: &mut Shapes) {
@@ -468,4 +583,109 @@ fn downloads(app: &App, shapes: &mut Shapes) {
     };
     shapes.add("downloads.notesState", &state);
     shapes.add("downloads.commitsOf", &app.commits_of(roads));
+}
+
+fn settings_key(shapes: &mut Shapes) {
+    use crate::reports::KeyShown;
+    use crate::workspace::secret::Memory;
+    let (_tmp, app) = made_up();
+    let app = app.browsing_fixture(true);
+    let shown = |app: &App, checking, failure| KeyShown::of(app.key_state(), checking, failure);
+    shapes.add("settings.steamKey", &shown(&app, false, None));
+    app.check_and_keep("fixture").unwrap();
+    shapes.add("settings.steamKey", &shown(&app, true, None));
+    let refused = Some(rimstack_core::said!("Steam refused this key"));
+    shapes.add("settings.steamKey", &shown(&app, false, refused));
+    let why = rimstack_core::say!("No credential store is available to keep the key in");
+    let broken = app.with_vault(std::sync::Arc::new(Memory::broken(why)));
+    shapes.add("settings.steamKey", &shown(&broken, false, None));
+}
+
+fn workshop(shapes: &mut Shapes) {
+    use crate::workshop_data::view::{DetailsShown, RelatedShown};
+    use crate::workspace::browse::{Related, Shown};
+    use crate::workspace::download_list::ListShown;
+    use rimstack_core::sources::browse::HARMONY;
+    const EXTRAS: &str = "3100000002";
+    const ROYAL: &str = "3100000004";
+    let (_tmp, app) = made_up();
+    let app = app.browsing_fixture(true);
+    use crate::workspace::browse::{Asked, chosen, offers};
+    let sorts = |app: &crate::App, words: bool| {
+        let defaults = app.browse_defaults();
+        chosen(&offers(&defaults.sorts, words, defaults.key_mode), "recent")
+    };
+    shapes.add("workshop.sorts", &sorts(&app, false));
+    let mut asked = Asked::default();
+    asked.picked.tag("Mod", true);
+    asked.picked.tag("1.5", false);
+    asked.picked.dlc("1149640", true);
+    asked.picked.hide_unowned = true;
+    shapes.add(
+        "workshop.sidebar",
+        &app.browse_search(&asked, 0, 10).unwrap().sidebar,
+    );
+    shapes.add(
+        "workshop.sidebar",
+        &app.browse_search(&Asked::default(), 0, 10).unwrap().sidebar,
+    );
+    app.check_and_keep("fixture").unwrap();
+    shapes.add("workshop.sorts", &sorts(&app, true));
+    shapes.add(
+        "workshop.sidebar",
+        &app.browse_search(&asked, 0, 10).unwrap().sidebar,
+    );
+    shapes.add("workshop.related", &RelatedShown::none());
+    shapes.add(
+        "workshop.related",
+        &RelatedShown::of(Related::NeededBy, HARMONY, "Fixture Harmony"),
+    );
+    app.add_to_list(EXTRAS, true);
+    let mut shown = app.browse_details(EXTRAS).unwrap();
+    shown.problem = Some(rimstack_core::said!("refused"));
+    const PICTURE: &str = "https://images.steamusercontent.com/ugc/1/A/";
+    shown.pieces = vec![
+        rimstack_core::base::markup::Piece::Html("<b>Text</b>".into()),
+        rimstack_core::base::markup::Piece::Image(PICTURE.into()),
+        rimstack_core::base::markup::Piece::Image("https://x.example/b.png".into()),
+    ];
+    shown.created_said = Some(rimstack_core::said!("Created 2 days ago"));
+    shown.requires[0].stars = vec![true, true, true, false, false];
+    fn details<'a>(shown: &'a Shown, preview_path: &'a str) -> DetailsShown<'a> {
+        const SHOTS: &[String] = &[];
+        DetailsShown {
+            shown,
+            preview_path,
+            description: shown.description(&Default::default()),
+            screenshots: SHOTS,
+        }
+    }
+    let shots = ["/previews/b.img".to_string()];
+    let with_shots = DetailsShown {
+        shown: &shown,
+        preview_path: "/previews/a.img",
+        description: shown.description(&std::collections::HashMap::from([(
+            PICTURE.to_string(),
+            "/previews/c.img".to_string(),
+        )])),
+        screenshots: &shots,
+    };
+    shapes.add("workshop.details", &with_shots);
+    shapes.add("workshop.details", &details(&shown, "/previews/a.img"));
+    shapes.add(
+        "workshop.details",
+        &details(&app.browse_details(ROYAL).unwrap(), ""),
+    );
+    shapes.add(
+        "workshop.details",
+        &details(&app.browse_details(HARMONY).unwrap(), ""),
+    );
+    shapes.add(
+        "workshop.details",
+        &details(&app.browse_details("3100000003").unwrap(), ""),
+    );
+    shapes.add("workshop.list", &ListShown::empty());
+    let failed = rimstack_core::base::error::Error::refused(rimstack_core::said!("refused"));
+    app.apply_downloads(&[("3100000001".to_string(), Err(failed))]);
+    shapes.add("workshop.list", &app.list_shown());
 }

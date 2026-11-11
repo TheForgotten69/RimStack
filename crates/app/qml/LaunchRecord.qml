@@ -11,16 +11,16 @@ Rectangle {
     signal closed()
     color: Theme.win
     Column {
-        x: 16
-        y: 14
-        width: Math.min(parent.width - 32, Theme.sized(620))
+        x: Theme.gapWide
+        y: Theme.gapCard
+        width: Math.min(parent.width - 2 * Theme.gapWide, Theme.sized(620))
         spacing: Theme.gapSmall
         Row {
             spacing: Theme.gap
             Text { anchors.verticalCenter: parent.verticalCenter; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: record.launch ? Theme.moment(record.launch.time) : "" }
             Chip { anchors.verticalCenter: parent.verticalCenter; tone: record.launch && record.launch.errors > 0 ? Theme.err : Theme.ink2; text: record.outcome }
         }
-        Text { width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say("The game keeps the logs of its last two launches only. Of this one RimStack kept the load order.") }
+        Text { width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say("The game keeps the logs of its last two launches only. For this one, RimStack kept the load order.") }
         GroupTitle { text: Theme.say("Its load order") }
         Text {
             readonly property var differs: record.launch ? [
@@ -36,7 +36,7 @@ Rectangle {
         Row {
             topPadding: Theme.gap
             spacing: Theme.gapSmall
-            Btn { enabled: !!record.launch && (record.launch.added + record.launch.removed > 0 || record.launch.reordered); text: Theme.say("Use its list"); tip: Theme.say("Makes this launch's load order the list on the Mods screen. Save writes it."); onClicked: record.useList(record.launch.ids) }
+            Btn { enabled: !!record.launch && (record.launch.added + record.launch.removed > 0 || record.launch.reordered); text: Theme.say("Use its list"); tip: Theme.say("Uses this launch's load order as the list on the Mods screen. Save writes it."); onClicked: record.useList(record.launch.ids) }
             Btn { text: Theme.say("Back to the log"); onClicked: record.closed() }
         }
     }

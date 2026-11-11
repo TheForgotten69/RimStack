@@ -56,7 +56,7 @@ Popup {
                     }
                 }
             }
-            Text { visible: Notices.earlier.length > 0; topPadding: Theme.gap; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("Said since the start") }
+            Text { visible: Notices.earlier.length > 0; topPadding: Theme.gap; color: Theme.ink; font.pixelSize: Theme.title; font.weight: Font.DemiBold; text: Theme.say("Since RimStack started") }
             Repeater {
                 model: Notices.earlier
                 RowLayout {

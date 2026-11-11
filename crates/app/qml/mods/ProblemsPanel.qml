@@ -24,13 +24,13 @@ Column {
         primary: true
         text: Theme.plural(Mods.fixable, "Activate the {} needed mod", "Activate the {} needed mods")
         tip: Theme.say("Activates every needed mod that is installed, each where its rules put it. One Undo takes them all back.")
-        onClicked: Mods.fixAll()
+        onClicked: Hub.mods.fixAll()
     }
     Btn {
         visible: !Theme.demo && !Hub.search.active
         icon: "search"
         text: Theme.say("Find the broken mod")
-        tip: Theme.say("Switches half of the mods off, you play and say whether it still breaks, until one mod is left. Your list is kept and comes back at the end.")
+        tip: Theme.say("Deactivates half of the mods; you play and say whether it still breaks. This repeats until one mod is left. Your list is kept and comes back at the end.")
         onClicked: Mods.findBrokenRequested()
     }
     Repeater {
@@ -56,7 +56,7 @@ Column {
                 color: Theme.ink2
                 font.pixelSize: Theme.body
                 lineHeight: 1.25
-                text: Theme.fill("Each lists other game versions than RimWorld {}. Many such mods still work.", (Mods.overview.gameVersion || ""))
+                text: Theme.fill("None of these lists RimWorld {} among its game versions. Many such mods still work.", (Mods.overview.gameVersion || ""))
             }
             Repeater {
                 model: group.modelData.shared ? group.modelData.lines : []
@@ -66,10 +66,10 @@ Column {
                     width: group.width
                     height: Theme.control
                     Rectangle { anchors.fill: parent; radius: Theme.corner; color: Theme.hover; opacity: over.hovered ? 0.05 : 0 }
-                    Text { x: 6; width: parent.width - 80; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: named.modelData.name }
+                    Text { x: Theme.gapSmall; width: ignoreBtn.x - 2 * Theme.gapSmall; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight; color: Theme.ink; font.pixelSize: Theme.body; text: named.modelData.name }
                     HoverHandler { id: over; cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: Mods.showMod(named.modelData.modId) }
-                    Btn { visible: over.hovered; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: Theme.say("Ignore"); tip: Theme.say("No warning about the game version for this mod"); onClicked: Mods.applyFix(named.modelData.modId, named.modelData.fix) }
+                    Btn { id: ignoreBtn; visible: over.hovered; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: Theme.say("Ignore"); tip: Theme.say("No warning about the game version for this mod"); onClicked: Mods.applyFix(named.modelData.modId, named.modelData.fix) }
                 }
             }
             Repeater {
@@ -88,5 +88,5 @@ Column {
             }
         }
     }
-    EmptyState { visible: Mods.troubles.length === 0; width: parent.width; title: Theme.say("Nothing stands in the way") }
+    EmptyState { visible: Mods.troubles.length === 0; width: parent.width; title: Theme.say("No problems") }
 }

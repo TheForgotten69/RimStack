@@ -18,6 +18,22 @@ const LAUNCH_SLACK_SECS: u64 = 120;
 
 const LONGEST_KIND: usize = 90;
 
+#[derive(Serialize)]
+pub struct LastStartSaid {
+    #[serde(flatten)]
+    start: LastStart,
+    line: Sentence,
+}
+
+/// Local time, as the window writes a moment.
+fn moment(seconds: u64) -> String {
+    use chrono::TimeZone;
+    let at = i64::try_from(seconds)
+        .ok()
+        .and_then(|s| chrono::Local.timestamp_opt(s, 0).single());
+    at.map_or(String::new(), |at| at.format("%Y-%m-%d %H:%M").to_string())
+}
+
 pub struct LogsReport {
     pub previous: bool,
     pub has_other: bool,
@@ -268,6 +284,20 @@ impl App {
         }
     }
 
+    pub fn last_start_said(&self) -> Option<LastStartSaid> {
+        self.last_start().map(|start| {
+            let errors = start.errors.map(|n| match n {
+                0 => say!("no errors"),
+                n => say_n!(n, "{} different error", "{} different errors"),
+            });
+            let started = say!("Last started {}", moment(start.time));
+            LastStartSaid {
+                start,
+                line: Sentence::listed(std::iter::once(started).chain(errors).collect()),
+            }
+        })
+    }
+
     pub fn last_start(&self) -> Option<LastStart> {
         let recorded = launches::read(&self.launches_file()).pop();
         let read = *self.log_read.lock().unwrap_or_else(|e| e.into_inner());
@@ -428,6 +458,9 @@ mod tests {
         assert_eq!(errors_of(&report, "Ann.Roads").len(), 1);
         assert!(help_text(&report, &report.errors[0]).contains("Logged 2 times, first at line 2"));
         assert_eq!(app.last_start().unwrap().errors, Some(1));
+        let line = app.last_start_said().unwrap().line.to_string();
+        assert!(line.starts_with("Last started 20"), "{line}");
+        assert!(line.ends_with(", 1 different error"), "{line}");
         let (_, again) = app.logs_report(false, None).unwrap();
         assert!(!again, "a second read changes nothing");
     }

@@ -280,14 +280,14 @@ fn against_a_hint(kind: Kind) -> Found {
 
 #[test]
 fn a_simulation_hint_beats_a_file_hint() {
-    let found = against_a_hint(Kind::Inferred);
+    let found = against_a_hint(Kind::Hint);
     assert_eq!(found.unfixed, []);
     assert_eq!(found.hints.len(), 1, "{:?}", found.hints);
 }
 
 #[test]
 fn a_code_hint_beats_a_simulation_hint() {
-    let found = against_a_hint(Kind::Code);
+    let found = against_a_hint(Kind::Inferred);
     assert_eq!(found.hints, []);
     assert_eq!(found.unfixed.len(), 1, "{:?}", found.unfixed);
 }

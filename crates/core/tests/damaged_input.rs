@@ -149,6 +149,13 @@ fn a_mod(name: &str, category: Category) -> Mod {
         patched: std::sync::Arc::from(Vec::<String>::new()),
         sub: String::new(),
         load_micros: None,
+        updated: None,
+        size: None,
+        downloaded: None,
+        activated: None,
+        filed: category,
+        chosen: false,
+        held_by: String::new(),
     }
 }
 

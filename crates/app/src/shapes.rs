@@ -1,4 +1,4 @@
-//! `RIMSTACK_SHAPES=write cargo test -p rimstack-app shapes` writes `shapes.txt` again;
+//! `RIMSTACK_SHAPES=write just test shapes` writes `shapes.txt` again;
 //! the diff is what QML must follow.
 
 use crate::layers::bridges;
@@ -103,13 +103,15 @@ impl Shape {
 }
 
 /// Paths whose keys are data, not fields; a list's items are `[]`.
-const MAPS: [&str; 6] = [
+const MAPS: [&str; 8] = [
     "settings.words",
     "settings.ownColours",
     "mods.columnWidths",
     "mods.details.conflictMarks",
     "mods.detailsOf.conflictMarks",
     "downloads.notes",
+    "mods.carried.also",
+    "mods.inverted.also",
 ];
 
 #[derive(Default)]
@@ -175,7 +177,7 @@ fn cxx_name_in(attributes: &str) -> Option<&str> {
     rest.split('"').next()
 }
 
-const UNFILLED: [(&str, &str); 19] = [
+const UNFILLED: [(&str, &str); 21] = [
     ("logs.since", "a clean launch before the last"),
     (
         "mods.details.megabytes",
@@ -225,6 +227,8 @@ const UNFILLED: [(&str, &str); 19] = [
     ),
     ("mods.overview.communityMods", "the community's rules"),
     ("mods.overview.communityTime", "the community's rules"),
+    ("settings.report.steamcmdRefused", "macOS"),
+    ("workshop.list.action.stuck", "macOS without Steam"),
 ];
 
 #[test]
@@ -243,7 +247,7 @@ fn every_field_is_seen_filled_but_those_the_made_up_install_cannot_fill() {
 }
 
 /// A model's cells, read by role: the roles are its fields.
-const NOT_RECORDS: [&str; 1] = ["mod_rows.data"];
+const NOT_RECORDS: [&str; 3] = ["mod_rows.data", "find.data", "workshop_rows.data"];
 
 #[test]
 fn every_value_handed_to_qml_has_its_shape_written() {

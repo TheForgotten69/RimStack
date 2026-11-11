@@ -8,9 +8,14 @@ pub mod qobject {
         include!("cxx-qt-lib/qvariant.h");
         type QVariant = cxx_qt_lib::QVariant;
 
+        include!("cxx-qt-lib/qlist.h");
+        type QList_QRect = cxx_qt_lib::QList<cxx_qt_lib::QRect>;
+
         include!("rimstack-app/src/application.h");
         #[rust_name = "set_font_family"]
         fn setFontFamily(family: &QString) -> QString;
+        #[rust_name = "screen_areas"]
+        fn screenAreas() -> QList_QRect;
     }
 
     extern "RustQt" {
@@ -30,6 +35,8 @@ pub mod qobject {
         #[qproperty(QVariant, release)]
         #[qproperty(bool, release_busy, cxx_name = "releaseBusy")]
         #[qproperty(QString, problem)]
+        /// `{ stored, available, refused, checking, note }`; `note` is null for none.
+        #[qproperty(QVariant, steam_key, cxx_name = "steamKey")]
         type SettingsData = super::SettingsDataRust;
     }
 
@@ -103,6 +110,14 @@ pub mod qobject {
         fn use_font(self: Pin<&mut SettingsData>, family: &QString) -> QString;
 
         #[qinvokable]
+        #[cxx_name = "checkKey"]
+        fn check_key(self: Pin<&mut SettingsData>, typed: &QString);
+
+        #[qinvokable]
+        #[cxx_name = "forgetKey"]
+        fn forget_key(self: Pin<&mut SettingsData>);
+
+        #[qinvokable]
         #[cxx_name = "downloadCommunity"]
         fn download_community(self: Pin<&mut SettingsData>);
 
@@ -121,16 +136,33 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "filesChanged"]
         fn files_changed(self: &SettingsData);
+
+        /// `{ x, y, width, height, visibility }`, read once as the window is made.
+        #[qinvokable]
+        #[cxx_name = "windowStart"]
+        fn window_start(self: &SettingsData) -> QVariant;
+
+        #[qinvokable]
+        #[cxx_name = "keepWindow"]
+        fn keep_window(
+            self: &SettingsData,
+            x: i32,
+            y: i32,
+            width: i32,
+            height: i32,
+            visibility: i32,
+        );
     }
 }
 
 use crate::App;
 use crate::changes::Changes;
 use crate::qml::values::{from_qml, to_qml};
-use crate::reports::{Answer, Written};
+use crate::reports::{Answer, WindowStart, Written};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QUrl, QVariant};
+use rimstack_core::base::window::Area;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -151,6 +183,11 @@ pub struct SettingsDataRust {
     release: QVariant,
     release_busy: bool,
     problem: QString,
+    steam_key: QVariant,
+    key_checking: bool,
+    key_known: Option<crate::workspace::KeyState>,
+    key_failure: Option<rimstack_core::base::sentence::Sentence>,
+    key_reading: crate::jobs::Lane,
     app: crate::hub::Given,
 }
 
@@ -159,6 +196,25 @@ fn written(file: Result<std::path::PathBuf, rimstack_core::base::error::Error>) 
         file: file.to_string_lossy().into_owned(),
     });
     to_qml(&Answer::from(file))
+}
+
+/// Shots, checks and the demo neither open where the window was closed nor keep it.
+fn window_unkept() -> bool {
+    ["--shot", "--check", "--demo", "--selftest"]
+        .iter()
+        .any(|flag| crate::hub::given(flag))
+}
+
+fn screens() -> Vec<Area> {
+    qobject::screen_areas()
+        .iter()
+        .map(|r| Area {
+            x: r.x(),
+            y: r.y(),
+            width: r.width(),
+            height: r.height(),
+        })
+        .collect()
 }
 
 const FOLDER_PAUSE: Duration = Duration::from_millis(400);
@@ -181,7 +237,13 @@ impl qobject::SettingsData {
         crate::hub::hear(&app, self.qt_thread(), Self::heard);
         self.as_mut().rust_mut().app = crate::hub::Given::of(app);
         self.as_mut().on_theme_changed(|me| me.recolour()).release();
-        self.heard(Changes::SETTINGS | Changes::LANGUAGE | Changes::THEME | Changes::COMMUNITY);
+        self.heard(
+            Changes::SETTINGS
+                | Changes::LANGUAGE
+                | Changes::THEME
+                | Changes::COMMUNITY
+                | Changes::KEY,
+        );
     }
 
     fn heard(mut self: Pin<&mut Self>, changes: Changes) {
@@ -198,8 +260,81 @@ impl qobject::SettingsData {
             self.as_mut().set_words(to_qml(&app.speak()));
         }
         if changes.contains(Changes::THEME) {
-            self.recolour();
+            self.as_mut().recolour();
         }
+        if changes.contains(Changes::KEY) {
+            self.as_mut().read_key();
+        } else if changes.contains(Changes::LANGUAGE)
+            && let Some(state) = self.key_known.clone()
+        {
+            self.show_key(state);
+        }
+    }
+
+    fn read_key(self: Pin<&mut Self>) {
+        let app = self.app();
+        self.key_reading.run(
+            "steam key state",
+            self.qt_thread(),
+            move |_| app.key_state(),
+            |mut me, state| me.as_mut().show_key(state),
+        );
+    }
+
+    fn show_key(mut self: Pin<&mut Self>, state: crate::workspace::KeyState) {
+        let shown = crate::reports::KeyShown::of(
+            state.clone(),
+            self.key_checking,
+            self.key_failure.clone(),
+        );
+        self.as_mut().rust_mut().get_mut().key_known = Some(state);
+        self.as_mut().set_steam_key(to_qml(&shown));
+    }
+
+    fn check_key(mut self: Pin<&mut Self>, typed: &QString) {
+        if self.key_checking {
+            return;
+        }
+        let typed = typed.to_string();
+        let me = self.as_mut().rust_mut().get_mut();
+        me.key_checking = true;
+        me.key_failure = None;
+        if let Some(state) = self.key_known.clone() {
+            self.as_mut().show_key(state);
+        }
+        let app = self.app();
+        crate::jobs::run(
+            "steam key check",
+            self.qt_thread(),
+            move || app.check_and_keep(&typed).err(),
+            |mut me, failure| {
+                let inner = me.as_mut().rust_mut().get_mut();
+                inner.key_checking = false;
+                inner.key_failure = failure;
+                me.read_key();
+            },
+        );
+    }
+
+    fn forget_key(mut self: Pin<&mut Self>) {
+        if self.key_checking {
+            return;
+        }
+        let me = self.as_mut().rust_mut().get_mut();
+        me.key_checking = true;
+        me.key_failure = None;
+        let app = self.app();
+        crate::jobs::run(
+            "steam key forget",
+            self.qt_thread(),
+            move || app.forget_key().err(),
+            |mut me, failure| {
+                let inner = me.as_mut().rust_mut().get_mut();
+                inner.key_checking = false;
+                inner.key_failure = failure;
+                me.read_key();
+            },
+        );
     }
 
     fn recolour(mut self: Pin<&mut Self>) {
@@ -370,4 +505,38 @@ impl qobject::SettingsData {
     fn files_changed(&self) {
         self.app().publish(Changes::THEME | Changes::LANGUAGE);
     }
+
+    fn window_start(&self) -> QVariant {
+        let screens = screens();
+        let (area, maximized) = match window_unkept() {
+            true => (App::window_unkept(asked_size(), &screens), false),
+            false => self.app().window_start(&screens),
+        };
+        to_qml(&WindowStart::of(area, maximized))
+    }
+
+    fn keep_window(&self, x: i32, y: i32, width: i32, height: i32, visibility: i32) {
+        let maximized = match visibility {
+            _ if window_unkept() => return,
+            WindowStart::WINDOWED => false,
+            WindowStart::MAXIMIZED => true,
+            _ => return,
+        };
+        let area = Area {
+            x,
+            y,
+            width,
+            height,
+        };
+        if let Err(problem) = self.app().keep_window(area, maximized) {
+            rimstack_core::problem!("window not kept: {problem}");
+        }
+    }
+}
+
+/// `--size=1000x560`.
+fn asked_size() -> Option<(i32, i32)> {
+    let given = crate::hub::value("--size")?;
+    let (width, height) = given.split_once('x')?;
+    Some((width.parse().ok()?, height.parse().ok()?))
 }

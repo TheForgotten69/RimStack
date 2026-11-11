@@ -102,7 +102,7 @@ enum Holds {
 
 const SWITCH: Holds = Holds::Choice(&["on", "off"]);
 
-const KNOWN: [(&str, Holds); 21] = [
+const KNOWN: [(&str, Holds); 26] = [
     ("game", Holds::Text),
     ("config", Holds::Text),
     ("workshop", Holds::Text),
@@ -121,9 +121,14 @@ const KNOWN: [(&str, Holds); 21] = [
     ("communityRules", SWITCH),
     ("versionWarnings", SWITCH),
     ("fileHints", SWITCH),
+    ("dimLeftOut", SWITCH),
     ("gitForWorkshop", SWITCH),
     ("selfCheck", SWITCH),
+    ("showMature", SWITCH),
+    ("steamKeyKept", SWITCH),
     ("updates", Holds::Choice(&["stable", "nightly"])),
+    ("window", Holds::Text),
+    ("windowMaximized", Holds::Choice(&["yes"])),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,8 +136,11 @@ pub enum Switch {
     CommunityRules,
     VersionWarnings,
     FileHints,
+    DimLeftOut,
     GitForWorkshop,
     SelfCheck,
+    ShowMature,
+    SteamKeyKept,
 }
 
 impl Switch {
@@ -141,8 +149,11 @@ impl Switch {
             Switch::CommunityRules => "communityRules",
             Switch::VersionWarnings => "versionWarnings",
             Switch::FileHints => "fileHints",
+            Switch::DimLeftOut => "dimLeftOut",
             Switch::GitForWorkshop => "gitForWorkshop",
             Switch::SelfCheck => "selfCheck",
+            Switch::ShowMature => "showMature",
+            Switch::SteamKeyKept => "steamKeyKept",
         }
     }
 
@@ -151,8 +162,9 @@ impl Switch {
             Switch::CommunityRules
             | Switch::VersionWarnings
             | Switch::SelfCheck
-            | Switch::FileHints => true,
-            Switch::GitForWorkshop => false,
+            | Switch::FileHints
+            | Switch::DimLeftOut => true,
+            Switch::GitForWorkshop | Switch::ShowMature | Switch::SteamKeyKept => false,
         }
     }
 }

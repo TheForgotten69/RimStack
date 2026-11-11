@@ -38,7 +38,7 @@ Column {
         Btn {
             text: Theme.fill("Keep all from {}", cmpSummary.names[0])
             // Keeping the earlier mod's versions renames files in the other mod.
-            tip: cmpSummary.report.earlier ? Theme.plural(cmpSummary.report.total, "Sets aside {} file in {} by renaming it; Undo names it back.", "Sets aside {} files in {} by renaming them; Undo names them back.", cmpSummary.names[1]) : ""
+            tip: cmpSummary.report.earlier ? Theme.plural(cmpSummary.report.total, "Sets aside {} file in {} by renaming it; Undo renames it back.", "Sets aside {} files in {} by renaming them; Undo renames them back.", cmpSummary.names[1]) : ""
             onClicked: {
                 const later = cmpSummary.report.later.id
                 const done = cmpSummary.cmp.keepAll(true)
@@ -55,6 +55,6 @@ Column {
         color: Theme.ink
         font.pixelSize: Theme.body
         text: Theme.fill("{} wins: it loads later.", cmpSummary.names[1])
-        Tip { text: Theme.say("A choice against the load order sets the losing file aside: it is renamed inside its mod, with .rimstack-hidden added, so the game skips it. Nothing is deleted; choosing the other version renames it back. Steam restores renamed files when it updates a mod.") }
+        Tip { text: Theme.say("Choosing against the load order sets the losing file aside: it is renamed inside its mod, with .rimstack-hidden added, so the game skips it. Nothing is deleted; choosing the other version renames it back. Steam restores renamed files when it updates a mod.") }
     }
 }

@@ -123,8 +123,9 @@ impl qobject::GameData {
     }
 
     fn heard(mut self: Pin<&mut Self>, changes: Changes) {
-        if changes.contains(Changes::LAUNCHES | Changes::LOGS | Changes::FOLDERS) && !self.demo {
-            let last = to_qml(&self.app().last_start());
+        let last_start = Changes::LAUNCHES | Changes::LOGS | Changes::FOLDERS | Changes::LANGUAGE;
+        if changes.contains(last_start) && !self.demo {
+            let last = to_qml(&self.app().last_start_said());
             self.as_mut().set_last_start(last);
         }
     }

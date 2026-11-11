@@ -12,11 +12,12 @@ use serde::Serialize;
 pub struct SortCount {
     mods: Vec<Mod>,
     detected: rules::Detected,
+    reading: std::sync::Arc<crate::workspace::Loaded>,
 }
 
 impl SortCount {
     pub fn moves(mut self, app: &App) -> usize {
-        let loaded = app.library();
+        let loaded = self.reading.clone();
         let Ok((library, _)) = &*loaded else {
             return 0;
         };
@@ -45,7 +46,7 @@ pub struct SortMove {
 impl LoadOrder {
     /// Waits while a patch simulation runs: its hints are part of the order.
     pub fn preview_sort(&mut self, app: &App) {
-        if self.preview.is_some() || !self.installed || self.sort_waiting() {
+        if self.preview.is_some() || !self.is_installed() || self.sort_waiting() {
             return;
         }
         if app.simulation_running() {
@@ -77,7 +78,7 @@ impl LoadOrder {
     }
 
     fn sort_now(&mut self, app: &App) {
-        let loaded = app.library();
+        let loaded = self.reading(app);
         let Ok((library, _)) = &*loaded else {
             return;
         };
@@ -92,7 +93,6 @@ impl LoadOrder {
         if moves == 0 {
             return;
         }
-        let found = rules::all_rules(app, &mut self.detected, library, &mods);
         let names: Vec<&str> = mods.iter().map(|m| m.name.as_str()).collect();
         let categories: Vec<Category> = mods.iter().map(|m| m.category).collect();
         let why = sorted
@@ -100,7 +100,7 @@ impl LoadOrder {
             .iter()
             .zip(&moved)
             .map(|(&old, moved)| {
-                moved.then(|| sort_reasons::moved(old, &found, &names, &categories))
+                moved.then(|| sort_reasons::moved(old, &sorted.kept, &names, &categories))
             })
             .collect();
         let moved_from = sorted
@@ -144,9 +144,11 @@ impl LoadOrder {
 
     /// Off the window's thread. `None` while a sort is on show or the list is made up.
     pub fn sort_count(&self) -> Option<SortCount> {
-        (self.preview.is_none() && self.installed).then(|| SortCount {
+        let reading = self.reading.clone().filter(|_| self.preview.is_none())?;
+        Some(SortCount {
             mods: self.active.mods().to_vec(),
             detected: self.detected.clone(),
+            reading,
         })
     }
 
@@ -239,7 +241,7 @@ fn note(mods: &[Mod], sorted: &rimstack_core::mods::sort::Sorted, moves: usize) 
         .filter(|r| {
             !matches!(
                 r.kind,
-                Kind::CommunityBottom | Kind::Inferred | Kind::Patches | Kind::Code
+                Kind::CommunityBottom | Kind::Inferred | Kind::Hint | Kind::Patches
             )
         })
         .map(|r| describe::rule(r, mods))

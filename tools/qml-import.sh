@@ -13,5 +13,10 @@ module=target/qml-import/RimStack/Ui
 mkdir -p "$module"
 cp "$built/qmldir" "$built"/*.qmltypes "$module/"
 ln -sfn "$PWD/crates/app/qml" "$module/qml"
+live=target/qml-live/RimStack/Ui
+mkdir -p "$live"
+grep -v '^prefer ' "$built/qmldir" > "$live/qmldir"
+cp "$built"/*.qmltypes "$live/"
+ln -sfn "$PWD/crates/app/qml" "$live/qml"
 # qmlls takes an import path only whole: written for this checkout.
 printf '[General]\nimportPaths="%s/target/qml-import"\nno-cmake-calls=true\n' "$PWD" > crates/app/.qmlls.ini

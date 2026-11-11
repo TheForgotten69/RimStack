@@ -17,7 +17,26 @@ pub mod qobject {
         #[qproperty(QVariant, snapshots)]
         /// Newest first; `{ time, said, restore, bringBack }`.
         #[qproperty(QVariant, history)]
+        #[qproperty(bool, busy)]
+        #[qproperty(QString, problem, cxx_name = "clipboardProblem")]
         type ListsData = super::ListsDataRust;
+    }
+
+    extern "RustQt" {
+        /// Package ids.
+        #[qsignal]
+        fn found(self: Pin<&mut ListsData>, ids: QVariant);
+
+        /// "" for none.
+        #[qsignal]
+        fn renamed(self: Pin<&mut ListsData>, name: QString);
+
+        #[qsignal]
+        fn shared(self: Pin<&mut ListsData>, link: QString);
+
+        /// `tone` is "" or "ok".
+        #[qsignal]
+        fn told(self: Pin<&mut ListsData>, note: QString, tone: QString);
     }
 
     impl cxx_qt::Threading for ListsData {}
@@ -42,8 +61,19 @@ pub mod qobject {
         fn snapshot_named(self: &ListsData, name: &QString) -> QVariant;
 
         #[qinvokable]
-        #[cxx_name = "idsInText"]
-        fn ids_in_text(self: &ListsData, text: &QString) -> QVariant;
+        #[cxx_name = "useCopied"]
+        fn use_copied(self: Pin<&mut ListsData>, text: &QString);
+
+        #[qinvokable]
+        fn share(self: Pin<&mut ListsData>, listing: &QString);
+
+        #[qinvokable]
+        #[cxx_name = "startWithGame"]
+        fn start_with_game(self: Pin<&mut ListsData>);
+
+        #[qinvokable]
+        #[cxx_name = "startWithExpansions"]
+        fn start_with_expansions(self: Pin<&mut ListsData>);
 
         #[qinvokable]
         fn original(self: &ListsData) -> QVariant;
@@ -72,6 +102,8 @@ pub struct ListsDataRust {
     saved: QVariant,
     snapshots: QVariant,
     history: QVariant,
+    busy: bool,
+    problem: QString,
     app: crate::hub::Given,
 }
 
@@ -126,8 +158,84 @@ impl qobject::ListsData {
         to_qml(&self.app().snapshot_named(&name.to_string()))
     }
 
-    fn ids_in_text(&self, text: &QString) -> QVariant {
-        to_qml(&rimstack_core::mods::share::ids_in(&text.to_string()))
+    fn start_with_game(self: Pin<&mut Self>) {
+        self.start_fresh(false);
+    }
+
+    fn start_with_expansions(self: Pin<&mut Self>) {
+        self.start_fresh(true);
+    }
+
+    fn start_fresh(mut self: Pin<&mut Self>, with_expansions: bool) {
+        let ids = self.app().fresh_list(with_expansions);
+        self.as_mut().found(to_qml(&ids));
+        self.renamed(QString::default());
+    }
+
+    fn use_copied(mut self: Pin<&mut Self>, text: &QString) {
+        if *self.busy() {
+            return;
+        }
+        self.as_mut().set_problem(QString::default());
+        self.as_mut().set_busy(true);
+        let (app, text) = (self.app(), text.to_string());
+        crate::jobs::run(
+            "copied list",
+            self.qt_thread(),
+            move || app.ids_in_copied(&text),
+            |mut me, read| {
+                me.as_mut().set_busy(false);
+                me.arrived(read);
+            },
+        );
+    }
+
+    fn arrived(mut self: Pin<&mut Self>, read: Result<Vec<String>, Error>) {
+        match read {
+            Ok(ids) if ids.is_empty() => {
+                let none = say!("No mod found on the clipboard");
+                self.set_problem(crate::words::said(&none));
+            }
+            Ok(ids) => {
+                self.as_mut().found(to_qml(&ids));
+                self.renamed(QString::default());
+            }
+            Err(problem) => self.set_problem(crate::words::said_of(&problem)),
+        }
+    }
+
+    fn share(mut self: Pin<&mut Self>, listing: &QString) {
+        if *self.busy() {
+            return;
+        }
+        let listing = listing.to_string();
+        if listing.is_empty() {
+            let none = say!("There is no load order to share");
+            return self.set_problem(crate::words::said(&none));
+        }
+        self.as_mut().set_problem(QString::default());
+        self.as_mut().set_busy(true);
+        let app = self.app();
+        crate::jobs::run(
+            "rentry publish",
+            self.qt_thread(),
+            move || app.publish_list(&listing),
+            |mut me, published| {
+                me.as_mut().set_busy(false);
+                match published {
+                    Ok(page) => {
+                        let note = say!(
+                            "The load order is at {}, and the link is copied. Its edit code, which RimStack does not keep: {}",
+                            page.url,
+                            page.edit_code
+                        );
+                        me.as_mut().shared(QString::from(&page.url));
+                        me.told(crate::words::said(&note), QString::from("ok"));
+                    }
+                    Err(problem) => me.set_problem(crate::words::said_of(&problem)),
+                }
+            },
+        );
     }
 
     fn original(&self) -> QVariant {

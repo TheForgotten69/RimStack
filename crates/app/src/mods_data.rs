@@ -44,14 +44,25 @@ pub mod qobject {
         #[qproperty(i32, library_version, cxx_name = "libraryVersion")]
         #[qproperty(QVariant, overview)]
         #[qproperty(QVariant, summary)]
+        #[qproperty(QString, filter_found, cxx_name = "filterFound")]
         /// -1 for none.
         #[qproperty(i32, selected)]
+        #[qproperty(bool, selected_active, cxx_name = "selectedActive")]
+        #[qproperty(i32, selected_count, cxx_name = "selectedCount")]
+        /// The first, then the others.
+        #[qproperty(QVariant, selected_ids, cxx_name = "selectedIds")]
+        /// `SelectionSummary` while several mods are chosen; null otherwise.
+        #[qproperty(QVariant, selection_summary, cxx_name = "selectionSummary")]
         #[qproperty(QVariant, details)]
         /// `{ count, ddsMade }`, once its folder is walked.
         #[qproperty(QVariant, textures)]
         #[qproperty(QVariant, fresh)]
         #[qproperty(bool, headings)]
-        #[qproperty(bool, by_name, cxx_name = "byName")]
+        /// "" by category, or as `columns::kept` writes it.
+        #[qproperty(QString, inactive_order, cxx_name = "inactiveOrder")]
+        #[qproperty(QVariant, orders)]
+        /// "" for the load order itself, or as `columns::kept` writes it.
+        #[qproperty(QString, active_order, cxx_name = "activeOrder")]
         #[qproperty(QString, filter)]
         /// Empty for none.
         #[qproperty(QString, save_problem, cxx_name = "saveProblem")]
@@ -91,6 +102,25 @@ pub mod qobject {
         #[cxx_name = "takeAll"]
         fn take_all(self: Pin<&mut ModsData>, from_active: bool, ids: &QVariant);
         #[qinvokable]
+        fn drop(
+            self: Pin<&mut ModsData>,
+            from_active: bool,
+            index: i32,
+            held: &QVariant,
+            to_active: bool,
+            to: i32,
+        );
+        #[qinvokable]
+        #[cxx_name = "slideOf"]
+        fn slide_of(
+            self: &ModsData,
+            from_active: bool,
+            index: i32,
+            held: &QVariant,
+            to_active: bool,
+            to: i32,
+        ) -> i32;
+        #[qinvokable]
         #[cxx_name = "toEdge"]
         fn to_edge(self: Pin<&mut ModsData>, ids: &QVariant, top: bool);
         #[qinvokable]
@@ -102,9 +132,6 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "removeSub"]
         fn remove_sub(self: Pin<&mut ModsData>, active: bool, row: i32);
-        #[qinvokable]
-        #[cxx_name = "showBy"]
-        fn show_by(self: Pin<&mut ModsData>, column: &QString, descending: bool);
         #[qinvokable]
         fn undo(self: Pin<&mut ModsData>);
         #[qinvokable]
@@ -179,7 +206,10 @@ pub mod qobject {
         fn bin(self: Pin<&mut ModsData>, mod_id: i32);
         #[qinvokable]
         #[cxx_name = "copyToLocal"]
-        fn copy_to_local(self: Pin<&mut ModsData>, mod_id: i32);
+        fn copy_to_local(self: Pin<&mut ModsData>, ids: &QVariant);
+        #[qinvokable]
+        #[cxx_name = "copyOffer"]
+        fn copy_offer(self: &ModsData, ids: &QVariant) -> QVariant;
 
         #[qinvokable]
         #[cxx_name = "versionWarned"]
@@ -221,10 +251,20 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "besideMod"]
         fn beside_mod(self: &ModsData, active: bool, mod_id: i32) -> i32;
-        /// Null unless both are shown.
         #[qinvokable]
-        #[cxx_name = "othersThrough"]
-        fn others_through(self: &ModsData, active: bool, from: i32, to: i32) -> QVariant;
+        fn select(self: Pin<&mut ModsData>, mod_id: i32, in_active: bool);
+        #[qinvokable]
+        #[cxx_name = "selectAlso"]
+        fn select_also(self: Pin<&mut ModsData>, mod_id: i32, in_active: bool);
+        #[qinvokable]
+        #[cxx_name = "selectThrough"]
+        fn select_through(self: Pin<&mut ModsData>, mod_id: i32, in_active: bool);
+        #[qinvokable]
+        #[cxx_name = "invertSelection"]
+        fn invert_selection(self: Pin<&mut ModsData>, in_active: bool);
+        /// `{ ids, name }`: what a drag of it takes along.
+        #[qinvokable]
+        fn holding(self: &ModsData, mod_id: i32, name: &QString, selected: &QVariant) -> QVariant;
         /// `[earlier, later]`; null unless both are in it.
         #[qinvokable]
         #[cxx_name = "inLoadOrder"]
@@ -243,6 +283,12 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "notInstalled"]
         fn not_installed(self: &ModsData, active: bool, index: i32) -> QVariant;
+        #[qinvokable]
+        #[cxx_name = "rowMenu"]
+        fn row_menu(self: Pin<&mut ModsData>, active: bool, index: i32, mod_id: i32) -> QVariant;
+        #[qinvokable]
+        #[cxx_name = "subMenu"]
+        fn sub_menu(self: &ModsData, active: bool, row: i32) -> QVariant;
         /// `{ tree, assemblies }`.
         #[qinvokable]
         #[cxx_name = "filesOf"]
@@ -259,15 +305,6 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "columnSized"]
         fn column_sized(self: &ModsData, kept: &QString, column: &QString, width: f64) -> QString;
-        /// `[column, descending]`; the empty column is the load order.
-        #[qinvokable]
-        #[cxx_name = "columnPressed"]
-        fn column_pressed(
-            self: &ModsData,
-            by: &QString,
-            descending: bool,
-            asked: &QString,
-        ) -> QVariant;
         #[qinvokable]
         #[cxx_name = "markReady"]
         fn mark_ready(self: &ModsData);
@@ -277,6 +314,8 @@ pub mod qobject {
 mod asks;
 mod commands;
 mod drafts;
+mod menu;
+mod selection;
 
 use crate::App;
 use crate::changes::Changes;
@@ -288,7 +327,9 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QVariant};
 use qobject::ModRows;
 use rimstack_core::base::sentence::Sentence;
+use rimstack_core::mods::columns;
 use rimstack_core::mods::library::ModId;
+use rimstack_core::mods::list::{LeftOut, SortKey};
 use std::sync::Arc;
 
 pub struct ModsDataRust {
@@ -326,12 +367,20 @@ pub struct ModsDataRust {
     library_version: i32,
     overview: QVariant,
     summary: QVariant,
+    filter_found: QString,
     selected: i32,
+    selected_active: bool,
+    selected_count: i32,
+    selected_ids: QVariant,
+    selection_summary: QVariant,
+    chosen: selection::Selection,
     details: QVariant,
     textures: QVariant,
     fresh: QVariant,
     headings: bool,
-    by_name: bool,
+    inactive_order: QString,
+    orders: QVariant,
+    active_order: QString,
     filter: QString,
     save_problem: QString,
     saving: bool,
@@ -339,6 +388,7 @@ pub struct ModsDataRust {
     upkeep_problem: QString,
     app: crate::hub::Given,
     order: LoadOrder,
+    same: std::collections::HashMap<ModId, ModId>,
     demo: bool,
     records: bool,
 }
@@ -380,12 +430,20 @@ impl Default for ModsDataRust {
             library_version: 0,
             overview: QVariant::default(),
             summary: QVariant::default(),
+            filter_found: QString::default(),
             selected: -1,
+            selected_active: false,
+            selected_count: 0,
+            selected_ids: QVariant::default(),
+            selection_summary: QVariant::default(),
+            chosen: selection::Selection::default(),
             details: QVariant::default(),
             textures: QVariant::default(),
             fresh: QVariant::default(),
             headings: true,
-            by_name: false,
+            inactive_order: QString::default(),
+            orders: QVariant::default(),
+            active_order: QString::default(),
             filter: QString::default(),
             save_problem: QString::default(),
             saving: false,
@@ -393,6 +451,7 @@ impl Default for ModsDataRust {
             upkeep_problem: QString::default(),
             app: crate::hub::Given::default(),
             order: LoadOrder::demo(0, 0),
+            same: Default::default(),
             demo: false,
             records: true,
         }
@@ -444,6 +503,7 @@ impl qobject::ModsData {
         self.as_mut()
             .on_selected_changed(|me| me.describe())
             .release();
+        self.as_mut().set_selected_ids(to_qml(&Vec::<i32>::new()));
         self.as_mut()
             .on_headings_changed(|mut me| {
                 let (app, headings) = (me.app(), me.headings);
@@ -456,13 +516,20 @@ impl qobject::ModsData {
             })
             .release();
         self.as_mut()
-            .on_by_name_changed(|mut me| {
-                let (app, by_name) = (me.app(), me.by_name);
+            .on_active_order_changed(|mut me| {
+                let order = columns::from_kept(&me.active_order.to_string());
+                me.as_mut().rust_mut().get_mut().order.set_active_by(order);
+                me.show();
+            })
+            .release();
+        self.as_mut()
+            .on_inactive_order_changed(|mut me| {
+                let (app, order) = (me.app(), me.inactive_by());
                 me.as_mut()
                     .rust_mut()
                     .get_mut()
                     .order
-                    .set_by_name(&app, by_name);
+                    .set_inactive_by(&app, order);
                 me.show();
             })
             .release();
@@ -491,23 +558,37 @@ impl qobject::ModsData {
         }
     }
 
+    fn inactive_by(&self) -> Option<(SortKey, bool)> {
+        columns::from_kept(&self.inactive_order.to_string())
+    }
+
     /// `anew`: ids held before mean nothing.
     fn load(mut self: Pin<&mut Self>, anew: bool) {
         let app = self.app();
-        let (headings, by_name) = (self.headings, self.by_name);
+        let (headings, inactive_by) = (self.headings, self.inactive_by());
         self.as_mut().set_rescanning(true);
         self.loading.run(
             "load order",
             self.qt_thread(),
-            move |_| LoadOrder::read(&app, headings, by_name),
+            move |_| LoadOrder::read(&app, headings, inactive_by),
             move |mut me, mut order| {
+                let app = me.app();
+                order.set_headings(&app, me.headings);
+                if order.inactive_by() != me.inactive_by() {
+                    order.set_inactive_by(&app, me.inactive_by());
+                }
                 order.set_filter(&me.filter.to_string());
+                order.set_active_by(columns::from_kept(&me.active_order.to_string()));
+                let same = me.order.same_mods_in(&order);
                 me.as_mut().rust_mut().get_mut().order = order;
                 me.as_mut().set_rescanning(false);
                 if anew {
+                    let kept = me.order.carried(&same, me.chosen.ids());
+                    me.as_mut().rust_mut().get_mut().same = same;
+                    me.as_mut()
+                        .keep(selection::Selection::of(kept.ids, kept.active));
                     let version = me.library_version + 1;
                     me.as_mut().set_library_version(version);
-                    me.as_mut().set_selected(-1);
                 }
                 me.as_mut().show();
                 me.read_files();
@@ -563,7 +644,9 @@ impl qobject::ModsData {
             | Changes::LAUNCHES
             | Changes::SAVES
             | Changes::RULES
-            | Changes::UPDATES;
+            | Changes::UPDATES
+            | Changes::COMMUNITY
+            | Changes::LANGUAGE;
         if changes.contains(counted) {
             self.as_mut().set_summary(to_qml(&app.summary()));
         }
@@ -587,6 +670,9 @@ impl qobject::ModsData {
         if changes.contains(Changes::NOTES) {
             order.sync(&app);
         }
+        if changes.contains(Changes::SETTINGS) {
+            order.follow_left_out(&app);
+        }
         if changes.contains(Changes::PROBLEMS | Changes::COMMUNITY | Changes::PATCHES) {
             order.recheck(&app);
         }
@@ -596,8 +682,14 @@ impl qobject::ModsData {
         if changes.contains(Changes::PATCHES) {
             order.sort_when_patched(&app);
         }
-        if changes.contains(Changes::UPDATES | Changes::LAUNCHES) {
+        if changes.contains(Changes::UPDATES | Changes::LAUNCHES | Changes::FIND) {
             order.settle(&app);
+        }
+        if changes.contains(Changes::FACTS) {
+            order.facts_read(&app);
+            if changes == Changes::FACTS && !order.needs_facts() {
+                return;
+            }
         }
         if changes.contains(Changes::FILES_READ) {
             self.as_mut().set_files_read(true);
@@ -613,12 +705,14 @@ impl qobject::ModsData {
 
     fn show(mut self: Pin<&mut Self>) {
         let app = self.app();
+        self.as_mut().follow_selection();
         for side in [Side::Active, Side::Inactive] {
             let list = self.order.list(side);
             let (count, matching) = (list.mods().len(), list.matching());
+            let dimmed = list.left_out() == Some(LeftOut::Dimmed);
             let rows = self.order.rows(&app, side);
             if let Some(model) = self.as_mut().rows(side) {
-                model.show(rows, count, matching);
+                model.show(rows, count, matching, dimmed);
             }
         }
         let (dirty, unsaved, undo, redo) = {
@@ -650,9 +744,14 @@ impl qobject::ModsData {
         let moves = order.sort_move_count() as i32;
         let conflicts = order.in_conflict(&app).len() as i32;
         let problem = crate::words::said(&order.problem);
+        let filter_found = match self.filter.is_empty() {
+            true => QString::default(),
+            false => crate::words::said(&order.filter_summary()),
+        };
         let status = order.status.clone();
         let overview = to_qml(&order.overview(&app));
         let fresh = to_qml(&order.fresh(&app, Side::Inactive));
+        let orders = to_qml(&order.orders());
         self.as_mut().set_errors(errors as i32);
         self.as_mut().set_warnings(warnings as i32);
         self.as_mut().set_troubled(troubled as i32);
@@ -664,12 +763,15 @@ impl qobject::ModsData {
         self.as_mut().set_sort_move_count(moves);
         self.as_mut().set_conflicts(conflicts);
         self.as_mut().set_problem(problem);
+        self.as_mut().set_filter_found(filter_found);
         self.as_mut()
             .set_status_active(crate::words::said(&status[0]));
         self.as_mut()
             .set_status_inactive(crate::words::said(&status[1]));
         self.as_mut().set_overview(overview);
         self.as_mut().set_fresh(fresh);
+        self.as_mut().set_orders(orders);
+        self.as_mut().summarize_selection();
         self.describe();
     }
 

@@ -104,8 +104,66 @@ downloads.updates: object
       name: text
       now: number
   problem: nothing or text
+find.mods: object
+  allChosen: bool
+  allCounted: text
+  allLabel: text
+  rows: list
+    []: object
+      chosen: bool
+      counted: text
+      index: number
+      name: text
+find.options: object
+  leave: list
+    []: object
+      available: bool
+      chosen: bool
+      id: text
+      label: text
+  switches: list
+    []: object
+      available: bool
+      chosen: bool
+      id: text
+      label: text
+  types: object
+    problem: nothing or text
+    text: text
+  where: list
+    []: object
+      available: bool
+      chosen: bool
+      id: text
+      label: text
+find.preview: object
+  line: number
+  lines: list
+    []: object
+      found: bool
+      here: bool
+      marked: bool
+      number: number
+      text: text
+  path: text
+  problem: nothing or text
+find.recent: list
+  []: object
+    case: bool
+    place: text
+    regex: bool
+    text: text
+    types: text
+    word: bool
+find.typeSuggestions: list
+  []: object
+    count: number
+    ext: text
+    label: text
+    note: text
 game.lastStart: object
   errors: number
+  line: text
   time: number
 game.resetByGame: list
   []: text
@@ -115,8 +173,6 @@ lists.history: list
     restore: text
     said: text
     time: number
-lists.idsInText: list
-  []: text
 lists.named: list or nothing
   []: text
 lists.original: list
@@ -206,16 +262,20 @@ logs.lines: list
     warning: bool
 logs.since: nothing
 mod_rows.at: object
+  accessibleName: text
+  activatedAgo: text
   again: bool
   author: text
   category: number
   collapsed: bool
   count: number
+  downloadedAgo: text
   fresh: bool
   groupSize: number
   isHeader: bool
   isSub: bool
   loadPart: number
+  loadSeconds: number
   loadTime: text
   local: bool
   madeFor: text
@@ -224,20 +284,29 @@ mod_rows.at: object
   movedFrom: number
   name: text
   number: number
+  orderedBy: text
   outdated: bool
   picture: text
+  sizeText: text
   source: number
   tags: text
   trouble: number
   troubleText: text
   twin: bool
+  updatedAgo: text
   version: text
   versionIgnored: bool
+  versionLine: text
   whyMoved: text
-mods.columnPressed: list
-  []: bool or text
 mods.columnWidths: map
   {}: number
+mods.copyOffer: object
+  ids: list
+    []: number
+  lines: list
+    []: object or text
+      path: text
+  title: text
 mods.details: object
   author: text
   binLocalCopy: nothing or object
@@ -263,6 +332,7 @@ mods.details: object
   gameVersions: text
   groupChoices: list
     []: text
+  held: text
   loadFolders: list
     []: text
   loadTime: text
@@ -368,6 +438,7 @@ mods.detailsOf: object
   gameVersions: text
   groupChoices: list
     []: text
+  held: text
   loadFolders: list
     []: text
   loadTime: text
@@ -461,6 +532,10 @@ mods.findMods: list
     name: text
 mods.fresh: list
   []: number
+mods.holding: object
+  ids: list
+    []: number
+  name: text
 mods.inLoadOrder: list or nothing
   []: number
 mods.notInstalled: object
@@ -475,17 +550,115 @@ mods.notInstalled: object
   resubscribe: list
     []: text
   takeOff: text
-mods.othersThrough: list
-  []: number
+mods.orders: object
+  active: list
+    []: object
+      icon: text
+      key: text
+      label: text
+      on: bool
+      then: text
+  activeBy: object
+    : object
+      icon: text
+      key: text
+      label: text
+      on: bool
+      then: text
+    activated: object
+      icon: text
+      key: text
+      label: text
+      on: bool
+      then: text
+    author: object
+      icon: text
+      key: text
+      label: text
+      on: bool
+      then: text
+    downloaded: object
+      icon: text
+      key: text
+      label: text
+      on: bool
+      then: text
+    load: object
+      icon: text
+      key: text
+      label: text
+      on: bool
+      then: text
+    name: object
+      icon: text
+      key: text
+      label: text
+      on: bool
+      then: text
+    package: object
+      icon: text
+      key: text
+      label: text
+      on: bool
+      then: text
+    size: object
+      icon: text
+      key: text
+      label: text
+      on: bool
+      then: text
+    updated: object
+      icon: text
+      key: text
+      label: text
+      on: bool
+      then: text
+    version: object
+      icon: text
+      key: text
+      label: text
+      on: bool
+      then: text
+  activeKey: text
+  inactive: list
+    []: object
+      icon: text
+      key: text
+      label: text
+      on: bool
+      then: text
+  inactiveSaid: text
+  widest: object
+    author: text
+    load: text
+    version: text
 mods.overview: object
   categories: list
     []: text
   communityMods: nothing
   communityTime: nothing
+  errorCount: number
+  firstErrors: list
+    []: object
+      error: bool
+      fix: object
+        action: text
+        label: text
+        page: nothing or text
+        target: text
+      group: text
+      ignore: text
+      modId: number
+      name: text
+      packageId: text
+      short: text
+      words: text
   gameVersion: text
   installed: number
   loadTimes: bool
+  loadTimesHow: text
   missing: number
+  moreErrors: number
   needed: list
     []: text
   otherWarnings: number
@@ -558,6 +731,50 @@ mods.overview: object
   worksOn: number
 mods.packageMods: list
   []: number
+mods.rowMenu: list
+  []: object
+    action: absent or text
+    active: absent or bool
+    ask: absent or object
+      label: text
+      lines: list
+        []: object or text
+          path: text
+      title: text
+    danger: absent or bool
+    fix: absent or object
+      action: text
+      label: text
+      page: nothing or text
+      target: text
+    icon: absent or text
+    ids: absent or list
+      []: number
+    index: absent or number
+    line: absent or bool
+    modId: absent or number
+    name: absent or text
+    off: absent or bool
+    path: absent or text
+    tag: absent or text
+    text: absent or text
+    title: absent or text
+    url: absent or text
+    value: absent or text
+    workshopId: absent or text
+    yes: absent or bool
+mods.selectedIds: list
+  []: number
+mods.selectionSummary: object
+  notInView: number
+  place: text
+  rows: list
+    []: object
+      category: number
+      load: text
+      name: text
+      trouble: number
+  troubled: text
 mods.sortMoves: list
   []: object
     moves: list
@@ -568,10 +785,22 @@ mods.sortMoves: list
         to: number
         why: text
     name: text
+mods.subMenu: list
+  []: object
+    action: text
+    active: bool
+    icon: absent or text
+    row: number
+    text: text
 mods.subsBeside: list
   []: text
 mods.summary: object
   folders: number
+  kept: list
+    []: object
+      label: text
+      value: text
+  keptNote: text
   lastLaunch: object
     errors: number
     mods: number
@@ -654,6 +883,7 @@ settings.report: object
   configFolder: text
   dataFolder: text
   diagnosticsFile: text
+  dimLeftOut: bool
   english: bool
   fileHints: bool
   font: text
@@ -687,8 +917,10 @@ settings.report: object
   setWorkshop: nothing or text
   settingsFile: text
   setupDone: bool
+  showMature: bool
   steamcmd: bool
   steamcmdFolder: text
+  steamcmdRefused: nothing
   version: text
   versionAsideFor: text
   versionWarnings: bool
@@ -703,6 +935,18 @@ settings.startLanguage: object
   problem: absent or text
 settings.startOwnTheme: object
   file: text
+settings.steamKey: object
+  available: bool
+  checking: bool
+  note: nothing or text
+  refused: bool
+  stored: bool
+settings.windowStart: object
+  height: number
+  visibility: number
+  width: number
+  x: number
+  y: number
 settings.words: map
   {}: text
 textures.comparison: object
@@ -777,3 +1021,125 @@ textures.shared: list
     name: text
     used: text
     yourChoice: bool
+workshop.details: object
+  author: nothing or text
+  badge: nothing or text
+  banned: bool
+  canAdd: bool
+  createdBy: nothing or text
+  createdSaid: nothing or text
+  description: list
+    []: object
+      html: text
+      image: text
+      note: nothing or text
+  dlc: list
+    []: object
+      id: text
+      name: text
+  favorites: number
+  id: text
+  installed: bool
+  loaded: bool
+  onList: bool
+  previewPath: text
+  previewUrl: text
+  problem: nothing or text
+  requires: list
+    []: object
+      author: text
+      badge: text
+      canAdd: bool
+      id: text
+      installed: bool
+      onList: bool
+      stars: list
+        []: bool
+      title: text
+      versions: list
+        []: text
+  screenshots: list
+    []: text
+  size: number
+  sizeSaid: text
+  stars: list
+    []: bool
+  stats: list
+    []: object
+      label: text
+      value: text
+  subscribers: number
+  title: text
+  unknownRequirements: list
+    []: text
+  unknownSaid: nothing or text
+  updated: number
+  updatedSaid: text
+  versions: list
+    []: text
+  votesSaid: text
+workshop.list: object
+  action: object
+    download: bool
+    enabled: bool
+    installSteamcmd: bool
+    label: text
+    stuck: nothing
+    subscribe: bool
+    subscribeEnabled: bool
+  count: number
+  failures: bool
+  rows: list
+    []: object
+      failed: nothing or text
+      id: text
+      reason: text
+      size: nothing or number
+      sizeSaid: nothing or text
+      title: text
+  sizeSaid: nothing or text
+workshop.related: object
+  active: bool
+  id: text
+  said: nothing or text
+  title: text
+  which: text
+workshop.sidebar: object
+  chips: list
+    []: object
+      exclude: bool
+      id: text
+      label: text
+      tone: text
+  counted: bool
+  dlc: list
+    []: object
+      count: nothing or text
+      exclude: bool
+      id: text
+      include: bool
+      label: text
+  filtered: bool
+  found: text
+  hideUnowned: bool
+  searched: bool
+  showIncompatible: bool
+  types: list
+    []: object
+      count: nothing or text
+      exclude: bool
+      id: text
+      include: bool
+      label: text
+  versions: list
+    []: object
+      count: nothing or text
+      exclude: bool
+      id: text
+      include: bool
+      label: text
+workshop.sorts: list
+  []: object
+    chosen: bool
+    id: text
+    label: text

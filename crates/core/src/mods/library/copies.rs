@@ -1,6 +1,10 @@
 use super::{Installed, Library, ModId};
+use crate::base::error::Error;
 use crate::base::versions::{newer, numbers};
 use crate::rimworld::paths::Source;
+use crate::said;
+use std::collections::HashMap;
+use std::path::Path;
 
 /// A mod in the game's Mods folder that is also a Workshop subscription: the game loads the
 /// local one, often a copy left from SteamCMD or "Copy to the game folder".
@@ -32,6 +36,34 @@ impl Library {
             workshop,
             workshop_newer: workshop_newer(self.get(local)?, self.get(workshop)?),
         })
+    }
+}
+
+impl Library {
+    /// Each of `ids` that may be copied into the game's Mods folder, or why not: a Workshop mod
+    /// may, unless a mod of its package id is there already.
+    pub fn to_copy(&self, ids: &[ModId]) -> Vec<(ModId, Result<&Installed, Error>)> {
+        let local: HashMap<String, &Path> = self
+            .ids()
+            .filter(|(_, m)| m.source == Source::Local)
+            .filter_map(|(_, m)| Some((m.key()?, m.path.as_path())))
+            .collect();
+        let judged = |id: ModId| match self.get(id) {
+            None => Err(Error::refused(said!(
+                "That mod has moved since it was read; read the folders again"
+            ))),
+            Some(m) if m.source != Source::Workshop => {
+                Err(Error::refused(said!("Not a Workshop mod")))
+            }
+            Some(m) => match m.key().and_then(|key| local.get(&key)) {
+                Some(there) => Err(Error::refused(said!(
+                    "{} is there already",
+                    there.display()
+                ))),
+                None => Ok(m),
+            },
+        };
+        ids.iter().map(|&id| (id, judged(id))).collect()
     }
 }
 
@@ -116,6 +148,20 @@ mod tests {
         assert_eq!(library.copies(local), Some(copies));
         assert_eq!(library.copies(workshop), Some(copies));
         assert_eq!(library.copies(by(&library, Source::Workshop, "77")), None);
+    }
+
+    #[test]
+    fn only_a_workshop_mod_without_a_local_copy_may_be_copied() {
+        let (_tmp, library) = library("", "");
+        let (local, workshop, other) = (
+            by(&library, Source::Local, "3535"),
+            by(&library, Source::Workshop, "3535"),
+            by(&library, Source::Workshop, "77"),
+        );
+        let judged = library.to_copy(&[local, workshop, other, ModId::new(0, 99)]);
+        let ok: Vec<bool> = judged.iter().map(|(_, m)| m.is_ok()).collect();
+        assert_eq!(ok, [false, false, true, false]);
+        assert_eq!(judged[2].1.as_ref().unwrap().folder, "77");
     }
 
     #[test]

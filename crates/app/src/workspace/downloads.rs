@@ -119,8 +119,9 @@ impl App {
         let mut kept = self.last_check();
         let ids: Vec<String> = library
             .workshop_mods()
-            .keys()
-            .map(|id| id.to_string())
+            .into_keys()
+            .filter(|folder| workshop::is_id(folder))
+            .map(str::to_string)
             .collect();
         let problem = match workshop::fetch_details(&ids) {
             Ok(now) => {
@@ -243,16 +244,17 @@ impl App {
             });
         }
         let ids = workshop::expand_collections(&ids)?;
-        let answered = workshop::fetch_details(&ids)?;
-        let loaded = self.library();
-        let (library, _) = loaded.as_ref().as_ref().map_err(Clone::clone)?;
-        let mods = library.workshop_mods();
-        let items = downloads::asked(&ids, &answered, &|id| mods.contains_key(id));
-        let wanted = items
-            .iter()
-            .filter(|item| item.title.is_some() && !item.installed)
-            .map(|item| item.id.clone())
+        let mut answered = workshop::fetch_details(&ids)?;
+        answered.retain(|details| details.refusal().is_none());
+        self.library().as_ref().as_ref().map_err(Clone::clone)?;
+        let installed = self.installed_workshop();
+        let items = downloads::asked(&ids, &answered, &|id| installed.contains(id));
+        let found = || items.iter().filter(|i| i.title.is_some() && !i.installed);
+        let wanted: Vec<String> = found().map(|item| item.id.clone()).collect();
+        let titled: Vec<(String, String)> = found()
+            .filter_map(|item| Some((item.id.clone(), item.title.clone()?)))
             .collect();
+        self.add_wanted_to_list(&titled);
         Ok(Queue {
             items,
             repositories,

@@ -3,6 +3,7 @@
 #include <QtGui/QFont>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QIcon>
+#include <QtGui/QScreen>
 
 void setWindowIcon(const QString &resource)
 {
@@ -19,4 +20,17 @@ QString setFontFamily(const QString &family)
         font.setFamily(family.trimmed());
     QGuiApplication::setFont(font);
     return font.family();
+}
+
+QList<QRect> screenAreas()
+{
+    QList<QRect> areas;
+    QScreen *primary = QGuiApplication::primaryScreen();
+    if (primary)
+        areas.append(primary->availableGeometry());
+    for (QScreen *screen : QGuiApplication::screens()) {
+        if (screen != primary)
+            areas.append(screen->availableGeometry());
+    }
+    return areas;
 }

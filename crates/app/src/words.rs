@@ -1,6 +1,9 @@
 //! Sentences are put in words here, on the window's thread, as they are handed to QML.
 
 use cxx_qt_lib::QString;
+use icu_decimal::DecimalFormatter;
+use icu_decimal::input::Decimal;
+use icu_decimal::options::DecimalFormatterOptions;
 use rimstack_core::base::error::Error;
 use rimstack_core::base::sentence::{Language, Sentence};
 use rimstack_core::base::translate::{Counting, LOCALE};
@@ -13,6 +16,18 @@ pub struct Words {
     table: HashMap<String, String>,
     locale: String,
     counting: Counting,
+    digits: DecimalFormatter,
+}
+
+fn digits_for(locale: &str) -> DecimalFormatter {
+    let options = DecimalFormatterOptions::default();
+    let parsed = icu_locale_core::Locale::try_from_str(locale.trim());
+    let english = icu_locale_core::locale!("en");
+    parsed
+        .ok()
+        .and_then(|locale| DecimalFormatter::try_new((&locale).into(), options.clone()).ok())
+        .or_else(|| DecimalFormatter::try_new((&english).into(), options).ok())
+        .expect("English digits are compiled in")
 }
 
 impl Default for Words {
@@ -31,6 +46,7 @@ impl Words {
         let locale = table.get(LOCALE).cloned().unwrap_or_default();
         Self {
             counting: Counting::of(&locale),
+            digits: digits_for(&locale),
             locale,
             table,
         }
@@ -44,6 +60,10 @@ impl Language for Words {
 
     fn counting(&self) -> &Counting {
         &self.counting
+    }
+
+    fn number(&self, n: i64) -> String {
+        self.digits.format(&Decimal::from(n)).to_string()
     }
 }
 
@@ -101,5 +121,30 @@ mod tests {
         show_in(words);
         assert_eq!(put(&counted), "0 mod");
         show_in(Words::default());
+    }
+
+    #[test]
+    fn numbers_are_grouped_as_the_language_does_and_the_count_still_picks_the_form() {
+        let expected = [
+            ("en", "1,932", "20,139"),
+            ("fr", "1\u{202f}932", "20\u{202f}139"),
+            ("de", "1.932", "20.139"),
+            ("ru", "1\u{a0}932", "20\u{a0}139"),
+            ("pl", "1932", "20\u{a0}139"),
+        ];
+        for (locale, small, large) in expected {
+            let table = serde_json::json!({ "@locale": locale });
+            let words = Words::of(table.as_object().unwrap());
+            for (n, shown) in [(1932, small), (20139, large), (999, "999")] {
+                let sentence = say_n!(n, "{} mod", "{} mods");
+                assert_eq!(sentence.put(&words), format!("{shown} mods"), "{locale}");
+                let plain = rimstack_core::say!("{} inactive", n);
+                assert_eq!(plain.put(&words), format!("{shown} inactive"), "{locale}");
+            }
+        }
+        assert_eq!(
+            rimstack_core::say!("{} inactive", 1932).to_string(),
+            "1932 inactive"
+        );
     }
 }

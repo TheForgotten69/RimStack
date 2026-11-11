@@ -10,6 +10,10 @@ Item {
     Appear { of: screen }
 
     property bool drawerOpen: Hub.given("--drawer")
+    readonly property real inactiveFirst: Theme.sized(290)
+    readonly property real detailsFirst: Theme.sized(360)
+    readonly property real inactiveWide: Mods.prefs.inactive || inactiveFirst
+    readonly property real detailsWide: Mods.prefs.details || detailsFirst
     Connections {
         target: Mods.prefs
         function onInactiveHiddenChanged() { screen.drawerOpen = false }
@@ -77,7 +81,7 @@ Item {
             Keys.onLeftPressed: move(-24)
             Keys.onRightPressed: move(24)
             // Not further left: a list's scroll bar sits there.
-            containmentMask: Item { x: -2; width: 15; height: grip.height }
+            containmentMask: Item { x: -Theme.gapHair; width: grip.width + Theme.gapHair + Theme.gapSmall; height: grip.height }
             Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: grip.held ? 3 : 1
@@ -85,15 +89,15 @@ Item {
                 color: grip.held ? Theme.focus : Theme.edge
             }
             // Takes no button, so the drag still reaches the divider.
-            MouseArea { x: -2; width: 15; height: parent.height; acceptedButtons: Qt.NoButton; cursorShape: Qt.SizeHorCursor }
-            TapHandler { onDoubleTapped: grip.move(grip.first ? 290 - inactivePane.width : detailsPane.width - 360) }
+            MouseArea { x: -Theme.gapHair; width: grip.width + Theme.gapHair + Theme.gapSmall; height: parent.height; acceptedButtons: Qt.NoButton; cursorShape: Qt.SizeHorCursor }
+            TapHandler { onDoubleTapped: grip.move(grip.first ? screen.inactiveFirst - inactivePane.width : detailsPane.width - screen.detailsFirst) }
         }
 
         InactivePane {
             id: inactivePane
             enabled: Mods.comparing === null
-            SplitView.preferredWidth: Mods.prefs.inactive
-            SplitView.minimumWidth: 200
+            SplitView.preferredWidth: screen.inactiveWide
+            SplitView.minimumWidth: Theme.sized(200)
             onWidthChanged: if (panes.resizing) Mods.prefs.inactive = width
             visible: Hub.mods.problem === "" && !Mods.prefs.inactiveHidden
         }
@@ -101,12 +105,12 @@ Item {
             id: activePane
             enabled: Mods.comparing === null
             SplitView.fillWidth: true
-            SplitView.minimumWidth: 380
+            SplitView.minimumWidth: Theme.sized(380)
         }
         DetailsPane {
             id: detailsPane
-            SplitView.preferredWidth: Mods.prefs.details
-            SplitView.minimumWidth: 260
+            SplitView.preferredWidth: screen.detailsWide
+            SplitView.minimumWidth: Theme.sized(260)
             onWidthChanged: if (panes.resizing) Mods.prefs.details = width
             visible: Hub.mods.problem === ""
         }
@@ -125,7 +129,7 @@ Item {
         id: drawerLoader
         active: screen.drawerOpen && rail.visible
         x: rail.width
-        width: Math.min(Math.max(Theme.sized(260), Mods.prefs.inactive), parent.width - rail.width - 60)
+        width: Math.min(Math.max(Theme.sized(260), screen.inactiveWide), parent.width - rail.width - Theme.sized(60))
         height: parent.height - bulk.height
         z: 1
         sourceComponent: InactivePane {
@@ -135,14 +139,14 @@ Item {
             transform: Translate { id: drawerShift }
             NumberAnimation { target: drawerShift; property: "x"; from: -drawerLoader.width; to: 0; duration: Theme.calm; easing.type: Easing.OutCubic; running: true }
             Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.edge }
-            Rectangle { anchors.left: parent.right; width: 12; height: parent.height; gradient: Gradient { orientation: Gradient.Horizontal; GradientStop { position: 0; color: Qt.rgba(0, 0, 0, 0.3) } GradientStop { position: 1; color: "transparent" } } }
+            Rectangle { anchors.left: parent.right; width: Theme.gapLarge; height: parent.height; gradient: Gradient { orientation: Gradient.Horizontal; GradientStop { position: 0; color: Qt.rgba(0, 0, 0, 0.3) } GradientStop { position: 1; color: "transparent" } } }
         }
     }
 
     Loader {
     id: compareLoader
     onItemChanged: Mods.compareView = item
-    width: parent.width - Mods.prefs.details - 1
+    width: panes.x + detailsPane.x - 1
     height: parent.height - bulk.height
     active: Mods.comparing !== null
     sourceComponent: CompareView {
@@ -170,15 +174,15 @@ Rectangle {
     color: Theme.accent
     opacity: 0.9
     readonly property point at: screen.mapFromItem(null, Mods.drag.point.x, Mods.drag.point.y)
-    x: at.x + 10
+    x: at.x + Theme.gapMedium
     y: at.y - height / 2
     Drag.active: visible
-    Drag.hotSpot.x: -10
+    Drag.hotSpot.x: -Theme.gapMedium
     Drag.hotSpot.y: height / 2
     Text {
         anchors.verticalCenter: parent.verticalCenter
-        x: 10
-        width: parent.width - 20
+        x: Theme.gapMedium
+        width: parent.width - 2 * Theme.gapMedium
         elide: Text.ElideRight
         color: "white"
         font.pixelSize: Theme.body
@@ -198,7 +202,7 @@ Rectangle {
         }
     }
 
-    PopMenu { id: rowMenu }
+    PopMenu { id: rowMenu; doers: Mods.menus.doers }
     Prompt {
         id: subPrompt
         property int modId: -1
@@ -247,7 +251,7 @@ Rectangle {
         Text { width: parent.width; wrapMode: Text.WordWrap; color: Theme.ink2; font.pixelSize: Theme.body; text: Theme.say("Steam downloads a Workshop mod again while you stay subscribed to it.") }
         buttons: [
             Btn { text: Theme.say("Cancel"); onClicked: binPrompt.close() },
-            Btn { danger: true; text: Theme.say("Move to the bin"); onClicked: { Mods.binMod(binPrompt.modId); binPrompt.close() } }
+            Btn { danger: true; text: Theme.say("Move to the bin"); onClicked: { Hub.mods.bin(binPrompt.modId); binPrompt.close() } }
         ]
     }
     Connections {
@@ -305,6 +309,9 @@ Timer {
 
     // `visible` is true from the click; `opened` only once the menu has faded in.
     readonly property alias menuOpen: rowMenu.visible
+    readonly property alias viewMenu: activePane.viewMenu
+    readonly property alias orderMenu: inactivePane.orderMenu
+    readonly property alias popMenu: rowMenu
 
     Loader {
         active: (Mods.checkMode !== "" && Mods.checkMode !== "pointer") || Theme.selfTest
@@ -312,10 +319,10 @@ Timer {
     }
     // Opened by address, so Qt's test module is needed only for this.
     Loader {
-        source: Mods.checkMode === "pointer" ? "qrc:/qt/qml/RimStack/Ui/qml/checks/PointerChecks.qml" : ""
+        source: Mods.checkMode === "pointer" ? Qt.resolvedUrl("../checks/PointerChecks.qml") : ""
         onLoaded: {
             item.screen = screen
-            item.activeList = activePane.list
+            item.activePane = activePane
             item.inactiveList = inactivePane.list
             item.details = detailsPane
         }

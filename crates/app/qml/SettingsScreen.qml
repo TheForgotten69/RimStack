@@ -7,6 +7,7 @@ import RimStack.Ui
 Item {
     id: screen
     Appear { of: screen }
+    readonly property real labelWidth: Theme.sized(190)
 
     signal useList(var ids)
     signal trust(int modId, bool yes)
@@ -15,6 +16,7 @@ Item {
 
     readonly property var info: Hub.settings.report
     readonly property string problem: Hub.settings.problem
+    readonly property var key: Hub.settings.steamKey || ({})
 
     function keep(name, value) {
         Hub.settings.keep(name, value)
@@ -22,7 +24,7 @@ Item {
 
     property string finding
     function matches(words) {
-        const wanted = finding.trim().toLowerCase().split(" ").filter(word => word !== "")
+        const wanted = finding.trim().toLowerCase().split(/ +/)
         return wanted.every(word => words.toLowerCase().indexOf(word) !== -1)
     }
     function resetIn(item) {
@@ -51,7 +53,7 @@ Item {
         property bool changed: false
         signal reset()
         default property alias content: held.data
-        readonly property real named: Math.min(Theme.sized(190), Math.max(Theme.sized(190), width * 0.3))
+        readonly property real named: screen.labelWidth
         width: parent.width
         visible: screen.matches(title + " " + tip)
         spacing: Theme.gapLine
@@ -61,7 +63,7 @@ Item {
             spacing: Theme.gap
             RowLayout {
                 Layout.preferredWidth: line.named
-                Layout.minimumWidth: Theme.sized(190)
+                Layout.minimumWidth: line.named
                 Layout.maximumWidth: line.named
                 Layout.alignment: Qt.AlignTop
                 Layout.topMargin: Theme.gapTiny
@@ -75,7 +77,7 @@ Item {
         Text {
             id: help
             visible: line.tip !== ""
-            x: line.named + 8
+            x: line.named + Theme.gap
             width: parent.width - x
             wrapMode: Text.WordWrap
             color: Theme.ink3
@@ -122,7 +124,7 @@ Item {
     property int part: {
         return Hub.number("--part", 0)
     }
-    readonly property var parts: [Theme.say("Game and folders"), Theme.say("Appearance"), Theme.say("Sorting"), "RimStack"]
+    readonly property var parts: [Theme.say("Game and folders"), Theme.say("Appearance"), Theme.say("Sorting"), Theme.say("Steam Web API key"), "RimStack"]
 
     Rectangle {
         id: nav
@@ -130,12 +132,12 @@ Item {
         height: parent.height
         color: Theme.panel
         Column {
-            x: 8
-            y: 10
-            width: parent.width - 16
+            x: Theme.gap
+            y: Theme.gapMedium
+            width: parent.width - 2 * Theme.gap
             spacing: Theme.gapHair
             FilterField { id: find; width: parent.width; placeholder: Theme.say("Find a setting"); onTextChanged: screen.finding = text }
-            Item { width: 1; height: 6 }
+            Item { width: 1; height: Theme.gapSmall }
             Repeater {
                 id: partRows
                 model: screen.parts
@@ -147,7 +149,7 @@ Item {
                     width: parent.width
                     height: Theme.sized(28)
                     radius: Theme.corner
-                    color: on ? Theme.accent : choiceHover.hovered ? Theme.chip : "transparent"
+                    color: on ? Theme.chosen : choiceHover.hovered ? Theme.chip : "transparent"
                     Accessible.role: Accessible.PageTab
                     Accessible.name: modelData
                     Accessible.onPressAction: choice.pick(index)
@@ -164,7 +166,7 @@ Item {
                     Keys.onSpacePressed: pick(index)
                     Keys.onReturnPressed: pick(index)
                     FocusRing { anchors.margins: -2 }
-                    Text { x: 10; anchors.verticalCenter: parent.verticalCenter; color: choice.on ? Theme.accentInk : Theme.ink; font.pixelSize: Theme.body; text: Theme.say(choice.modelData) }
+                    Text { x: Theme.gapMedium; anchors.verticalCenter: parent.verticalCenter; color: choice.on ? Theme.onSelected : Theme.ink; font.pixelSize: Theme.body; text: Theme.say(choice.modelData) }
                     HoverHandler { id: choiceHover }
                     TapHandler { onTapped: choice.pick(choice.index) }
                 }
@@ -177,17 +179,18 @@ Item {
         id: flick
         anchors.fill: parent
         anchors.leftMargin: nav.width
-        contentHeight: page.implicitHeight + 48
+        contentHeight: page.y + page.implicitHeight + Theme.gapPage + 2 * Theme.gapCard
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: ScrollBar {}
+        ScrollBar.vertical: Scroller {}
         Wheel {}
 
         Column {
             id: page
-            width: Math.min(Theme.sized(860), flick.width - 52)
-            x: Math.max(26, (flick.width - width) / 2)
-            y: 14
+            readonly property real gutter: Theme.gapPage + Theme.gapSmall
+            width: Math.min(Theme.sized(860), flick.width - 2 * gutter)
+            x: Math.max(gutter, (flick.width - width) / 2)
+            y: Theme.gapCard
             spacing: Theme.gapSmall
 
             RowLayout {
@@ -228,7 +231,7 @@ Item {
                     title: Theme.say("Play starts the game")
                     changed: !!screen.info.launchDirectly
                     onReset: screen.keep("launch", "steam")
-                    tip: Theme.say("Directly runs the game's own program from its folder, for a copy that is not Steam's.")
+                    tip: Theme.say("Directly runs the game's own program from its folder, for a copy not from Steam.")
                     Choice {
                         title: Theme.say("Play starts the game")
                         options: ["Through Steam", "Directly"]
@@ -259,7 +262,7 @@ Item {
                 }
                 Line {
                     title: Theme.say("Copies")
-                    tip: Theme.say("Before each Save the file as it was is copied beside itself to .rimstack-backup, and the first time also to .rimstack-original.")
+                    tip: Theme.say("Before each Save, the old file is copied next to it as .rimstack-backup, and the first time also as .rimstack-original.")
                     Text { Layout.fillWidth: true; color: screen.info.backup ? Theme.ink : Theme.ink3; font.pixelSize: Theme.body; text: screen.info.backup ? ".rimstack-backup, .rimstack-original" : Theme.say("None yet") }
                 }
 
@@ -271,7 +274,7 @@ Item {
                 }
                 Line {
                     title: Theme.say("Git for Workshop mods")
-                    tip: Theme.say("Check now asks Steam about a Workshop mod, and Git about a checkout in the game's Mods folder. On: a Workshop mod that is a Git checkout is asked through Git as well, which fetches into its folder.")
+                    tip: Theme.say("Check now asks Steam about Workshop mods, and Git about checkouts in the game's Mods folder. On: a Workshop mod that is also a Git checkout is checked with Git too, which fetches into its folder.")
                     changed: !!screen.info.gitForWorkshop
                     onReset: screen.keep("gitForWorkshop", "off")
                     Toggle {
@@ -310,7 +313,7 @@ Item {
                             Hub.mods.rescan()
                     }
                     title: Theme.say("Language")
-                    tip: Theme.say("A file of the same name beside the settings stands over a language, text by text; one left empty there stays as it is.")
+                    tip: Theme.say("A language file with the same name in the settings folder replaces this language's texts one by one. A text left empty there keeps the original.")
                     readonly property int translated: Object.keys(Theme.words).filter(text => Theme.words[text] !== "").length
                     function file(name) {
                         const made = Hub.settings.startLanguage(name)
@@ -364,13 +367,13 @@ Item {
                         visible: Theme.ownInUse && short.length > 0
                         tone: Theme.warn
                         icon: "triangle-alert"
-                        text: Theme.plural(short.length, "{} pair under its contrast", "{} pairs under their contrast")
+                        text: Theme.plural(short.length, "{} colour pair has too little contrast", "{} colour pairs have too little contrast")
                         tip: short.map(pair => Theme.fill("{} {}, needs {}", Theme.say(pair.what), pair.found.toFixed(1), pair.needed)).join("\n")
                     }
                     Btn {
                         icon: "external-link"
                         text: Theme.say("Edit theme.json")
-                        tip: Theme.say("Opens the file, written with this theme's colours when it has none for it; what is saved there shows at once")
+                        tip: Theme.say("Opens the file, first adding this theme's colours if it has none. A change saved there shows at once")
                         onClicked: {
                             const now = {}
                             for (const name of Theme.colourNames)
@@ -391,7 +394,7 @@ Item {
                         id: fontButton
                         menu: true
                         text: screen.info.font || Theme.say("System font")
-                        onClicked: fontPicker.open()
+                        onClicked: fontPicker.visible = !fontPicker.visible
                     }
                     Popup {
                         enter: PopIn {}
@@ -401,9 +404,9 @@ Item {
                         parent: fontButton
                         y: fontButton.height + 4
                         width: Theme.sized(320)
-                        height: 380
+                        height: Theme.sized(380)
                         padding: Theme.gap
-                        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
                         background: Rectangle { radius: Theme.cornerLarge; color: Theme.bar; border.width: 1; border.color: Theme.line }
                         onOpened: { fontFilter.text = ""; fontFilter.focusInput() }
                         contentItem: ColumnLayout {
@@ -415,7 +418,7 @@ Item {
                                 clip: true
                                 model: fontPicker.shown
                                 Wheel {}
-                                ScrollBar.vertical: ScrollBar {}
+                                ScrollBar.vertical: Scroller {}
                                 delegate: Rectangle {
                                     id: family
                                     required property string modelData
@@ -423,13 +426,13 @@ Item {
                                     width: ListView.view.width
                                     height: Theme.sized(30)
                                     radius: Theme.corner
-                                    color: familyHover.hovered ? Theme.accent : "transparent"
+                                    color: familyHover.hovered ? Theme.chosen : "transparent"
                                     Text {
-                                        x: 8
+                                        x: Theme.gap
                                         anchors.verticalCenter: parent.verticalCenter
-                                        width: parent.width - 16
+                                        width: parent.width - 2 * Theme.gap
                                         elide: Text.ElideRight
-                                        color: familyHover.hovered ? Theme.accentInk : Theme.ink
+                                        color: familyHover.hovered ? Theme.onSelected : Theme.ink
                                         font.pixelSize: Theme.title
                                         font.family: family.system ? Qt.application.font.family : family.modelData
                                         text: family.system ? Theme.say("System font") : family.modelData
@@ -466,6 +469,19 @@ Item {
                         options: ["Compact", "Roomy", "With pictures"]
                         current: Theme.stored.comfortable ? 2 : Theme.stored.largeRows ? 1 : 0
                         onPicked: (index) => { Theme.stored.comfortable = index === 2; Theme.stored.largeRows = index === 1 }
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+                Line {
+                    title: Theme.say("A list the filter leaves out")
+                    tip: Theme.say("A list where the filter matches no mod. Dimmed: it shows all its mods faded, and mods can still be dropped on it.")
+                    changed: !screen.info.dimLeftOut
+                    onReset: screen.keep("dimLeftOut", "on")
+                    Choice {
+                        title: Theme.say("A list the filter leaves out")
+                        options: ["Dimmed", "Hidden"]
+                        current: Number(!screen.info.dimLeftOut)
+                        onPicked: (index) => screen.keep("dimLeftOut", ["on", "off"][index])
                     }
                     Item { Layout.fillWidth: true }
                 }
@@ -575,8 +591,8 @@ Item {
                 }
                 Text {
                     visible: Hub.settings.communityProblem !== ""
-                    x: 198
-                    width: parent.width - 200
+                    x: screen.labelWidth + Theme.gap
+                    width: parent.width - x
                     wrapMode: Text.WordWrap
                     color: Theme.err
                     font.pixelSize: Theme.body
@@ -605,7 +621,7 @@ Item {
                     function version(choice) {
                         Hub.settings.versionWarnings(choice)
                     }
-                    tip: Theme.say("A mod that does not list the installed game version. For this version: the warnings return when the game is updated. One mod can be excused from its menu.")
+                    tip: Theme.say("A mod that does not list the installed game version. For this version: the warnings come back when the game is updated. A single mod can be ignored from its menu.")
                     Choice {
                         title: Theme.say("Game version mismatch")
                         options: ["Warn", "Ignore for this version", "Ignore"]
@@ -630,6 +646,76 @@ Item {
                 width: parent.width
                 spacing: Theme.gapSmall
                 visible: screen.part === 3 || screen.finding !== ""
+                Line {
+                    title: Theme.say("What a key adds")
+                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.ink; font.pixelSize: Theme.body; text: Theme.say("With a key, Browse searches Steam itself, with Steam's sort orders. It also shows mods newer than the downloaded database, collections, more by the same author, votes and screenshots. Without a key, Browse searches the downloaded database.") }
+                }
+                Line {
+                    title: Theme.say("Keep it private")
+                    Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.warn; font.pixelSize: Theme.body; text: Theme.say("Whoever has this key can read and cancel your trade offers. Never share it with anyone. This is Steam's own warning. RimStack keeps the key in this computer's credential store, never in its settings file.") }
+                }
+                Line {
+                    title: Theme.say("Get a key")
+                    tip: Theme.say("Steam's page asks you to sign in and name a domain; any name will do.")
+                    Btn { icon: "external-link"; text: Theme.say("Open Steam's key page"); onClicked: Qt.openUrlExternally("https://steamcommunity.com/dev/apikey") }
+                    Item { Layout.fillWidth: true }
+                }
+                Line {
+                    title: Theme.say("Your key")
+                    Text { visible: screen.key.available && screen.key.stored; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.ok; font.pixelSize: Theme.body; text: Theme.say("A key is kept.") }
+                    Text { visible: screen.key.available && !screen.key.stored; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.ink3; font.pixelSize: Theme.body; text: Theme.say("No key is kept.") }
+                    Text { visible: !screen.key.available; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.err; font.pixelSize: Theme.body; text: Theme.say("The credential store does not work, so a key cannot be kept.") }
+                    Btn { visible: !!screen.key.stored; enabled: !screen.key.checking; text: Theme.say("Forget the key"); onClicked: Hub.settings.forgetKey() }
+                }
+                Line {
+                    visible: !!screen.key.available && screen.matches(title)
+                    title: Theme.say("Type a key")
+                    FilterField {
+                        id: typed
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 0
+                        echo: TextInput.Password
+                        placeholder: Theme.say("Steam Web API key")
+                        onAccepted: check.clicked()
+                    }
+                    Btn {
+                        id: check
+                        primary: true
+                        enabled: typed.text !== "" && !screen.key.checking
+                        text: Theme.say("Check and keep")
+                        onClicked: { Hub.settings.checkKey(typed.text); typed.text = "" }
+                    }
+                }
+                Text {
+                    visible: !!screen.key.checking
+                    x: screen.labelWidth + Theme.gap
+                    color: Theme.ink3
+                    font.pixelSize: Theme.small
+                    text: Theme.say("Asking Steam…")
+                }
+                Text {
+                    visible: !!screen.key.note
+                    x: screen.labelWidth + Theme.gap
+                    width: parent.width - x
+                    wrapMode: Text.WordWrap
+                    color: Theme.err
+                    font.pixelSize: Theme.body
+                    text: screen.key.note || ""
+                }
+                Line {
+                    title: Theme.say("Show mods Steam marks as mature")
+                    changed: !!screen.info.showMature
+                    onReset: screen.keep("showMature", "off")
+                    tip: Theme.say("Works only with a key; the database does not mark mature mods.")
+                    Toggle { title: Theme.say("Show mods Steam marks as mature"); on: !!screen.info.showMature; onFlipped: screen.keep("showMature", ["on", "off"][Number(!!screen.info.showMature)]) }
+                    Item { Layout.fillWidth: true }
+                }
+            }
+
+            Column {
+                width: parent.width
+                spacing: Theme.gapSmall
+                visible: screen.part === 4 || screen.finding !== ""
                 GroupTitle { visible: screen.finding === ""; text: Theme.say("When the game misbehaves") }
                 Line {
                     title: Theme.say("Game files")
@@ -641,7 +727,7 @@ Item {
                     id: modSettings
                     property string said
                     title: Theme.say("Mod settings")
-                    tip: Theme.say("Moves every Mod_*.xml of the game's Config folder into a dated folder of RimStack's. Mods start from their defaults.")
+                    tip: Theme.say("Moves every Mod_*.xml from the game's Config folder into a dated folder in RimStack's data folder. Mods start from their default settings.")
                     Btn {
                         danger: true
                         text: Theme.say("Set aside…")
@@ -675,7 +761,7 @@ Item {
                     title: Theme.say("Logs kept")
                     changed: screen.info.logsKept !== 10
                     onReset: screen.keep("logsKept", "10")
-                    tip: Theme.say("The game keeps the logs of its last two launches. RimStack copies each log once the game has stopped, so an older launch can still be read in Logs; the oldest give way.")
+                    tip: Theme.say("The game keeps the logs of its last two launches. RimStack copies each log after the game stops, so older launches can still be read in Logs; the oldest copies are deleted first.")
                     Choice {
                         readonly property var limits: [0, 5, 10, 25, 50]
                         title: Theme.say("Logs kept")
@@ -720,7 +806,7 @@ Item {
                     title: Theme.say("Versions to look for")
                     changed: !!screen.info.nightlyUpdates
                     onReset: screen.keep("updates", "stable")
-                    tip: Theme.say("Stable: a numbered release. Nightly: the newest build of the main branch, which is made often and may break. Nightly compares the commit this program was built from.")
+                    tip: Theme.say("Stable: a numbered release. Nightly: the newest build of the main branch, which is made often and may break. Nightly compares against the commit this program was built from.")
                     Choice {
                         title: Theme.say("Versions to look for")
                         options: ["Stable", "Nightly"]

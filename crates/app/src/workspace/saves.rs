@@ -127,7 +127,7 @@ pub fn shown<'a>(report: &'a SavesReport, folder: &str, filter: &str) -> SavesSh
         .collect();
     let count = saves.len();
     let mut heading = vec![match folder.is_empty() {
-        true => Sentence::Plain(count.to_string()),
+        true => Sentence::Number(count as i64),
         false => say!("{} in {}", count, folder),
     }];
     if let Some(version) = &report.all_from {

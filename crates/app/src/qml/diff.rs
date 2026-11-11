@@ -82,10 +82,14 @@ fn fewest_moves<K: Eq + Hash + Clone>(now: &[K], after: &[K]) -> Vec<(usize, usi
     }
 }
 
+/// Stops once past `MOST_STEPS` moves: a longer result is only good for its length.
 fn pass<K: Eq + Clone>(now: &[K], order: &[&K]) -> Vec<(usize, usize)> {
     let mut working = now.to_vec();
     let mut moves = Vec::new();
     for (at, key) in order.iter().enumerate() {
+        if moves.len() > MOST_STEPS {
+            break;
+        }
         if &&working[at] == key {
             continue;
         }

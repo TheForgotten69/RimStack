@@ -96,13 +96,21 @@ impl App {
         let (library, _) = loaded.as_ref().as_ref().ok()?;
         let last = launches::read(&self.launches_file()).pop()?;
         let saved = self.session().saved().to_vec();
-        let official = |m: &rimstack_core::mods::list::Mod| {
-            let installed = m.installed.and_then(|i| library.get(i));
-            installed.is_some_and(|i| i.source == Source::Official)
-        };
-        let emptied = library.arrange(&saved).active.iter().all(official);
-        (emptied && last.ids.len() > saved.len()).then_some(last.ids)
+        emptied_by_game(library, &saved, &last).then_some(last.ids)
     }
+}
+
+/// On its first start on a new version the game leaves only its own mods in `ModsConfig.xml`.
+pub fn emptied_by_game(
+    library: &rimstack_core::mods::library::Library,
+    saved: &[String],
+    last: &launches::Launch,
+) -> bool {
+    let official = |m: &rimstack_core::mods::list::Mod| {
+        let installed = m.installed.and_then(|i| library.get(i));
+        installed.is_some_and(|i| i.source == Source::Official)
+    };
+    last.ids.len() > saved.len() && library.arrange(saved).active.iter().all(official)
 }
 
 #[cfg(test)]

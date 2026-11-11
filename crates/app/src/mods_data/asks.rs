@@ -1,6 +1,6 @@
 use super::{id, ids, qobject};
 use crate::qml::values::{from_qml, to_qml};
-use crate::workspace::load_order::{LoadOrder, Side};
+use crate::workspace::load_order::{Holding, LoadOrder, Side};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QVariant};
@@ -29,22 +29,18 @@ impl qobject::ModsData {
     }
 
     pub(super) fn version_warned(&self, given: &QVariant) -> QVariant {
-        let list = self.order.list(Side::Active);
-        let warned = |id: &ModId| {
-            let own = list
-                .position_of(*id)
-                .and_then(|at| self.order.troubles().get(at));
-            own.is_some_and(|own| rimstack_core::mods::describe::warned_for_version(own))
-        };
-        let Some(given) = ids(given) else {
-            return to_qml(&Vec::<i32>::new());
-        };
-        let found: Vec<i32> = given
+        let found: Vec<i32> = ids(given)
+            .map(|given| self.order.version_warned(&given))
+            .unwrap_or_default()
             .into_iter()
-            .filter(warned)
             .map(ModId::to_qml)
             .collect();
         to_qml(&found)
+    }
+
+    pub(super) fn copy_offer(&self, given: &QVariant) -> QVariant {
+        let given = ids(given).unwrap_or_default();
+        to_qml(&self.app().copy_offer(&given))
     }
 
     pub(super) fn package_mods(&self, given: &QVariant) -> QVariant {
@@ -94,10 +90,12 @@ impl qobject::ModsData {
             .filter_map(|m| library.get(m.installed?))
             .map(rimstack_core::mods::share::Entry::of)
             .collect();
-        QString::from(&rimstack_core::mods::share::listing(
-            &library.game_version,
-            &entries,
-        ))
+        let paths = app.paths();
+        let version = paths
+            .full_game_version
+            .as_deref()
+            .unwrap_or(&library.game_version);
+        QString::from(&rimstack_core::mods::share::listing(version, &entries))
     }
 
     pub(super) fn sort_moves(&self) -> QVariant {
@@ -158,12 +156,30 @@ impl qobject::ModsData {
         held_id(id(mod_id).and_then(|id| list.beside_mod(id)))
     }
 
-    pub(super) fn others_through(&self, active: bool, from: i32, to: i32) -> QVariant {
-        let list = self.order.list(Side::of(active));
-        let others = id(from)
-            .zip(id(to))
-            .and_then(|(a, b)| list.others_through(a, b));
-        to_qml(&others.map(|ids| ids.into_iter().map(ModId::to_qml).collect::<Vec<_>>()))
+    pub(super) fn place_alone(&self, side: Side, to: usize) -> i32 {
+        let last = self.order.list(side).mods().len().saturating_sub(1);
+        to.min(last) as i32
+    }
+
+    /// How many places `drop` moves a mod alone inside its list, for its slide.
+    pub(super) fn slide_of(
+        &self,
+        from_active: bool,
+        index: i32,
+        held: &QVariant,
+        to_active: bool,
+        to: i32,
+    ) -> i32 {
+        let alone = ids(held).is_none_or(|held| held.len() < 2);
+        match (usize::try_from(to), alone && from_active == to_active) {
+            (Ok(to), true) => index - self.place_alone(Side::of(from_active), to),
+            _ => 0,
+        }
+    }
+
+    pub(super) fn holding(&self, mod_id: i32, name: &QString, selected: &QVariant) -> QVariant {
+        let selected = ids(selected).unwrap_or_default();
+        to_qml(&Holding::of(id(mod_id), &name.to_string(), &selected))
     }
 
     pub(super) fn in_load_order(&self, a: i32, b: i32) -> QVariant {
@@ -232,19 +248,6 @@ impl qobject::ModsData {
             &kept.to_string(),
             &column.to_string(),
             width,
-        ))
-    }
-
-    pub(super) fn column_pressed(
-        &self,
-        by: &QString,
-        descending: bool,
-        asked: &QString,
-    ) -> QVariant {
-        to_qml(&columns::pressed(
-            &by.to_string(),
-            descending,
-            &asked.to_string(),
         ))
     }
 

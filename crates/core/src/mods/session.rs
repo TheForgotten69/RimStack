@@ -148,7 +148,7 @@ mod tests {
         );
         assert_eq!(
             changes.said().to_kept().to_string(),
-            r#"[",",["{} moved","1"],["{} activated","1"],["{} deactivated","1"]]"#
+            r#"[",",["{} moved",1],["{} activated",1],["{} deactivated",1]]"#
         );
         s.mark_saved_as(s.current().to_vec());
         assert!(s.changes().is_empty());

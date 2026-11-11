@@ -1,7 +1,8 @@
 import QtQuick
 
 QtObject {
-    // { model, modIndex, modId } of the mod held; null when none is.
+    // { model, modIndex, modId, ids, name } of the mod held, `ids` all it takes
+    // along; null when none is.
     property var held: null
     // { model, modIndex } of the place under the pointer.
     property var target: null

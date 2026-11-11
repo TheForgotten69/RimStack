@@ -4,6 +4,7 @@ use rimstack_core::said;
 
 mod changes;
 mod downloads_data;
+mod find_data;
 mod game_data;
 mod hub;
 mod jobs;
@@ -18,6 +19,8 @@ mod search_data;
 mod settings_data;
 mod textures_data;
 mod words;
+mod workshop_data;
+mod workshop_rows;
 mod workspace;
 
 pub use workspace::*;
@@ -149,7 +152,20 @@ fn main() -> std::process::ExitCode {
             .as_mut()
             .on_object_creation_failed(|_, _| std::process::exit(1))
             .release();
-        engine.load(&QUrl::from("qrc:/qt/qml/RimStack/Ui/qml/Main.qml"));
+        match std::env::var("RIMSTACK_QML") {
+            // A folder holding `RimStack/Ui` as tools/qml-import.sh writes it; the C++ types stay this build's.
+            Ok(dir) if !dir.is_empty() => {
+                let dir = std::path::absolute(&dir).unwrap_or_else(|_| dir.into());
+                engine
+                    .as_mut()
+                    .add_import_path(&QString::from(&*dir.to_string_lossy()));
+                let main = dir.join("RimStack/Ui/qml/Main.qml");
+                engine.load(&QUrl::from_local_file(&QString::from(
+                    &*main.to_string_lossy(),
+                )));
+            }
+            _ => engine.load(&QUrl::from("qrc:/qt/qml/RimStack/Ui/qml/Main.qml")),
+        }
     }
     // Checks end with 1 when one failed.
     let ended = qt.as_mut().map_or(1, |qt| qt.exec());

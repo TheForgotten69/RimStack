@@ -47,7 +47,7 @@ impl App {
         let (library, _) = loaded.as_ref().as_ref().map_err(Clone::clone)?;
         let m = library.get(id).ok_or_else(|| {
             Error::refused(said!(
-                "That mod is no longer where it was read; read the folders again"
+                "That mod has moved since it was read; read the folders again"
             ))
         })?;
         Ok((m.path.clone(), m.display_name().to_string()))
@@ -118,6 +118,7 @@ impl App {
         Done::told(match redownload::install(self.data_dir()) {
             Ok(_) => {
                 self.look_for_steamcmd();
+                self.publish(crate::changes::Changes::DOWNLOAD_LIST);
                 Ok(say!("SteamCMD installed"))
             }
             Err(problem) => Err(Error::new(
@@ -127,9 +128,12 @@ impl App {
         })
     }
 
-    pub fn download_with_steamcmd(&self, ids: &[String]) -> Done {
+    pub fn download_listed(&self) -> Done {
         let steamcmd = (*self.steamcmd()).clone();
         let (steamcmd, local) = match (steamcmd, self.paths().local_mods()) {
+            _ if self.listed_ids().is_empty() => {
+                return Done::told(Err(Error::refused(said!("The download list is empty"))));
+            }
             (Some(steamcmd), Some(local)) => (steamcmd, local),
             (None, _) => {
                 return Done::told(Err(Error::refused(said!("SteamCMD is not installed"))));
@@ -138,17 +142,29 @@ impl App {
                 return Done::told(Err(Error::refused(said!("The game's folder is not known"))));
             }
         };
+        self.clear_list_failures();
+        let ids = self.vet_list();
+        if ids.is_empty() {
+            return Done::told(Err(Self::nothing_to_ask()));
+        }
         let scratch = self.data_dir().join("steamcmd-downloads");
-        let fetched = redownload::fetch_all(&steamcmd, ids, &scratch);
-        let outcomes: Vec<Result<PathBuf>> = fetched
+        let fetched = redownload::fetch_all(&steamcmd, &ids, &scratch);
+        let outcomes: Vec<(String, Result<PathBuf>)> = fetched
             .items
             .iter()
-            .map(|(id, fresh)| match fresh {
-                Ok(fresh) => redownload::put_in_local(fresh, id, &local),
-                Err(problem) => Err(problem.clone()),
+            .map(|(id, fresh)| {
+                let put = match fresh {
+                    Ok(fresh) => redownload::put_in_local(fresh, id, &local),
+                    Err(problem) => Err(problem.clone()),
+                };
+                (id.clone(), put)
             })
             .collect();
-        let failed: Vec<&Error> = outcomes.iter().filter_map(|o| o.as_ref().err()).collect();
+        self.apply_downloads(&outcomes);
+        let failed: Vec<&Error> = outcomes
+            .iter()
+            .filter_map(|(_, o)| o.as_ref().err())
+            .collect();
         Done {
             wrote: failed.len() < outcomes.len(),
             note: match failed.first() {
@@ -164,6 +180,25 @@ impl App {
                 )),
             },
         }
+    }
+
+    fn nothing_to_ask() -> Error {
+        Error::refused(said!(
+            "Steam cannot be asked about anything on the list; each row says why"
+        ))
+    }
+
+    pub fn subscribe_listed(&self) -> Done {
+        self.clear_list_failures();
+        let ids = self.vet_list();
+        if ids.is_empty() {
+            return Done::told(Err(Self::nothing_to_ask()));
+        }
+        let done = self.ask_steam(SteamAsk::Subscribe, &ids);
+        if done.note.is_ok() {
+            self.forget_listed(&ids);
+        }
+        done
     }
 
     /// Slow when a crash left a copy to delete: off the window's thread, before the library is
@@ -239,5 +274,55 @@ mod tests {
         assert!(folders.contains(&"roads"), "{folders:?}");
         assert!(!mods.join("roads.rimstack-old").exists());
         assert!(!mods.join("roads.rimstack-new").exists());
+    }
+
+    /// A tiny Workshop mod (719 bytes when chosen); SteamCMD is installed into the scratch folder.
+    #[test]
+    #[ignore = "needs the network, Linux, a scratch HOME and RIMSTACK_SCRATCH: an empty folder"]
+    fn the_list_is_downloaded_by_steamcmd_into_the_games_mods() {
+        use crate::workspace::App;
+        use rimstack_core::rimworld::paths;
+        const TINY: &str = "3223946831";
+        let scratch = std::path::PathBuf::from(std::env::var_os("RIMSTACK_SCRATCH").unwrap());
+        assert_eq!(
+            std::env::var_os("HOME").map(Into::into),
+            Some(scratch.clone())
+        );
+        let core = scratch.join("game/Data/Core/About");
+        fs::create_dir_all(&core).unwrap();
+        fs::write(
+            core.join("About.xml"),
+            "<ModMetaData><packageId>Ludeon.RimWorld</packageId></ModMetaData>",
+        )
+        .unwrap();
+        fs::create_dir_all(scratch.join("game/Mods")).unwrap();
+        fs::write(scratch.join("game/Version.txt"), "1.6.4871 rev598").unwrap();
+        fs::create_dir_all(scratch.join("config/Config")).unwrap();
+        let given = paths::Overrides {
+            game: Some(scratch.join("game")),
+            config: Some(scratch.join("config")),
+            workshop: Some(scratch.join("workshop")),
+        };
+        let app = App::new(
+            scratch.join("home"),
+            &scratch.join("settings"),
+            &scratch.join("data"),
+            given,
+        );
+        let installed = app.install_steamcmd();
+        println!("install: {:?}", installed.note);
+        installed.note.unwrap();
+        assert!(app.steamcmd().is_some());
+        let added = app.add_to_list(TINY, false);
+        println!("added: {:?}", added.added);
+        assert_eq!(app.listed_ids(), [TINY]);
+        let done = app.download_listed();
+        println!("download: {:?}", done.note);
+        done.note.unwrap();
+        let mod_folder = scratch.join("game/Mods").join(TINY);
+        assert!(mod_folder.join("About/About.xml").is_file());
+        let noted = fs::read_to_string(mod_folder.join("About/PublishedFileId.txt")).unwrap();
+        assert_eq!(noted.trim(), TINY);
+        assert!(app.listed_ids().is_empty());
     }
 }

@@ -80,13 +80,21 @@ pub fn declared(xml: &str, game_version: &str) -> Option<Vec<Entry>> {
 
 /// `is_active` takes folded package ids.
 pub fn folders(root: &Path, game_version: &str, is_active: &dyn Fn(&str) -> bool) -> Vec<PathBuf> {
+    folders_where(root, game_version, &|entry| entry.applies(is_active))
+}
+
+pub fn every_folder(root: &Path, game_version: &str) -> Vec<PathBuf> {
+    folders_where(root, game_version, &|_| true)
+}
+
+fn folders_where(root: &Path, game_version: &str, takes: &dyn Fn(&Entry) -> bool) -> Vec<PathBuf> {
     let listed = std::fs::read_to_string(root.join("LoadFolders.xml"))
         .ok()
         .and_then(|xml| declared(&xml, game_version));
     let mut wanted: Vec<PathBuf> = match listed {
         Some(entries) => entries
             .iter()
-            .filter(|e| e.applies(is_active))
+            .filter(|e| takes(e))
             .map(|e| root.join(&e.folder))
             .collect(),
         None => Vec::new(),

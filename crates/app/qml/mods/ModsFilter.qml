@@ -10,10 +10,11 @@ FilterField {
     keys: Theme.say("Ctrl + F")
     chips: true
     placeholder: Theme.say("Filter active and inactive mods")
-    found: Mods.filtered === "" ? "" : Theme.fill("{} active, {} inactive", Theme.count(Mods.active.matching), Theme.count(Mods.inactive.matching))
+    found: Hub.mods.filterFound
     readonly property alias suggesting: suggestions.visible
     onTypingChanged: suggestions.shut = false
     onEditingChanged: suggestions.shut = false
+    onTapped: suggestions.shut = false
     onEscaped: suggestions.shut = true
     Popup {
         id: suggestions
@@ -22,9 +23,11 @@ FilterField {
         onClosed: shut = true
         closePolicy: Popup.CloseOnPressOutsideParent
         y: filter.height + 4
-        width: Math.min(filter.width, 420)
+        width: Math.min(filter.width, Theme.sized(420))
         padding: 6
         background: Rectangle { radius: Theme.cornerLarge; color: Theme.bar; border.width: 1; border.color: Theme.line }
+        readonly property string widestKey: "has:languages"
+        TextMetrics { id: keyFont; font.family: "monospace"; font.pixelSize: Theme.small; text: suggestions.widestKey }
         contentItem: Column {
             id: suggestList
             Repeater {
@@ -36,15 +39,23 @@ FilterField {
                     ["is:changed", Theme.say("moved or activated since the last save")],
                     ["is:new", Theme.say("installed since the game was last started")],
                     ["is:updated", Hub.downloads.behindActive > 0 ? Theme.fill("{} with an update", Hub.downloads.behindActive) : Theme.say("after checking for updates")],
-                    ["is:active", Theme.say("in the active list only")],
-                    ["is:inactive", Theme.say("in the inactive list only")],
+                    ["is:active", Theme.say("the load order only; the inactive list is dimmed or hidden")],
+                    ["is:inactive", Theme.say("the inactive list only; the load order is dimmed or hidden")],
                     ["is:workshop", Theme.say("from the Workshop")],
                     ["is:local", Theme.say("in the game's Mods folder")],
                     ["is:git", Theme.say("a git checkout")],
                     ["is:notinsave", Theme.say("active, and not in the newest save")],
                     ["is:recent", Theme.say("updated by Steam in the last week")],
                     ["is:duplicate", Theme.say("installed more than once")],
+                    ["in:search", Theme.say("has matches in the last search of Find")],
                     ["has:code", Theme.say("ships compiled code")],
+                    ["has:defs", Theme.say("has XML defs")],
+                    ["has:patches", Theme.say("has XML patches")],
+                    ["has:textures", Theme.say("has textures")],
+                    ["has:sounds", Theme.say("has sounds")],
+                    ["has:languages", Theme.say("has translations")],
+                    ["defines:", Theme.say("defines this defName")],
+                    ["patchesdef:", Theme.say("patches this defName")],
                     ["patches:", Theme.say("patches this method of the game")],
                     ["tag:", Theme.say("has this tag")],
                     ["author:", Theme.say("by this author")],
@@ -58,8 +69,8 @@ FilterField {
                     color: offerHover.hovered ? Theme.chip : "transparent"
                     Accessible.role: Accessible.Button
                     Accessible.name: Theme.fill("Filter by {}", modelData[0])
-                    Text { x: 8; anchors.verticalCenter: parent.verticalCenter; color: Theme.ink; font.family: "monospace"; font.pixelSize: Theme.small; text: offer.modelData[0] }
-                    Text { x: 110; anchors.verticalCenter: parent.verticalCenter; color: Theme.ink2; font.pixelSize: Theme.small; text: offer.modelData[1] }
+                    Text { id: offerKey; width: keyFont.advanceWidth; anchors.left: parent.left; anchors.leftMargin: Theme.gap; anchors.verticalCenter: parent.verticalCenter; color: Theme.ink; font: keyFont.font; text: offer.modelData[0] }
+                    Text { anchors.left: offerKey.right; anchors.leftMargin: Theme.sized(16); anchors.right: parent.right; anchors.rightMargin: Theme.gap; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight; color: Theme.ink2; font.pixelSize: Theme.small; text: offer.modelData[1] }
                     HoverHandler { id: offerHover }
                     TapHandler {
                         onTapped: {
