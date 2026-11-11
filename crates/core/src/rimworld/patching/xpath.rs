@@ -74,7 +74,7 @@ fn indexed(xpath: &str) -> Option<Indexed<'_>> {
         .into_iter()
         .map(Test::into_pair)
         .collect::<Option<Vec<_>>>()?;
-    if !(rest.is_empty() || rest.starts_with('/')) {
+    if !filters_then_path(rest) {
         return None;
     }
     Some(Indexed {
@@ -83,6 +83,40 @@ fn indexed(xpath: &str) -> Option<Indexed<'_>> {
         rest,
         names,
     })
+}
+
+/// Predicates that only filter, then nothing or a path. Evaluated from each def alone, a predicate that
+/// counts positions would hold for every one of them.
+fn filters_then_path(mut rest: &str) -> bool {
+    while let Some(inside) = rest.strip_prefix('[') {
+        let Some(close) = closing_bracket(inside) else {
+            return false;
+        };
+        if counts(&inside[..close]) {
+            return false;
+        }
+        rest = &inside[close + 1..];
+    }
+    rest.is_empty() || rest.starts_with('/')
+}
+
+/// XPath compares a number with the position.
+fn counts(predicate: &str) -> bool {
+    const NUMBERS: [&str; 7] = [
+        "count(",
+        "sum(",
+        "number(",
+        "string-length(",
+        "floor(",
+        "ceiling(",
+        "round(",
+    ];
+    let predicate = predicate.trim();
+    let compares = predicate.contains(['=', '<', '>']);
+    predicate.contains("position(")
+        || predicate.contains("last(")
+        || predicate.parse::<f64>().is_ok()
+        || (!compares && NUMBERS.iter().any(|f| predicate.starts_with(f)))
 }
 
 /// A predicate that narrows to names.
@@ -354,6 +388,26 @@ mod tests {
             "Defs/ThingDef[defName=\"A\" and soundWorking=\"Y\" or soundWorking=\"Y\"]",
         ] {
             assert!(indexed(wide).is_none(), "{wide}");
+        }
+    }
+
+    #[test]
+    fn a_further_filter_goes_through_the_index_and_a_position_does_not() {
+        the_index_matches_libxml2(&[
+            "Defs/ThingDef[defName=\"A\"][not(comps)]",
+            "Defs/ThingDef[defName=\"A\" or defName=\"B\"][soundWorking=\"Y\"]/soundWorking",
+            "Defs/ThingDef[defName=\"A\"][soundWorking][not(x)]/soundWorking",
+            "Defs/ThingDef[defName=\"A\"][count(soundWorking) > 0]",
+        ]);
+        for counted in [
+            "Defs/ThingDef[defName=\"A\"][1]",
+            "Defs/ThingDef[defName=\"A\"][ 2 ]/soundWorking",
+            "Defs/ThingDef[defName=\"A\"][last()]",
+            "Defs/ThingDef[defName=\"A\"][position() < 2]",
+            "Defs/ThingDef[defName=\"A\"][count(soundWorking)]",
+            "Defs/ThingDef[defName=\"A\"][not(x)]comps",
+        ] {
+            assert!(indexed(counted).is_none(), "{counted}");
         }
     }
 

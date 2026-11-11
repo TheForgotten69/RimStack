@@ -90,6 +90,7 @@ pub(super) fn apply(
                     wrote: BTreeSet::new(),
                     touched: Vec::new(),
                     structural: false,
+                    appended: Vec::new(),
                 };
                 let mut blame = Blame::default();
                 let verdict = run.apply(operation, &mut blame);
@@ -193,6 +194,8 @@ struct Run<'a> {
     wrote: BTreeSet<DefKey>,
     touched: Vec<Node>,
     structural: bool,
+    /// Defs added at the end of `<Defs>`: indexed one by one, without a `resync`.
+    appended: Vec<Node>,
 }
 
 impl Run<'_> {
@@ -228,11 +231,19 @@ impl Run<'_> {
                 single,
             } => self.each(xpath, value, *single, |run, mut node, value| {
                 if node.get_type() == Some(NodeType::ElementNode) {
+                    if !*prepend && run.is_root(&node) {
+                        let added = value.iter().filter_map(|f| run.append(&mut node, f));
+                        let added: Vec<Node> = added.collect();
+                        run.appended.extend(added);
+                        return;
+                    }
                     run.mark(&node);
                     if *prepend {
                         value.iter().rev().for_each(|f| run.prepend(&mut node, f));
                     } else {
-                        value.iter().for_each(|f| run.append(&mut node, f));
+                        for f in value {
+                            run.append(&mut node, f);
+                        }
                     }
                 }
             }),
@@ -274,7 +285,9 @@ impl Run<'_> {
                     else {
                         return;
                     };
-                    value.iter().for_each(|f| run.append(&mut list, f));
+                    for f in value {
+                        run.append(&mut list, f);
+                    }
                 })
             }
             Work::Remove { xpath, single } => self.remove(xpath, *single),
@@ -506,8 +519,12 @@ impl Run<'_> {
     }
 
     /// `node`'s own content or attributes change.
+    fn is_root(&self, node: &Node) -> bool {
+        node.to_hashable() == self.doc.root().to_hashable()
+    }
+
     fn mark(&mut self, node: &Node) {
-        if node.to_hashable() == self.doc.root().to_hashable() {
+        if self.is_root(node) {
             self.structural = true;
         } else {
             self.touched.push(node.clone());
@@ -530,8 +547,12 @@ impl Run<'_> {
         for node in std::mem::take(&mut self.touched) {
             self.doc.rekey(&node);
         }
+        let appended = std::mem::take(&mut self.appended);
         if std::mem::take(&mut self.structural) {
             let added = self.doc.resync(self.mod_at, self.file);
+            self.wrote.extend(added);
+        } else if !appended.is_empty() {
+            let added = self.doc.append_defs(appended, self.mod_at, self.file);
             self.wrote.extend(added);
         }
     }
@@ -563,15 +584,17 @@ impl Run<'_> {
     }
 
     // libxml2 merges a text node into a text neighbour and frees it, so text is merged by hand.
-    fn append(&self, parent: &mut Node, frag: &Frag) {
+    /// The element added, if any.
+    fn append(&self, parent: &mut Node, frag: &Frag) -> Option<Node> {
         match frag {
             Frag::Text(text) => {
                 let _ = parent.append_text(text);
+                None
             }
             _ => {
-                if let Some(mut node) = self.build(frag) {
-                    let _ = parent.add_child(&mut node);
-                }
+                let mut node = self.build(frag)?;
+                parent.add_child(&mut node).ok()?;
+                Some(node)
             }
         }
     }
@@ -579,7 +602,9 @@ impl Run<'_> {
     fn prepend(&self, parent: &mut Node, frag: &Frag) {
         match parent.get_first_child() {
             Some(mut first) => self.before(&mut first, frag),
-            None => self.append(parent, frag),
+            None => {
+                self.append(parent, frag);
+            }
         }
     }
 

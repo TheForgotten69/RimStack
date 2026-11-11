@@ -346,6 +346,37 @@ impl Document {
         }
     }
 
+    /// After `nodes` were added at the end of `<Defs>` and nothing else moved there. Returns their keys.
+    pub(super) fn append_defs(
+        &mut self,
+        nodes: Vec<Node>,
+        place: usize,
+        file: &Path,
+    ) -> Vec<DefKey> {
+        let mut added = Vec::new();
+        for node in nodes {
+            let origin = Origin {
+                place,
+                file: file.to_path_buf(),
+                added: true,
+            };
+            let def = Def::new(node, origin);
+            let at = self.defs.len();
+            if let Some(key) = &def.key {
+                self.index.entry(key.clone()).or_default().push(at);
+                added.push(key.clone());
+            }
+            if let Some(key) = &def.attribute {
+                self.by_attribute.entry(key.clone()).or_default().push(at);
+            }
+            self.by_node.insert(def.node.to_hashable(), at);
+            self.defs.push(def);
+        }
+        self.by_name = OnceLock::new();
+        self.by_parent = OnceLock::new();
+        added
+    }
+
     /// After top-level nodes were added or removed: rebuilds the list from `<Defs>`'s children, giving a
     /// node that was not there before this place and file. Returns the keys of the new ones.
     pub(super) fn resync(&mut self, place: usize, file: &Path) -> Vec<DefKey> {

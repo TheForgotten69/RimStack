@@ -219,6 +219,47 @@ fn adding_a_def_to_defs_is_found_by_name() {
 }
 
 #[test]
+fn defs_added_to_defs_stay_found_after_a_def_is_removed() {
+    let add = |name: &str| {
+        op(
+            "PatchOperationAdd",
+            &format!(
+                "<xpath>Defs</xpath><value><ThingDef><defName>{name}</defName></ThingDef></value>"
+            ),
+        )
+    };
+    let remove = op(
+        "PatchOperationRemove",
+        "<xpath>Defs/ThingDef[defName=\"A\"]</xpath>",
+    );
+    let mark = |name: &str| {
+        op(
+            "PatchOperationAdd",
+            &format!("<xpath>Defs/ThingDef[defName=\"{name}\"]</xpath><value><x/></value>"),
+        )
+    };
+    let out = run(&[
+        add("N"),
+        add("M"),
+        remove,
+        mark("N"),
+        mark("M"),
+        add("L"),
+        mark("L"),
+    ]);
+    assert!(out.failures.is_empty(), "{:?}", out.failures);
+    assert!(
+        out.xml.ends_with(
+            "<defName>N</defName><x/></ThingDef><ThingDef><defName>M</defName><x/></ThingDef>\
+             <ThingDef><defName>L</defName><x/></ThingDef></Defs>"
+        ),
+        "{}",
+        out.xml
+    );
+    assert!(out.traces[1].wrote.contains(&key("M")));
+}
+
+#[test]
 fn a_changed_def_name_is_followed() {
     let rename = op(
         "PatchOperationReplace",
