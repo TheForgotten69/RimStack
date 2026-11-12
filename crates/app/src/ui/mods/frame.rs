@@ -15,6 +15,8 @@ impl Focusable for Mods {
 
 impl Render for Mods {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(test)]
+        RENDERS.with(|renders| renders.set(renders.get() + 1));
         let theme = cx.global::<Theme>().clone();
         if std::mem::take(&mut self.focus_wanted) {
             let focus = self.active_list.read(cx).focus_handle();
@@ -102,4 +104,10 @@ impl Render for Mods {
             .children(bulk)
             .children(hint)
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How often the Mods tab was rendered, as a test of what scrolling a list draws again.
+    pub(super) static RENDERS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }

@@ -174,8 +174,12 @@ fn drawn(text_scale: f32, window: &dyn Fn(&Theme) -> Size<Pixels>) -> Vec<Seen> 
     let (_tmp, mut cx, shell, downloads) = opened(text_scale, window);
     watch::start();
     cx.update(|cx| downloads.update(cx, |_, cx| cx.notify()));
-    cx.update_window(shell.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
+    cx.update_window(shell.into(), |_, window, cx| {
+        // Every view drawn whole: one gpui-fast keeps from the last frame tells no texts.
+        window.refresh();
+        window.draw(cx).clear(cx)
+    })
+    .unwrap();
     watch::take()
 }
 

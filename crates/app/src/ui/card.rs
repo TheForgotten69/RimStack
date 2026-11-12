@@ -229,7 +229,7 @@ impl Card {
             .child(self.note);
         let card_id = self.id.clone();
         let head = div()
-            .id(self.id)
+            .id("card-head")
             .flex()
             .flex_col()
             .w_full()
@@ -282,7 +282,9 @@ impl Card {
                     .on_click(fold)
             });
         div()
-            .id("card")
+            // Each card its own id: siblings sharing one share their children's layout keys,
+            // and gpui-fast then lays out every view around them again each frame.
+            .id(card_id.clone())
             .flex()
             .flex_col()
             .w_full()

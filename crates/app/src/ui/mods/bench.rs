@@ -62,6 +62,22 @@ impl ModList {
             bench.slow += usize::from(took > SLOW);
             bench.worst = bench.worst.max(took);
         }
+        if bench.frames == 0 {
+            // A pointer resting on the list, as a hand on the wheel leaves it: what follows the
+            // pointer is drawn as the rows pass under it.
+            let size = window.viewport_size();
+            let at = gpui::point(size.width * 0.6, size.height / 2.);
+            window.on_next_frame(move |window, cx| {
+                window.dispatch_event(
+                    gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                        position: at,
+                        pressed_button: None,
+                        modifiers: gpui::Modifiers::default(),
+                    }),
+                    cx,
+                );
+            });
+        }
         (bench.frames, bench.last) = (bench.frames + 1, now);
         let part = ((now - bench.started).as_secs_f32() / LENGTH.as_secs_f32()).min(1.);
         let most = scroll.borrow().most();

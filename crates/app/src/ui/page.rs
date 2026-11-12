@@ -57,7 +57,11 @@ pub fn page(
                 scroll.fit(total, shown);
                 scroll.advance()
             };
-            handle.set_offset(point(px(0.), -follow.borrow().top()));
+            let offset = point(px(0.), -follow.borrow().top());
+            // gpui-fast takes a write as a scroll, which draws the page's view again.
+            if handle.offset() != offset {
+                handle.set_offset(offset);
+            }
             if gliding {
                 window.request_animation_frame();
             }

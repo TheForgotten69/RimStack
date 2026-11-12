@@ -91,9 +91,17 @@ impl Shell {
         if options.bench {
             let mods = mods.clone();
             cx.spawn_in(window, async move |_, cx| {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(300))
-                    .await;
+                let wait = std::time::Duration::from_millis(300);
+                loop {
+                    cx.background_executor().timer(wait).await;
+                    let read = cx.update(|_, cx| {
+                        let mods = mods.read(cx);
+                        mods.count(Side::Active) > 0 && !mods.reading_files()
+                    });
+                    if read.unwrap_or(true) {
+                        break;
+                    }
+                }
                 let _ = cx.update(|_, cx| mods.update(cx, |mods, cx| mods.start_bench(cx)));
             })
             .detach();

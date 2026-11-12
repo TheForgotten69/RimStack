@@ -109,6 +109,7 @@ impl Options {
             match name {
                 "--demo" => options.demo = true,
                 "--selftest" => (options.demo, options.bench) = (true, true),
+                "--bench" => options.bench = true,
                 "--section" => options.section = value.parse().unwrap_or(0),
                 "--theme" => options.theme = ThemeName::named(value),
                 "--text-scale" => options.text_scale = value.parse().ok(),

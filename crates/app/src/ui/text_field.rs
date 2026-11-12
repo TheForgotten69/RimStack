@@ -84,7 +84,10 @@ pub struct TextField {
     selected: Range<usize>,
     reversed: bool,
     marked: Option<Range<usize>>,
-    shaped: Option<(ShapedLine, Bounds<Pixels>)>,
+    /// Where the text was last painted, written by the painter itself: written through the
+    /// entity while drawing, gpui-fast takes the field as changed and draws again each view
+    /// that read it, every frame.
+    shaped: Painted<ShapedLine>,
     size: Pixels,
     /// Shown as bullets, as `TextInput.Password`: a key, which is not copied either.
     masked: bool,
@@ -94,8 +97,8 @@ pub struct TextField {
     area: usize,
     /// Esc leaves the text as it is, as in a field that holds what is kept rather than a filter.
     kept_on_escape: bool,
-    wrapped: Option<(area::Wrapped, Bounds<Pixels>)>,
-    rows_drawn: std::cell::Cell<usize>,
+    wrapped: Painted<area::Wrapped>,
+    rows_drawn: std::rc::Rc<std::cell::Cell<usize>>,
     /// Shown to be selected and copied, never typed in, as `CopyText` was.
     read_only: bool,
     weight: Option<gpui::FontWeight>,
@@ -105,6 +108,9 @@ pub struct TextField {
     /// What a screen reader calls it, as `FilterField.qml` gave its placeholder.
     spoken: gpui::SharedString,
 }
+
+/// What was painted, and where, kept by the painter for the field to read.
+type Painted<T> = std::rc::Rc<std::cell::RefCell<Option<(T, Bounds<Pixels>)>>>;
 
 /// What a masked field shows for each character.
 const BULLET: char = '\u{25cf}';
@@ -126,14 +132,14 @@ impl TextField {
             selected: 0..0,
             reversed: false,
             marked: None,
-            shaped: None,
+            shaped: Default::default(),
             size,
             masked: false,
             focused: std::cell::Cell::new(false),
             area: 0,
             kept_on_escape: false,
-            wrapped: None,
-            rows_drawn: std::cell::Cell::new(1),
+            wrapped: Default::default(),
+            rows_drawn: std::rc::Rc::new(std::cell::Cell::new(1)),
             read_only: false,
             weight: None,
             colour: None,
@@ -160,10 +166,11 @@ impl TextField {
 
     /// The place of the text under `at`, a point in the window.
     fn index_at(&self, at: Point<Pixels>) -> Option<usize> {
-        if let Some((wrapped, bounds)) = &self.wrapped {
+        if let Some((wrapped, bounds)) = &*self.wrapped.borrow() {
             return Some(wrapped.index_at(at - bounds.origin));
         }
-        let (shaped, bounds) = self.shaped.as_ref()?;
+        let shaped = self.shaped.borrow();
+        let (shaped, bounds) = shaped.as_ref()?;
         Some(self.text_at(shaped.closest_index_for_x(at.x - bounds.left())))
     }
 
@@ -378,12 +385,16 @@ impl TextField {
 
     /// The cursor a row up or down, where it stands across.
     fn by_row(&mut self, rows: f32, cx: &mut Context<Self>) {
-        let Some((wrapped, _)) = &self.wrapped else {
+        let line = cx.global::<Theme>().line(self.size);
+        let Some((at, to)) = self.wrapped.borrow().as_ref().map(|(wrapped, _)| {
+            let at = wrapped.position(self.cursor());
+            (
+                at,
+                wrapped.index_at(point(at.x, at.y + line * rows + line / 2.)),
+            )
+        }) else {
             return;
         };
-        let line = cx.global::<Theme>().line(self.size);
-        let at = wrapped.position(self.cursor());
-        let to = wrapped.index_at(point(at.x, at.y + line * rows + line / 2.));
         let to = if at.y + line * rows < px(0.) { 0 } else { to };
         self.move_to(to, cx);
     }
@@ -614,7 +625,7 @@ impl EntityInputHandler for TextField {
         _: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
         let range = self.range_of_utf16(&range);
-        if let Some((wrapped, _)) = &self.wrapped {
+        if let Some((wrapped, _)) = &*self.wrapped.borrow() {
             let (from, to) = (wrapped.position(range.start), wrapped.position(range.end));
             let line = bounds.size.height / self.rows_drawn.get().max(1) as f32;
             return Some(Bounds::from_corners(
@@ -622,7 +633,8 @@ impl EntityInputHandler for TextField {
                 bounds.origin + point(to.x.max(from.x), to.y + line),
             ));
         }
-        let (shaped, _) = self.shaped.as_ref()?;
+        let shaped = self.shaped.borrow();
+        let (shaped, _) = shaped.as_ref()?;
         Some(Bounds::from_corners(
             point(
                 bounds.left() + shaped.x_for_index(self.shown_at(range.start)),
@@ -641,10 +653,11 @@ impl EntityInputHandler for TextField {
         _: &mut Window,
         _: &mut Context<Self>,
     ) -> Option<usize> {
-        if let Some((wrapped, bounds)) = &self.wrapped {
+        if let Some((wrapped, bounds)) = &*self.wrapped.borrow() {
             return Some(self.to_utf16(wrapped.index_at(at - bounds.origin)));
         }
-        let (shaped, bounds) = self.shaped.as_ref()?;
+        let shaped = self.shaped.borrow();
+        let (shaped, bounds) = shaped.as_ref()?;
         let index = shaped
             .index_for_x(at.x - bounds.left())
             .map_or(self.text.len(), |shown| self.text_at(shown));
@@ -713,7 +726,7 @@ impl TextField {
             self.focused.get() && !self.read_only,
         );
         let (ink, accent) = (theme.colours.ink, theme.colours.accent);
-        let drawn = self.rows_drawn.get();
+        let (kept, rows_drawn) = (self.wrapped.clone(), self.rows_drawn.clone());
         canvas(
             |_, _, _| (),
             move |bounds, (), window, cx| {
@@ -735,13 +748,13 @@ impl TextField {
                     window.paint_quad(fill(Bounds::new(at, size(px(1.), line)), ink));
                 }
                 let rows = wrapped.rows();
-                if rows != drawn {
+                // Against what the last paint found: what the render saw goes stale while
+                // gpui-fast keeps the field's render, and a refresh each frame would follow.
+                if rows != rows_drawn.get() {
+                    rows_drawn.set(rows);
                     window.refresh();
                 }
-                field.update(cx, |field, _| {
-                    field.rows_drawn.set(rows);
-                    field.wrapped = Some((wrapped, bounds));
-                });
+                *kept.borrow_mut() = Some((wrapped, bounds));
                 window.handle_input(&focus, ElementInputHandler::new(bounds, field.clone()), cx);
             },
         )
@@ -762,7 +775,7 @@ impl Render for TextField {
                 .h(tall)
                 .child(painted.size_full());
         }
-        let field = cx.entity();
+        let (field, kept) = (cx.entity(), self.shaped.clone());
         let focus = self.focus.clone();
         let shaped = self.shape(window, &theme);
         let (selected, cursor, focused) = (
@@ -799,8 +812,7 @@ impl Render for TextField {
                         window
                             .paint_quad(fill(Bounds::new(point(x, top), size(px(1.), line)), ink));
                     }
-                    let kept = field.clone();
-                    kept.update(cx, |field, _| field.shaped = Some((shaped, bounds)));
+                    *kept.borrow_mut() = Some((shaped, bounds));
                     window.handle_input(
                         &focus,
                         ElementInputHandler::new(bounds, field.clone()),

@@ -448,3 +448,41 @@ fn a_mod_moved_slides_from_where_it_was() {
         "it starts above where it lands: {sliding:?} then {landed:?}"
     );
 }
+
+#[test]
+fn scrolling_the_load_order_draws_the_list_alone_again() {
+    use super::frame::RENDERS;
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    let window = cx.update(|cx| cx.windows()[0]);
+    let draw = |cx: &mut gpui::HeadlessAppContext| {
+        cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+    };
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            let chosen = mods.order.list(Side::Active).mods()[4].installed.unwrap();
+            mods.choose(Side::Active, chosen.to_qml(), cx);
+        })
+    });
+    for _ in 0..3 {
+        cx.run_until_parked();
+        draw(&mut cx);
+    }
+    let list = cx.update(|cx| mods.read(cx).list(Side::Active).clone());
+    RENDERS.with(|renders| renders.set(0));
+    for _ in 0..30 {
+        cx.update(|cx| {
+            list.update(cx, |list, cx| {
+                let top = list.scroll().borrow().top();
+                list.scroll().borrow_mut().set_top(top + gpui::px(3.));
+                cx.notify();
+            })
+        });
+        draw(&mut cx);
+    }
+    let renders = RENDERS.with(|renders| renders.get());
+    assert!(
+        renders < 5,
+        "the Mods tab was drawn again {renders} times in 30 frames of its list scrolling"
+    );
+}

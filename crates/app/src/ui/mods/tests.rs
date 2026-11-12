@@ -244,3 +244,45 @@ fn the_thumb_drags_the_load_order(cx: &mut gpui::TestAppContext) {
         "the thumb held halfway down shows row {row} at the top"
     );
 }
+
+/// As `scroll_cost`, the whole window this time, scrolled by the wheel with the pointer resting
+/// on the load order, so what follows the pointer is drawn too.
+#[gpui::test]
+#[ignore]
+fn scroll_cost_in_the_window(cx: &mut gpui::TestAppContext) {
+    use gpui::{MouseMoveEvent, ScrollDelta, ScrollEvent, point};
+    let _root = demo(cx);
+    let options = Options {
+        demo: true,
+        ..Options::default()
+    };
+    let (shell, cx) =
+        cx.add_window_view(|window, cx| crate::ui::shell::Shell::new(&options, window, cx));
+    cx.run_until_parked();
+    let mods = shell.read_with(cx, |shell, _| shell.mods.clone());
+    let list = mods.read_with(cx, |mods, _| mods.list(Side::Active).clone());
+    let over = list.read_with(cx, |list, _| list.drawn_at(8)) + gpui::px(4.);
+    let over = point(gpui::px(700.), over);
+    cx.simulate_event(MouseMoveEvent {
+        position: over,
+        ..MouseMoveEvent::default()
+    });
+    cx.run_until_parked();
+    const FRAMES: usize = 600;
+    let step = gpui::px(7.);
+    let started = std::time::Instant::now();
+    for _ in 0..FRAMES {
+        cx.simulate_event(ScrollEvent {
+            position: over,
+            delta: ScrollDelta::Pixels(point(gpui::px(0.), -step)),
+            ..ScrollEvent::default()
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+    }
+    let each = started.elapsed() / FRAMES as u32;
+    let reached = list.read_with(cx, |list, _| list.top_row());
+    eprintln!(
+        "scroll_cost_in_the_window frame_us={} reached_row={reached}",
+        each.as_micros()
+    );
+}
