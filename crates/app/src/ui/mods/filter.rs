@@ -152,6 +152,7 @@ impl Mods {
         let found = (!empty).then(|| put(&self.order.filter_summary()));
         let keys = put(&say!("Ctrl + F"));
         let placeholder = put(&say!("Filter active and inactive mods"));
+        field.update(cx, |field, _| field.speak_as(&placeholder));
         let keys_fit = room
             > theme.icon()
                 + theme::GAP

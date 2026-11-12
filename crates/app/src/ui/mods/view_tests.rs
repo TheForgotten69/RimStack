@@ -304,3 +304,26 @@ fn a_mod_dropped_below_the_last_row_goes_to_the_end_of_the_load_order() {
         })
     });
 }
+
+#[test]
+fn a_column_and_a_divider_move_by_their_keys() {
+    use super::panes::Grip;
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    cx.update(|cx| {
+        let step = cx.global::<crate::ui::theme::Theme>().sized(24.);
+        mods.update(cx, |mods, cx| {
+            mods.move_column("author", 1, cx);
+            assert_eq!(mods.view.columns, "version,author,load");
+            mods.move_column("author", -1, cx);
+            assert_eq!(mods.view.columns, "author,version,load");
+            let before = mods.inactive_width;
+            let right = gpui::KeyDownEvent {
+                keystroke: gpui::Keystroke::parse("right").unwrap(),
+                is_held: false,
+                prefer_character_input: false,
+            };
+            mods.nudge_grip(Grip::Inactive, &right, cx);
+            assert_eq!(mods.inactive_width, before + step);
+        })
+    });
+}

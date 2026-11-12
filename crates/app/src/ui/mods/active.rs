@@ -41,15 +41,27 @@ impl Mods {
         let tip = put(&say!(
             "Click to order the list by this column; click again to reverse it. Right-click to choose the columns. Drag it, or press Ctrl + Alt + Left or Right, to move it."
         ));
+        let named = ["", "name"]
+            .into_iter()
+            .chain(columns.fitting.iter().map(|(key, _)| *key));
+        let reach: std::collections::HashMap<&'static str, _> =
+            named.map(|key| (key, self.reachable(key, cx))).collect();
         let heading = |key: &'static str, text: String, on: bool| {
-            let (pressed, asked) = (me.clone(), me.clone());
+            let (pressed, asked, keyed) = (me.clone(), me.clone(), me.clone());
             let said = match key {
                 "" => put(&say!("The load order itself")),
                 _ => tip.clone(),
             };
+            let (handle, drawn) = reach[key].clone();
+            let focused = handle.is_focused(window);
             crate::ui::tip::tipped(
                 div()
                     .id(gpui::SharedString::from(format!("heading-{key}")))
+                    .relative()
+                    .role(gpui::Role::ColumnHeader)
+                    .aria_label(text.clone())
+                    .track_focus(&handle)
+                    .capture_any_mouse_down(|_, window, _| window.prevent_default())
                     .cursor_pointer()
                     .child(
                         label(
@@ -58,8 +70,18 @@ impl Mods {
                             if on { c.ink } else { c.ink3 },
                             text,
                         )
-                        .font_weight(theme.medium),
+                        .font_weight(theme.medium)
+                        .when(focused, |d| d.underline()),
                     )
+                    .child(
+                        gpui::canvas(move |bounds, _, _| drawn.set(bounds), |_, _, _, _| {})
+                            .absolute()
+                            .inset_0(),
+                    )
+                    .on_key_down(move |event, window, cx| {
+                        let _ =
+                            keyed.update(cx, |mods, cx| mods.heading_key(key, event, window, cx));
+                    })
                     .on_click(move |_, _, cx| {
                         let _ = pressed.update(cx, |mods, cx| mods.heading_pressed(key, cx));
                     })

@@ -38,6 +38,11 @@ pub(super) fn placed(control: impl IntoElement, at: Rc<Cell<Bounds<Pixels>>>) ->
     )
 }
 
+/// What Tab reaches beside the lists, by name: a column's heading, a divider. Each keeps its
+/// keys' handle and where it was last drawn, which a menu opened by a key is put under.
+pub(super) type Reachable =
+    std::collections::HashMap<&'static str, (gpui::FocusHandle, Rc<Cell<Bounds<Pixels>>>)>;
+
 /// A column's left edge dragged to size it.
 #[derive(Clone, Copy)]
 pub struct ColumnEdge(pub &'static str);
@@ -501,5 +506,62 @@ impl Mods {
             cx,
         );
         self.filter_by("", cx);
+    }
+}
+
+impl Mods {
+    pub(super) fn reachable(
+        &mut self,
+        name: &'static str,
+        cx: &mut Context<Self>,
+    ) -> (gpui::FocusHandle, Rc<Cell<Bounds<Pixels>>>) {
+        self.keys
+            .entry(name)
+            .or_insert_with(|| (cx.focus_handle().tab_stop(true), Rc::default()))
+            .clone()
+    }
+
+    /// A heading's keys, as `ActivePane.qml` took them: Enter or Space orders the list by its
+    /// column, the menu key opens the columns' menu, Ctrl + Alt + Left or Right moves the column.
+    pub(super) fn heading_key(
+        &mut self,
+        column: &'static str,
+        event: &gpui::KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let keys = &event.keystroke;
+        let held = keys.modifiers;
+        match keys.key.as_str() {
+            "enter" | "space" if !held.modified() => self.heading_pressed(column, cx),
+            "menu" | "f10" if keys.key == "menu" || held.shift => {
+                let drawn = self.reachable(column, cx).1.get();
+                let at = gpui::point(drawn.left(), drawn.bottom() + px(2.));
+                self.columns_menu(at, window, cx);
+            }
+            "left" | "right" if held.control && held.alt => {
+                self.move_column(column, if keys.key == "right" { 1 } else { -1 }, cx);
+            }
+            _ => return,
+        }
+        cx.stop_propagation();
+    }
+}
+
+impl Mods {
+    /// A column moved `by` places among those shown.
+    pub(super) fn move_column(&mut self, column: &'static str, by: i32, cx: &mut Context<Self>) {
+        let Some(at) = kept::chosen(&self.view.columns)
+            .iter()
+            .position(|shown| *shown == column)
+        else {
+            return;
+        };
+        self.keep_view(
+            |view| view.columns = kept::moved(&view.columns, column, at as i32 + by),
+            cx,
+        );
+        self.sync_lists(cx);
+        cx.notify();
     }
 }

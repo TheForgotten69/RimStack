@@ -72,6 +72,7 @@ pub struct Mods {
     active_list: Entity<list::ModList>,
     /// The load order takes the keys at the next frame, as it does once a comparison closes.
     focus_wanted: bool,
+    keys: columns::Reachable,
     inactive_list: Entity<list::ModList>,
     focus: gpui::FocusHandle,
     overview: Option<Rc<Overview>>,
@@ -266,6 +267,7 @@ impl Mods {
             hunting: false,
             picking: None,
             focus_wanted: false,
+            keys: Default::default(),
             drafts: notes::Drafts::default(),
             notes_saved: false,
             chosen_read: Lane::default(),

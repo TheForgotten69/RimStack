@@ -148,6 +148,31 @@ impl Mods {
         cx.notify();
     }
 
+    /// A divider holding the keys moved by Left or Right, as `ModsScreen.qml` moved it.
+    pub(super) fn nudge_grip(
+        &mut self,
+        grip: Grip,
+        event: &gpui::KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        let theme = cx.global::<Theme>().clone();
+        let by = match event.keystroke.key.as_str() {
+            "left" => -theme.sized(24.),
+            "right" => theme.sized(24.),
+            _ => return,
+        };
+        match grip {
+            Grip::Inactive => {
+                self.inactive_width = (self.inactive_width + by).max(theme.sized(200.));
+            }
+            Grip::Details => self.details_width = (self.details_width - by).max(theme.sized(260.)),
+        }
+        cx.stop_propagation();
+        self.keep_widths_soon(cx);
+        self.sync_details(cx);
+        cx.notify();
+    }
+
     fn reset_width(&mut self, grip: Grip, cx: &mut Context<Self>) {
         let (inactive, details) = first_widths(cx.global::<Theme>());
         match grip {
@@ -170,7 +195,13 @@ impl Mods {
         );
     }
 
-    fn grip(&self, theme: &Theme, grip: Grip, cx: &mut Context<Self>) -> gpui::Stateful<gpui::Div> {
+    fn grip(
+        &mut self,
+        theme: &Theme,
+        grip: Grip,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::Stateful<gpui::Div> {
         let c = &theme.colours;
         let (id, group) = match grip {
             Grip::Inactive => ("grip-inactive", "grip-inactive"),
@@ -181,9 +212,15 @@ impl Mods {
             Grip::Details => put(&say!("Width of the details")),
         };
         let focus = c.focus;
+        let handle = self.reachable(id, cx).0;
+        let held = handle.is_focused(window);
         div()
             .id(id)
             .group(group)
+            .role(gpui::Role::Splitter)
+            .track_focus(&handle)
+            .capture_any_mouse_down(|_, window, _| window.prevent_default())
+            .on_key_down(cx.listener(move |mods, event, _, cx| mods.nudge_grip(grip, event, cx)))
             .flex()
             .flex_none()
             .justify_center()
@@ -196,6 +233,7 @@ impl Mods {
                     .w(px(1.))
                     .h_full()
                     .bg(c.edge)
+                    .when(held, |d| d.w(px(3.)).bg(focus))
                     .group_hover(group, move |s| s.w(px(3.)).bg(focus)),
             )
             .on_drag(grip, |_, _, _, cx| cx.new(|_| Ghost))
@@ -354,14 +392,14 @@ impl Mods {
                         .w(inactive_width)
                         .flex_none(),
                 )
-                .child(self.grip(theme, Grip::Inactive, cx))
+                .child(self.grip(theme, Grip::Inactive, window, cx))
             })
             .child(
                 self.active_pane(theme, active_width, window, cx)
                     .flex_1()
                     .min_w_0(),
             )
-            .child(self.grip(theme, Grip::Details, cx))
+            .child(self.grip(theme, Grip::Details, window, cx))
             .child(
                 div()
                     .w(details_width)

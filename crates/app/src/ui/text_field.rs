@@ -7,8 +7,8 @@ use super::theme::Theme;
 use gpui::{
     App as Cx, Bounds, ClipboardItem, Context, ElementInputHandler, EntityInputHandler,
     EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyBinding,
-    ParentElement, Pixels, Point, Render, ShapedLine, SharedString, Styled, TextRun,
-    UTF16Selection, Window, actions, canvas, div, fill, point, px, size,
+    ParentElement, Pixels, Point, Render, ShapedLine, SharedString, StatefulInteractiveElement,
+    Styled, TextRun, UTF16Selection, Window, actions, canvas, div, fill, point, px, size,
 };
 use std::ops::Range;
 
@@ -101,6 +101,8 @@ pub struct TextField {
     colour: Option<gpui::Hsla>,
     /// A press is held to select.
     dragging: bool,
+    /// What a screen reader calls it, as `FilterField.qml` gave its placeholder.
+    spoken: gpui::SharedString,
 }
 
 /// What a masked field shows for each character.
@@ -135,6 +137,7 @@ impl TextField {
             weight: None,
             colour: None,
             dragging: false,
+            spoken: gpui::SharedString::default(),
         }
     }
 
@@ -650,8 +653,21 @@ impl EntityInputHandler for TextField {
 
 impl TextField {
     /// The field with what its keys do.
-    fn keyed(&self, cx: &mut Context<Self>) -> gpui::Div {
+    /// Named for a screen reader as `spoken`, when that is not what it is already called.
+    pub fn speak_as(&mut self, spoken: &str) {
+        if self.spoken != spoken {
+            self.spoken = spoken.to_string().into();
+        }
+    }
+
+    fn keyed(&self, cx: &mut Context<Self>) -> gpui::Stateful<gpui::Div> {
         div()
+            .id("text-field")
+            .role(match self.read_only {
+                true => gpui::Role::Label,
+                false => gpui::Role::TextInput,
+            })
+            .aria_label(self.spoken.clone())
             .track_focus(&self.focus)
             .on_action(cx.listener(Self::backspace))
             .on_action(cx.listener(Self::delete))
