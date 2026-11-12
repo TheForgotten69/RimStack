@@ -132,6 +132,17 @@ impl Shell {
             Rc::new(|shell, window, cx| shell.open_keys(window, cx)),
         );
         push(
+            !demo,
+            say!("Show the first-run hints again"),
+            &help,
+            none.clone(),
+            Rc::new(|shell, _, cx| {
+                super::keep_appearance("hintsSeen", "false", cx);
+                shell.go(0, cx);
+                shell.mods.update(cx, |mods, cx| mods.start_hints(cx));
+            }),
+        );
+        push(
             true,
             say!("Report a problem"),
             &help,

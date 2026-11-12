@@ -100,6 +100,9 @@ impl Shell {
         if options.still {
             mods.update(cx, |mods, _| mods.leave_off());
         }
+        if let Some(step) = options.hints {
+            mods.update(cx, |mods, cx| mods.show_hint(step, cx));
+        }
         if options.sorting {
             mods.update(cx, |mods, cx| mods.sort_when_read(cx));
         }
@@ -604,6 +607,7 @@ impl Shell {
             notices::say(put(&said), notices::Tone::Ok, cx);
         }
         self.first_run = None;
+        self.mods.update(cx, |mods, cx| mods.start_hints(cx));
         cx.notify();
     }
 }

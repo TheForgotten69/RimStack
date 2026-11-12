@@ -521,6 +521,7 @@ impl Settings {
 
     fn say_hints(&mut self, cx: &mut Context<Self>) {
         super::keep_appearance("hintsSeen", "false", cx);
+        self.mods.update(cx, |mods, cx| mods.start_hints(cx));
         super::notices::say(
             put(&say!("The hints show on the Mods screen")),
             super::notices::Tone::Plain,

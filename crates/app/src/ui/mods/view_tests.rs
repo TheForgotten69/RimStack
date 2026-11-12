@@ -229,3 +229,21 @@ fn a_term_toggled_and_a_reread_keep_the_chips() {
         "the reread list is still filtered: {shown}"
     );
 }
+
+#[test]
+fn the_hints_go_one_after_the_other_and_are_not_shown_again() {
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            mods.start_hints(cx);
+            assert_eq!(mods.hint_step, 1);
+            mods.next_hint(cx);
+            mods.next_hint(cx);
+            assert_eq!(mods.hint_step, 3);
+            mods.next_hint(cx);
+            assert_eq!(mods.hint_step, 0, "Done ends them");
+            mods.start_hints(cx);
+            assert_eq!(mods.hint_step, 0, "seen once, they do not start again");
+        })
+    });
+}

@@ -11,6 +11,7 @@ mod compare;
 mod details;
 mod edit;
 mod filter;
+mod hints;
 mod inactive;
 mod latest;
 mod left_off;
@@ -127,6 +128,11 @@ pub struct Mods {
     folder_problem: String,
     /// The mod folders being read again.
     pub rescanning: bool,
+    /// The first-run hint shown, 1 to 3; 0 for none.
+    hint_step: u8,
+    hint_anchors: hints::Anchors,
+    /// Frames the due hint's button has not been drawn in.
+    hint_misses: u8,
     unhide_problem: String,
     /// The shared textures of two mods, shown in place of the lists.
     comparing: Option<Entity<compare::CompareView>>,
@@ -260,6 +266,9 @@ impl Mods {
             commits_read: Lane::default(),
             folder_problem: String::new(),
             rescanning: false,
+            hint_step: 0,
+            hint_anchors: Default::default(),
+            hint_misses: 0,
             unhide_problem: String::new(),
             comparing: None,
             compared: None,
@@ -746,6 +755,7 @@ impl Render for Mods {
             pane_widths(&theme, window.viewport_size().width, self.panes_wanted());
         let bulk = self.bulk_bar(&theme, cx);
         let unread = self.unread(&theme, cx);
+        let hint = self.hint(&theme, window, cx);
         let is_unread = unread.is_some();
         self.open_wanted_menu(window, cx);
         div()
@@ -797,6 +807,7 @@ impl Render for Mods {
                 d.child(self.panes(&theme, window, cx))
             })
             .children(bulk)
+            .children(hint)
     }
 }
 

@@ -70,6 +70,8 @@ pub struct Options {
     pub drawer: bool,
     /// Sort's preview shown once the files are read, as `--sorting` asks.
     pub sorting: bool,
+    /// One first-run hint shown, as `--hints=N` asks.
+    pub hints: Option<u8>,
     /// Typed into the Mods filter, which has the keys, as `--typing=` asks.
     pub typing: Option<String>,
     /// The filter's text at the start, as `--filter=` gives it.
@@ -114,6 +116,7 @@ impl Options {
                 "--comparing" => options.comparing = true,
                 "--drawer" => options.drawer = true,
                 "--sorting" => options.sorting = true,
+                "--hints" => options.hints = value.parse().ok(),
                 "--typing" => options.typing = Some(value.to_string()),
                 "--filter" => options.filter = Some(value.to_string()),
                 "--pick" => options.pick = value.parse().ok(),

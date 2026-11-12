@@ -346,7 +346,7 @@ impl Mods {
                         .flex()
                         .gap(theme::GAP_LINE)
                         .when(problems_button, |d| {
-                            d.child(
+                            d.child(super::hints::anchored_at(
                                 Btn::new("problems", problems_said)
                                     .icon("triangle-alert")
                                     .tone(problem_tone)
@@ -354,7 +354,8 @@ impl Mods {
                                         "Opens the list of every problem, with the fix for each"
                                     )))
                                     .on_click(cx.listener(|m, _, _, cx| m.open_problems(cx))),
-                            )
+                                self.hint_anchors.problems.clone(),
+                            ))
                         })
                         .child(
                             Btn::new("problem-up", "")
@@ -406,22 +407,24 @@ impl Mods {
                 )
             })
             .when(!self.demo, |d| {
-                d.child(
+                d.child(super::hints::anchored_at(
                     Btn::new("sort", sort)
                         .icon("arrow-up-down")
                         .tone(c.moved)
                         .tip(put(&say!("Shows the order the rules ask for, to keep or discard. Nothing is written before Save.")))
                         .enabled(!previewing && self.files_read)
                         .on_click(cx.listener(|m, _, _, cx| m.preview_sort(cx))),
-                )
-                .child(
+                    self.hint_anchors.sort.clone(),
+                ))
+                .child(super::hints::anchored_at(
                     Btn::new("save", save)
                         .icon("save")
                         .tip(put(&say!("Writes the load order to ModsConfig.xml (Ctrl + S). The file as it was is copied beside it first.")))
                         .enabled(dirty)
                         .primary_if(dirty)
                         .on_click(cx.listener(|m, _, _, cx| m.save(None, cx))),
-                )
+                    self.hint_anchors.save.clone(),
+                ))
             })
             .when(tight && !self.demo, |d| {
                 let more = Btn::new(
