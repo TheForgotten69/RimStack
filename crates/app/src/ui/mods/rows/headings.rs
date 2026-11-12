@@ -61,6 +61,7 @@ pub(super) fn sub(
     row: &RowView,
     side: Side,
     at: usize,
+    pointed: bool,
     mods: WeakEntity<Mods>,
 ) -> AnyElement {
     let c = &theme.colours;
@@ -90,7 +91,7 @@ pub(super) fn sub(
         ))
         .child(label(theme, theme.small(), c.ink3, counted))
         .child(div().flex_1())
-        .child(crate::ui::tip::tipped(
+        .when(pointed, |d| d.child(crate::ui::tip::tipped(
             div()
                 .id(SharedString::from(format!("untag-{}", put(&row.name))))
                 .role(gpui::Role::Button)
@@ -104,15 +105,13 @@ pub(super) fn sub(
                 .bg(c.ctl)
                 .hover(|s| s.bg(c.ctl_hi))
                 .cursor_pointer()
-                .invisible()
-                .group_hover("mod-row", |s| s.visible())
                 .child(icon("x", theme.sized(12.), c.ink))
                 .on_click(move |_, _, cx| {
                     cx.stop_propagation();
                     let _ = mods.update(cx, |mods, cx| mods.remove_sub(side, at, cx));
                 }),
             put(&say!("Takes this tag off these mods; they stay where they are")).into(),
-        ))
+        )))
         .when(row.again, |d| {
             d.child(tipped_label(
                 format!("group-rest-{}", put(&row.name)),

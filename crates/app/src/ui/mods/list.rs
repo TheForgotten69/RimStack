@@ -62,6 +62,10 @@ pub struct ModList {
     /// Where the pointer is while mods are dragged over the list, and the list's bounds then.
     dragged_at: Option<(gpui::Point<Pixels>, gpui::Bounds<Pixels>)>,
     pulling: Option<gpui::Task<()>>,
+    /// How far down the window the pointer is while over the list, and where the list's top was
+    /// drawn: which row it is on is read from them as the list scrolls under it.
+    pointer: Option<Pixels>,
+    drawn_top: Rc<std::cell::Cell<Pixels>>,
 }
 
 /// How often and how far a drag held at the list's edge scrolls it, as `ModList.qml`'s timer.
@@ -123,6 +127,8 @@ impl ModList {
             focus: cx.focus_handle().tab_stop(true),
             dragged_at: None,
             pulling: None,
+            pointer: None,
+            drawn_top: Rc::default(),
         }
     }
 
@@ -177,6 +183,37 @@ impl ModList {
         let first = self.top_row();
         let row = rows.get(first).filter(|r| r.is_sub || !r.is_header)?;
         Some((row.category, top))
+    }
+
+    /// The row the pointer is on, which alone has its buttons.
+    pub fn pointed(&self) -> Option<usize> {
+        self.pointed_row(self.pointer)
+    }
+
+    /// Where row `at` is drawn in the window, from its top: as a test points at it.
+    #[cfg(test)]
+    pub fn drawn_at(&self, at: usize) -> Pixels {
+        self.drawn_top.get() + self.tops[at] - self.scroll.borrow().top()
+    }
+
+    fn pointed_row(&self, pointer: Option<Pixels>) -> Option<usize> {
+        let at = pointer? - self.drawn_top.get() + self.scroll.borrow().top();
+        let (first, end) = (*self.tops.first()?, *self.tops.last()?);
+        (at >= first && at < end).then(|| {
+            self.tops
+                .partition_point(|row| *row <= at)
+                .saturating_sub(1)
+                .min(self.shown.rows.len().saturating_sub(1))
+        })
+    }
+
+    /// The pointer moved over the list, or off it: drawn again when it is on another row.
+    fn point(&mut self, pointer: Option<Pixels>, cx: &mut Context<Self>) {
+        let (was, now) = (self.pointed_row(self.pointer), self.pointed_row(pointer));
+        self.pointer = pointer;
+        if was != now {
+            cx.notify();
+        }
     }
 
     /// A drag held near the list's top or bottom scrolls it, faster the nearer the edge.
@@ -251,6 +288,8 @@ impl Render for ModList {
             self.mods.clone(),
         );
         let (made, list_id) = (self.made.clone(), cx.entity_id());
+        let pointed = self.pointed_row(self.pointer);
+        let drawn_top = self.drawn_top.clone();
         let drawn_theme = theme.clone();
         let room = bar_room(&theme);
         let line = theme.sized(40.);
@@ -285,6 +324,7 @@ impl Render for ModList {
                 };
                 let chosen_ids: Vec<i32> = shown.chosen.iter().copied().collect();
                 let around = rows::Around {
+                    pointed,
                     movable: shown.movable,
                     chosen_ids: &chosen_ids,
                     marks: &shown.marks,
@@ -340,6 +380,22 @@ impl Render for ModList {
             .relative()
             .size_full()
             .when(self.shown.dimmed, |d| d.opacity(0.5))
+            .child(
+                gpui::canvas(
+                    move |bounds, _, _| drawn_top.set(bounds.top()),
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .inset_0(),
+            )
+            .on_mouse_move(cx.listener(|list, event: &gpui::MouseMoveEvent, _, cx| {
+                list.point(Some(event.position.y), cx)
+            }))
+            .on_hover(cx.listener(|list, over: &bool, _, cx| {
+                if !over {
+                    list.point(None, cx);
+                }
+            }))
             .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
                 window.focus(&focus, cx)
             })

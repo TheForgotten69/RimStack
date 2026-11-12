@@ -521,8 +521,9 @@ impl Mods {
             .clone()
     }
 
-    /// A heading's keys, as `ActivePane.qml` took them: Enter or Space orders the list by its
-    /// column, the menu key opens the columns' menu, Ctrl + Alt + Left or Right moves the column.
+    /// A heading's keys, as `ActivePane.qml` took them: the menu key opens the columns' menu,
+    /// Ctrl + Alt + Left or Right moves the column. Enter and Space press it, as GPUI presses a
+    /// control that holds the keys.
     pub(super) fn heading_key(
         &mut self,
         column: &'static str,
@@ -533,7 +534,6 @@ impl Mods {
         let keys = &event.keystroke;
         let held = keys.modifiers;
         match keys.key.as_str() {
-            "enter" | "space" if !held.modified() => self.heading_pressed(column, cx),
             "menu" | "f10" if keys.key == "menu" || held.shift => {
                 let drawn = self.reachable(column, cx).1.get();
                 let at = gpui::point(drawn.left(), drawn.bottom() + px(2.));

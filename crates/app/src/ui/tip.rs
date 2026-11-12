@@ -47,6 +47,14 @@ pub fn hint(cx: &App) -> SharedString {
         .unwrap_or_default()
 }
 
+/// The hint let go of, as a press, a key or the wheel may take the control away under a pointer
+/// that does not move, which would then never tell it left.
+pub fn forget_hint(cx: &mut App) {
+    if !hint(cx).is_empty() {
+        cx.set_global(Hint::default());
+    }
+}
+
 /// `control` with its tip; an empty one shows none.
 pub fn tipped(control: Stateful<gpui::Div>, text: SharedString) -> Stateful<gpui::Div> {
     if text.is_empty() {

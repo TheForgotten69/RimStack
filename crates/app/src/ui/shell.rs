@@ -21,6 +21,8 @@ const SETTINGS: usize = 7;
 
 pub struct Shell {
     section: usize,
+    /// The keys' handles of the sections and of the search box.
+    bar_keys: [gpui::FocusHandle; 2],
     pub(crate) demo: bool,
     pub(crate) mods: Entity<Mods>,
     /// Made with the window, as Qt's `DownloadsData` was: it counts the updates the top bar and
@@ -187,6 +189,10 @@ impl Shell {
             menu: super::menu::install(cx),
             notices: super::notices::install(cx),
             drawn: false,
+            bar_keys: [
+                cx.focus_handle().tab_stop(true),
+                cx.focus_handle().tab_stop(true),
+            ],
         };
         shell.downloads(cx);
         if !demo {
@@ -444,6 +450,22 @@ impl Render for Shell {
                     find.update(cx, |find, cx| find.focus_search(window, cx));
                 }),
             )
+            .capture_any_mouse_down(|_, _, cx| super::tip::forget_hint(cx))
+            .capture_key_down(|_, _, cx| super::tip::forget_hint(cx))
+            .child(
+                gpui::canvas(
+                    |_, _, _| (),
+                    |_, _, window, _| {
+                        window.on_mouse_event(|_: &gpui::ScrollEvent, phase, _, cx| {
+                            if phase.capture() {
+                                super::tip::forget_hint(cx);
+                            }
+                        })
+                    },
+                )
+                .absolute()
+                .size_0(),
+            )
             .bg(win)
             .text_color(ink)
             .font_family(family)
@@ -456,6 +478,7 @@ impl Render for Shell {
                     behind: self.behind,
                     running: self.game.read(cx).running(),
                     lists_view: self.lists.clone(),
+                    keys: self.bar_keys.clone(),
                 },
                 window,
                 cx,

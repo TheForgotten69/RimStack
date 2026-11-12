@@ -125,6 +125,8 @@ pub struct Around<'a> {
     pub headed: bool,
     /// Whether the column the load order is ordered by is shown, which then says the value.
     pub order_shown: bool,
+    /// The row the pointer is on: only it has its buttons and its tips made.
+    pub pointed: Option<usize>,
 }
 
 pub type Marks = std::collections::BTreeMap<
@@ -132,18 +134,22 @@ pub type Marks = std::collections::BTreeMap<
     rimstack_core::mods::details::Mark,
 >;
 
-/// The buttons a mod's row shows while pointed at or chosen: across, its folder, its menu.
+/// The buttons a mod's row shows while pointed at, across and its folder, and its menu, which
+/// stays while it is the only mod chosen.
 fn hover_buttons(
     theme: &Theme,
     side: Side,
     at: usize,
     row: &RowView,
-    alone: bool,
+    pointed: bool,
     mods: &WeakEntity<Mods>,
 ) -> AnyElement {
     let c = &theme.colours;
     let size = theme.sized(24.);
     let (mod_id, index) = (row.mod_id, row.mod_index);
+    let tall = height(theme, row, side == Side::Active);
+    let drawn: std::rc::Rc<std::cell::Cell<gpui::Bounds<Pixels>>> = Default::default();
+    let placed = drawn.clone();
     let button = |key: &'static str, name: &'static str, tip: String| {
         let shown = div()
             .id((key, at))
@@ -157,6 +163,7 @@ fn hover_buttons(
             .cursor_pointer()
             .role(gpui::Role::Button)
             .aria_label(tip.clone())
+            .relative()
             .child(icon(name, theme.sized(13.), c.ink));
         crate::ui::tip::tipped(shown, tip.into())
     };
@@ -170,41 +177,43 @@ fn hover_buttons(
         .flex()
         .items_center()
         .gap(theme::GAP_HAIR)
-        .child(
-            button(
-                "row-across",
-                if active { "minus" } else { "plus" },
-                match active {
-                    true => put(&say!("Deactivate")),
-                    false => put(&say!("Activate")),
-                },
-            )
-            .invisible()
-            .group_hover("mod-row", |s| s.visible())
-            .on_click(move |_, _, cx| {
-                cx.stop_propagation();
-                let _ = across.update(cx, |mods, cx| mods.toggle_mod(side, mod_id, cx));
-            }),
-        )
-        .when(mod_id >= 0, |d| {
+        .when(pointed, |d| {
             d.child(
-                button("row-folder", "folder-open", put(&say!("Open folder")))
-                    .invisible()
-                    .group_hover("mod-row", |s| s.visible())
-                    .on_click(move |_, _, cx| {
+                button(
+                    "row-across",
+                    if active { "minus" } else { "plus" },
+                    match active {
+                        true => put(&say!("Deactivate")),
+                        false => put(&say!("Activate")),
+                    },
+                )
+                .on_click(move |_, _, cx| {
+                    cx.stop_propagation();
+                    let _ = across.update(cx, |mods, cx| mods.toggle_mod(side, mod_id, cx));
+                }),
+            )
+        })
+        .when(pointed && mod_id >= 0, |d| {
+            d.child(
+                button("row-folder", "folder-open", put(&say!("Open folder"))).on_click(
+                    move |_, _, cx| {
                         cx.stop_propagation();
                         let _ = folder.update(cx, |mods, cx| mods.open_folder(mod_id, cx));
-                    }),
+                    },
+                ),
             )
         })
         .child(
             button("row-menu", "ellipsis", put(&say!("Menu (right-click)")))
-                .when(!alone, |d| {
-                    d.invisible().group_hover("mod-row", |s| s.visible())
-                })
-                .on_click(move |event, window, cx| {
+                .child(
+                    gpui::canvas(move |bounds, _, _| drawn.set(bounds), |_, _, _, _| {})
+                        .absolute()
+                        .inset_0(),
+                )
+                .on_click(move |_, window, cx| {
                     cx.stop_propagation();
-                    let at = event.position();
+                    let button = placed.get();
+                    let at = gpui::point(button.left(), button.center().y + tall / 2.);
                     let _ = menu.update(cx, |mods, cx| {
                         mods.row_menu(side, index, mod_id, at, window, cx)
                     });
@@ -235,8 +244,9 @@ pub fn row(
     let mark = rimstack_core::mods::library::ModId::from_qml(row.mod_id)
         .and_then(|id| around.marks.get(&id))
         .filter(|_| columns.is_some() && !row.is_header);
+    let pointed = around.pointed == Some(at);
     let body = if row.is_sub {
-        headings::sub(theme, row, side, at, mods.clone())
+        headings::sub(theme, row, side, at, pointed, mods.clone())
     } else if row.again {
         headings::again(theme, row)
     } else if row.is_header {
@@ -257,6 +267,7 @@ pub fn row(
             columns,
             chosen,
             alone: chosen && around.single,
+            pointed,
             colour,
             picture,
             mark,
@@ -353,17 +364,12 @@ pub fn row(
         })
         .child(body)
         .when(
-            !is_header && row.mod_index >= 0 && around.buttons && !cx.has_active_drag(),
-            |d| {
-                d.child(hover_buttons(
-                    theme,
-                    side,
-                    at,
-                    row,
-                    chosen && around.single,
-                    &mods,
-                ))
-            },
+            !is_header
+                && row.mod_index >= 0
+                && (pointed || chosen && around.single)
+                && around.buttons
+                && !cx.has_active_drag(),
+            |d| d.child(hover_buttons(theme, side, at, row, pointed, &mods)),
         )
         .when(!is_header, |d| {
             let landing = mods.clone();

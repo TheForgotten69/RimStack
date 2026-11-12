@@ -158,11 +158,14 @@ fn the_status_bar_tells_the_first_line_of_the_tip_pointed_at() {
     let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(super::assets::Assets));
     let options = Options {
         demo: true,
+        text_scale: Some(1.6),
         ..Options::default()
     };
     cx.update(|cx| install(Arc::new(app), &options, cx));
     cx.update(|cx| {
-        cx.set_global(super::tip::Hint("What it does\nand more".into()));
+        cx.set_global(super::tip::Hint(
+            "Click to order the list by this column; click again to reverse it. Right-click to choose the columns.\nand more".into(),
+        ));
     });
     watch::start();
     let opened = cx
@@ -174,6 +177,62 @@ fn the_status_bar_tells_the_first_line_of_the_tip_pointed_at() {
     cx.update_window(opened.into(), |_, window, cx| window.draw(cx).clear(cx))
         .unwrap();
     let seen = watch::take();
-    assert!(seen.iter().any(|s| s.text.as_ref() == "What it does"));
+    assert!(seen.iter().any(|s| s.text.starts_with("Click to order")));
     assert!(!seen.iter().any(|s| s.text.contains("and more")));
+    let found = faults(&seen);
+    assert!(found.is_empty(), "{}", found.join("\n"));
+}
+
+#[test]
+fn the_hint_is_let_go_on_a_press_a_key_or_the_wheel() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path();
+    let app = App::new(
+        path.join("home"),
+        &path.join("settings"),
+        &path.join("data"),
+        Default::default(),
+    );
+    let text = crate::ui::made_up::text_system();
+    let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(super::assets::Assets));
+    let options = Options {
+        demo: true,
+        ..Options::default()
+    };
+    cx.update(|cx| install(Arc::new(app), &options, cx));
+    let opened = cx
+        .open_window(
+            size(crate::ui::WINDOW.0, crate::ui::WINDOW.1),
+            |window, cx| cx.new(|cx| Shell::new(&options, window, cx)),
+        )
+        .unwrap();
+    cx.update_window(opened.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let at = gpui::point(gpui::px(600.), gpui::px(400.));
+    let inputs = [
+        gpui::PlatformInput::Scroll(gpui::ScrollEvent {
+            position: at,
+            ..Default::default()
+        }),
+        gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+            button: gpui::MouseButton::Left,
+            position: at,
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        }),
+        gpui::PlatformInput::KeyDown(gpui::KeyDownEvent {
+            keystroke: gpui::Keystroke::parse("shift").unwrap(),
+            is_held: false,
+            prefer_character_input: false,
+        }),
+    ];
+    for input in inputs {
+        cx.update(|cx| cx.set_global(super::tip::Hint("Pointed at".into())));
+        cx.update_window(opened.into(), |_, window, cx| {
+            window.dispatch_event(input, cx);
+        })
+        .unwrap();
+        assert_eq!(cx.update(|cx| super::tip::hint(cx)), "");
+    }
 }

@@ -183,6 +183,7 @@ impl Card {
             });
         let title = super::tip::tipped(title.id("card-title"), meaning.unwrap_or_default().into());
         let note = div()
+            .text_decoration_none()
             .flex_1()
             .min_w_0()
             .mr(theme::GAP_SMALL)
@@ -221,6 +222,7 @@ impl Card {
                         };
                         d.child(
                             div()
+                                .text_decoration_none()
                                 .flex()
                                 .flex_none()
                                 .items_center()
@@ -230,7 +232,7 @@ impl Card {
                         )
                     }),
             )
-            .children(under)
+            .children(under.map(|under| under.text_decoration_none()))
             .role(match self.on_fold.is_some() {
                 true => gpui::Role::Button,
                 false => gpui::Role::Heading,

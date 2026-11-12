@@ -74,6 +74,8 @@ pub struct TopState {
     pub behind: usize,
     pub running: bool,
     pub lists_view: gpui::Entity<super::lists::Lists>,
+    /// The keys' handles of the sections and of the search box.
+    pub keys: [gpui::FocusHandle; 2],
 }
 
 pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> impl IntoElement {
@@ -84,6 +86,7 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
         behind,
         running,
         lists_view,
+        keys,
     } = state;
     let theme = cx.global::<Theme>().clone();
     let c = theme.colours;
@@ -279,9 +282,7 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
         .id("top-search")
         .role(gpui::Role::Button)
         .aria_label(put(&say!("Search mods, commands and settings")))
-        .tab_index(0)
-        .capture_any_mouse_down(|_, window, _| window.prevent_default())
-        .focus_visible(|s| s.border_2().border_color(c.focus))
+        .relative()
         .cursor_text()
         .on_click(cx.listener(|shell, _, window, cx| shell.open_commands(window, cx)))
         .flex()
@@ -315,6 +316,7 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
                 put(&say!("Ctrl + K")),
             ))
         });
+    let search = super::focus::reachable(search, &keys[1], theme::CORNER, false, window, &theme);
     let search = super::tip::tipped(
         search,
         put(&say!(
@@ -338,7 +340,7 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
                 .left(box_x)
                 .flex()
                 .items_center()
-                .child(
+                .child(super::focus::reachable(
                     div()
                         .flex()
                         .gap(theme::GAP_LINE)
@@ -351,9 +353,7 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
                         .id("sections")
                         .role(gpui::Role::TabList)
                         .aria_label(put(&say!("Sections")))
-                        .tab_index(0)
-                        .capture_any_mouse_down(|_, window, _| window.prevent_default())
-                        .focus_visible(|s| s.border_2().border_color(c.focus))
+                        .relative()
                         .on_key_down(cx.listener(move |shell, event: &gpui::KeyDownEvent, window, cx| {
                             let keys = &event.keystroke;
                             if keys.modifiers.modified() {
@@ -370,7 +370,12 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
                             cx.stop_propagation();
                         }))
                         .children(tabs),
-                ),
+                    &keys[0],
+                    theme::CORNER_LARGE,
+                    false,
+                    window,
+                    &theme,
+                )),
         )
         .child(
             div()

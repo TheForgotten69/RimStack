@@ -327,3 +327,80 @@ fn a_column_and_a_divider_move_by_their_keys() {
         })
     });
 }
+
+#[test]
+fn enter_on_a_heading_holding_the_keys_orders_the_list_once() {
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    let window = cx.update(|cx| cx.windows()[0]);
+    let draw = |cx: &mut gpui::HeadlessAppContext| {
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+    };
+    draw(&mut cx);
+    let wanted = cx.update(|cx| mods.read(cx).orders.active_by["name"].then.clone());
+    cx.update_window(window, |_, window, cx| {
+        let handle = mods.read(cx).keys["name"].0.clone();
+        window.focus(&handle, cx);
+    })
+    .unwrap();
+    draw(&mut cx);
+    let enter = gpui::Keystroke::parse("enter").unwrap();
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_event(
+            gpui::PlatformInput::KeyDown(gpui::KeyDownEvent {
+                keystroke: enter.clone(),
+                is_held: false,
+                prefer_character_input: false,
+            }),
+            cx,
+        );
+        window.dispatch_event(
+            gpui::PlatformInput::KeyUp(gpui::KeyUpEvent { keystroke: enter }),
+            cx,
+        );
+    })
+    .unwrap();
+    draw(&mut cx);
+    cx.update(|cx| {
+        assert_eq!(
+            mods.read(cx).order.order_of(Side::Active),
+            rimstack_core::mods::columns::from_kept(&wanted),
+            "one press, one step"
+        );
+    });
+}
+
+#[test]
+fn the_row_under_the_pointer_is_the_one_pointed_at_as_the_list_scrolls() {
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    let window = cx.update(|cx| cx.windows()[0]);
+    let draw = |cx: &mut gpui::HeadlessAppContext| {
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+    };
+    draw(&mut cx);
+    let list = cx.update(|cx| mods.read(cx).list(Side::Inactive).clone());
+    let (y, x) = cx.update(|cx| (list.read(cx).drawn_at(3) + gpui::px(2.), gpui::px(100.)));
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_event(
+            gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                position: gpui::point(x, y),
+                pressed_button: None,
+                modifiers: Default::default(),
+            }),
+            cx,
+        );
+    })
+    .unwrap();
+    draw(&mut cx);
+    assert_eq!(cx.update(|cx| list.read(cx).pointed()), Some(3));
+    let row = cx.update(|cx| {
+        let list = list.read(cx);
+        let step = list.drawn_at(4) - list.drawn_at(3);
+        list.scroll().borrow_mut().set_top(step);
+        list.pointed()
+    });
+    assert_eq!(row, Some(4), "the list moved under a pointer that stayed");
+}

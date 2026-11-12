@@ -41,6 +41,8 @@ pub(super) struct Shown<'a> {
     pub chosen: bool,
     /// Chosen, and the only mod chosen: its menu button stays.
     pub alone: bool,
+    /// The pointer is on it: its category and a cut name or load time explain themselves.
+    pub pointed: bool,
     pub colour: Hsla,
     pub picture: Option<Arc<RenderImage>>,
     pub mark: Option<&'a Mark>,
@@ -176,6 +178,7 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
         columns,
         chosen,
         alone,
+        pointed,
         colour,
         picture,
         mark,
@@ -183,7 +186,6 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
     let quiet = if chosen { c.on_selected_dim } else { c.ink2 };
     let ink = if chosen { c.on_selected } else { c.ink };
     let name_text = div()
-        .id(SharedString::from(format!("name-{}", row.number)))
         .min_w_0()
         .overflow_hidden()
         .whitespace_nowrap()
@@ -191,7 +193,7 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
         .sized_text(theme, theme.body())
         .text_color(ink)
         .child(fitted.name);
-    let full_name = match fitted.cut {
+    let full_name = match fitted.cut && pointed {
         true => put(&row.name),
         false => String::new(),
     };
@@ -201,15 +203,21 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
         .min_w_0()
         .items_center()
         .gap(theme::GAP_SMALL)
-        .child(tipped_label(
-            format!("category-{}", row.number),
-            div().child(icon(
+        .map(|d| {
+            let shown = icon(
                 category_icon(row.category),
                 theme.sized(13.),
                 if chosen { c.on_selected } else { colour },
-            )),
-            category_name(row.category),
-        ))
+            );
+            match pointed {
+                true => d.child(tipped_label(
+                    format!("category-{}", row.number),
+                    div().child(shown),
+                    category_name(row.category),
+                )),
+                false => d.child(shown),
+            }
+        })
         .when(columns.is_some_and(|c| c.tile), |d| {
             d.child(tile(theme, row, colour, picture))
         })
@@ -226,7 +234,13 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
                 )),
             ))
         })
-        .child(crate::ui::tip::tipped(name_text, full_name.into()))
+        .map(|d| match full_name.is_empty() {
+            true => d.child(name_text),
+            false => d.child(crate::ui::tip::tipped(
+                name_text.id(SharedString::from(format!("name-{}", row.number))),
+                full_name.into(),
+            )),
+        })
         .when(row.outdated, |d| {
             d.child(
                 Chip::new(row.made_for.clone())
@@ -377,7 +391,7 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
                             .bg(if chosen { c.on_selected_dim } else { c.ink3 }),
                     )
                 });
-            let tip = match (*key, row.load_time.is_empty()) {
+            let tip = match (*key, row.load_time.is_empty() || !pointed) {
                 ("load", false) => put(&say!("{} at the game's last start", row.load_time.clone())),
                 _ => String::new(),
             };

@@ -4,6 +4,7 @@
 mod area;
 
 use super::theme::Theme;
+use gpui::prelude::FluentBuilder;
 use gpui::{
     App as Cx, Bounds, ClipboardItem, Context, ElementInputHandler, EntityInputHandler,
     EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyBinding,
@@ -653,11 +654,13 @@ impl EntityInputHandler for TextField {
 
 impl TextField {
     /// The field with what its keys do.
-    /// Named for a screen reader as `spoken`, when that is not what it is already called.
+    /// Named for a screen reader as `spoken`.
     pub fn speak_as(&mut self, spoken: &str) {
-        if self.spoken != spoken {
-            self.spoken = spoken.to_string().into();
-        }
+        self.spoken = spoken.to_string().into();
+    }
+
+    pub fn spoken(&self) -> &str {
+        &self.spoken
     }
 
     fn keyed(&self, cx: &mut Context<Self>) -> gpui::Stateful<gpui::Div> {
@@ -667,7 +670,9 @@ impl TextField {
                 true => gpui::Role::Label,
                 false => gpui::Role::TextInput,
             })
-            .aria_label(self.spoken.clone())
+            .when(!self.spoken.is_empty(), |d| {
+                d.aria_label(self.spoken.clone())
+            })
             .track_focus(&self.focus)
             .on_action(cx.listener(Self::backspace))
             .on_action(cx.listener(Self::delete))
