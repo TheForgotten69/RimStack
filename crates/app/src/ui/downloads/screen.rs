@@ -11,9 +11,8 @@ use crate::words::{count, put};
 use crate::workspace::downloads::{BehindShown, CheckoutShown, updates_shown};
 use crate::workspace::logs::day;
 use gpui::{
-    AnyElement, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels,
-    Render, StatefulInteractiveElement, Styled, Window, canvas, div, fill, point,
-    prelude::FluentBuilder, size,
+    AnyElement, Context, FontWeight, IntoElement, ParentElement, Pixels, Render, Styled, Window,
+    canvas, div, fill, point, prelude::FluentBuilder, size,
 };
 use rimstack_core::{say, say_n};
 
@@ -56,6 +55,9 @@ impl Downloads {
             .child(field.render(theme, window, cx).flex_1().min_w_0())
             .child(
                 Btn::new("look-up", look)
+                    .tip(put(&say!(
+                        "Looks up what is pasted beside it: paste a link or an id first."
+                    )))
                     .primary_if(typed)
                     .enabled(!self.queue_busy && typed)
                     .on_click(cx.listener(|downloads, _, _, cx| downloads.look_up(cx))),
@@ -131,7 +133,7 @@ impl Downloads {
             .gap(theme::GAP)
             .when(self.report.auto_updates, |d| {
                 let every = put(&self.report.update_every_said);
-                d.child(Chip::new(every).tone(c.ok).icon("refresh-cw"))
+                d.child(Chip::new(every).tone(c.ok).icon("refresh-cw").tip(put(&say!("Settings, Updates: Update by themselves"))))
             })
             .when(self.steam_waits, |d| {
                 d.child(
@@ -182,6 +184,10 @@ impl Downloads {
             )
             .child(
                 Btn::new("check-now", put(&say!("Check now")))
+                    .tip(match self.report.git_for_workshop {
+                        true => put(&say!("Asks Steam for the current version of each installed Workshop mod (only their Workshop ids are sent), and Git for new commits on each checkout in the game's Mods folder and in the Workshop folder.")),
+                        false => put(&say!("Asks Steam for the current version of each installed Workshop mod (only their Workshop ids are sent), and Git for new commits on each checkout in the game's Mods folder.")),
+                    })
                     .icon("refresh-cw")
                     .primary_if(shown.checked.is_none())
                     .enabled(!self.updates_busy)
@@ -233,13 +239,26 @@ impl Downloads {
                         .icon("check"),
                 )
             })
-            .child(Chip::new(format!("{} → {}", day(row.have), day(row.now))).tone(c.moved))
+            .child(
+                Chip::new(format!("{} → {}", day(row.have), day(row.now)))
+                    .tone(c.moved)
+                    .tip(put(&say!(
+                        "Published {}",
+                        rimstack_core::base::elapsed::ago(
+                            crate::workspace::now_secs().saturating_sub(row.now)
+                        )
+                        .inside()
+                    ))),
+            )
             .child(
                 Btn::new((key.0, key.1 * 2), put(&say!("Show")))
+                    .spoken(put(&say!("Show {}", row.name.clone())))
                     .on_click(cx.listener(move |_, _, _, cx| cx.emit(ShowMod(mod_id)))),
             )
             .child(
                 Btn::new((key.0, key.1 * 2 + 1), "")
+                    .spoken(put(&say!("What changed in {}", row.name.clone())))
+                    .tip(put(&say!("The mod's change notes on the Workshop.")))
                     .icon("external-link")
                     .on_click(move |_, _, cx| cx.open_url(&notes)),
             )
@@ -278,6 +297,10 @@ impl Downloads {
             .when(shown.updatable, |d| {
                 d.child(
                     Btn::new((key.0, key.1 * 2), update)
+                        .spoken(put(&say!("Update {}", shown.row.name.clone())))
+                        .tip(put(&say!(
+                            "Updates to the newest commit; stops if the folder has local changes."
+                        )))
                         .enabled(self.tasks.updating.is_none())
                         .primary_if(shown.due && !updating)
                         .on_click(cx.listener(move |downloads, _, _, cx| {
@@ -287,6 +310,7 @@ impl Downloads {
             })
             .child(
                 Btn::new((key.0, key.1 * 2 + 1), put(&say!("Show")))
+                    .spoken(put(&say!("Show {}", shown.row.name.clone())))
                     .on_click(cx.listener(move |_, _, _, cx| cx.emit(ShowMod(mod_id)))),
             )
             .into_any_element()
@@ -337,6 +361,7 @@ impl Downloads {
             };
             let update = put(&say!("Update in Steam"));
             let action = Btn::new("update-in-steam", update.clone())
+                .tip(put(&say!("Steam must be running. It downloads the newer version of each now; otherwise it does so the next time it starts.")))
                 .icon("download")
                 .primary_if(!shown.active.is_empty())
                 .enabled(!self.tasks.running)
@@ -462,11 +487,13 @@ impl Downloads {
         let actions = match ignored > 0 {
             true => (
                 vec![
-                    div()
-                        .id("suggest-again")
-                        .cursor_pointer()
-                        .child(Chip::new(again.clone()).icon("eye-off").pressable())
-                        .on_click(cx.listener(|d, _, _, cx| d.ignore_replacement(None, cx)))
+                    Chip::new(again.clone())
+                        .icon("eye-off")
+                        .tip(put(&say!("Suggest them again")))
+                        .on_click(
+                            "suggest-again",
+                            cx.listener(|d, _, _, cx| d.ignore_replacement(None, cx)),
+                        )
                         .into_any_element(),
                 ],
                 chip_width(window, theme, &again, true),
@@ -521,17 +548,21 @@ impl Downloads {
                 )
                 .when(!old.have_new, |d| {
                     d.child(
-                        Btn::new(("replacement", at), put(&say!("Replacement")))
+                        Btn::new(("replacement", at), put(&say!("Replacement"))).tip(put(&say!("Workshop page of the replacement")))
                             .icon("external-link")
                             .on_click(move |_, _, cx| cx.open_url(&page)),
                     )
                 })
                 .child(
                     Btn::new(("show-old", at), put(&say!("Show old mod")))
+                        .spoken(put(&say!("Show {}", old.name.clone())))
+                        .tip(put(&say!("The installed mod the list would replace")))
                         .on_click(cx.listener(move |_, _, _, cx| cx.emit(ShowMod(mod_id)))),
                 )
                 .child(
                     Btn::new(("ignore-replacement", at), put(&say!("Ignore")))
+                        .spoken(put(&say!("Ignore the replacement of {}", old.name.clone())))
+                        .tip(put(&say!("No replacement is suggested for this mod again")))
                         .icon("eye-off")
                         .on_click(
                             cx.listener(move |d, _, _, cx| d.ignore_replacement(Some(mod_id), cx)),
@@ -539,6 +570,8 @@ impl Downloads {
                 )
                 .child(
                     Btn::new(("unsubscribe", at), put(&say!("Unsubscribe…")))
+                        .spoken(put(&say!("Unsubscribe from {}", old.name.clone())))
+                        .tip(put(&say!("Removes the replaced mod: Steam unsubscribes from it and deletes its folder")))
                         .danger()
                         .on_click({
                             let name = old.name.clone();

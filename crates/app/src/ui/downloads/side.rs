@@ -51,6 +51,11 @@ impl Downloads {
             .when(asked.title.is_some() && !asked.installed, |d| {
                 d.child(
                     Btn::new(("asked-page", at), "")
+                        .tip(put(&say!("Workshop page")))
+                        .spoken(put(&say!(
+                            "Show {}",
+                            asked.title.clone().unwrap_or_default()
+                        )))
                         .icon("external-link")
                         .on_click(move |_, _, cx| cx.open_url(&page)),
                 )
@@ -125,12 +130,17 @@ impl Downloads {
                         })
                         .child(
                             Btn::new(("repository-page", at), "")
+                                .tip(put(&say!("Repository page")))
                                 .icon("external-link")
                                 .on_click(move |_, _, cx| cx.open_url(&link)),
                         )
                         .when(!repository.installed, |d| {
                             d.child(
                                 Btn::new(("clone", at), clone)
+                                    .tip(match self.report.git.is_some() {
+                                        true => put(&say!("git clone into the game's own Mods folder; Check for updates then asks its repository")),
+                                        false => put(&say!("Git is not installed")),
+                                    })
                                     .icon("download")
                                     .primary_if(!cloning)
                                     .enabled(
@@ -246,9 +256,14 @@ impl Downloads {
                     .when_some(row.size_said.as_ref(), |d, size| {
                         d.child(label(theme, theme.small(), c.ink3, put(size)))
                     })
-                    .child(Btn::new(("unlist", at), "").icon("x").on_click(
-                        cx.listener(move |_, _, _, cx| crate::ui::app(cx).remove_from_list(&id)),
-                    ))
+                    .child(
+                        Btn::new(("unlist", at), "")
+                            .tip(put(&say!("Take off the list")))
+                            .icon("x")
+                            .on_click(cx.listener(move |_, _, _, cx| {
+                                crate::ui::app(cx).remove_from_list(&id)
+                            })),
+                    )
                     .into_any_element()
             })
             .collect();
@@ -292,6 +307,7 @@ impl Downloads {
                 .when(action.download, |d| {
                     d.child(
                         Btn::new("download-wanted", put(&action.label))
+                            .tip(put(&say!("Into the game's own Mods folder, {}, without subscribing: Steam will not update these.", self.report.local_mods.clone().unwrap_or_default())))
                             .icon("download")
                             .primary()
                             .enabled(action.enabled)
@@ -301,6 +317,7 @@ impl Downloads {
                 .when(action.subscribe, |d| {
                     d.child(
                         Btn::new("subscribe-wanted", put(&say!("Subscribe in Steam")))
+                            .tip(put(&say!("Steam must be running. It subscribes to each and downloads it, then keeps them up to date.")))
                             .icon("plus")
                             .primary_if(!action.download)
                             .enabled(action.subscribe_enabled)
@@ -310,6 +327,7 @@ impl Downloads {
                 .when(list.failures, |d| {
                     d.child(
                         Btn::new("retry-list", put(&say!("Retry")))
+                            .tip(put(&say!("Forgets what went wrong, so the next download tries these again.")))
                             .icon("refresh-cw")
                             .on_click(
                                 cx.listener(|_, _, _, cx| crate::ui::app(cx).clear_list_failures()),

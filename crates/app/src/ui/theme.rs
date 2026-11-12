@@ -431,6 +431,14 @@ impl Theme {
     pub fn field(&self) -> Pixels {
         self.sized(28.)
     }
+    /// `Theme.outline`: the frame's width, drawn only for high contrast.
+    pub fn outline(&self) -> Pixels {
+        gpui::px(if self.appearance.high_contrast {
+            1.
+        } else {
+            0.
+        })
+    }
     pub fn segment(&self) -> Pixels {
         self.sized(24.)
     }

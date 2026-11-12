@@ -106,7 +106,7 @@ impl Render for Prompt {
                     .sized_text(&theme, theme.small())
                     .font_family(theme.mono.clone())
                     .text_color(c.ink)
-                    .child(path.clone()),
+                    .child(super::widgets::breakable(path)),
             })
             .map(IntoElement::into_any_element)
             .collect();

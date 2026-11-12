@@ -1,10 +1,15 @@
 //! The window: views that show what the `App` hands them and forward what is done.
 
 pub mod assets;
+pub mod button;
 pub mod card;
+pub mod controls;
 pub mod downloads;
 pub mod field;
+pub mod focus;
+pub mod menu;
 pub mod mods;
+pub mod notices;
 pub mod page;
 pub mod problem;
 pub mod prompt;
@@ -13,6 +18,7 @@ pub mod shell;
 pub mod status_bar;
 pub mod text_field;
 pub mod theme;
+pub mod tip;
 pub mod top_bar;
 pub mod widgets;
 
@@ -47,6 +53,10 @@ pub struct Options {
     pub tab: usize,
     /// The scripted scroll of `--selftest`.
     pub bench: bool,
+    /// Two toasts shown at the start, as `--notices` asks, for pictures.
+    pub notices: bool,
+    /// What is open at the start, as `--open=` names it, for pictures.
+    pub open: Option<String>,
 }
 
 impl Options {
@@ -64,6 +74,8 @@ impl Options {
                 "--filter" => options.filter = Some(value.to_string()),
                 "--pick" => options.pick = value.parse().ok(),
                 "--tab" => options.tab = value.parse().unwrap_or(0),
+                "--notices" => options.notices = true,
+                "--open" => options.open = Some(value.to_string()),
                 _ => {}
             }
         }
@@ -161,6 +173,7 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     cx.set_global(theme);
     cx.set_global(Shared(app));
     text_field::bind_keys(cx);
+    focus::bind_keys(cx);
     cx.bind_keys([gpui::KeyBinding::new(
         crate::command!("f"),
         mods::FocusFilter,
@@ -198,3 +211,5 @@ pub fn run(app: Arc<App>, options: Options) {
 mod gates;
 #[cfg(test)]
 pub(crate) mod layout_checks;
+#[cfg(test)]
+mod widget_tests;

@@ -1,8 +1,7 @@
 use super::theme::{self, Theme};
 use gpui::{
-    AbsoluteLength, AnyElement, App as Cx, ClickEvent, ElementId, FontWeight, Hsla,
-    InteractiveElement, IntoElement, ParentElement, Pixels, RenderOnce, SharedString,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px, svg,
+    AbsoluteLength, AnyElement, FontWeight, Hsla, IntoElement, ParentElement, Pixels, SharedString,
+    Styled, Window, div, px, svg,
 };
 
 pub trait TextSized: Styled + Sized {
@@ -66,182 +65,19 @@ pub fn halo(tone: Hsla, corner: Pixels) -> impl Iterator<Item = AnyElement> {
     })
 }
 
-type Click = Box<dyn Fn(&ClickEvent, &mut Window, &mut Cx)>;
+pub use super::button::{Btn, Chip};
 
-/// `Btn.qml`.
-#[derive(IntoElement)]
-pub struct Btn {
-    id: ElementId,
-    text: SharedString,
-    icon: Option<&'static str>,
-    primary: bool,
-    large: bool,
-    menu: bool,
-    enabled: bool,
-    danger: bool,
-    tone: Option<Hsla>,
-    height: Option<Pixels>,
-    on_click: Option<Click>,
-}
-
-impl Btn {
-    pub fn new(id: impl Into<ElementId>, text: impl Into<SharedString>) -> Self {
-        Self {
-            id: id.into(),
-            text: text.into(),
-            icon: None,
-            primary: false,
-            large: false,
-            menu: false,
-            enabled: true,
-            danger: false,
-            tone: None,
-            height: None,
-            on_click: None,
+/// `text` that may break between any two characters, as Qt's `Text.WrapAnywhere`: a path has
+/// few places a line may break otherwise. The zero-width spaces between them draw nothing.
+pub fn breakable(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() * 4);
+    for (at, ch) in text.chars().enumerate() {
+        if at > 0 {
+            out.push('\u{200b}');
         }
+        out.push(ch);
     }
-
-    pub fn icon(mut self, name: &'static str) -> Self {
-        self.icon = Some(name);
-        self
-    }
-
-    pub fn primary(mut self) -> Self {
-        self.primary = true;
-        self
-    }
-
-    pub fn primary_if(mut self, primary: bool) -> Self {
-        self.primary = primary;
-        self
-    }
-
-    pub fn large(mut self) -> Self {
-        self.large = true;
-        self
-    }
-
-    pub fn menu(mut self) -> Self {
-        self.menu = true;
-        self
-    }
-
-    pub fn enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
-        self
-    }
-
-    /// A button that removes something: its words in the error colour.
-    pub fn danger(mut self) -> Self {
-        self.danger = true;
-        self
-    }
-
-    /// Tinted: the tone as its ground and its ink.
-    pub fn tone(mut self, tone: Hsla) -> Self {
-        self.tone = Some(tone);
-        self
-    }
-
-    pub fn height(mut self, height: Pixels) -> Self {
-        self.height = Some(height);
-        self
-    }
-
-    pub fn on_click(mut self, run: impl Fn(&ClickEvent, &mut Window, &mut Cx) + 'static) -> Self {
-        self.on_click = Some(Box::new(run));
-        self
-    }
-}
-
-impl RenderOnce for Btn {
-    fn render(self, window: &mut Window, cx: &mut Cx) -> impl IntoElement {
-        let theme = cx.global::<Theme>();
-        let c = &theme.colours;
-        let toned = self.tone.filter(|_| !self.primary);
-        let ink = match (self.primary, toned) {
-            (true, _) => c.accent_ink,
-            (false, Some(tone)) => tone,
-            (false, None) if self.danger && self.enabled => c.err,
-            (false, None) => c.ink,
-        };
-        let padding = match (self.large, self.text.is_empty() && !self.menu) {
-            (true, _) => theme.sized(36.),
-            (false, true) => theme.sized(14.),
-            (false, false) => theme.sized(20.),
-        };
-        let (ground, hovered) = match (self.primary, toned) {
-            (true, _) => (c.accent, c.accent_hi),
-            (false, Some(tone)) => (with_alpha(tone, 0.18), with_alpha(tone, 0.3)),
-            (false, None) => (c.ctl, c.ctl_hi),
-        };
-        let frame = if self.enabled { 1. } else { 0.4 };
-        let size = if self.large {
-            theme.body()
-        } else {
-            theme.small()
-        };
-        let weight = match (self.large, self.primary || toned.is_some()) {
-            (true, _) => theme.semibold,
-            (false, true) => theme.medium,
-            (false, false) => FontWeight::NORMAL,
-        };
-        let height = self.height.unwrap_or(if self.large {
-            theme.control_large()
-        } else {
-            theme.control()
-        });
-        let line = toned.unwrap_or(c.field_line);
-        div()
-            .id(self.id)
-            .relative()
-            .flex()
-            .flex_none()
-            .items_center()
-            .justify_center()
-            .gap(theme::GAP_SMALL)
-            .h(height)
-            .px(padding / 2.)
-            .rounded(theme::CORNER)
-            .bg(with_alpha(ground, frame))
-            .when(self.enabled, |d| d.hover(move |s| s.bg(hovered)))
-            .when(theme.appearance.high_contrast, |d| {
-                d.border_1().border_color(with_alpha(line, frame))
-            })
-            .when(self.primary && self.enabled, |d| {
-                d.children(halo(c.accent, theme::CORNER))
-            })
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(theme::GAP_SMALL)
-                    .when(!self.enabled, |d| d.opacity(0.5))
-                    .when_some(self.icon, |d, name| d.child(icon(name, theme.icon(), ink)))
-                    .when(!self.text.is_empty(), |d| {
-                        let shown = weighted(window, theme, self.text.clone(), size, weight);
-                        d.child(watched(
-                            div()
-                                .whitespace_nowrap()
-                                .sized_text(theme, size)
-                                .font_weight(weight)
-                                .text_color(ink),
-                            self.text,
-                            shown,
-                            false,
-                        ))
-                    })
-                    .when(self.menu, |d| {
-                        d.child(icon("chevron-down", theme.sized(12.), with_alpha(ink, 0.8)))
-                    }),
-            )
-            .when_some(self.on_click.filter(|_| self.enabled), |d, run| {
-                d.on_click(move |event, window, cx| {
-                    cx.stop_propagation();
-                    run(event, window, cx);
-                })
-            })
-    }
+    out
 }
 
 /// `Notice.qml`: a band in a tone, with a bar at its left.
@@ -259,114 +95,6 @@ pub fn notice(tone: Hsla) -> gpui::Div {
                 .w(px(2.))
                 .bg(tone),
         )
-}
-
-/// `Chip.qml`.
-#[derive(IntoElement)]
-pub struct Chip {
-    text: SharedString,
-    tone: Option<Hsla>,
-    icon: Option<&'static str>,
-    on_accent: bool,
-    pressable: bool,
-    max_width: Option<Pixels>,
-}
-
-impl Chip {
-    pub fn new(text: impl Into<SharedString>) -> Self {
-        Self {
-            text: text.into(),
-            tone: None,
-            icon: None,
-            on_accent: false,
-            pressable: false,
-            max_width: None,
-        }
-    }
-
-    pub fn icon(mut self, name: &'static str) -> Self {
-        self.icon = Some(name);
-        self
-    }
-
-    /// On a chosen row: a dark ground and the chosen row's ink.
-    pub fn on_accent(mut self, on: bool) -> Self {
-        self.on_accent = on;
-        self
-    }
-
-    /// As tall as a button, for a chip that is pressed.
-    pub fn pressable(mut self) -> Self {
-        self.pressable = true;
-        self
-    }
-
-    pub fn max_width(mut self, width: Pixels) -> Self {
-        self.max_width = Some(width);
-        self
-    }
-
-    pub fn tone(mut self, tone: Hsla) -> Self {
-        self.tone = Some(tone);
-        self
-    }
-}
-
-impl RenderOnce for Chip {
-    fn render(self, window: &mut Window, cx: &mut Cx) -> impl IntoElement {
-        let theme = cx.global::<Theme>();
-        let tone = self.tone.unwrap_or(theme.colours.ink2);
-        let ink = if self.on_accent {
-            theme.colours.on_selected
-        } else {
-            tone
-        };
-        let ground = if self.on_accent {
-            theme::hex("#38000000")
-        } else {
-            with_alpha(tone, 0.16)
-        };
-        let height = if self.pressable {
-            theme.control()
-        } else {
-            theme.tag()
-        };
-        div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap(theme::GAP_TINY)
-            .h(height)
-            .px(theme::GAP_CARD / 2.)
-            .rounded(height / 2.)
-            .bg(ground)
-            .when_some(self.max_width, |d, most| d.max_w(most))
-            .when_some(self.icon, |d, name| {
-                d.child(icon(name, theme.sized(11.), ink))
-            })
-            .when(!self.text.is_empty(), |d| {
-                let shown = weighted(
-                    window,
-                    theme,
-                    self.text.clone(),
-                    theme.caption(),
-                    theme.medium,
-                );
-                d.child(watched(
-                    div()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .whitespace_nowrap()
-                        .text_ellipsis()
-                        .sized_text(theme, theme.caption())
-                        .font_weight(theme.medium)
-                        .text_color(ink),
-                    self.text,
-                    shown,
-                    true,
-                ))
-            })
-    }
 }
 
 /// A text's width as drawn in the Theme's family, as `TextMetrics.advanceWidth` gives it.

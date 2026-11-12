@@ -8,8 +8,8 @@ use super::theme::Theme;
 use super::top_bar::top_bar;
 use crate::workspace::load_order::Side;
 use gpui::{
-    AppContext, Context, Entity, Focusable, IntoElement, ParentElement, Render, Styled, Window,
-    div, prelude::FluentBuilder,
+    AppContext, Context, Entity, Focusable, InteractiveElement, IntoElement, ParentElement, Render,
+    Styled, Window, div, prelude::FluentBuilder,
 };
 
 pub struct Shell {
@@ -22,6 +22,8 @@ pub struct Shell {
     /// The active mods with a newer Workshop version, on the Downloads tab.
     behind: usize,
     prompt: Entity<super::prompt::Prompt>,
+    menu: Entity<super::menu::Menu>,
+    notices: Entity<super::notices::Notices>,
     drawn: bool,
 }
 
@@ -68,11 +70,45 @@ impl Shell {
             downloads: None,
             behind: 0,
             prompt: super::prompt::install(cx),
+            menu: super::menu::install(cx),
+            notices: super::notices::install(cx),
             drawn: false,
         };
         shell.downloads(cx);
         shell.go(section, cx);
+        shell.show_asked(options, window, cx);
         shell
+    }
+
+    /// What `--notices` and `--open=` ask to be shown, as `Main.qml` showed them for pictures.
+    fn show_asked(&mut self, options: &Options, window: &mut Window, cx: &mut Context<Self>) {
+        use super::notices::{self, Tone};
+        use super::prompt::{self, Line, Question};
+        use crate::words::put;
+        use rimstack_core::{say, say_n};
+        if options.notices {
+            notices::say(put(&say!("Saved")), Tone::Ok, cx);
+            notices::offer(
+                put(&say_n!(3, "Deactivated {} mod", "Deactivated {} mods")),
+                put(&say!("Undo")),
+                |_, _| {},
+                cx,
+            );
+        }
+        if options.open.as_deref() == Some("ask") {
+            let question = Question {
+                title: put(&say!("Set the mods' settings aside")),
+                lines: vec![
+                    Line::Text(put(&say!("Every Mod_*.xml is moved out of"))),
+                    Line::Path("/home/example/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios/Config".into()),
+                    Line::Text(put(&say!("Mods start from their defaults. Moving the files back restores them."))),
+                ],
+                label: put(&say!("Set aside")),
+                danger: false,
+                run: Box::new(|_, _| {}),
+            };
+            prompt::ask(question, window, cx);
+        }
     }
 
     pub(crate) fn downloads(&mut self, cx: &mut Context<Self>) -> Entity<Downloads> {
@@ -133,6 +169,8 @@ impl Render for Shell {
             .flex()
             .flex_col()
             .size_full()
+            .on_action(|_: &super::focus::Next, window, cx| window.focus_next(cx))
+            .on_action(|_: &super::focus::Previous, window, cx| window.focus_prev(cx))
             .bg(win)
             .text_color(ink)
             .font_family(family)
@@ -156,6 +194,8 @@ impl Render for Shell {
                     ),
             )
             .child(status_bar(self.demo, last_start, cx))
+            .child(self.notices.clone())
+            .child(self.menu.clone())
             .child(self.prompt.clone())
     }
 }

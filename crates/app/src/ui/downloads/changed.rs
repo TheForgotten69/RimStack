@@ -3,14 +3,15 @@
 use super::screen::text_fill;
 use super::{Downloads, ShowMod};
 use crate::ui::card::Card;
+use crate::ui::controls::Choice;
 use crate::ui::theme::{self, Theme};
-use crate::ui::widgets::{Btn, Chip, TextSized, btn_width, icon, label, measure};
+use crate::ui::widgets::{Btn, Chip, TextSized, btn_width, icon, label};
 use crate::words::{count, put};
 use crate::workspace::changed::{ChangedShown, Only, since_shown};
 use crate::workspace::logs::{clock, day, moment};
 use gpui::{
-    AnyElement, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder,
+    AnyElement, Context, IntoElement, ParentElement, Pixels, Styled, Window, div,
+    prelude::FluentBuilder,
 };
 use rimstack_core::{say, say_n};
 
@@ -69,11 +70,15 @@ impl Downloads {
             })
             .child(
                 Btn::new(("changed-show", at), put(&say!("Show")))
+                    .spoken(put(&say!("Show {}", row.name.clone())))
+                    .tip(put(&say!("Enter")))
                     .on_click(cx.listener(move |_, _, _, cx| cx.emit(ShowMod(mod_id)))),
             )
             .when(!row.git, |d| {
                 d.child(
                     Btn::new(("changed-notes", at), "")
+                        .spoken(put(&say!("Change notes of {}", row.name.clone())))
+                        .tip(put(&say!("The mod's change notes on the Workshop.")))
                         .icon("external-link")
                         .on_click(move |_, _, cx| cx.open_url(&notes)),
                 )
@@ -140,7 +145,6 @@ impl Downloads {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let c = &theme.colours;
         let since = since_shown(&self.changed, self.since_only, &self.fetched);
         if since.count == 0 {
             return None;
@@ -196,45 +200,18 @@ impl Downloads {
                 Only::Active => 1,
                 Only::Inactive => 2,
             };
-            let wide = |name: &String| {
-                measure(window, theme, name, theme.small(), theme.semibold) + theme::GAP_LARGE * 2.
-            };
-            actions_width += names
-                .iter()
-                .map(wide)
-                .fold(Pixels::ZERO, |all, one| all + one)
-                + gpui::px(4.);
-            let segments = names.into_iter().enumerate().map(|(at, name)| {
-                let on = at == picked;
-                div()
-                    .id(("changed-only", at))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .px(theme::GAP_LARGE)
-                    .h(theme.segment())
-                    .rounded(theme::CORNER - gpui::px(1.))
-                    .when(on, |d| d.bg(c.ctl_hi))
-                    .child(
-                        label(theme, theme.small(), if on { c.ink } else { c.ink2 }, name)
-                            .font_weight(if on {
-                                theme.semibold
-                            } else {
-                                FontWeight::NORMAL
-                            }),
-                    )
-                    .on_click(cx.listener(move |d, _, _, cx| {
-                        d.since_only = [Only::All, Only::Active, Only::Inactive][at];
-                        cx.notify();
-                    }))
-            });
+            let names: Vec<gpui::SharedString> = names.into_iter().map(Into::into).collect();
+            actions_width += Choice::width(window, theme, &names);
+            let me = cx.entity().downgrade();
             actions.push(
-                div()
-                    .flex()
-                    .p(gpui::px(2.))
-                    .rounded(theme::CORNER)
-                    .bg(c.seg)
-                    .children(segments)
+                Choice::new("changed-only", names, picked)
+                    .title(put(&say!("Changed mods shown")))
+                    .on_pick(move |at, _, cx| {
+                        let _ = me.update(cx, |d, cx| {
+                            d.since_only = [Only::All, Only::Active, Only::Inactive][at];
+                            cx.notify();
+                        });
+                    })
                     .into_any_element(),
             );
         }
@@ -243,6 +220,7 @@ impl Downloads {
             actions_width += btn_width(window, theme, &ask, true, false) + theme::GAP_SMALL;
             actions.push(
                 Btn::new("fetch-notes", ask)
+                    .tip(put(&say!("Reads each mod's change notes from its Workshop page. Only the Workshop ids are sent.")))
                     .icon("download")
                     .enabled(!self.notes_busy)
                     .on_click(cx.listener(|d, _, _, cx| d.fetch_since_notes(cx)))
