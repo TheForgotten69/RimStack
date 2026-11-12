@@ -481,7 +481,7 @@ pub(super) fn columns(theme: &Theme, orders: &Orders, width: Pixels, window: &Wi
         }
         shown.retain(|key| *key != dropped);
     }
-    let tile = width - bar_room(theme) >= theme.sized(420.);
+    let tile = theme.appearance.comfortable && width - bar_room(theme) >= theme.sized(420.);
     let fitting: Vec<(&'static str, Pixels)> = shown
         .into_iter()
         .map(|key| (key, column_width(key)))

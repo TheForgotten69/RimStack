@@ -36,7 +36,7 @@ pub fn height(theme: &Theme, row: &RowView, columns: bool) -> Pixels {
         theme.sized(22.)
     } else if row.is_header {
         theme.sized(32.)
-    } else if columns {
+    } else if columns && theme.appearance.comfortable {
         theme.sized(52.).max(theme.row() + theme::GAP_MEDIUM)
     } else {
         theme.row()

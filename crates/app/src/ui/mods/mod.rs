@@ -450,6 +450,30 @@ impl Mods {
         self.active_list.update(cx, |list, cx| list.start_bench(cx));
     }
 
+    pub fn overview(&self) -> Option<Rc<crate::workspace::load_order::Overview>> {
+        self.overview.clone()
+    }
+
+    /// Marks the mods as working on this game version, or takes the mark off.
+    pub fn trust(
+        &mut self,
+        ids: Vec<rimstack_core::mods::library::ModId>,
+        yes: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let app = super::app(cx);
+        app.set_version_ok(&ids, yes);
+        self.order.recheck(&app);
+        self.show(cx);
+    }
+
+    /// The load order becomes `ids`, unsaved.
+    pub fn use_list(&mut self, ids: Vec<String>, cx: &mut Context<Self>) {
+        let app = super::app(cx);
+        self.order.use_list(&app, ids);
+        self.show(cx);
+    }
+
     /// How many active mods Downloads found behind their Workshop version.
     pub fn set_behind(&mut self, behind: usize, cx: &mut Context<Self>) {
         self.behind = behind;

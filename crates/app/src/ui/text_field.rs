@@ -77,7 +77,12 @@ pub struct TextField {
     marked: Option<Range<usize>>,
     shaped: Option<(ShapedLine, Bounds<Pixels>)>,
     size: Pixels,
+    /// Shown as bullets, as `TextInput.Password`: a key, which is not copied either.
+    masked: bool,
 }
+
+/// What a masked field shows for each character.
+const BULLET: char = '\u{25cf}';
 
 impl EventEmitter<Edited> for TextField {}
 impl EventEmitter<Entered> for TextField {}
@@ -98,6 +103,33 @@ impl TextField {
             marked: None,
             shaped: None,
             size,
+            masked: false,
+        }
+    }
+
+    pub fn set_masked(&mut self, masked: bool) {
+        self.masked = masked;
+    }
+
+    /// Where `at`, a place in the text, is in what is shown.
+    fn shown_at(&self, at: usize) -> usize {
+        match self.masked {
+            true => self.text[..at].chars().count() * BULLET.len_utf8(),
+            false => at,
+        }
+    }
+
+    /// The place in the text of `shown`, a place in what is shown.
+    fn text_at(&self, shown: usize) -> usize {
+        match self.masked {
+            true => {
+                let chars = shown / BULLET.len_utf8();
+                self.text
+                    .char_indices()
+                    .nth(chars)
+                    .map_or(self.text.len(), |(at, _)| at)
+            }
+            false => shown,
         }
     }
 
@@ -218,7 +250,7 @@ impl TextField {
     }
 
     fn copy(&mut self, _: &Copy, _: &mut Window, cx: &mut Context<Self>) {
-        if !self.selected.is_empty() {
+        if !self.selected.is_empty() && !self.masked {
             cx.write_to_clipboard(ClipboardItem::new_string(
                 self.text[self.selected.clone()].to_string(),
             ));
@@ -264,8 +296,12 @@ impl TextField {
     }
 
     fn shape(&self, window: &Window, theme: &Theme) -> ShapedLine {
+        let shown = match self.masked {
+            true => self.text.chars().map(|_| BULLET).collect(),
+            false => self.text.clone(),
+        };
         let run = TextRun {
-            len: self.text.len(),
+            len: shown.len(),
             font: gpui::font(theme.family.clone()),
             color: theme.colours.ink,
             background_color: None,
@@ -276,12 +312,9 @@ impl TextField {
             }),
             strikethrough: None,
         };
-        window.text_system().shape_line(
-            SharedString::from(self.text.clone()),
-            self.size,
-            &[run],
-            None,
-        )
+        window
+            .text_system()
+            .shape_line(SharedString::from(shown), self.size, &[run], None)
     }
 }
 
@@ -380,11 +413,11 @@ impl EntityInputHandler for TextField {
         let range = self.range_of_utf16(&range);
         Some(Bounds::from_corners(
             point(
-                bounds.left() + shaped.x_for_index(range.start),
+                bounds.left() + shaped.x_for_index(self.shown_at(range.start)),
                 bounds.top(),
             ),
             point(
-                bounds.left() + shaped.x_for_index(range.end),
+                bounds.left() + shaped.x_for_index(self.shown_at(range.end)),
                 bounds.bottom(),
             ),
         ))
@@ -399,7 +432,7 @@ impl EntityInputHandler for TextField {
         let (shaped, bounds) = self.shaped.as_ref()?;
         let index = shaped
             .index_for_x(at.x - bounds.left())
-            .unwrap_or(self.text.len());
+            .map_or(self.text.len(), |shown| self.text_at(shown));
         Some(self.to_utf16(index))
     }
 }
@@ -411,8 +444,8 @@ impl Render for TextField {
         let focus = self.focus.clone();
         let shaped = self.shape(window, &theme);
         let (selected, cursor, focused) = (
-            self.selected.clone(),
-            self.cursor(),
+            self.shown_at(self.selected.start)..self.shown_at(self.selected.end),
+            self.shown_at(self.cursor()),
             focus.is_focused(window),
         );
         let (ink, accent) = (theme.colours.ink, theme.colours.accent);

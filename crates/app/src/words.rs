@@ -75,6 +75,18 @@ pub fn show_in(words: Words) {
     ON_SCREEN.with(|on_screen| *on_screen.borrow_mut() = Rc::new(words));
 }
 
+/// How many texts the language in use words otherwise than English, as `Theme.words` counted.
+pub fn translated() -> usize {
+    ON_SCREEN.with(|on_screen| {
+        on_screen
+            .borrow()
+            .table
+            .keys()
+            .filter(|key| key.as_str() != LOCALE)
+            .count()
+    })
+}
+
 pub fn put(sentence: &Sentence) -> String {
     let words = ON_SCREEN.with(|on_screen| on_screen.borrow().clone());
     sentence.put(words.as_ref())

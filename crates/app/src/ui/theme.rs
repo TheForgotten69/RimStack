@@ -205,21 +205,61 @@ pub const SWATCHES: [(&str, &str, &str); 13] = [
     ("Orange", "#e09a5c", "#a8621e"),
 ];
 
-/// The terms `Theme.terms` explains: a title or label that is one is underlined with dots.
-pub const TERMS: [&str; 13] = [
-    "Load order",
-    "Own rules",
-    "Community rules",
-    "Detected from files",
-    "Texture conflicts",
-    "Patched methods",
-    "Group",
-    "Textures set aside",
-    "Folders the game loads from",
-    "Requires",
-    "Filed under",
-    "DDS",
-    "To review",
+/// `Theme.terms`: a title or label that is one of these is underlined with dots, and its
+/// meaning is its tip.
+pub const TERMS: [(&str, &str); 13] = [
+    (
+        "Load order",
+        "The order in which the game loads the active mods. A mod that changes another has to load after it.",
+    ),
+    (
+        "Own rules",
+        "Rules you added: this mod loads after, or before, that one. Sort follows them before anything else.",
+    ),
+    (
+        "Community rules",
+        "Load-order rules written by players (RimSort's Community Rules Database), for mods whose own files do not say enough.",
+    ),
+    (
+        "Detected from files",
+        "What a mod's files point at in another mod. A hint for Sort, not something the game requires.",
+    ),
+    (
+        "Texture conflicts",
+        "Two active mods provide a picture under the same name. The game uses the one from the mod that loads later.",
+    ),
+    (
+        "Patched methods",
+        "The game's methods that this mod's code changes with the Harmony library. Two mods that patch the same method may conflict.",
+    ),
+    (
+        "Group",
+        "A mod's first tag. Inside a category, mods with the same first tag are kept side by side under its name.",
+    ),
+    (
+        "Textures set aside",
+        "Files RimStack renamed inside this mod so the game skips them. Nothing is deleted.",
+    ),
+    (
+        "Folders the game loads from",
+        "A mod can ship a folder per game version or per other mod; the game reads only those that apply.",
+    ),
+    (
+        "Requires",
+        "Mods this one needs active, as its About.xml says.",
+    ),
+    (
+        "Filed under",
+        "The category Sort keeps this mod in. Categories load in a fixed order: loaders, the game, libraries, content, patches, textures.",
+    ),
+    (
+        "DDS",
+        "A texture format the game loads faster than PNG. RimStack writes DDS copies beside the PNG files.",
+    ),
+    (
+        "To review",
+        "Not problems: things to look at when you have time.",
+    ),
 ];
 
 /// The category names as `LoadOrder` gives them, in category order.
@@ -273,6 +313,15 @@ pub enum ThemeName {
 }
 
 impl ThemeName {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Rim => "rim",
+            Self::Dark => "dark",
+            Self::Oled => "oled",
+            Self::Light => "light",
+        }
+    }
+
     pub fn named(name: &str) -> Option<Self> {
         Some(match name {
             "rim" => Self::Rim,
@@ -298,8 +347,12 @@ pub struct Appearance {
     pub theme: ThemeName,
     pub text_scale: f32,
     pub large_rows: bool,
+    /// The load order's rows with the mods' pictures, as Qt's `comfortable`.
+    pub comfortable: bool,
     pub high_contrast: bool,
     pub reduce_motion: bool,
+    /// The user's own colours for this theme, from theme.json, when they are used.
+    pub own: Vec<(String, String)>,
 }
 
 impl Default for Appearance {
@@ -308,8 +361,89 @@ impl Default for Appearance {
             theme: ThemeName::Rim,
             text_scale: 1.0,
             large_rows: false,
+            comfortable: true,
             high_contrast: false,
             reduce_motion: false,
+            own: Vec::new(),
+        }
+    }
+}
+
+/// `Theme.colourNames`: the colours a theme sets, as theme.json names them.
+pub const COLOUR_NAMES: [&str; 28] = [
+    "win",
+    "panel",
+    "bar",
+    "ctl",
+    "ctlHi",
+    "line",
+    "edge",
+    "well",
+    "seg",
+    "chip",
+    "hover",
+    "ink",
+    "ink2",
+    "ink3",
+    "brand",
+    "fieldLine",
+    "accent",
+    "accentHi",
+    "focus",
+    "accentInk",
+    "err",
+    "warn",
+    "ok",
+    "moved",
+    "banner",
+    "dangerBg",
+    "scrim",
+    "card",
+];
+
+impl Appearance {
+    /// `Theme.colour(key)` as its text: high contrast first, then the user's own, then the theme.
+    pub fn colour_text(&self, key: &str) -> Option<String> {
+        let (own, high) = self.theme.tables();
+        let find = |table: Table| {
+            table
+                .iter()
+                .find(|(k, _)| *k == key)
+                .map(|(_, v)| (*v).to_string())
+        };
+        let raised = self.high_contrast.then(|| find(high)).flatten();
+        let mine = self
+            .own
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.clone());
+        raised.or(mine).or_else(|| find(own))
+    }
+
+    /// What `AppPrefs.qml` kept in `[Appearance]`; `own` gives the theme's own colours when they
+    /// are used.
+    pub fn of(
+        prefs: &rimstack_core::kept::prefs::Prefs,
+        own: impl FnOnce(&str) -> Vec<(String, String)>,
+    ) -> Self {
+        let group = "Appearance";
+        let flag = |key: &str, otherwise: bool| prefs.flag(group, key).unwrap_or(otherwise);
+        let theme = prefs
+            .get(group, "theme")
+            .and_then(|name| ThemeName::named(&name))
+            .unwrap_or(ThemeName::Rim);
+        Self {
+            theme,
+            text_scale: prefs.number(group, "textScale").map_or(1.0, |n| n as f32),
+            large_rows: flag("largeRows", false),
+            comfortable: flag("comfortable", true),
+            high_contrast: flag("highContrast", false),
+            reduce_motion: flag("reduceMotion", false),
+            own: if flag("ownColours", false) {
+                own(theme.name())
+            } else {
+                Vec::new()
+            },
         }
     }
 }
@@ -368,7 +502,15 @@ impl Theme {
                 "onSelectedDim" => ink2,
                 _ => "#ff00ff",
             };
-            hex(raised.or_else(|| find(own, key)).unwrap_or(fallback))
+            let mine = appearance
+                .own
+                .iter()
+                .find(|(k, _)| k == key)
+                .map(|(_, v)| v.as_str());
+            hex(raised
+                .or(mine)
+                .or_else(|| find(own, key))
+                .unwrap_or(fallback))
         };
         let scale = appearance.text_scale.clamp(0.85, 1.6);
         Self {
@@ -383,6 +525,18 @@ impl Theme {
             scale,
             grow: scale.max(1.0),
             appearance,
+        }
+    }
+
+    /// This theme in another appearance: the same family and font measures.
+    pub fn with_appearance(&self, appearance: Appearance) -> Self {
+        Self {
+            mono: self.mono.clone(),
+            ascent: self.ascent,
+            descent: self.descent,
+            semibold: self.semibold,
+            medium: self.medium,
+            ..Self::new(appearance, self.family.clone())
         }
     }
 

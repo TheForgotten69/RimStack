@@ -78,6 +78,16 @@ impl ModList {
         let theme = cx.global::<Theme>().clone();
         let mut scroll = Scroll::default();
         scroll.set_reduce_motion(theme.appearance.reduce_motion);
+        cx.observe_global::<Theme>(|list, cx| {
+            let theme = cx.global::<Theme>().clone();
+            list.tops = tops_of(&theme, list.side, &list.shown.rows);
+            list.scroll
+                .borrow_mut()
+                .set_reduce_motion(theme.appearance.reduce_motion);
+            *list.made.borrow_mut() = Made::default();
+            cx.notify();
+        })
+        .detach();
         Self {
             side,
             tops: tops_of(&theme, side, &shown.rows),

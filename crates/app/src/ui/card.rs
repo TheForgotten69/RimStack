@@ -29,9 +29,15 @@ pub struct Card {
 
 /// Whether a title is one of the terms the window explains: those are underlined with dots.
 pub fn defined(title: &str) -> bool {
-    theme::TERMS
+    meaning(title).is_some()
+}
+
+/// `Theme.meaning`: what a term means, in the language in use, the term given in it or in English.
+pub fn meaning(title: &str) -> Option<String> {
+    let (_, meaning) = theme::TERMS
         .iter()
-        .any(|term| put(&Sentence::said(term, Vec::new())) == title)
+        .find(|(term, _)| *term == title || put(&Sentence::said(term, Vec::new())) == title)?;
+    Some(put(&Sentence::said(meaning, Vec::new())))
 }
 
 impl Card {
@@ -168,11 +174,13 @@ impl Card {
             ),
             (false, _) => (None, None),
         };
+        let meaning = meaning(&self.title);
         let title = label(theme, theme.small(), tone, self.title.clone())
             .font_weight(theme.semibold)
-            .when(defined(&self.title), |d| {
+            .when(meaning.is_some(), |d| {
                 d.border_b_1().border_dashed().border_color(tone)
             });
+        let title = super::tip::tipped(title.id("card-title"), meaning.unwrap_or_default().into());
         let note = div()
             .flex_1()
             .min_w_0()

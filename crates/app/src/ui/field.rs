@@ -26,7 +26,10 @@ impl Field<'_> {
         let field = self.text.read(cx);
         let (empty, focused) = (field.text().is_empty(), field.is_focused(window));
         let focus = field.focus_handle(cx);
-        let lead = theme::GAP_SMALL + theme.icon() + theme::GAP;
+        let lead = match self.icon.is_empty() {
+            true => theme::GAP_SMALL,
+            false => theme::GAP_SMALL + theme.icon() + theme::GAP,
+        };
         let held = self.text.clone();
         div()
             .id(self.id)
@@ -44,16 +47,18 @@ impl Field<'_> {
             .when(focused, |d| d.children(halo(c.focus, theme::CORNER)))
             .cursor_text()
             .on_click(move |_, window, cx| window.focus(&focus, cx))
-            .child(
-                div()
-                    .absolute()
-                    .left(theme::GAP)
-                    .top_0()
-                    .bottom_0()
-                    .flex()
-                    .items_center()
-                    .child(icon(self.icon, theme.icon() - px(1.), c.ink3)),
-            )
+            .when(!self.icon.is_empty(), |d| {
+                d.child(
+                    div()
+                        .absolute()
+                        .left(theme::GAP)
+                        .top_0()
+                        .bottom_0()
+                        .flex()
+                        .items_center()
+                        .child(icon(self.icon, theme.icon() - px(1.), c.ink3)),
+                )
+            })
             .child(
                 div()
                     .relative()

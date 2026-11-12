@@ -199,6 +199,7 @@ mod tests {
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct KeyShown {
     pub stored: bool,
     pub available: bool,

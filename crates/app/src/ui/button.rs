@@ -6,10 +6,12 @@ use super::theme::{self, Theme};
 use super::tip::tipped;
 use super::widgets::{TextSized, halo, icon, watched, weighted, with_alpha};
 use gpui::{
-    App as Cx, ClickEvent, ElementId, FontWeight, Hsla, InteractiveElement, IntoElement,
+    App as Cx, Bounds, ClickEvent, ElementId, FontWeight, Hsla, InteractiveElement, IntoElement,
     ParentElement, Pixels, RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled,
     Window, div, prelude::FluentBuilder,
 };
+use std::cell::Cell;
+use std::rc::Rc;
 
 type Click = Box<dyn Fn(&ClickEvent, &mut Window, &mut Cx)>;
 
@@ -29,6 +31,8 @@ pub struct Btn {
     tip: SharedString,
     spoken: Option<SharedString>,
     on_click: Option<Click>,
+    /// Where the button was drawn, for a menu it opens.
+    placed: Option<Rc<Cell<Bounds<Pixels>>>>,
 }
 
 impl Btn {
@@ -47,6 +51,7 @@ impl Btn {
             tip: SharedString::default(),
             spoken: None,
             on_click: None,
+            placed: None,
         }
     }
 
@@ -111,6 +116,15 @@ impl Btn {
 
     pub fn on_click(mut self, run: impl Fn(&ClickEvent, &mut Window, &mut Cx) + 'static) -> Self {
         self.on_click = Some(Box::new(run));
+        self
+    }
+
+    /// A button that opens a menu: `run` is given where the button is, to open it under.
+    pub fn opens(mut self, run: impl Fn(Bounds<Pixels>, &mut Window, &mut Cx) + 'static) -> Self {
+        let at: Rc<Cell<Bounds<Pixels>>> = Rc::default();
+        self.menu = true;
+        self.placed = Some(at.clone());
+        self.on_click = Some(Box::new(move |_, window, cx| run(at.get(), window, cx)));
         self
     }
 }
@@ -214,6 +228,13 @@ impl RenderOnce for Btn {
                     run(event, window, cx);
                 })
             });
+        let control = control.when_some(self.placed, |d, at| {
+            d.child(
+                gpui::canvas(move |bounds, _, _| at.set(bounds), |_, _, _, _| {})
+                    .absolute()
+                    .inset_0(),
+            )
+        });
         let control = match self.enabled {
             true => focus::reachable(control, &handle, theme::CORNER, false, window, theme),
             false => control,

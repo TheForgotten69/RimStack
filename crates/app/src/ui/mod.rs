@@ -14,6 +14,7 @@ pub mod page;
 pub mod problem;
 pub mod prompt;
 pub mod rows;
+pub mod settings;
 pub mod shell;
 pub mod status_bar;
 pub mod text_field;
@@ -57,6 +58,8 @@ pub struct Options {
     pub notices: bool,
     /// What is open at the start, as `--open=` names it, for pictures.
     pub open: Option<String>,
+    /// The part of Settings shown, as `--part=` gives it.
+    pub part: usize,
 }
 
 impl Options {
@@ -76,6 +79,7 @@ impl Options {
                 "--tab" => options.tab = value.parse().unwrap_or(0),
                 "--notices" => options.notices = true,
                 "--open" => options.open = Some(value.to_string()),
+                "--part" => options.part = value.parse().unwrap_or(0),
                 _ => {}
             }
         }
@@ -145,8 +149,35 @@ fn system_family_for(generic: &str) -> Option<String> {
     None
 }
 
-pub fn appearance(options: &Options) -> Appearance {
-    let mut appearance = Appearance::default();
+/// The appearance kept in `RimStack.conf`, with the theme's own colours when they are used.
+fn kept_appearance(app: &App) -> Appearance {
+    Appearance::of(&app.prefs(), |theme| {
+        let own = app.own_colours(theme);
+        own.into_iter()
+            .filter_map(|(key, value)| Some((key, value.as_str()?.to_string())))
+            .collect()
+    })
+}
+
+/// Draws every window again in the appearance kept now.
+pub fn retheme(cx: &mut Cx) {
+    let appearance = kept_appearance(&app(cx));
+    let theme = cx.global::<Theme>().with_appearance(appearance);
+    cx.set_global(theme);
+    cx.refresh_windows();
+}
+
+/// Keeps a preference of `[Appearance]` and shows the window in it.
+pub fn keep_appearance(key: &str, value: &str, cx: &mut Cx) {
+    match app(cx).keep_pref("Appearance", key, value) {
+        Ok(()) => retheme(cx),
+        Err(problem) => rimstack_core::problem!("{problem}"),
+    }
+}
+
+/// The kept appearance, but for what the command line asks for a picture.
+pub fn appearance(app: &App, options: &Options) -> Appearance {
+    let mut appearance = kept_appearance(app);
     if let Some(theme) = options.theme {
         appearance.theme = theme;
     }
@@ -156,20 +187,43 @@ pub fn appearance(options: &Options) -> Appearance {
     appearance
 }
 
-/// Sets what every view reads: the `App` and the Theme.
-pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
-    let family = system_family();
+/// `theme` in `family`, the system's when none: its weights, and its ascent and descent read.
+fn in_family(theme: Theme, family: Option<&str>, cx: &Cx) -> Theme {
+    let family = family.map_or_else(system_family, str::to_string);
     let weights = weights_of(&family);
-    let mut theme = Theme::new(appearance(options), family).with_weights(&weights);
-    if let Some(mono) = system_family_for("monospace") {
-        theme.mono = mono.into();
-    }
-
+    let mut theme = Theme::new(theme.appearance.clone(), family).with_weights(&weights);
     let text = cx.text_system();
     let id = text.resolve_font(&font(theme.family.clone()));
     let at = theme::PROBE;
     theme.ascent = text.ascent(id, at) / at;
     theme.descent = text.descent(id, at).abs() / at;
+    theme
+}
+
+/// Every text in `family` from now on; the system's font when it is empty.
+pub fn use_font(family: &str, cx: &mut Cx) {
+    let old = cx.global::<Theme>().clone();
+    let mut theme = in_family(old.clone(), (!family.is_empty()).then_some(family), cx);
+    theme.mono = old.mono;
+    cx.set_global(theme);
+    cx.refresh_windows();
+}
+
+/// Sets what every view reads: the `App` and the Theme.
+pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
+    let chosen = app
+        .settings()
+        .get("font")
+        .map(str::to_string)
+        .filter(|f| !f.is_empty());
+    let mut theme = in_family(
+        Theme::new(appearance(&app, options), ""),
+        chosen.as_deref(),
+        cx,
+    );
+    if let Some(mono) = system_family_for("monospace") {
+        theme.mono = mono.into();
+    }
     cx.set_global(theme);
     cx.set_global(Shared(app));
     text_field::bind_keys(cx);

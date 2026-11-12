@@ -12,6 +12,9 @@ use gpui::{
     Styled, Window, div, prelude::FluentBuilder,
 };
 
+/// The section of the Settings screen, as `Theme.sections.settings`.
+const SETTINGS: usize = 7;
+
 pub struct Shell {
     section: usize,
     demo: bool,
@@ -21,6 +24,9 @@ pub struct Shell {
     downloads: Option<Entity<Downloads>>,
     /// The active mods with a newer Workshop version, on the Downloads tab.
     behind: usize,
+    /// Made the first time Settings is shown; `part` is the one it opens on.
+    pub(crate) settings: Option<Entity<super::settings::Settings>>,
+    part: usize,
     prompt: Entity<super::prompt::Prompt>,
     menu: Entity<super::menu::Menu>,
     notices: Entity<super::notices::Notices>,
@@ -69,6 +75,8 @@ impl Shell {
             mods,
             downloads: None,
             behind: 0,
+            settings: None,
+            part: options.part,
             prompt: super::prompt::install(cx),
             menu: super::menu::install(cx),
             notices: super::notices::install(cx),
@@ -139,6 +147,17 @@ impl Shell {
         if section == 1 {
             self.downloads(cx);
         }
+        if section == SETTINGS && self.settings.is_none() {
+            let (demo, part, mods) = (self.demo, self.part, self.mods.clone());
+            let settings = cx.new(|cx| super::settings::Settings::new(demo, part, mods, cx));
+            cx.subscribe(&settings, |shell, _, super::settings::UseList(ids), cx| {
+                let ids = ids.clone();
+                shell.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
+                shell.go(0, cx);
+            })
+            .detach();
+            self.settings = Some(settings);
+        }
         cx.notify();
     }
 }
@@ -191,6 +210,10 @@ impl Render for Shell {
                     .when_some(
                         self.downloads.clone().filter(|_| self.section == 1),
                         |d, downloads| d.child(downloads),
+                    )
+                    .when_some(
+                        self.settings.clone().filter(|_| self.section == SETTINGS),
+                        |d, settings| d.child(settings),
                     ),
             )
             .child(status_bar(self.demo, last_start, cx))
