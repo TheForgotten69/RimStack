@@ -95,6 +95,12 @@ pub struct TextField {
     kept_on_escape: bool,
     wrapped: Option<(area::Wrapped, Bounds<Pixels>)>,
     rows_drawn: std::cell::Cell<usize>,
+    /// Shown to be selected and copied, never typed in, as `CopyText` was.
+    read_only: bool,
+    weight: Option<gpui::FontWeight>,
+    colour: Option<gpui::Hsla>,
+    /// A press is held to select.
+    dragging: bool,
 }
 
 /// What a masked field shows for each character.
@@ -125,6 +131,84 @@ impl TextField {
             kept_on_escape: false,
             wrapped: None,
             rows_drawn: std::cell::Cell::new(1),
+            read_only: false,
+            weight: None,
+            colour: None,
+            dragging: false,
+        }
+    }
+
+    /// Text to select and copy only, wrapped to its width as `CopyText` was.
+    pub fn read_only(mut self) -> Self {
+        self.read_only = true;
+        self.several_lines(1)
+    }
+
+    pub fn weight(mut self, weight: gpui::FontWeight) -> Self {
+        self.weight = Some(weight);
+        self
+    }
+
+    pub fn colour(mut self, colour: gpui::Hsla) -> Self {
+        self.colour = Some(colour);
+        self
+    }
+
+    /// The place of the text under `at`, a point in the window.
+    fn index_at(&self, at: Point<Pixels>) -> Option<usize> {
+        if let Some((wrapped, bounds)) = &self.wrapped {
+            return Some(wrapped.index_at(at - bounds.origin));
+        }
+        let (shaped, bounds) = self.shaped.as_ref()?;
+        Some(self.text_at(shaped.closest_index_for_x(at.x - bounds.left())))
+    }
+
+    /// The word around `at`, as a double click chooses it.
+    fn word_at(&self, at: usize) -> Range<usize> {
+        let word = |c: char| c.is_alphanumeric() || c == '_';
+        let start = self.text[..at]
+            .char_indices()
+            .rev()
+            .take_while(|(_, c)| word(*c))
+            .last()
+            .map_or(at, |(i, _)| i);
+        let end = self.text[at..]
+            .char_indices()
+            .take_while(|(_, c)| word(*c))
+            .last()
+            .map_or(at, |(i, c)| at + i + c.len_utf8());
+        start..end
+    }
+
+    fn pressed(
+        &mut self,
+        event: &gpui::MouseDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        window.focus(&self.focus, cx);
+        let Some(at) = self.index_at(event.position) else {
+            return;
+        };
+        match (event.click_count, event.modifiers.shift) {
+            (2, _) => {
+                self.selected = self.word_at(at);
+                self.reversed = false;
+                cx.notify();
+            }
+            (_, true) => self.select_to(at, cx),
+            _ => self.move_to(at, cx),
+        }
+        self.dragging = event.click_count < 2;
+    }
+
+    fn moved(&mut self, event: &gpui::MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
+        if !self.dragging || event.pressed_button != Some(gpui::MouseButton::Left) {
+            self.dragging = false;
+            return;
+        }
+        if let Some(at) = self.index_at(event.position) {
+            self.select_to(at, cx);
         }
     }
 
@@ -309,6 +393,9 @@ impl TextField {
     }
 
     fn backspace(&mut self, _: &Backspace, window: &mut Window, cx: &mut Context<Self>) {
+        if self.read_only {
+            return cx.propagate();
+        }
         if self.selected.is_empty() {
             self.select_to(self.previous(self.cursor()), cx);
         }
@@ -316,6 +403,9 @@ impl TextField {
     }
 
     fn delete(&mut self, _: &Delete, window: &mut Window, cx: &mut Context<Self>) {
+        if self.read_only {
+            return cx.propagate();
+        }
         if self.selected.is_empty() {
             self.select_to(self.next(self.cursor()), cx);
         }
@@ -323,6 +413,9 @@ impl TextField {
     }
 
     fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
+        if self.read_only {
+            return;
+        }
         if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
             let text = match self.area {
                 0 => text.replace('\n', " "),
@@ -342,10 +435,16 @@ impl TextField {
 
     fn cut(&mut self, _: &Cut, window: &mut Window, cx: &mut Context<Self>) {
         self.copy(&Copy, window, cx);
+        if self.read_only {
+            return;
+        }
         self.replace_text_in_range(None, "", window, cx);
     }
 
     fn enter(&mut self, _: &Enter, window: &mut Window, cx: &mut Context<Self>) {
+        if self.read_only {
+            return cx.propagate();
+        }
         match self.area {
             0 => cx.emit(Entered),
             _ => self.replace_text_in_range(None, "\n", window, cx),
@@ -387,8 +486,11 @@ impl TextField {
     fn run(&self, theme: &Theme, len: usize) -> TextRun {
         TextRun {
             len,
-            font: gpui::font(theme.family.clone()),
-            color: theme.colours.ink,
+            font: gpui::Font {
+                weight: self.weight.unwrap_or_default(),
+                ..gpui::font(theme.family.clone())
+            },
+            color: self.colour.unwrap_or(theme.colours.ink),
             background_color: None,
             underline: self.marked.as_ref().map(|_| gpui::UnderlineStyle {
                 thickness: px(1.),
@@ -451,6 +553,9 @@ impl EntityInputHandler for TextField {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.read_only {
+            return;
+        }
         let range = range
             .as_ref()
             .map(|range| self.range_of_utf16(range))
@@ -477,6 +582,9 @@ impl EntityInputHandler for TextField {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.read_only {
+            return;
+        }
         let range = range
             .as_ref()
             .map(|range| self.range_of_utf16(range))
@@ -562,6 +670,13 @@ impl TextField {
             .on_action(cx.listener(Self::enter))
             .on_action(cx.listener(Self::up))
             .on_action(cx.listener(Self::down))
+            .cursor_text()
+            .on_mouse_down(gpui::MouseButton::Left, cx.listener(Self::pressed))
+            .on_mouse_move(cx.listener(Self::moved))
+            .on_mouse_up(
+                gpui::MouseButton::Left,
+                cx.listener(|field, _, _, _| field.dragging = false),
+            )
     }
 
     fn paint_area(&mut self, theme: &Theme, cx: &mut Context<Self>) -> gpui::Canvas<()> {
@@ -572,8 +687,11 @@ impl TextField {
             theme.line(self.size),
             self.run(theme, self.text.len()),
         );
-        let (selected, cursor, focused) =
-            (self.selected.clone(), self.cursor(), self.focused.get());
+        let (selected, cursor, focused) = (
+            self.selected.clone(),
+            self.cursor(),
+            self.focused.get() && !self.read_only,
+        );
         let (ink, accent) = (theme.colours.ink, theme.colours.accent);
         let drawn = self.rows_drawn.get();
         canvas(

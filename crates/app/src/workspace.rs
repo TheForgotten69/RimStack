@@ -110,6 +110,8 @@ pub struct App {
     facts_runs: AtomicU64,
     facts_counted: std::sync::atomic::AtomicUsize,
     behind: RwLock<Option<HashSet<String>>>,
+    /// Why the community data last failed to download; `None` once one succeeds.
+    community_problem: RwLock<Option<rimstack_core::base::sentence::Sentence>>,
     list_on_disk: Mutex<(u64, bool)>,
     /// Read once: git installed later is not seen.
     git: OnceLock<Option<String>>,
@@ -188,6 +190,7 @@ impl App {
             facts_runs: AtomicU64::new(0),
             facts_counted: Default::default(),
             behind: RwLock::new(None),
+            community_problem: RwLock::new(None),
             list_on_disk: Mutex::new((0, false)),
             git: OnceLock::new(),
             log_read: Mutex::new(None),

@@ -64,14 +64,14 @@ impl DetailsView {
             .flex_col()
             .p(theme::GAP_CARD)
             .pr(theme::GAP_CARD + bar);
+        if let Some(comparison) = self.shown.comparison.clone() {
+            return scrolled.child(self.compare_summary(theme, &comparison));
+        }
         if self.shown.problems_open && !self.shown.previewing {
             let inner = width - bar - theme::GAP_CARD * 2.;
             if let Some(panel) = self.problems_pane(theme, inner, window) {
                 return scrolled.child(panel);
             }
-        }
-        if let Some(comparison) = self.shown.comparison.clone() {
-            return scrolled.child(self.compare_summary(theme, &comparison));
         }
         if let Some(groups) = self
             .shown
@@ -132,11 +132,11 @@ impl DetailsView {
         scrolled
             .gap(theme::GAP_CARD)
             .child(head)
+            .when(!self.shown.demo, |d| d.children(self.verdict(theme)))
+            .children(self.review(theme, cx))
+            .children(self.slowest(theme, cx))
             .when(!self.shown.demo, |d| {
-                d.children(self.verdict(theme))
-                    .children(self.review(theme, cx))
-                    .children(self.slowest(theme, cx))
-                    .children(self.kept(theme, cx))
+                d.children(self.kept(theme, window, cx))
             })
     }
 
@@ -167,7 +167,13 @@ impl DetailsView {
             .enumerate()
             .map(|(at, said)| {
                 let act = super::edit::acting(self.mods.clone(), said);
-                crate::ui::problem::problem(theme, at, said, None, Some(act))
+                crate::ui::problem::problem(
+                    theme,
+                    at,
+                    said,
+                    None,
+                    (!self.shown.previewing).then_some(act),
+                )
             })
             .collect();
         let troubled = self.shown.troubled;
@@ -327,7 +333,12 @@ impl DetailsView {
         Some(card.folds(folded, fold).render(theme, None))
     }
 
-    fn kept(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<gpui::Stateful<gpui::Div>> {
+    fn kept(
+        &self,
+        theme: &Theme,
+        window: &gpui::Window,
+        cx: &mut Context<Self>,
+    ) -> Option<gpui::Stateful<gpui::Div>> {
         let summary = self.shown.summary.as_ref()?;
         let (folded, fold) = self.fold("overview-inventory", true, cx);
         // Its note says what it holds while it is folded.
@@ -336,27 +347,52 @@ impl DetailsView {
         } else {
             String::new()
         };
-        let lines = summary.kept.iter().map(|kept| {
+        let labels: Vec<String> = summary.kept.iter().map(|kept| put(&kept.label)).collect();
+        let named = labels
+            .iter()
+            .map(|said| {
+                crate::ui::widgets::measure(window, theme, said, theme.body(), FontWeight::NORMAL)
+            })
+            .fold(gpui::px(0.), gpui::Pixels::max)
+            + theme::GAP;
+        let lines = summary.kept.iter().zip(labels).map(|(kept, said)| {
             div()
                 .flex()
-                .gap(theme::GAP)
-                .child(label(
-                    theme,
-                    theme.body(),
-                    theme.colours.ink2,
-                    put(&kept.label),
-                ))
-                .child(label(
-                    theme,
-                    theme.body(),
-                    theme.colours.ink,
-                    put(&kept.value),
-                ))
+                .child(
+                    label(theme, theme.body(), theme.colours.ink2, said)
+                        .flex_none()
+                        .w(named),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .text_ellipsis()
+                        .sized_text(theme, theme.body())
+                        .text_color(theme.colours.ink)
+                        .child(put(&kept.value)),
+                )
                 .into_any_element()
         });
+        let mut lines: Vec<AnyElement> = lines.collect();
+        if !self.shown.community_problem.is_empty() {
+            lines.push(
+                div()
+                    .w_full()
+                    .sized_text(theme, theme.body())
+                    .text_color(theme.colours.err)
+                    .child(put(&say!(
+                        "Community rules not updated: {}",
+                        self.shown.community_problem.clone()
+                    )))
+                    .into_any_element(),
+            );
+        }
         let card = Card::new("overview-inventory", put(&say!("Kept")))
             .note(note)
-            .body(lines.collect());
+            .body(lines);
         Some(card.folds(folded, fold).render(theme, None))
     }
 }

@@ -12,6 +12,7 @@ use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{TextSized, elide_middle_in, icon, label, measure};
 use crate::words::put;
 use crate::workspace::load_order::Details;
+use gpui::InteractiveElement as _;
 use gpui::{
     AnyElement, Context, FontWeight, IntoElement, ParentElement, Pixels, Styled, Window, div,
     prelude::FluentBuilder, px,
@@ -77,7 +78,7 @@ impl DetailsView {
                     at,
                     said,
                     Some((inner, window)),
-                    Some(acting(self.mods.clone(), said)),
+                    (!self.shown.previewing).then(|| acting(self.mods.clone(), said)),
                 )
             })
             .collect();
@@ -146,7 +147,12 @@ impl DetailsView {
         )
     }
 
-    fn clashes(&self, theme: &Theme, details: &Details) -> Option<AnyElement> {
+    fn clashes(
+        &self,
+        theme: &Theme,
+        details: &Details,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         let c = &theme.colours;
         let all: Vec<_> = details
             .loses_to
@@ -218,12 +224,15 @@ impl DetailsView {
                 )
                 .into_any_element()
         });
+        let lines: Vec<AnyElement> = lines.collect();
+        let (folded, fold) = self.fold("about-conflicts", false, cx);
         Some(
             Card::new("about-conflicts", put(&say!("Texture conflicts")))
                 .tone(c.warn)
                 .note(count.to_string())
                 .spacing(theme::GAP)
-                .body(lines.collect())
+                .folds(folded, fold)
+                .body(lines)
                 .render(theme, None)
                 .into_any_element(),
         )
@@ -384,15 +393,20 @@ impl DetailsView {
         .collect::<Vec<_>>()
         .join("; ");
         let facts = [
-            (say!("Contains"), contains),
-            (say!("Code"), put(&details.code)),
-            (say!("Load time"), details.load_time.clone()),
-            (say!("Package id"), details.package_id.clone()),
+            ("fact-contains", say!("Contains"), contains),
+            ("fact-code", say!("Code"), put(&details.code)),
+            ("fact-load", say!("Load time"), details.load_time.clone()),
+            (
+                "fact-package",
+                say!("Package id"),
+                details.package_id.clone(),
+            ),
         ];
         let mut lines: Vec<AnyElement> = facts
             .into_iter()
-            .filter(|(_, value)| !value.is_empty())
-            .map(|(name, value)| {
+            .filter(|(_, _, value)| !value.is_empty())
+            .map(|(key, name, value)| {
+                let value = self.copyable(key, &value, theme.body(), FontWeight::NORMAL, c.ink, cx);
                 div()
                     .flex()
                     .gap(theme::GAP_TINY)
@@ -433,8 +447,9 @@ impl DetailsView {
                             .min_w_0()
                             .items_center()
                             .gap(theme::GAP_SMALL)
-                            .child(
+                            .child(crate::ui::tip::tipped(
                                 div()
+                                    .id("facts-folder")
                                     .flex_1()
                                     .min_w_0()
                                     .overflow_hidden()
@@ -442,8 +457,13 @@ impl DetailsView {
                                     .font_family(theme.mono.clone())
                                     .sized_text(theme, theme.small())
                                     .text_color(c.ink)
-                                    .child(shown),
-                            )
+                                    .child(shown.clone()),
+                                match shown == details.path {
+                                    true => String::new(),
+                                    false => details.path.clone(),
+                                }
+                                .into(),
+                            ))
                             .child(
                                 Btn::new("copy-path", "")
                                     .icon("copy")
@@ -672,7 +692,7 @@ impl DetailsView {
                     .into_any_element(),
             );
         }
-        shown.extend(self.clashes(theme, details));
+        shown.extend(self.clashes(theme, details, cx));
         shown.extend(self.replaced(theme, details));
         shown.extend(self.copies(theme, details));
         shown.push(self.facts(theme, details, inner, window, cx));

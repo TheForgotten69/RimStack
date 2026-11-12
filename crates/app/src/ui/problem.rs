@@ -32,7 +32,10 @@ pub fn problem(
 ) -> AnyElement {
     let c = &theme.colours;
     let tone = if said.error { c.err } else { c.warn };
-    let text = format!("{} {}", said.name, put(&said.words));
+    let text = match said.name.is_empty() {
+        true => put(&said.words),
+        false => format!("{}  {}", said.name, put(&said.words)),
+    };
     let bold = HighlightStyle {
         font_weight: Some(FontWeight::BOLD),
         ..HighlightStyle::default()

@@ -472,6 +472,13 @@ impl Mods {
                 .then(|| Rc::new(self.order.sort_moves())),
             chosen_id: self.selected_id(),
             fresh: self.fresh,
+            community_problem: match self.demo {
+                true => String::new(),
+                false => super::app(cx)
+                    .community_problem()
+                    .map(|why| crate::words::put(&why))
+                    .unwrap_or_default(),
+            },
             commits: self
                 .chosen_commits
                 .as_ref()

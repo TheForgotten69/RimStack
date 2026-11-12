@@ -407,10 +407,11 @@ impl Mods {
         &mut self,
         side: Side,
         event: &KeyDownEvent,
-        _: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let keys = &event.keystroke;
+        let bare = !keys.modifiers.modified();
         let (alt, command) = (keys.modifiers.alt, keys.modifiers.secondary(cx));
         let by = match keys.key.as_str() {
             "up" => -1,
@@ -436,6 +437,11 @@ impl Mods {
             "enter" => self.activate_selected(side, cx),
             "a" if command => self.select_all(side, cx),
             "i" if command => self.invert_selection(side == Side::Active, cx),
+            "t" | "n" if bare && self.details.is_some() => {
+                let tags = keys.key == "t";
+                self.details_view
+                    .update(cx, |view, cx| view.edit_notes(tags, window, cx));
+            }
             "escape" if self.picking.is_some() => self.start_picking(None, cx),
             "escape" if !self.selection.is_empty() => self.select(None, true, cx),
             _ => return,

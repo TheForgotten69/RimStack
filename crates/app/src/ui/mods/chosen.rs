@@ -44,6 +44,8 @@ pub struct DetailsShown {
     pub unhide_problem: String,
     /// What Sort's preview moves, while it is shown.
     pub sort_moves: Option<Rc<Vec<crate::workspace::load_order::SortGroup>>>,
+    /// Why the community data last failed to download, put in words.
+    pub community_problem: String,
     /// The inactive mods installed since the game was last started from RimStack.
     pub fresh: usize,
     /// A Git checkout's last commits, read off the window's thread.
@@ -93,6 +95,10 @@ pub struct DetailsView {
     /// The picture shown small, as a click on it asks.
     pub(super) small_picture: bool,
     paging: crate::ui::page::Paging,
+    /// `CopyText`s: words of the details that can be selected and copied, by what they show.
+    copyable: std::cell::RefCell<
+        std::collections::HashMap<&'static str, gpui::Entity<crate::ui::text_field::TextField>>,
+    >,
     /// Where a Workshop mod's change notes are fetched and kept.
     pub(super) downloads: Option<gpui::WeakEntity<crate::ui::downloads::Downloads>>,
 }
@@ -131,6 +137,7 @@ impl DetailsView {
             note,
             small_picture: false,
             downloads: None,
+            copyable: Default::default(),
             paging: crate::ui::page::Paging::new(cx.global::<Theme>().appearance.reduce_motion),
         }
     }
@@ -189,6 +196,45 @@ impl DetailsView {
         (folded, Box::new(fold))
     }
 
+    /// `CopyText.qml`: `text` that can be selected and copied, drawn at `size`.
+    pub(super) fn copyable(
+        &self,
+        key: &'static str,
+        text: &str,
+        size: Pixels,
+        weight: FontWeight,
+        colour: gpui::Hsla,
+        cx: &mut Context<Self>,
+    ) -> gpui::Entity<crate::ui::text_field::TextField> {
+        use gpui::AppContext;
+        let made = self.copyable.borrow().get(key).cloned();
+        let field = made.unwrap_or_else(|| {
+            let field = cx.new(|cx| {
+                crate::ui::text_field::TextField::new(size, cx)
+                    .read_only()
+                    .weight(weight)
+                    .colour(colour)
+            });
+            self.copyable.borrow_mut().insert(key, field.clone());
+            field
+        });
+        if field.read(cx).text() != text {
+            field.update(cx, |field, cx| field.set_text_quietly(text, cx));
+        }
+        field
+    }
+
+    /// The About tab with its tags and note open, and the keys in the tags or the note, as T and
+    /// N on the list ask.
+    pub(super) fn edit_notes(&mut self, tags: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.tab = 0;
+        self.folded.remove("about-notes");
+        let field = if tags { &self.tags } else { &self.note };
+        window.focus(&gpui::Focusable::focus_handle(field.read(cx), cx), cx);
+        cx.emit(Asked::Tab(0));
+        cx.notify();
+    }
+
     pub fn show(&mut self, shown: DetailsShown, cx: &mut Context<Self>) {
         let other = self.shown.details.as_ref().map(|d| d.path.clone())
             != shown.details.as_ref().map(|d| d.path.clone());
@@ -228,34 +274,30 @@ fn tabs() -> [String; 3] {
     ]
 }
 
-/// `CopyText` and `Text` in a column of the details: words that wrap.
-fn words(
-    theme: &Theme,
-    size: Pixels,
-    colour: gpui::Hsla,
-    text: impl Into<gpui::SharedString>,
-) -> gpui::Div {
-    div()
-        .w_full()
-        .sized_text(theme, size)
-        .text_color(colour)
-        .child(text.into())
-}
-
-/// `Defined.qml`: a term of the details, underlined with dots when it has a meaning to show.
-pub(super) fn defined(theme: &Theme, term: String) -> gpui::Div {
-    div()
+/// `Defined.qml`: a term of the details, underlined with dots and its meaning shown when
+/// pointed at, when it has one.
+pub(super) fn defined(theme: &Theme, term: String) -> gpui::Stateful<gpui::Div> {
+    let meaning = crate::ui::card::meaning(&term).unwrap_or_default();
+    let has = !meaning.is_empty();
+    let shown = div()
+        .id(gpui::SharedString::from(format!("defined-{term}")))
         .flex()
         .flex_none()
         .items_center()
         .gap(theme::GAP_SMALL)
+        .aria_label(term.clone())
+        .aria_description(meaning.clone())
         .child(
-            label(theme, theme.body(), theme.colours.ink2, term)
-                .border_b_1()
-                .border_dashed()
-                .border_color(theme.colours.ink3),
+            label(theme, theme.body(), theme.colours.ink2, term).when(has, |d| {
+                d.border_b_1()
+                    .border_dashed()
+                    .border_color(theme.colours.ink3)
+            }),
         )
-        .child(icon("info", theme.sized(12.), theme.colours.ink3))
+        .when(has, |d| {
+            d.child(icon("info", theme.sized(12.), theme.colours.ink3))
+        });
+    crate::ui::tip::tipped(shown, meaning.into())
 }
 
 impl DetailsView {
@@ -324,7 +366,7 @@ impl DetailsView {
                 d.child(
                     Chip::new(said)
                         .icon(if details.workshop {
-                            "download"
+                            "cloud"
                         } else {
                             "hard-drive"
                         })
@@ -386,6 +428,9 @@ impl DetailsView {
         });
         let share = (inner - px(4.) - all_words) / names_of_tabs.len() as f32;
         let choice = div()
+            .id("details-tabs")
+            .role(gpui::Role::TabList)
+            .aria_label(put(&say!("Details")))
             .p(px(2.))
             .rounded(theme::CORNER)
             .bg(c.seg)
@@ -464,7 +509,16 @@ impl DetailsView {
                             .min_w_0()
                             .gap(theme::GAP_THIN)
                             .child(
-                                words(theme, theme.heading(), c.ink, details.name.clone())
+                                div()
+                                    .w_full()
+                                    .child(self.copyable(
+                                        "name",
+                                        &details.name,
+                                        theme.heading(),
+                                        FontWeight::BOLD,
+                                        c.ink,
+                                        cx,
+                                    ))
                                     .font_weight(FontWeight::BOLD),
                             )
                             .child(

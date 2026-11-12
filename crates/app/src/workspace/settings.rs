@@ -508,11 +508,23 @@ impl App {
                 Err(why) => failed.push(why),
             }
         }
+        *self
+            .community_problem
+            .write()
+            .unwrap_or_else(|p| p.into_inner()) = failed.first().map(|why| why.sentence().clone());
         self.publish(Changes::COMMUNITY | Changes::PROBLEMS);
         for why in &failed {
             rimstack_core::problem!("{why}");
         }
         failed.into_iter().next().map_or(Ok(()), Err)
+    }
+
+    /// Why the community data last failed to download, until one succeeds.
+    pub fn community_problem(&self) -> Option<Sentence> {
+        self.community_problem
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone()
     }
 
     /// 0: the game version, 1: the installed version, 2: never.

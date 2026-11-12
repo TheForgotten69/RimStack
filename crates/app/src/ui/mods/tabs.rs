@@ -8,6 +8,7 @@ use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{TextSized, breakable, elide_middle_in, label};
 use crate::words::put;
 use crate::workspace::load_order::Details;
+use gpui::InteractiveElement as _;
 use gpui::{
     AnyElement, Context, IntoElement, ParentElement, Pixels, Styled, Window, div,
     prelude::FluentBuilder, px,
@@ -28,7 +29,7 @@ fn names(theme: &Theme, title: String, lead: String, named: &[Named]) -> Vec<Any
             div()
                 .pb(theme::GAP_TINY)
                 .sized_text(theme, theme.body())
-                .text_color(c.ink2)
+                .text_color(c.ink3)
                 .child(lead)
                 .into_any_element(),
         );
@@ -48,11 +49,14 @@ fn names(theme: &Theme, title: String, lead: String, named: &[Named]) -> Vec<Any
                     .whitespace_nowrap()
                     .text_ellipsis()
                     .sized_text(theme, theme.body())
-                    .text_color(if one.trouble { c.warn } else { c.ink })
+                    .text_color(c.ink)
                     .child(one.name.clone()),
             )
             .when(!note.is_empty(), |d| {
-                d.child(label(theme, theme.small(), c.ink3, note))
+                d.child(match one.trouble {
+                    true => label(theme, theme.small(), c.err, format!("! {note}")),
+                    false => label(theme, theme.small(), c.ink3, note),
+                })
             })
             .into_any_element()
     }));
@@ -306,8 +310,9 @@ impl DetailsView {
                 .flex()
                 .items_center()
                 .gap(theme::GAP_SMALL)
-                .child(
+                .child(crate::ui::tip::tipped(
                     div()
+                        .id("files-folder")
                         .flex_1()
                         .min_w_0()
                         .overflow_hidden()
@@ -315,8 +320,13 @@ impl DetailsView {
                         .font_family(theme.mono.clone())
                         .sized_text(theme, theme.body())
                         .text_color(c.ink)
-                        .child(path),
-                )
+                        .child(path.clone()),
+                    match path == details.path {
+                        true => String::new(),
+                        false => details.path.clone(),
+                    }
+                    .into(),
+                ))
                 .child(
                     Btn::new("files-copy-path", "")
                         .icon("copy")
