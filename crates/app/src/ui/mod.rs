@@ -281,6 +281,9 @@ pub fn use_font(family: &str, cx: &mut Cx) {
 
 /// Sets what every view reads: the `App` and the Theme.
 pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
+    if let Err(problem) = app.carry_interface_scale() {
+        rimstack_core::problem!("{problem}");
+    }
     let chosen = app
         .settings()
         .get("font")

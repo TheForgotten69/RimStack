@@ -117,6 +117,23 @@ impl App {
         Prefs::read(&self.prefs_file())
     }
 
+    /// The interface size of RimStack before 0.6 (`interfaceScale` in the settings) carried into
+    /// the text size once, as `Main.qml` carried it, and forgotten.
+    pub fn carry_interface_scale(&self) -> Result<(), Error> {
+        let size = self
+            .settings()
+            .get("interfaceScale")
+            .and_then(|kept| kept.parse::<f64>().ok())
+            .filter(|size| *size > 0. && *size != 1.);
+        let Some(size) = size else {
+            return Ok(());
+        };
+        let text = self.prefs().number("Appearance", "textScale").unwrap_or(1.);
+        let scale = (text * size * 20.).round() / 20.;
+        self.keep_pref("Appearance", "textScale", &scale.to_string())?;
+        self.keep_setting("interfaceScale", "")
+    }
+
     /// Keeps `key` of `group`; the appearance is told to every view.
     pub fn keep_pref(&self, group: &str, key: &str, value: &str) -> Result<(), Error> {
         let mut prefs = self.prefs();
@@ -199,5 +216,17 @@ mod tests {
                 .unwrap()
                 .contains(crate::changes::Changes::THEME)
         );
+    }
+
+    #[test]
+    fn the_interface_size_of_old_is_carried_into_the_text_size_once() {
+        let (_tmp, app) = installed();
+        app.keep_pref("Appearance", "textScale", "1.1").unwrap();
+        app.keep_setting("interfaceScale", "1.5").unwrap();
+        app.carry_interface_scale().unwrap();
+        assert_eq!(app.prefs().number("Appearance", "textScale"), Some(1.65));
+        assert_eq!(app.settings().get("interfaceScale"), None);
+        app.carry_interface_scale().unwrap();
+        assert_eq!(app.prefs().number("Appearance", "textScale"), Some(1.65));
     }
 }

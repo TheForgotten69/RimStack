@@ -34,12 +34,33 @@ impl Render for Tip {
     }
 }
 
+/// The tip of what the pointer is on, as `Notices.hint`: the status bar shows its first line.
+#[derive(Default)]
+pub struct Hint(pub SharedString);
+
+impl gpui::Global for Hint {}
+
+/// What the status bar says of the control pointed at, empty when none.
+pub fn hint(cx: &App) -> SharedString {
+    cx.try_global::<Hint>()
+        .map(|hint| hint.0.clone())
+        .unwrap_or_default()
+}
+
 /// `control` with its tip; an empty one shows none.
 pub fn tipped(control: Stateful<gpui::Div>, text: SharedString) -> Stateful<gpui::Div> {
     if text.is_empty() {
         return control;
     }
+    let pointed = text.clone();
     control
+        .on_hover(move |over, _, cx| {
+            if *over {
+                cx.set_global(Hint(pointed.clone()));
+            } else if hint(cx) == pointed {
+                cx.set_global(Hint::default());
+            }
+        })
         .tooltip(move |_: &mut Window, cx: &mut App| -> AnyView {
             cx.new(|_| Tip(text.clone())).into()
         })

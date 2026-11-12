@@ -143,3 +143,37 @@ fn the_check_finds_a_text_past_its_edge_and_two_over_each_other() {
     };
     assert!(faults(&[cut]).is_empty());
 }
+
+#[test]
+fn the_status_bar_tells_the_first_line_of_the_tip_pointed_at() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path();
+    let app = App::new(
+        path.join("home"),
+        &path.join("settings"),
+        &path.join("data"),
+        Default::default(),
+    );
+    let text = crate::ui::made_up::text_system();
+    let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(super::assets::Assets));
+    let options = Options {
+        demo: true,
+        ..Options::default()
+    };
+    cx.update(|cx| install(Arc::new(app), &options, cx));
+    cx.update(|cx| {
+        cx.set_global(super::tip::Hint("What it does\nand more".into()));
+    });
+    watch::start();
+    let opened = cx
+        .open_window(
+            size(crate::ui::WINDOW.0, crate::ui::WINDOW.1),
+            |window, cx| cx.new(|cx| Shell::new(&options, window, cx)),
+        )
+        .unwrap();
+    cx.update_window(opened.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    let seen = watch::take();
+    assert!(seen.iter().any(|s| s.text.as_ref() == "What it does"));
+    assert!(!seen.iter().any(|s| s.text.contains("and more")));
+}

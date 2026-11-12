@@ -175,6 +175,7 @@ impl Card {
             (false, _) => (None, None),
         };
         let meaning = meaning(&self.title);
+        let spoken_meaning = meaning.clone();
         let title = label(theme, theme.small(), tone, self.title.clone())
             .font_weight(theme.semibold)
             .when(meaning.is_some(), |d| {
@@ -230,7 +231,19 @@ impl Card {
                     }),
             )
             .children(under)
-            .when_some(self.on_fold, |d, fold| d.cursor_pointer().on_click(fold));
+            .role(match self.on_fold.is_some() {
+                true => gpui::Role::Button,
+                false => gpui::Role::Heading,
+            })
+            .aria_label(self.title.clone())
+            .when_some(spoken_meaning, |d, meaning| d.aria_description(meaning))
+            .when_some(self.on_fold, |d, fold| {
+                d.cursor_pointer()
+                    .tab_index(0)
+                    .capture_any_mouse_down(|_, window, _| window.prevent_default())
+                    .focus_visible(|s| s.underline())
+                    .on_click(fold)
+            });
         div()
             .id("card")
             .flex()

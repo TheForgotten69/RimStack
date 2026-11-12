@@ -69,6 +69,8 @@ pub struct Shell {
 impl Shell {
     pub fn new(options: &Options, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let demo = options.demo;
+        cx.observe_global::<super::tip::Hint>(|_, cx| cx.notify())
+            .detach();
         let mods = cx.new(|cx| Mods::new(demo, cx));
         let focus = mods.read(cx).focus_handle(cx);
         window.focus(&focus, cx);

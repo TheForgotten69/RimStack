@@ -58,6 +58,9 @@ impl Shell {
 
     pub(crate) fn status_bar(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.global::<Theme>().clone();
+        let hint = super::tip::hint(cx);
+        let hinted = !hint.is_empty() && hint != put(&say!("Opens Logs on this launch")).as_str();
+        let pointed = hinted.then(|| hint.lines().next().unwrap_or_default().to_string());
         let c = theme.colours;
         let height = theme.strip() - px(2.);
         let demo = self.demo;
@@ -131,7 +134,22 @@ impl Shell {
                             put(&say!("Not saved: {}", unsaved)),
                         ))
                     })
-                    .when_some(last, |d, (time, errors)| {
+                    .when_some(pointed, |d, said| {
+                        let said: gpui::SharedString = said.into();
+                        d.child(super::widgets::watched(
+                            div()
+                                .min_w_0()
+                                .overflow_hidden()
+                                .whitespace_nowrap()
+                                .text_ellipsis()
+                                .sized_text(&theme, theme.small())
+                                .text_color(c.ink),
+                            said.clone(),
+                            said,
+                            true,
+                        ))
+                    })
+                    .when_some(last.filter(|_| !hinted), |d, (time, errors)| {
                         let started = put(&say!("Last start of the game {}", moment(time)));
                         let said = errors.map(|n| match n {
                             0 => (put(&say!("no errors")), c.ink2),
