@@ -1536,6 +1536,8 @@
  "{} texture": "{} texture",
  "{} texture could not be converted; it keeps using its PNG.": "{} texture non è stata convertita; continua a usare il suo PNG.",
  "{} texture set aside: renamed with .rimstack-hidden, so the game skips it.": "{} texture messe da parte: rinominate con .rimstack-hidden, affinché il gioco le ignori.",
+ "{} texture, {}": "{} texture, {}",
+ "{} texture, {}, not active": "{} texture, {}, inattivo",
  "{} texture: {} converted": "{} texture: {} convertita",
  "{} textures": "{} texture",
  "{} textures could not be converted; they keep using their PNG.": "{} texture non sono state convertite; continuano a usare il loro PNG.",

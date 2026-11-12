@@ -465,10 +465,16 @@ impl Textures {
             let m = chosen.row.clone();
             let said = put(&chosen.said).to_lowercase();
             let about = match m.active {
-                true => put(&say!("{} textures, {}", count(m.textures), said)),
-                false => put(&say!(
+                true => put(&say_n!(
+                    m.textures,
+                    "{} texture, {}",
+                    "{} textures, {}",
+                    said
+                )),
+                false => put(&say_n!(
+                    m.textures,
+                    "{} texture, {}, not active",
                     "{} textures, {}, not active",
-                    count(m.textures),
                     said
                 )),
             };

@@ -1562,6 +1562,8 @@
  "{} texture": "{} texture",
  "{} texture could not be converted; it keeps using its PNG.": "{} texture could not be converted; it keeps using its PNG.",
  "{} texture set aside: renamed with .rimstack-hidden, so the game skips it.": "{} texture set aside: renamed with .rimstack-hidden, so the game skips it.",
+ "{} texture, {}": "{} texture, {}",
+ "{} texture, {}, not active": "{} texture, {}, not active",
  "{} texture: {} converted": "{} texture: {} converted",
  "{} textures": "{} textures",
  "{} textures could not be converted; they keep using their PNG.": "{} textures could not be converted; they keep using their PNG.",

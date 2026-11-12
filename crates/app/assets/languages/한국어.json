@@ -1501,6 +1501,8 @@
  "{} texture": "텍스처 {}개",
  "{} texture could not be converted; it keeps using its PNG.": "텍스처 {}개를 변환하지 못했습니다. 기존 PNG를 계속 사용합니다.",
  "{} texture set aside: renamed with .rimstack-hidden, so the game skips it.": "텍스처 {}개를 제외 보관했습니다: 이름 끝에 .rimstack-hidden을 붙여 게임이 읽지 않도록 했습니다.",
+ "{} texture, {}": "텍스처 {}개, {}",
+ "{} texture, {}, not active": "텍스처 {}개, {}, 비활성",
  "{} texture: {} converted": "텍스처 {}개: {}개 변환됨",
  "{} textures": "텍스처 {}개",
  "{} textures could not be converted; they keep using their PNG.": "텍스처 {}개를 변환하지 못했습니다. 기존 PNG를 계속 사용합니다.",
