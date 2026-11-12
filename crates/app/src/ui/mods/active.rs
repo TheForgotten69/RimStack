@@ -73,9 +73,27 @@ impl Mods {
         let name_on = self.orders.active_by.get("name").is_some_and(|e| e.on);
         let view_menu = cx.entity().downgrade();
         let headings = div()
+            .id("headings")
             .relative()
             .flex_none()
             .h(theme.control())
+            .on_drag_move::<super::columns::ColumnEdge>(cx.listener(
+                |mods, event: &gpui::DragMoveEvent<super::columns::ColumnEdge>, _, cx| {
+                    let key = event.drag(cx).0;
+                    mods.size_column(key, event.event.position.x, cx);
+                },
+            ))
+            .on_drop(
+                cx.listener(|mods, edge: &super::columns::ColumnEdge, _, cx| {
+                    mods.column_drag = None;
+                    let _ = (edge, cx);
+                }),
+            )
+            .on_drop(
+                cx.listener(|mods, held: &super::columns::ColumnHeld, window, cx| {
+                    mods.drop_column(*held, window.mouse_position().x, cx);
+                }),
+            )
             .child(
                 div()
                     .absolute()
@@ -98,27 +116,38 @@ impl Mods {
                         self.heading_label("name"),
                         name_on,
                     )))
-                    .children(columns.fitting.iter().map(|(key, width)| {
-                        let on = self.orders.active_by.get(key).is_some_and(|e| e.on);
-                        div()
-                            .relative()
-                            .flex()
-                            .flex_none()
-                            .h_full()
-                            .items_center()
-                            .w(*width)
-                            .when(matches!(*key, "load" | "size"), |d| d.justify_end())
-                            .child(
+                    .children(
+                        columns
+                            .fitting
+                            .iter()
+                            .enumerate()
+                            .map(|(at, (key, width))| {
+                                let on = self.orders.active_by.get(key).is_some_and(|e| e.on);
+                                let (key, width) = (*key, *width);
                                 div()
-                                    .absolute()
-                                    .left(-(theme::GAP_LARGE / 2.))
-                                    .top(px(2.))
-                                    .bottom(px(2.))
-                                    .w(px(1.))
-                                    .bg(c.field_line),
-                            )
-                            .child(heading(key, self.heading_label(key), on))
-                    }))
+                                    .id(gpui::SharedString::from(format!("column-{key}")))
+                                    .relative()
+                                    .flex()
+                                    .flex_none()
+                                    .h_full()
+                                    .items_center()
+                                    .w(width)
+                                    .when(matches!(key, "load" | "size"), |d| d.justify_end())
+                                    .child(super::columns::edge(theme, key, width, cx))
+                                    .child(heading(key, self.heading_label(key), on))
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(
+                                            move |mods, event: &gpui::MouseDownEvent, _, _| {
+                                                mods.column_drag = Some((event.position.x, width));
+                                            },
+                                        ),
+                                    )
+                                    .on_drag(super::columns::ColumnHeld(key, at), |_, _, _, cx| {
+                                        gpui::AppContext::new(cx, |_| super::rows::Ghost)
+                                    })
+                            }),
+                    )
                     .child(
                         div()
                             .flex()

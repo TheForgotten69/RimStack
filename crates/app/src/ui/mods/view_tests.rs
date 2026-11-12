@@ -134,3 +134,36 @@ fn the_mod_tab_and_filter_left_come_back_and_a_new_choice_is_kept() {
         })
     });
 }
+
+#[test]
+fn a_column_is_sized_by_its_edge_and_moved_by_its_heading() {
+    use super::columns::ColumnHeld;
+    use gpui::px;
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    cx.update(|cx| {
+        let grow = f32::from(cx.global::<crate::ui::theme::Theme>().sized(1.));
+        mods.update(cx, |mods, cx| {
+            mods.column_drag = Some((px(500.), px(100.)));
+            mods.size_column("author", px(470.), cx);
+            let wide = (130. / grow).round() as u32;
+            assert_eq!(
+                mods.view.column_sizes,
+                format!("author={wide}"),
+                "further left is wider"
+            );
+            mods.column_drag = Some((px(500.), px(100.)));
+            mods.drop_column(ColumnHeld("author", 0), px(530.), cx);
+            assert_eq!(
+                mods.view.columns, "author,version,load",
+                "less than half its width stays"
+            );
+            mods.column_drag = Some((px(500.), px(100.)));
+            mods.drop_column(ColumnHeld("author", 0), px(600.), cx);
+            assert_eq!(mods.view.columns, "version,author,load");
+            assert_eq!(
+                crate::ui::app(cx).mods_view().columns,
+                "version,author,load"
+            );
+        })
+    });
+}

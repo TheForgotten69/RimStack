@@ -135,6 +135,8 @@ pub struct Mods {
     mirror: Entity<TextField>,
     widths_kept: Lane,
     left_off: left_off::LeftOff,
+    /// Where a heading or a column's edge was pressed, and the column's width then.
+    column_drag: Option<(Pixels, Pixels)>,
 }
 
 impl Mods {
@@ -252,6 +254,7 @@ impl Mods {
             drawer_open: false,
             mirror,
             widths_kept: Lane::default(),
+            column_drag: None,
             left_off: match demo {
                 true => left_off::LeftOff::Off,
                 false => left_off::LeftOff::Waiting,

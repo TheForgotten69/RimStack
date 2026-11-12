@@ -12,8 +12,8 @@ use crate::words::put;
 use crate::workspace::ModsView;
 use crate::workspace::load_order::{OrderEntry, Orders, Side};
 use gpui::{
-    Bounds, Context, FontWeight, IntoElement, ParentElement, Pixels, Point, Styled, Window, canvas,
-    div, px,
+    AppContext, Bounds, Context, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    Pixels, Point, SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, px,
 };
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::columns as kept;
@@ -35,6 +35,60 @@ pub(super) fn placed(control: impl IntoElement, at: Rc<Cell<Bounds<Pixels>>>) ->
         canvas(move |bounds, _, _| at.set(bounds), |_, _, _, _| {})
             .absolute()
             .inset_0(),
+    )
+}
+
+/// A column's left edge dragged to size it.
+#[derive(Clone, Copy)]
+pub struct ColumnEdge(pub &'static str);
+
+/// A column's heading dragged to move it: its key and its place among those shown.
+#[derive(Clone, Copy)]
+pub struct ColumnHeld(pub &'static str, pub usize);
+
+/// The line left of a column's heading, and the room either side of it that sizes the column.
+pub(super) fn edge(
+    theme: &Theme,
+    key: &'static str,
+    width: Pixels,
+    cx: &mut Context<Mods>,
+) -> gpui::Stateful<gpui::Div> {
+    let c = &theme.colours;
+    let group = SharedString::from(format!("edge-{key}"));
+    let focus = c.focus;
+    let tip = put(&say!("Drag to size the column"));
+    crate::ui::tip::tipped(
+        div()
+            .id(group.clone())
+            .group(group.clone())
+            .absolute()
+            .left(-(theme::GAP_LARGE / 2.) - theme::GAP_TINY)
+            .top_0()
+            .bottom_0()
+            .w(theme::GAP_TINY * 2. + px(1.))
+            .flex()
+            .justify_center()
+            .cursor_col_resize()
+            .child(
+                div()
+                    .mt(px(2.))
+                    .mb(px(2.))
+                    .w(px(1.))
+                    .h_full()
+                    .bg(c.field_line)
+                    .group_hover(group, move |s| s.w(px(2.)).bg(focus)),
+            )
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(move |mods, event: &gpui::MouseDownEvent, _, cx| {
+                    mods.column_drag = Some((event.position.x, width));
+                    cx.stop_propagation();
+                }),
+            )
+            .on_drag(ColumnEdge(key), |_, _, _, cx| {
+                cx.new(|_| super::rows::Ghost)
+            }),
+        tip.into(),
     )
 }
 
@@ -233,6 +287,44 @@ impl Mods {
         let app = super::super::app(cx);
         self.order.set_inactive_by(&app, order);
         self.show(cx);
+    }
+
+    /// The column `key` as wide as its edge has been dragged to `x`: further left is wider.
+    pub(super) fn size_column(&mut self, key: &'static str, x: Pixels, cx: &mut Context<Self>) {
+        let Some((from_x, from_width)) = self.column_drag else {
+            return;
+        };
+        let grow = f32::from(cx.global::<Theme>().sized(1.));
+        let wide = f32::from(from_width - (x - from_x)) / grow;
+        self.keep_view(
+            |view| view.column_sizes = kept::sized(&view.column_sizes, key, f64::from(wide)),
+            cx,
+        );
+        self.sync_lists(cx);
+        cx.notify();
+    }
+
+    /// A heading dropped more than half its width away moves one place that way.
+    pub(super) fn drop_column(&mut self, held: ColumnHeld, x: Pixels, cx: &mut Context<Self>) {
+        let Some((from_x, width)) = self.column_drag.take() else {
+            return;
+        };
+        let moved = x - from_x;
+        if moved.abs() <= width / 2. {
+            return;
+        }
+        let ColumnHeld(key, at) = held;
+        let to = if moved > px(0.) {
+            at as i32 + 1
+        } else {
+            at as i32 - 1
+        };
+        self.keep_view(
+            |view| view.columns = kept::moved(&view.columns, key, to),
+            cx,
+        );
+        self.sync_lists(cx);
+        cx.notify();
     }
 
     pub(super) fn toggle_column(&mut self, column: &'static str, cx: &mut Context<Self>) {
