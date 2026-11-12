@@ -2,7 +2,9 @@
 
 use super::Mods;
 use crate::ui::theme::{self, CATEGORY_ICONS, Theme};
-use crate::ui::widgets::{Chip, Sized, elide_middle, halo, icon, label, with_alpha};
+use crate::ui::widgets::{
+    Chip, TextSized, chip_width, elide_middle, halo, icon, label, with_alpha,
+};
 use crate::words::{count, put};
 use crate::workspace::load_order::{RowView, Side};
 use gpui::{
@@ -73,7 +75,24 @@ pub fn row(
     } else if row.is_header {
         heading(theme, row, colour)
     } else {
-        let name = elide_middle(window, theme, &put(&row.name), theme.body(), name_room);
+        let mut room = name_room;
+        let mut beside = |text: &str, most: Option<Pixels>| {
+            let wide = chip_width(window, theme, text, false);
+            room -= most.map_or(wide, |most| wide.min(most)) + theme::GAP_SMALL;
+        };
+        if row.outdated {
+            beside(&row.made_for, None);
+        }
+        if row.fresh {
+            beside(&put(&say!("New")), None);
+        }
+        for tag in row.tags.split(", ").filter(|t| !t.is_empty()).take(2) {
+            beside(tag, Some(theme.sized(110.)));
+        }
+        if row.version_ignored {
+            room -= theme.sized(12.) + theme::GAP_SMALL;
+        }
+        let name = elide_middle(window, theme, &put(&row.name), theme.body(), room);
         cells(theme, row, name, columns, chosen, colour)
     };
     let (is_header, is_sub, category, mod_id) =
@@ -86,7 +105,13 @@ pub fn row(
         None
     };
     div()
-        .id(("row", at))
+        .id((
+            match side {
+                Side::Active => "active-row",
+                Side::Inactive => "inactive-row",
+            },
+            at,
+        ))
         .group("mod-row")
         .relative()
         .w_full()

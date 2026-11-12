@@ -4,7 +4,7 @@ use super::Mods;
 use super::rows::Columns;
 use super::scrollbar::bar_room;
 use crate::ui::theme::{self, Theme};
-use crate::ui::widgets::{Btn, Chip, Sized, btn_width, halo, icon, label, measure, notice};
+use crate::ui::widgets::{Btn, Chip, TextSized, btn_width, halo, icon, label, measure, notice};
 use crate::words::{count, put};
 use crate::workspace::load_order::Side;
 use gpui::{
@@ -471,7 +471,7 @@ impl Mods {
         shown
     }
 
-    /// `ModsFilter.qml` as it stands empty.
+    /// `ModsFilter.qml` and `FilterField.qml`: the filter, its count of what it lets through, and its clear button.
     fn filter_field(
         &self,
         theme: &Theme,

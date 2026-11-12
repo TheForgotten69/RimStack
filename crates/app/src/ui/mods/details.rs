@@ -2,7 +2,7 @@
 
 use super::Mods;
 use crate::ui::theme::{self, Theme};
-use crate::ui::widgets::{Btn, Chip, Sized, icon, label};
+use crate::ui::widgets::{Btn, Chip, TextSized, icon, label};
 use crate::words::{count, put};
 use crate::workspace::load_order::{ProblemSaid, Side};
 use gpui::{

@@ -5,7 +5,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px, svg,
 };
 
-pub trait Sized: Styled + std::marker::Sized {
+pub trait TextSized: Styled + Sized {
     /// A text at this size, as tall as Qt makes its line.
     fn sized_text(self, theme: &Theme, size: Pixels) -> Self {
         self.text_size(size).line_height(theme.line(size))
@@ -20,7 +20,7 @@ pub trait Sized: Styled + std::marker::Sized {
     }
 }
 
-impl<T: Styled> Sized for T {}
+impl<T: Styled> TextSized for T {}
 
 pub fn icon(name: &str, size: Pixels, colour: Hsla) -> gpui::Svg {
     svg()
@@ -236,7 +236,7 @@ pub fn notice(tone: Hsla) -> gpui::Div {
         )
 }
 
-/// `Chip.qml`, not pressable.
+/// `Chip.qml`.
 #[derive(IntoElement)]
 pub struct Chip {
     text: SharedString,
@@ -421,6 +421,16 @@ pub fn elide_middle_in(
         }
     }
     shown(low)
+}
+
+/// The width `Chip.qml` takes: its icon, its text and the room around them.
+pub fn chip_width(window: &Window, theme: &Theme, text: &str, icon: bool) -> Pixels {
+    let shown = if icon {
+        theme.sized(11.) + theme::GAP_TINY
+    } else {
+        Pixels::ZERO
+    };
+    shown + measure(window, theme, text, theme.caption(), theme.medium) + theme::GAP_CARD
 }
 
 /// The width `Btn.qml` takes: its icon, its text, its menu arrow and the room around them.

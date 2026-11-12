@@ -69,3 +69,43 @@ fn a_category_heading_folds_its_mods_away(cx: &mut gpui::TestAppContext) {
     let after = mods.read_with(cx, |mods, _| rows(mods));
     assert_eq!(after, before - first.count as usize);
 }
+
+#[gpui::test]
+fn a_click_on_a_category_heading_folds_it(cx: &mut gpui::TestAppContext) {
+    use gpui::{Modifiers, point, px};
+    let _root = demo(cx);
+    let (mods, cx) = cx.add_window_view(|_, cx| Mods::new(true, cx));
+    cx.run_until_parked();
+    let (before, first) = mods.read_with(cx, |mods, _| {
+        (mods.active.rows.len(), mods.active.rows[0].clone())
+    });
+    // At text size 1: the inactive pane and its edge, then the title row, the filter and the headings.
+    let x = px(290. + 7. + 120.);
+    let y = px(42. + 28. + 8. + 24. + 4. + 16.);
+    cx.simulate_click(point(x, y), Modifiers::none());
+    let after = mods.read_with(cx, |mods, _| mods.active.rows.len());
+    assert_eq!(after, before - first.count as usize);
+}
+
+#[gpui::test]
+fn a_fold_keeps_the_list_where_it_was_scrolled(cx: &mut gpui::TestAppContext) {
+    use gpui::{ListOffset, px};
+    let _root = demo(cx);
+    let (mods, cx) = cx.add_window_view(|_, cx| Mods::new(true, cx));
+    cx.run_until_parked();
+    let at = ListOffset {
+        item_ix: 300,
+        offset_in_item: px(0.),
+    };
+    mods.update(cx, |mods, _| mods.active.list.scroll_to(at));
+    let last = mods
+        .read_with(cx, |mods, _| {
+            mods.active.rows.iter().rev().find(|r| r.is_header).cloned()
+        })
+        .unwrap();
+    mods.update(cx, |mods, cx| {
+        mods.toggle_category(Side::Active, last.category, cx)
+    });
+    let kept = mods.read_with(cx, |mods, _| mods.active.list.logical_scroll_top());
+    assert_eq!(kept.item_ix, 300);
+}

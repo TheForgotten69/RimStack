@@ -2,7 +2,7 @@
 
 use super::Mods;
 use crate::ui::theme::{self, Theme};
-use crate::ui::widgets::{Btn, Chip, Sized, elide_middle_in, icon, label, measure};
+use crate::ui::widgets::{Btn, Chip, TextSized, elide_middle_in, icon, label, measure};
 use crate::words::put;
 use crate::workspace::load_order::Details;
 use gpui::{

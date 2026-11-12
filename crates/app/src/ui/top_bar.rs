@@ -2,7 +2,9 @@
 
 use super::shell::Shell;
 use super::theme::{self, Theme};
-use super::widgets::{Btn, Sized, btn_width, btn_width_of, halo, icon, label, measure, with_alpha};
+use super::widgets::{
+    Btn, TextSized, btn_width, btn_width_of, halo, icon, label, measure, with_alpha,
+};
 use crate::words::{count, put};
 use gpui::{
     Context, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels,

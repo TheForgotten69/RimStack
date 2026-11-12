@@ -16,6 +16,7 @@ use gpui::{
     AppContext, Context, Entity, Focusable, InteractiveElement, IntoElement, ListAlignment,
     ListState, ParentElement, Pixels, Render, Styled, Window, div, px,
 };
+use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::list::Category;
 use std::rc::Rc;
 
@@ -107,7 +108,8 @@ impl Mods {
         mods.show(cx);
         if !demo {
             mods.hear(cx);
-            mods.load(cx);
+            mods.reread(Changes::LAUNCHES | Changes::LISTS, cx);
+            mods.load(false, cx);
         }
         mods
     }
@@ -131,8 +133,9 @@ impl Mods {
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
         let app = super::app(cx);
+        self.reread(changes, cx);
         if changes.contains(Changes::LIBRARY | Changes::LANGUAGE) {
-            return self.load(cx);
+            return self.load(changes.contains(Changes::LIBRARY), cx);
         }
         let order = &mut self.order;
         if changes.contains(Changes::NOTES) {
@@ -197,15 +200,54 @@ impl Mods {
         );
     }
 
-    fn load(&mut self, cx: &mut Context<Self>) {
+    /// What the details and the status bar read from disk, read again only when it changed.
+    fn reread(&mut self, changes: Changes, cx: &mut Context<Self>) {
+        if self.demo {
+            return;
+        }
+        let app = super::app(cx);
+        let counted = Changes::LIBRARY
+            | Changes::LISTS
+            | Changes::LAUNCHES
+            | Changes::SAVES
+            | Changes::RULES
+            | Changes::UPDATES
+            | Changes::COMMUNITY
+            | Changes::LANGUAGE;
+        if changes.contains(counted) {
+            self.summary = Some(app.summary());
+        }
+        if changes
+            .contains(Changes::LAUNCHES | Changes::LOGS | Changes::FOLDERS | Changes::LANGUAGE)
+        {
+            self.last_start = app.last_start_said();
+        }
+    }
+
+    /// `anew`: the mods were read again, so every id held before means nothing.
+    fn load(&mut self, anew: bool, cx: &mut Context<Self>) {
         let app = super::app(cx);
         self.loading.run(
             "load order",
             cx,
             move |_| LoadOrder::read(&app, true, None),
-            |mods, order, cx| {
+            move |mods, mut order, cx| {
+                let text = mods.filter.read(cx).text().to_string();
+                order.set_filter(&text);
+                if anew {
+                    let same = mods.order.same_mods_in(&order);
+                    let held: Vec<ModId> = mods
+                        .selection
+                        .iter()
+                        .filter_map(|id| ModId::from_qml(*id))
+                        .collect();
+                    let kept = mods.order.carried(&same, &held);
+                    mods.selection = kept.ids.iter().map(|id| id.to_qml()).collect();
+                    mods.selected_active = kept.active;
+                }
                 mods.order = order;
                 mods.show(cx);
+                mods.describe(cx);
                 mods.read_files(cx);
                 if let Some((row, tab)) = mods.wanted.take() {
                     mods.pick_row(Side::Active, row, tab, cx);
@@ -224,9 +266,12 @@ impl Mods {
             let rows = self.order.rows(&app, side);
             let shown = self.shown_mut(side);
             shown.count = rows.len();
+            // A reset scrolls to the top: the place kept is given back.
+            let kept = shown.list.logical_scroll_top();
             shown
                 .list
                 .reset_with_uniform_height(rows.len() + 2, theme.row());
+            shown.list.scroll_to(kept);
             shown.rows = Rc::new(rows);
         }
         self.orders = self.order.orders();
@@ -234,12 +279,6 @@ impl Mods {
             self.describe(cx);
         }
         self.overview = (!self.demo).then(|| self.order.overview(&app));
-        self.summary = (!self.demo).then(|| app.summary());
-        self.last_start = if self.demo {
-            None
-        } else {
-            app.last_start_said()
-        };
         if !self.demo {
             self.count_sort_moves(cx);
         }
