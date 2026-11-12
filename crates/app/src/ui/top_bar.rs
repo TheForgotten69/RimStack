@@ -25,6 +25,43 @@ pub fn sections() -> [String; 8] {
     ]
 }
 
+/// What each section holds, as its tab's tip says.
+fn about_section(at: usize) -> String {
+    put(&match at {
+        0 => say!("The load order and every installed mod"),
+        1 => say!("Workshop updates, looked-up mods and Git checkouts"),
+        2 => say!("Faster-loading DDS textures and the files the game would refuse"),
+        3 => say!("Browse the Workshop's mods and subscribe in Steam"),
+        4 => say!("Saves and how their mods differ from the load order"),
+        5 => say!("The game's log: errors and the mods they point at"),
+        6 => say!("Words and patterns in the files of the mods"),
+        _ => say!("Folders, appearance, sorting and upkeep"),
+    })
+}
+
+/// The sections as a menu, from the one tab shown while they are folded.
+fn pick_section(
+    below: gpui::Bounds<Pixels>,
+    section: usize,
+    window: &mut Window,
+    cx: &mut Context<Shell>,
+) {
+    let me = cx.entity().downgrade();
+    let entries = sections()
+        .into_iter()
+        .enumerate()
+        .map(|(at, name)| {
+            let me = me.clone();
+            super::menu::Entry::item(name, move |_, cx| {
+                let _ = me.update(cx, |shell, cx| shell.go(at, cx));
+            })
+            .off(at == section)
+            .into()
+        })
+        .collect();
+    super::menu::open(below, entries, window, cx);
+}
+
 /// `in_the_way`: what Play warns of, as `Mods::in_the_way` counts it.
 /// The section whose tab counts the active mods with a newer Workshop version.
 const DOWNLOADS: usize = 1;
@@ -156,11 +193,21 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
     let right_x = width - theme::GAP_CARD - (search_width + theme::GAP_LARGE + play_width);
     let box_x = (left_end + theme::GAP_MEDIUM)
         .max(((width - box_width) / 2.).min(right_x - box_width - theme::GAP_MEDIUM));
+    let placed: std::rc::Rc<std::cell::Cell<gpui::Bounds<Pixels>>> = Default::default();
     let tabs = shown.into_iter().map(|at| {
         let on = at == section;
         let ink = if on { c.ink } else { c.ink2 };
-        div()
+        let tip = format!(
+            "{}\n{}",
+            put(&say!("{} · Ctrl + {}", names[at].clone(), at + 1)),
+            about_section(at)
+        );
+        let (held, kept) = (placed.clone(), placed.clone());
+        let tab = div()
             .id(("section", at))
+            .role(gpui::Role::Tab)
+            .aria_label(names[at].clone())
+            .aria_selected(on)
             .relative()
             .flex()
             .flex_none()
@@ -216,7 +263,16 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
                         .child(icon("chevron-down", theme.sized(12.), ink)),
                 )
             })
-            .on_click(cx.listener(move |shell, _, _, cx| shell.go(at, cx)))
+            .child(
+                gpui::canvas(move |bounds, _, _| held.set(bounds), |_, _, _, _| {})
+                    .absolute()
+                    .inset_0(),
+            )
+            .on_click(cx.listener(move |shell, _, window, cx| match folded {
+                true => pick_section(kept.get(), section, window, cx),
+                false => shell.go(at, cx),
+            }));
+        super::tip::tipped(tab, tip.into())
     });
     let search = div()
         .id("top-search")
@@ -288,6 +344,9 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
                         .when(theme.appearance.high_contrast, |d| {
                             d.border_1().border_color(c.field_line)
                         })
+                        .id("sections")
+                        .role(gpui::Role::TabList)
+                        .aria_label(put(&say!("Sections")))
                         .children(tabs),
                 ),
         )

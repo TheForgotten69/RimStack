@@ -246,7 +246,29 @@ impl DetailsView {
     ) -> gpui::Div {
         let c = &theme.colours;
         let inner = width - theme::GAP_CARD * 2. - theme.sized(9.) - theme::GAP_HAIR * 2.;
-        let tile = || {
+        let preview = details.preview.clone();
+        let tile = |cx: &mut Context<Self>| -> gpui::AnyElement {
+            if let Some(path) = preview.clone() {
+                let tip = put(&say!("Click for the picture at full size"));
+                let shown = div()
+                    .id("small-picture")
+                    .flex_none()
+                    .size(theme.sized(64.))
+                    .rounded(theme::CORNER_LARGE)
+                    .bg(c.well)
+                    .overflow_hidden()
+                    .cursor_pointer()
+                    .child(
+                        img(std::path::PathBuf::from(path))
+                            .size_full()
+                            .object_fit(ObjectFit::Cover),
+                    )
+                    .on_click(cx.listener(|view, _, _, cx| {
+                        view.small_picture = false;
+                        cx.notify();
+                    }));
+                return crate::ui::tip::tipped(shown, tip.into()).into_any_element();
+            }
             let first: String = details
                 .name
                 .chars()
@@ -262,8 +284,9 @@ impl DetailsView {
                 .rounded(theme::CORNER_LARGE)
                 .bg(c.well)
                 .child(label(theme, theme.display(), c.brand, first).font_weight(theme.semibold))
+                .into_any_element()
         };
-        let large = details.preview.as_ref();
+        let large = details.preview.as_ref().filter(|_| !self.small_picture);
         let made_for_warns = details.made_for.is_some() && !details.version_ok && !details.official;
         let chips = div()
             .flex()
@@ -293,7 +316,11 @@ impl DetailsView {
             })
             .when(!details.game_versions.is_empty(), |d| {
                 let chip = Chip::new(put(&say!("RimWorld {}", details.game_versions.clone())))
-                    .max_width(inner);
+                    .max_width(inner)
+                    .tip(match details.version_ok {
+                        true => put(&say!("Marked as working on this game version")),
+                        false => String::new(),
+                    });
                 d.child(if made_for_warns {
                     chip.tone(c.warn)
                 } else {
@@ -373,11 +400,17 @@ impl DetailsView {
                 let tall = (inner * (9. / 16.)).min(theme.sized(220.));
                 d.child(
                     div()
+                        .id("large-picture")
                         .w_full()
                         .h(tall)
                         .rounded(theme::CORNER_LARGE)
                         .bg(c.well)
                         .overflow_hidden()
+                        .cursor_pointer()
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            view.small_picture = true;
+                            cx.notify();
+                        }))
                         .child(
                             img(std::path::PathBuf::from(path))
                                 .w(inner)
@@ -393,7 +426,7 @@ impl DetailsView {
                 div()
                     .flex()
                     .gap(theme::GAP_LARGE)
-                    .when(large.is_none(), |d| d.child(tile()))
+                    .when(large.is_none(), |d| d.child(tile(cx)))
                     .child(
                         div()
                             .flex()

@@ -24,6 +24,7 @@ pub struct Shown {
     pub orders: Rc<Orders>,
     /// The columns chosen and their widths.
     pub view: Rc<crate::workspace::ModsView>,
+    pub marks: Rc<rows::Marks>,
     /// The `mod_id`s chosen in this list.
     pub chosen: Rc<HashSet<i32>>,
     /// Whether its mods may be dragged: not while Sort is shown, nor in an order of a column.
@@ -212,6 +213,7 @@ impl Render for ModList {
                             rows::Moving {
                                 movable: shown.movable,
                                 chosen_ids: &chosen_ids,
+                                marks: &shown.marks,
                             },
                             mods.clone(),
                             &thumbs,

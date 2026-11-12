@@ -87,9 +87,11 @@ impl Field<'_> {
                 d.child(label(theme, theme.caption(), c.ink3, keys))
             })
             .when(!empty, |d| {
-                d.child(
+                d.child(super::tip::tipped(
                     div()
                         .id((self.id, 1usize))
+                        .role(gpui::Role::Button)
+                        .aria_label(crate::words::put(&rimstack_core::say!("Clear (Esc)")))
                         .cursor_pointer()
                         .child(icon("x", theme.sized(12.), c.ink3))
                         .on_click(move |_, window, cx| {
@@ -97,7 +99,8 @@ impl Field<'_> {
                             let focus = held.read(cx).focus_handle(cx);
                             window.focus(&focus, cx);
                         }),
-                )
+                    crate::words::put(&rimstack_core::say!("Clear (Esc)")).into(),
+                ))
             })
     }
 

@@ -183,6 +183,7 @@ impl Mods {
                 rows: Rc::default(),
                 orders: orders.clone(),
                 view: view.clone(),
+                marks: Rc::default(),
                 chosen: Rc::default(),
                 movable: false,
             };
@@ -569,9 +570,13 @@ impl Mods {
             [one] => rimstack_core::mods::library::ModId::from_qml(*one),
             _ => None,
         };
+        let marks_before = self.details.as_ref().map(|d| d.conflict_marks.clone());
         self.details = alone
             .filter(|_| self.order.is_installed())
             .map(|id| Rc::new(self.order.details(&app, id)));
+        if self.details.as_ref().map(|d| d.conflict_marks.clone()) != marks_before {
+            self.sync_lists(cx);
+        }
         self.read_chosen(cx);
         self.sync_details(cx);
         self.keep_left_mod(cx);
@@ -596,6 +601,12 @@ impl Mods {
     /// Hands each list its rows and what is chosen in it.
     fn sync_lists(&mut self, cx: &mut Context<Self>) {
         let orders = Rc::new(self.order.orders());
+        let marks: Rc<rows::Marks> = Rc::new(
+            self.details
+                .as_ref()
+                .map(|d| d.conflict_marks.clone())
+                .unwrap_or_default(),
+        );
         for side in [Side::Active, Side::Inactive] {
             let on_side = self.selected_active == (side == Side::Active);
             let chosen = match on_side {
@@ -612,6 +623,10 @@ impl Mods {
                 rows: self.shown(side).rows.clone(),
                 orders: orders.clone(),
                 view: self.view.clone(),
+                marks: match side {
+                    Side::Active => marks.clone(),
+                    Side::Inactive => Rc::default(),
+                },
                 chosen: Rc::new(chosen),
                 movable: in_order && !self.order.previewing() && !self.demo,
             };

@@ -77,7 +77,14 @@ impl gpui::Render for Ghost {
 pub struct Moving<'a> {
     pub movable: bool,
     pub chosen_ids: &'a [i32],
+    /// The mods sharing textures with the one chosen: whether each loses them to it.
+    pub marks: &'a Marks,
 }
+
+pub type Marks = std::collections::BTreeMap<
+    rimstack_core::mods::library::ModId,
+    rimstack_core::mods::details::Mark,
+>;
 
 /// The buttons a mod's row shows while pointed at or chosen: across, its folder, its menu.
 fn hover_buttons(
@@ -214,7 +221,9 @@ pub fn row(
             }
             false => None,
         };
-        cells(theme, row, name, columns, chosen, colour, picture)
+        let mark = rimstack_core::mods::library::ModId::from_qml(row.mod_id)
+            .and_then(|id| moving.marks.get(&id));
+        cells(theme, row, name, columns, chosen, colour, picture, mark)
     };
     let (is_header, is_sub, category, mod_id) =
         (row.is_header, row.is_sub, row.category, row.mod_id);
@@ -373,6 +382,12 @@ fn arrow(theme: &Theme, collapsed: bool, colour: Hsla) -> gpui::Div {
     .w(theme.sized(10.))
 }
 
+/// `text` with `tip` shown while pointed at.
+fn tipped_label(id: String, text: gpui::Div, tip: String) -> AnyElement {
+    crate::ui::tip::tipped(div().id(SharedString::from(id)).child(text), tip.into())
+        .into_any_element()
+}
+
 fn heading(theme: &Theme, row: &RowView, colour: Hsla) -> AnyElement {
     let c = &theme.colours;
     div()
@@ -384,7 +399,14 @@ fn heading(theme: &Theme, row: &RowView, colour: Hsla) -> AnyElement {
         .gap(theme::GAP_SMALL)
         .child(arrow(theme, row.collapsed, c.ink2))
         .child(icon(category_icon(row.category), theme.icon(), colour))
-        .child(label(theme, theme.small(), c.ink, put(&row.name)).font_weight(theme.semibold))
+        .child(tipped_label(
+            format!("heading-{}", row.category),
+            label(theme, theme.small(), c.ink, put(&row.name)).font_weight(theme.semibold),
+            put(&match row.collapsed {
+                true => say!("Click to show its mods"),
+                false => say!("Click to hide its mods"),
+            }),
+        ))
         .child(label(
             theme,
             theme.small(),
@@ -412,14 +434,22 @@ fn sub(theme: &Theme, row: &RowView) -> AnyElement {
         .pl(theme::GAP_WIDE + theme.sized(28.))
         .gap(theme::GAP_SMALL)
         .child(arrow(theme, row.collapsed, c.ink3))
-        .child(label(theme, theme.small(), c.ink2, put(&row.name)))
+        .child(tipped_label(
+            format!("group-{}", put(&row.name)),
+            label(theme, theme.small(), c.ink2, put(&row.name)),
+            put(&match row.collapsed {
+                true => say!("Click to show its mods"),
+                false => say!("The mods whose first tag this is. Click to hide them."),
+            }),
+        ))
         .child(label(theme, theme.small(), c.ink3, counted))
         .when(row.again, |d| {
-            d.child(label(
-                theme,
-                theme.small(),
-                c.ink3,
-                put(&say!("the rest of it")),
+            d.child(tipped_label(
+                format!("group-rest-{}", put(&row.name)),
+                label(theme, theme.small(), c.ink3, put(&say!("the rest of it"))),
+                put(&say!(
+                    "This group has mods further up as well: a rule keeps them apart, and Sort follows rules before groups."
+                )),
             ))
         })
         .into_any_element()
@@ -428,7 +458,14 @@ fn sub(theme: &Theme, row: &RowView) -> AnyElement {
 fn again(theme: &Theme, row: &RowView) -> AnyElement {
     let c = &theme.colours;
     let said = format!("{}  {}", put(&row.name), count(row.count.max(0) as usize));
-    div()
+    let tip = put(&say!(
+        "This category has mods further up as well. Sort brings a category's mods together."
+    ));
+    let line = div()
+        .id(SharedString::from(format!(
+            "again-{}-{}",
+            row.category, row.number
+        )))
         .absolute()
         .inset_0()
         .flex()
@@ -443,8 +480,8 @@ fn again(theme: &Theme, row: &RowView) -> AnyElement {
             c.warn,
             put(&say!("out of category order")),
         ))
-        .child(div().flex_1().ml(theme::GAP_SMALL).h(px(1.)).bg(c.line))
-        .into_any_element()
+        .child(div().flex_1().ml(theme::GAP_SMALL).h(px(1.)).bg(c.line));
+    crate::ui::tip::tipped(line, tip.into()).into_any_element()
 }
 
 fn tile(
@@ -494,6 +531,7 @@ fn tile(
         .into_any_element()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cells(
     theme: &Theme,
     row: &RowView,
@@ -502,6 +540,7 @@ fn cells(
     chosen: bool,
     colour: Hsla,
     picture: Option<Arc<RenderImage>>,
+    mark: Option<&rimstack_core::mods::details::Mark>,
 ) -> AnyElement {
     let c = &theme.colours;
     let quiet = if chosen { c.on_selected_dim } else { c.ink2 };
@@ -589,7 +628,7 @@ fn cells(
             _ => put(&row.size_text).into(),
         }
     };
-    let quick = quick_chip(theme, row, columns.wide, chosen);
+    let quick = quick_chip(theme, row, columns.wide, chosen, mark);
     div()
         .absolute()
         .inset_0()
@@ -647,13 +686,45 @@ fn cells(
 }
 
 /// The chip at a row's end: how far Sort moves it, or its problem.
-fn quick_chip(theme: &Theme, row: &RowView, wide: bool, chosen: bool) -> Option<Chip> {
+/// `ModRow`'s chip: how far Sort moves it, its share of a texture clash, or its problem.
+fn quick_chip(
+    theme: &Theme,
+    row: &RowView,
+    wide: bool,
+    chosen: bool,
+    mark: Option<&rimstack_core::mods::details::Mark>,
+) -> Option<Chip> {
     let c = &theme.colours;
     let chip = if row.moved_from > 0 {
         let up = row.moved_from > row.number;
+        let tip = match row.why_moved.is_empty() {
+            true => say!("Sort moves it from {} to {}", row.moved_from, row.number),
+            false => say!(
+                "Sort moves it from {} to {}: {}",
+                row.moved_from,
+                row.number,
+                row.why_moved.inside()
+            ),
+        };
         Chip::new(count(row.moved_from.abs_diff(row.number) as usize))
             .tone(c.moved)
             .icon(if up { "arrow-up" } else { "arrow-down" })
+            .tip(put(&tip))
+    } else if let Some(mark) = mark {
+        let (said, tip) = match mark.loses {
+            true => (
+                say!("loses textures"),
+                say!("The selected mod loads later and its textures are used"),
+            ),
+            false => (
+                say!("wins textures"),
+                say!("This mod loads later than the selected one and its textures are used"),
+            ),
+        };
+        Chip::new(if wide { put(&said) } else { String::new() })
+            .tone(c.warn)
+            .icon("image")
+            .tip(put(&tip))
     } else if row.trouble > 0 {
         let error = row.trouble == 2;
         Chip::new(if wide {
@@ -661,6 +732,7 @@ fn quick_chip(theme: &Theme, row: &RowView, wide: bool, chosen: bool) -> Option<
         } else {
             String::new()
         })
+        .tip(put(&row.trouble_text))
         .tone(if error { c.err } else { c.warn })
         .icon(if error {
             "circle-alert"

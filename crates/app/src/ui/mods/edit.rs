@@ -445,6 +445,26 @@ impl Mods {
 }
 
 impl Mods {
+    /// Which of the mods with a problem the arrows last chose, from 1, while it stays chosen.
+    pub(super) fn problem_place(&self) -> Option<usize> {
+        use rimstack_core::mods::list::Row;
+        let list = self.order.list(Side::Active);
+        let Row::Mod { index } = *list.rows().get(self.problem_row?)? else {
+            return None;
+        };
+        let id = list.mods().get(index)?.installed?;
+        if self.selected_id() != Some(id.to_qml()) {
+            return None;
+        }
+        let marked: Vec<bool> = self
+            .order
+            .troubles()
+            .iter()
+            .map(|t| !t.is_empty())
+            .collect();
+        Some(rimstack_core::mods::checks::place_among(&marked, index).0).filter(|place| *place > 0)
+    }
+
     /// The next mod with a problem chosen and shown, or the one before.
     pub(super) fn show_problem(&mut self, forward: bool, cx: &mut Context<Self>) {
         use rimstack_core::mods::list::Row;

@@ -65,6 +65,12 @@ impl CompareView {
         let me = cx.entity().downgrade();
         div()
             .id(id)
+            .role(gpui::Role::Image)
+            .aria_label(put(&match id {
+                "compare-difference" => say!("Where the two pictures differ"),
+                "compare-later" | "slider-over" => say!("The later mod's picture"),
+                _ => say!("The earlier mod's picture"),
+            }))
             .relative()
             .flex_1()
             .min_h_0()

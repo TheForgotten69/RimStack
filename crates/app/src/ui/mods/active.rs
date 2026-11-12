@@ -155,13 +155,13 @@ impl Mods {
                             .justify_end()
                             .w(columns.quick)
                             .child(super::columns::placed(
-                                Btn::new("view", put(&say!("View"))).opens(
-                                    move |below, window, cx| {
+                                Btn::new("view", put(&say!("View")))
+                                    .spoken(put(&say!("View options")))
+                                    .opens(move |below, window, cx| {
                                         let _ = view_menu.update(cx, |mods, cx| {
                                             mods.view_menu(below, window, cx)
                                         });
-                                    },
-                                ),
+                                    }),
                                 self.menu_buttons.view.clone(),
                             )),
                     ),
@@ -273,7 +273,13 @@ impl Mods {
                 count(errors)
             )),
         };
-        let problems_button = !(only_warnings && warnings_shown > 0 && warnings_shown == problems);
+        let stepping = self.problem_place();
+        let problems_said = match stepping {
+            Some(place) => put(&say!("Problem {} of {}", place, count(problems))),
+            None => problems_said,
+        };
+        let problems_button = stepping.is_some()
+            || !(only_warnings && warnings_shown > 0 && warnings_shown == problems);
         let chip_width = |text: &str| {
             theme.sized(11.)
                 + theme::GAP_TINY
@@ -336,7 +342,11 @@ impl Mods {
                             d.child(
                                 Btn::new("problems", problems_said)
                                     .icon("triangle-alert")
-                                    .tone(problem_tone),
+                                    .tone(problem_tone)
+                                    .tip(put(&say!(
+                                        "Opens the list of every problem, with the fix for each"
+                                    )))
+                                    .on_click(cx.listener(|m, _, _, cx| m.open_problems(cx))),
                             )
                         })
                         .child(
@@ -359,6 +369,11 @@ impl Mods {
             .when(self.behind > 0 && !tight, |d| {
                 d.child(
                     Btn::new("updates", updates)
+                        .tip(put(&say_n!(
+                            self.behind,
+                            "{} active Workshop mod is older than its Workshop version",
+                            "{} active Workshop mods are older than their Workshop version"
+                        )))
                         .on_click(cx.listener(|_, _, _, cx| cx.emit(super::ShowSection(1)))),
                 )
             })
@@ -411,7 +426,12 @@ impl Mods {
                     },
                 )
                 .icon("ellipsis")
-                .menu();
+                .opens({
+                    let me = cx.entity().downgrade();
+                    move |below, window, cx| {
+                        let _ = me.update(cx, |mods, cx| mods.more_menu(below, window, cx));
+                    }
+                });
                 d.child(if problems > 0 {
                     more.tone(problem_tone)
                 } else {
@@ -522,5 +542,111 @@ impl Mods {
             keys: Some(put(&say!("Ctrl + F"))),
         }
         .render(theme, window, cx)
+    }
+}
+
+impl Mods {
+    /// `moreEntries`: what the title row holds when it is too narrow to show it.
+    fn more_menu(&self, below: gpui::Bounds<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+        use crate::ui::menu::{self, Entry};
+        let me = cx.entity().downgrade();
+        let run = |act: fn(&mut Mods, &mut Context<Mods>)| {
+            let me = me.clone();
+            move |_: &mut Window, cx: &mut gpui::App| {
+                let _ = me.update(cx, act);
+            }
+        };
+        let mut entries: Vec<Entry> = Vec::new();
+        let problems = self
+            .order
+            .troubles()
+            .iter()
+            .filter(|t| !t.is_empty())
+            .count();
+        if problems > 0 {
+            entries.push(
+                Entry::item(
+                    put(&say!("Next problem")),
+                    run(|m, cx| m.show_problem(true, cx)),
+                )
+                .icon("chevron-down")
+                .into(),
+            );
+            entries.push(
+                Entry::item(
+                    put(&say!("Previous problem")),
+                    run(|m, cx| m.show_problem(false, cx)),
+                )
+                .icon("chevron-up")
+                .into(),
+            );
+            entries.push(
+                Entry::item(put(&say!("All problems")), run(|m, cx| m.open_problems(cx)))
+                    .icon("triangle-alert")
+                    .into(),
+            );
+        }
+        let (version_only, other) = self
+            .overview
+            .as_ref()
+            .map_or((0, 0), |o| (o.version_only, o.other_warnings));
+        let warnings = match version_only >= 3 && !self.order.previewing() && !self.demo {
+            true => other,
+            false => self.order.errors_and_warnings().1,
+        };
+        if warnings > 0 {
+            entries.push(
+                Entry::item(
+                    put(&say_n!(warnings, "{} warning", "{} warnings")),
+                    run(|m, cx| m.toggle_term("is:warning", cx)),
+                )
+                .icon("funnel")
+                .into(),
+            );
+        }
+        if self.conflicts > 0 {
+            entries.push(
+                Entry::item(
+                    put(&say!("{} share textures", count(self.conflicts))),
+                    run(|m, cx| m.toggle_term("is:conflict", cx)),
+                )
+                .icon("image")
+                .into(),
+            );
+        }
+        if self.behind > 0 {
+            entries.push(
+                Entry::item(
+                    put(&say_n!(self.behind, "{} update", "{} updates")),
+                    run(|_, cx| cx.emit(super::ShowSection(1))),
+                )
+                .icon("download")
+                .into(),
+            );
+        }
+        if !entries.is_empty() {
+            entries.push(Entry::Line);
+        }
+        let app = crate::ui::app(cx);
+        let session = app.session();
+        let (can_undo, can_redo) = (session.can_undo(), session.can_redo());
+        drop(session);
+        let previewing = self.order.previewing();
+        entries.push(
+            Entry::item(put(&say!("Undo (Ctrl + Z)")), run(|m, cx| m.undo(cx)))
+                .icon("undo-2")
+                .off(!can_undo || previewing)
+                .into(),
+        );
+        entries.push(
+            Entry::item(
+                put(&say!("Redo (Ctrl + Shift + Z)")),
+                run(|m, cx| m.redo(cx)),
+            )
+            .icon("redo-2")
+            .off(!can_redo || previewing)
+            .into(),
+        );
+        menu::open(below, entries, window, cx);
     }
 }
