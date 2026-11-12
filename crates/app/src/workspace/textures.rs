@@ -556,7 +556,7 @@ mod tests {
         let (tmp, app) = installed();
         texture(&tmp.path().join("game/Mods/roads/Textures/road.png"));
         let rows = app.texture_rows();
-        let on_show = crate::qml::values::as_shown(&shown(&rows, false));
+        let on_show = crate::words::as_shown(&shown(&rows, false));
         assert_eq!(on_show["rows"][0]["name"], "Ann.Roads");
         assert_eq!(on_show["rows"][0]["state"], "Not converted");
         assert_eq!(on_show["usual"], "Not converted");

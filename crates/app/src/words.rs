@@ -1,11 +1,10 @@
-//! Sentences are put in words here, on the window's thread, as they are handed to QML.
+//! Sentences are put in words here, on the window's thread, as they are handed to a view.
 
-use cxx_qt_lib::QString;
 use icu_decimal::DecimalFormatter;
 use icu_decimal::input::Decimal;
 use icu_decimal::options::DecimalFormatterOptions;
 use rimstack_core::base::error::Error;
-use rimstack_core::base::sentence::{Language, Sentence};
+use rimstack_core::base::sentence::{Language, MARK, Sentence};
 use rimstack_core::base::translate::{Counting, LOCALE};
 use serde_json::{Map, Value};
 use std::cell::RefCell;
@@ -89,17 +88,40 @@ pub fn counted(n: usize, one: &str, many: &str, locale: &str) -> String {
     Counting::of(locale).pick(n, one, many).to_string()
 }
 
-pub fn said(sentence: &Sentence) -> QString {
-    QString::from(&put(sentence))
+pub fn said(sentence: &Sentence) -> String {
+    put(sentence)
 }
 
-pub fn said_of(problem: &Error) -> QString {
+pub fn said_of(problem: &Error) -> String {
     said(problem.sentence())
 }
 
 /// Empty when it was done.
-pub fn why_not<T>(done: &Result<T, Error>) -> QString {
-    done.as_ref().err().map_or_else(QString::default, said_of)
+pub fn why_not<T>(done: &Result<T, Error>) -> String {
+    done.as_ref().err().map_or_else(String::new, said_of)
+}
+
+/// A record as a view reads it: each sentence in it put in words.
+pub fn as_shown(value: &impl serde::Serialize) -> Value {
+    fn shown(value: Value) -> Value {
+        match value {
+            Value::Object(fields) if fields.len() == 1 && fields.contains_key(MARK) => {
+                Value::from(put(&Sentence::from_kept_value(&fields[MARK])))
+            }
+            Value::Object(fields) => {
+                Value::Object(fields.into_iter().map(|(k, v)| (k, shown(v))).collect())
+            }
+            Value::Array(items) => Value::Array(items.into_iter().map(shown).collect()),
+            other => other,
+        }
+    }
+    match serde_json::to_value(value) {
+        Ok(value) => shown(value),
+        Err(problem) => {
+            rimstack_core::problem!("not given to the window: {problem}");
+            Value::Null
+        }
+    }
 }
 
 #[cfg(test)]

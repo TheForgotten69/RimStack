@@ -434,19 +434,16 @@ mod tests {
         launches::record(&app.launches_file(), &["ludeon.rimworld".to_string()], 1).unwrap();
         let (report, changed) = app.logs_report(false, None).unwrap();
         assert!(changed);
-        let errors = crate::qml::values::as_shown(&listed(&report.errors, "", &HashSet::new()));
+        let errors = crate::words::as_shown(&listed(&report.errors, "", &HashSet::new()));
         assert_eq!(errors[0]["count"], 2);
         assert_eq!(errors[0]["mod"], "Ann.Roads");
         assert_eq!(errors[0]["kind"], "Could not load texture for Ann.Roads");
-        assert_eq!(
-            crate::qml::values::as_shown(&report.culprits)[0]["times"],
-            2
-        );
-        let shown = crate::qml::values::as_shown(&launches(&report));
+        assert_eq!(crate::words::as_shown(&report.culprits)[0]["times"], 2);
+        let shown = crate::words::as_shown(&launches(&report));
         assert_eq!(shown[0]["errors"], 1);
         assert_eq!(shown[0]["added"], 1);
         assert_eq!(shown[0]["outcome"], "1 error");
-        let said = crate::qml::values::as_shown(&head(&report));
+        let said = crate::words::as_shown(&head(&report));
         assert_eq!(said["about"], "RimWorld 1.6.4871 rev600, 4 lines");
         assert_eq!(said["outside"], true);
         assert_eq!(said["cut"], "");

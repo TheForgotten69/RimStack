@@ -186,12 +186,12 @@ mod tests {
     fn an_answer_is_its_result_or_its_problem_and_never_both() {
         let failed: Answer<Written> = Err(rimstack_core::base::error::Error::refused("no")).into();
         assert_eq!(
-            crate::qml::values::as_shown(&failed),
+            crate::words::as_shown(&failed),
             serde_json::json!({ "problem": "no" })
         );
         let done: Answer<Written> = Ok(Written { file: "/a".into() }).into();
         assert_eq!(
-            crate::qml::values::as_shown(&done),
+            crate::words::as_shown(&done),
             serde_json::json!({ "file": "/a" })
         );
     }

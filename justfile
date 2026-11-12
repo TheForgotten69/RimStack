@@ -9,15 +9,10 @@ default:
 # Build the release app
 build:
     cargo build --release -q -p rimstack-app
-    tools/qml-import.sh
 
 # Build and open RimStack on the installed mods
 run *args: build
     {{app}} {{args}}
-
-# Open the last build with the QML read from crates/app/qml: a QML edit shows at the next start, with no build
-live *args:
-    RIMSTACK_QML=target/qml-live {{app}} {{args}}
 
 # Open on 2,300 made-up mods instead of the installed ones
 demo *args: build
@@ -27,12 +22,9 @@ demo *args: build
 fmt:
     cargo fmt
 
-# Clippy on every target, then qmllint on the QML
-lint: build
+# Clippy on every target
+lint:
     cargo clippy --release -q --all-targets
-    tools/lint-qml.sh
-    @# 21 are known (items reached through a Loader, a Repeater or `parent`, and the app's own types, which qmllint cannot see into): a new one is a mistake.
-    @test "$(tools/lint-qml.sh 2>&1 | grep -c '^Warning')" -le 21 || { echo "qmllint: more warnings than the 21 known"; exit 1; }
 
 # Both crates' tests, on the release build's profile; `just test list::` runs those matching a name
 test *filter:
@@ -65,19 +57,18 @@ languages:
         for text in extra: print("  no longer used:", text)
     raise SystemExit(1 if bad else 0)
 
-# Every action of the Mods screen, with no window, on a copy of the game's settings; `just check Français` in that language
-check language="": build
-    RIMSTACK_LANGUAGE="{{language}}" tools/check-app.sh
-
-# A picture of one section, with no window and its own settings folder: `just shot 4 /tmp/logs.png --view=1`
-shot section out *args: build
+# The window's picture at 2x, with no window and its own settings folder: `just shot /tmp/mods.png --demo --theme=light --text-scale=1.6`
+shot out *args:
     #!/usr/bin/env bash
     set -euo pipefail
-    scratch="$(mktemp -d)"
+    cargo build --release -q -p rimstack-app --example shot
+    scratch="$(mktemp -d -p target)"
     trap 'rm -rf "$scratch"' EXIT
-    mkdir -p "$scratch/settings/RimStack"
-    printf '{ "setupDone": "yes" }' > "$scratch/settings/RimStack/settings.json"
-    XDG_CONFIG_HOME="$scratch/settings" QT_QPA_PLATFORM=offscreen {{app}} --section={{section}} --shot={{out}} {{args}}
+    XDG_CONFIG_HOME="$scratch/settings" XDG_DATA_HOME="$scratch/data" target/release/examples/shot {{out}} {{args}}
+
+# The Qt build's picture of the Mods tab, to set beside it: `just qt-shot /tmp/qt.png rim 1 --several`
+qt-shot out theme="rim" scale="1" *args:
+    target/qt-reference/shot.sh {{out}} {{theme}} {{scale}} {{args}}
 
 # The scripted ten-second scroll on made-up mods, in a real window: frames, slow frames, the worst
 scroll: build
@@ -101,6 +92,5 @@ release version:
     echo
     echo "Tagged v$v. To publish: git push origin main v$v"
 
-# Everything before a commit: format, lint, tests, build, the app's checks (in English; the screens check switches language)
-ready: fmt lint test audit words languages
-    just check
+# Everything before a commit: format, lint, tests
+ready: fmt lint test audit
