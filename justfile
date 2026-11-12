@@ -74,7 +74,8 @@ qt-build:
     git archive main | tar -x -C target/qt-main
     cd target/qt-main && CARGO_TARGET_DIR="{{justfile_directory()}}/target/qt-main-build" cargo build --release -q -p rimstack-app
 
-# The Qt build's picture at 2x, to set beside `just shot`: `just qt-shot /tmp/qt.png rim 1 --demo`
+# The Qt build's picture at 2x, to set beside `just shot`: `just qt-shot /tmp/qt.png rim 1 --demo --section=0`
+# Its own HOME too: Qt reads the settings in the real home even with XDG_CONFIG_HOME elsewhere.
 qt-shot out theme="rim" scale="1" *args:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -83,8 +84,8 @@ qt-shot out theme="rim" scale="1" *args:
     mkdir -p "$scratch/settings/RimStack" "$scratch/data"
     printf '{ "setupDone": "yes" }' > "$scratch/settings/RimStack/settings.json"
     printf '[Appearance]\ntheme=%s\ntextScale=%s\nhintsSeen=true\n' {{theme}} {{scale}} > "$scratch/settings/RimStack/RimStack.conf"
-    XDG_DATA_HOME="$scratch/data" XDG_CONFIG_HOME="$scratch/settings" QT_SCALE_FACTOR=2 QT_QPA_PLATFORM=offscreen \
-        timeout 60 target/qt-main-build/release/rimstack --section=0 --shot={{out}} {{args}} >/dev/null 2>&1
+    HOME="$scratch" XDG_DATA_HOME="$scratch/data" XDG_CONFIG_HOME="$scratch/settings" QT_SCALE_FACTOR=2 QT_QPA_PLATFORM=offscreen \
+        timeout 60 target/qt-main-build/release/rimstack --shot={{out}} {{args}} >/dev/null 2>&1
 
 # The scripted ten-second scroll on made-up mods, in a real window: frames, slow frames, the worst, the CPU it took
 scroll: build
