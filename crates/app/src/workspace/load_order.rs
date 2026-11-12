@@ -25,7 +25,7 @@ mod summary;
 
 pub use details::{Details, Files, Overview};
 pub use menu::{Clicked, Entry};
-pub use orders::Orders;
+pub use orders::{OrderEntry, Orders};
 pub use rows::RowView;
 pub use summary::SelectionSummary;
 

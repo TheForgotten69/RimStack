@@ -1,6 +1,7 @@
 //! The window: views that show what the `App` hands them and forward what is done.
 
 pub mod assets;
+pub mod mods;
 pub mod shell;
 pub mod status_bar;
 pub mod theme;
@@ -30,6 +31,8 @@ pub struct Options {
     pub section: usize,
     pub theme: Option<ThemeName>,
     pub text_scale: Option<f32>,
+    /// Four mods of the load order chosen, as `--several` asks.
+    pub several: bool,
 }
 
 impl Options {
@@ -42,6 +45,7 @@ impl Options {
                 "--section" => options.section = value.parse().unwrap_or(0),
                 "--theme" => options.theme = ThemeName::named(value),
                 "--text-scale" => options.text_scale = value.parse().ok(),
+                "--several" => options.several = true,
                 _ => {}
             }
         }

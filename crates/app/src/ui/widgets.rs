@@ -185,6 +185,9 @@ impl RenderOnce for Btn {
 pub struct Chip {
     text: SharedString,
     tone: Option<Hsla>,
+    icon: Option<&'static str>,
+    on_accent: bool,
+    max_width: Option<Pixels>,
 }
 
 impl Chip {
@@ -192,7 +195,26 @@ impl Chip {
         Self {
             text: text.into(),
             tone: None,
+            icon: None,
+            on_accent: false,
+            max_width: None,
         }
+    }
+
+    pub fn icon(mut self, name: &'static str) -> Self {
+        self.icon = Some(name);
+        self
+    }
+
+    /// On a chosen row: a dark ground and the chosen row's ink.
+    pub fn on_accent(mut self, on: bool) -> Self {
+        self.on_accent = on;
+        self
+    }
+
+    pub fn max_width(mut self, width: Pixels) -> Self {
+        self.max_width = Some(width);
+        self
     }
 
     pub fn tone(mut self, tone: Hsla) -> Self {
@@ -205,23 +227,117 @@ impl RenderOnce for Chip {
     fn render(self, _: &mut Window, cx: &mut Cx) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         let tone = self.tone.unwrap_or(theme.colours.ink2);
+        let ink = if self.on_accent {
+            theme.colours.on_selected
+        } else {
+            tone
+        };
+        let ground = if self.on_accent {
+            theme::hex("#38000000")
+        } else {
+            with_alpha(tone, 0.16)
+        };
         div()
             .flex()
             .flex_none()
             .items_center()
+            .gap(theme::GAP_TINY)
             .h(theme.tag())
             .px(theme::GAP_CARD / 2.)
             .rounded(theme.tag() / 2.)
-            .bg(with_alpha(tone, 0.16))
-            .child(
-                div()
-                    .whitespace_nowrap()
-                    .sized_text(theme, theme.caption())
-                    .font_weight(theme.medium)
-                    .text_color(tone)
-                    .child(self.text),
-            )
+            .bg(ground)
+            .when_some(self.max_width, |d, most| d.max_w(most))
+            .when_some(self.icon, |d, name| {
+                d.child(icon(name, theme.sized(11.), ink))
+            })
+            .when(!self.text.is_empty(), |d| {
+                d.child(
+                    div()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .text_ellipsis()
+                        .sized_text(theme, theme.caption())
+                        .font_weight(theme.medium)
+                        .text_color(ink)
+                        .child(self.text),
+                )
+            })
     }
+}
+
+/// A text's width as drawn in the Theme's family, as `TextMetrics.advanceWidth` gives it.
+pub fn measure(
+    window: &Window,
+    theme: &Theme,
+    text: &str,
+    size: Pixels,
+    weight: FontWeight,
+) -> Pixels {
+    if text.is_empty() {
+        return Pixels::ZERO;
+    }
+    let mut font = gpui::font(theme.family.clone());
+    font.weight = weight;
+    let run = gpui::TextRun {
+        len: text.len(),
+        font,
+        color: theme.colours.ink,
+        background_color: None,
+        underline: None,
+        strikethrough: None,
+    };
+    window
+        .text_system()
+        .shape_line(SharedString::from(text.to_string()), size, &[run], None)
+        .width
+}
+
+/// `Text.ElideMiddle`: as many characters kept at each end as fit, with "…" between.
+pub fn elide_middle(
+    window: &Window,
+    theme: &Theme,
+    text: &str,
+    size: Pixels,
+    room: Pixels,
+) -> String {
+    let fits = |shown: &str| measure(window, theme, shown, size, FontWeight::NORMAL) <= room;
+    if fits(text) {
+        return text.to_string();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let shown = |kept: usize| {
+        let (left, right) = (kept.div_ceil(2), kept / 2);
+        let start: String = chars[..left].iter().collect();
+        let end: String = chars[chars.len() - right..].iter().collect();
+        format!("{start}…{end}")
+    };
+    let (mut low, mut high) = (0, chars.len().saturating_sub(1));
+    while low < high {
+        let middle = (low + high).div_ceil(2);
+        match fits(&shown(middle)) {
+            true => low = middle,
+            false => high = middle - 1,
+        }
+    }
+    shown(low)
+}
+
+/// The width `Btn.qml` takes: its icon, its text, its menu arrow and the room around them.
+pub fn btn_width(window: &Window, theme: &Theme, text: &str, icon: bool, menu: bool) -> Pixels {
+    let parts = [
+        icon.then(|| theme.icon()),
+        (!text.is_empty()).then(|| measure(window, theme, text, theme.small(), FontWeight::NORMAL)),
+        menu.then(|| theme.sized(12.)),
+    ];
+    let shown: Vec<Pixels> = parts.into_iter().flatten().collect();
+    let gaps = theme::GAP_SMALL * shown.len().saturating_sub(1) as f32;
+    let room = if text.is_empty() && !menu {
+        theme.sized(14.)
+    } else {
+        theme.sized(20.)
+    };
+    shown.into_iter().fold(gaps + room, |all, part| all + part)
 }
 
 /// A text in the Theme's terms: `label(theme, theme.body(), theme.colours.ink, "…")`.

@@ -1,21 +1,38 @@
 //! `Main.qml`: the top bar, the section shown, the status bar.
 
 use super::Options;
+use super::mods::Mods;
 use super::status_bar::status_bar;
 use super::theme::Theme;
 use super::top_bar::top_bar;
-use gpui::{Context, IntoElement, ParentElement, Render, Styled, Window, div};
+use crate::workspace::load_order::Side;
+use gpui::{
+    AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Window, div,
+    prelude::FluentBuilder,
+};
 
 pub struct Shell {
     section: usize,
     demo: bool,
+    mods: Entity<Mods>,
 }
 
 impl Shell {
-    pub fn new(options: &Options, _window: &mut Window, _cx: &mut Context<Self>) -> Self {
+    pub fn new(options: &Options, _window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let demo = options.demo;
+        let mods = cx.new(|cx| Mods::new(demo, cx));
+        if options.several {
+            mods.update(cx, |mods, cx| {
+                mods.choose_nth(Side::Active, 14, false, cx);
+                for at in [15, 16, 19] {
+                    mods.choose_nth(Side::Active, at, true, cx);
+                }
+            });
+        }
         Self {
             section: options.section,
-            demo: options.demo,
+            demo,
+            mods,
         }
     }
 
@@ -43,7 +60,12 @@ impl Render for Shell {
             .font_family(family)
             .text_size(body)
             .child(top_bar(self.section, self.demo, cx))
-            .child(div().flex_1())
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .when(self.section == 0, |d| d.child(self.mods.clone())),
+            )
             .child(status_bar(self.demo, cx))
     }
 }

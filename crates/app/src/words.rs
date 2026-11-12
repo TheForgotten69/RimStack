@@ -80,6 +80,29 @@ pub fn put(sentence: &Sentence) -> String {
     sentence.put(words.as_ref())
 }
 
+/// The locale numbers are written in, as Qt's `Qt.locale()` takes it: `LC_NUMERIC` before the language.
+fn number_locale() -> String {
+    let from_env = ["LC_ALL", "LC_NUMERIC", "LANG"]
+        .iter()
+        .filter_map(|name| std::env::var(name).ok())
+        .find(|value| !value.is_empty() && value != "C" && value != "POSIX");
+    let named = from_env.or_else(sys_locale::get_locale).unwrap_or_default();
+    named
+        .split(['.', '@'])
+        .next()
+        .unwrap_or_default()
+        .replace('_', "-")
+}
+
+thread_local! {
+    static NUMBERS: DecimalFormatter = digits_for(&number_locale());
+}
+
+/// A count as `Theme.count` wrote it, grouped the system's way: "2 000" in French.
+pub fn count(n: usize) -> String {
+    NUMBERS.with(|digits| digits.format(&Decimal::from(n as u64)).to_string())
+}
+
 pub fn counted(n: usize, one: &str, many: &str, locale: &str) -> String {
     let words = ON_SCREEN.with(|on_screen| on_screen.borrow().clone());
     if words.locale == locale {
