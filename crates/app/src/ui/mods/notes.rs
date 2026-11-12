@@ -35,6 +35,7 @@ pub struct Drafts {
 impl Mods {
     pub(super) fn start_picking(&mut self, picking: Option<Picking>, cx: &mut Context<Self>) {
         self.picking = picking;
+        self.sync_lists(cx);
         self.sync_details(cx);
         cx.notify();
     }

@@ -755,6 +755,7 @@ impl Mods {
     pub(super) fn close_compare(&mut self, cx: &mut Context<Self>) {
         self.comparing = None;
         self.compared = None;
+        self.focus_wanted = true;
         self.sync_details(cx);
         cx.notify();
     }

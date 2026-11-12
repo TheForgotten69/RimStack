@@ -29,6 +29,15 @@ pub struct Shown {
     pub chosen: Rc<HashSet<i32>>,
     /// Whether its mods may be dragged: not while Sort is shown, nor in an order of a column.
     pub movable: bool,
+    /// Whether the filter leaves it out and it is dimmed rather than hidden.
+    pub dimmed: bool,
+    /// Whether one mod alone is chosen, in either list.
+    pub single: bool,
+    pub previewing: bool,
+    /// Whether a mod is being picked for a rule.
+    pub picking: bool,
+    /// Its mods, headings and filter aside: where a drop past its last row lands.
+    pub count: usize,
 }
 
 /// The columns fitted to the width the list was last drawn at.
@@ -50,7 +59,13 @@ pub struct ModList {
     made: Rc<RefCell<Made>>,
     pub(super) bench: Option<super::bench::Bench>,
     focus: gpui::FocusHandle,
+    /// Where the pointer is while mods are dragged over the list, and the list's bounds then.
+    dragged_at: Option<(gpui::Point<Pixels>, gpui::Bounds<Pixels>)>,
+    pulling: Option<gpui::Task<()>>,
 }
+
+/// How often and how far a drag held at the list's edge scrolls it, as `ModList.qml`'s timer.
+const PULL_EVERY: std::time::Duration = std::time::Duration::from_millis(16);
 
 pub use crate::ui::rows::bar_room;
 
@@ -105,7 +120,9 @@ impl ModList {
             mods,
             made: Rc::default(),
             bench: None,
-            focus: cx.focus_handle(),
+            focus: cx.focus_handle().tab_stop(true),
+            dragged_at: None,
+            pulling: None,
         }
     }
 
@@ -126,22 +143,92 @@ impl ModList {
 
     /// Scrolls so that row `at` is in the middle of the list, as `positionViewAtIndex` centred it.
     pub fn reveal(&mut self, at: usize, cx: &mut Context<Self>) {
-        let Some(&top) = self.tops.get(at) else {
-            return;
-        };
-        let mut scroll = self.scroll.borrow_mut();
-        let shown = scroll.shown();
-        scroll.set_top(top - shown / 2.);
-        drop(scroll);
-        cx.notify();
-    }
-
-    /// Scrolls just enough for row `at` to show whole, as `ListView.Contain` did.
-    pub fn contain(&mut self, at: usize, cx: &mut Context<Self>) {
         if let (Some(&top), Some(&bottom)) = (self.tops.get(at), self.tops.get(at + 1)) {
-            self.scroll.borrow_mut().contain(top, bottom);
+            self.scroll.borrow_mut().centre(top, bottom);
             cx.notify();
         }
+    }
+
+    /// Scrolls just enough for row `at` to show whole, as `ListView.Contain` did, and clear of
+    /// the category heading kept at the top.
+    pub fn contain(&mut self, at: usize, cx: &mut Context<Self>) {
+        if let (Some(&top), Some(&bottom)) = (self.tops.get(at), self.tops.get(at + 1)) {
+            let headed = self.shown.rows.first().is_some_and(|r| r.is_header);
+            let clear = match headed {
+                true => cx.global::<Theme>().control(),
+                false => px(0.),
+            };
+            self.scroll.borrow_mut().contain(top - clear, bottom);
+            cx.notify();
+        }
+    }
+
+    pub fn focus_handle(&self) -> gpui::FocusHandle {
+        self.focus.clone()
+    }
+
+    /// The category whose mods are at the list's top, while its heading has scrolled away.
+    fn top_category(&self) -> Option<(i32, Pixels)> {
+        let rows = &self.shown.rows;
+        if !rows.first().is_some_and(|r| r.is_header) {
+            return None;
+        }
+        let top = self.scroll.borrow().top();
+        let first = self.top_row();
+        let row = rows.get(first).filter(|r| r.is_sub || !r.is_header)?;
+        Some((row.category, top))
+    }
+
+    /// A drag held near the list's top or bottom scrolls it, faster the nearer the edge.
+    fn dragged_over(
+        &mut self,
+        at: gpui::Point<Pixels>,
+        bounds: gpui::Bounds<Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        self.dragged_at = Some((at, bounds));
+        if self.pulling.is_some() {
+            return;
+        }
+        self.pulling = Some(cx.spawn(async move |list, cx| {
+            loop {
+                cx.background_executor().timer(PULL_EVERY).await;
+                let going = list.update(cx, |list, cx| list.pull(cx)).unwrap_or(false);
+                if !going {
+                    break;
+                }
+            }
+        }));
+    }
+
+    fn pull(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some((at, bounds)) = self.dragged_at.filter(|_| cx.has_active_drag()) else {
+            self.dragged_at = None;
+            self.pulling = None;
+            return false;
+        };
+        let theme = cx.global::<Theme>();
+        let (edge, step) = (theme.sized(40.), theme.sized(22.));
+        let (y, height) = (at.y - bounds.top(), bounds.size.height);
+        let outside = at.x < bounds.left() || at.x > bounds.right();
+        if outside || y < -edge || y > height + edge {
+            return true;
+        }
+        let pull = if y < edge {
+            -((edge - y.max(px(0.))) / edge)
+        } else if y > height - edge {
+            (y.min(height) - (height - edge)) / edge
+        } else {
+            0.
+        };
+        if pull != 0. {
+            let mut scroll = self.scroll.borrow_mut();
+            let top = scroll.top();
+            scroll.set_top(top + step * pull);
+            drop(scroll);
+            cx.notify();
+        }
+        true
     }
 
     /// The row at the list's top.
@@ -197,6 +284,21 @@ impl Render for ModList {
                     }
                 };
                 let chosen_ids: Vec<i32> = shown.chosen.iter().copied().collect();
+                let around = rows::Around {
+                    movable: shown.movable,
+                    chosen_ids: &chosen_ids,
+                    marks: &shown.marks,
+                    single: shown.single,
+                    buttons: !shown.previewing && !shown.picking,
+                    previewing: shown.previewing,
+                    headed: shown.orders.active_key.is_empty() && shown.view.headings,
+                    order_shown: made.columns.as_ref().is_some_and(|columns| {
+                        columns
+                            .fitting
+                            .iter()
+                            .any(|(key, _)| *key == shown.orders.active_key)
+                    }),
+                };
                 range
                     .map(|at| {
                         let row = &shown.rows[at];
@@ -210,11 +312,7 @@ impl Render for ModList {
                             row,
                             made.columns.as_deref(),
                             chosen,
-                            rows::Moving {
-                                movable: shown.movable,
-                                chosen_ids: &chosen_ids,
-                                marks: &shown.marks,
-                            },
+                            &around,
                             mods.clone(),
                             &thumbs,
                             list_id,
@@ -227,6 +325,10 @@ impl Render for ModList {
         );
         let focused = self.focus.is_focused(window);
         let (keyed, focus) = (self.mods.clone(), self.focus.clone());
+        let heading = self
+            .top_category()
+            .map(|(category, top)| self.top_heading(&theme, category, top, cx));
+        let footer = self.footer(&theme, cx);
         div()
             .id(("mod-list-pane", side as usize))
             .track_focus(&self.focus)
@@ -237,13 +339,21 @@ impl Render for ModList {
             }))
             .relative()
             .size_full()
+            .when(self.shown.dimmed, |d| d.opacity(0.5))
             .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
                 window.focus(&focus, cx)
             })
+            .on_drag_move::<rows::Held>(cx.listener(
+                |list, event: &gpui::DragMoveEvent<rows::Held>, _, cx| {
+                    list.dragged_over(event.event.position, event.bounds, cx)
+                },
+            ))
             .on_key_down(move |event: &gpui::KeyDownEvent, window, cx| {
                 let _ = keyed.update(cx, |mods, cx| mods.list_key(side, event, window, cx));
             })
             .child(list)
+            .children(footer)
+            .children(heading)
             .when(focused, |d| {
                 d.child(
                     div()
@@ -259,5 +369,138 @@ impl Render for ModList {
                 self.scroll.clone(),
                 cx.entity_id(),
             ))
+    }
+}
+
+impl ModList {
+    /// `ModList.qml`'s footer: below the last row, where a drop puts the mods at the list's end.
+    fn footer(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
+        let (_, below) = spacer(theme, self.side);
+        let end = *self.tops.last()? - below;
+        let scroll = self.scroll.borrow();
+        let from = end - scroll.top();
+        if from > scroll.shown() && scroll.shown() > px(0.) {
+            return None;
+        }
+        drop(scroll);
+        let (mods, side, count) = (self.mods.clone(), self.side, self.shown.count);
+        let line = div()
+            .absolute()
+            .left(theme::GAP_SMALL)
+            .right(theme::GAP_SMALL)
+            .top_0()
+            .h(px(2.))
+            .rounded(px(1.))
+            .bg(theme.colours.focus)
+            .invisible()
+            .group_drag_over::<rows::Held>("list-end", |s| s.visible());
+        let _ = cx;
+        Some(
+            div()
+                .id(("list-end", side as usize))
+                .group("list-end")
+                .absolute()
+                .left_0()
+                .right(bar_room(theme))
+                .top(from.max(px(0.)))
+                .bottom_0()
+                .child(line)
+                .on_drop(move |held: &rows::Held, _, cx| {
+                    let held = held.clone();
+                    let _ = mods.update(cx, |mods, cx| {
+                        mods.drop_on((held.side, held.index, held.ids), (side, count), cx)
+                    });
+                })
+                .into_any_element(),
+        )
+    }
+
+    /// The heading of the category at the list's top, kept there while its mods scroll under it
+    /// and pushed up by the next category's heading.
+    fn top_heading(
+        &self,
+        theme: &Theme,
+        category: i32,
+        top: Pixels,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let c = &theme.colours;
+        let tall = theme.control();
+        let next = self
+            .tops
+            .partition_point(|row| *row <= top + tall)
+            .saturating_sub(1);
+        let pushed = self
+            .shown
+            .rows
+            .get(next)
+            .filter(|r| r.is_header && !r.is_sub && !r.again)
+            .map_or(px(0.), |_| (self.tops[next] - top - tall).min(px(0.)));
+        let colour = usize::try_from(category).map_or(c.ink3, |at| theme.category_colour(at));
+        let icon = usize::try_from(category)
+            .ok()
+            .and_then(|at| theme::CATEGORY_ICONS.get(at))
+            .copied()
+            .unwrap_or("package");
+        let name = usize::try_from(category)
+            .ok()
+            .and_then(|at| theme::CATEGORY_NAMES.get(at))
+            .map(|name| {
+                crate::words::put(&rimstack_core::base::sentence::Sentence::said(
+                    name,
+                    Vec::new(),
+                ))
+            })
+            .unwrap_or_default();
+        let mods = self.mods.clone();
+        let _ = cx;
+        div()
+            .id(("top-heading", self.side as usize))
+            .absolute()
+            .left_0()
+            .right(bar_room(theme))
+            .top(pushed)
+            .h(tall)
+            .bg(match self.side {
+                Side::Active => c.win,
+                Side::Inactive => c.panel,
+            })
+            .child(
+                div()
+                    .absolute()
+                    .left(px(2.))
+                    .top_0()
+                    .bottom_0()
+                    .w(px(3.))
+                    .bg(colour),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .pl(theme::GAP_WIDE + theme.sized(10.) + theme::GAP_SMALL)
+                    .flex()
+                    .items_center()
+                    .gap(theme::GAP_SMALL)
+                    .child(crate::ui::widgets::icon(icon, theme.icon(), colour))
+                    .child(
+                        crate::ui::widgets::label(theme, theme.small(), c.ink, name)
+                            .font_weight(theme.semibold),
+                    ),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .bottom_0()
+                    .left(theme::GAP_SMALL)
+                    .right(theme::GAP_SMALL)
+                    .h(px(1.))
+                    .bg(c.line),
+            )
+            .on_mouse_down(gpui::MouseButton::Right, move |event, window, cx| {
+                let at = event.position;
+                let _ = mods.update(cx, |mods, cx| mods.category_menu(category, at, window, cx));
+            })
+            .into_any_element()
     }
 }

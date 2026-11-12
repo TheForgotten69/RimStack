@@ -29,6 +29,8 @@ pub struct Scroll {
     shown: Pixels,
     /// While the bar's thumb is held: how far below the thumb's top it was taken.
     pub held: Option<Pixels>,
+    /// Whether the pointer is over the bar, which then shows its thumb stronger.
+    hovered: bool,
     reduce_motion: bool,
     /// A row to bring into view once the list knows its height: its top and bottom, and
     /// whether to put it in the middle rather than just inside.
@@ -275,7 +277,7 @@ pub fn bar_room(theme: &Theme) -> Pixels {
 /// `Scroller.qml`: the bar at a scrolled area's right, its thumb held to scroll; `view` is drawn
 /// again as the thumb moves.
 pub fn bar(theme: &Theme, scroll: Scrolling, view: EntityId) -> impl IntoElement {
-    let colour = with_alpha(theme.colours.ink3, 0.6);
+    let (colour, strong) = (with_alpha(theme.colours.ink3, 0.6), theme.colours.ink2);
     let (width, shortest) = (theme.sized(9.), theme.sized(32.));
     let thumb = move |scroll: &Scroll, track: Pixels| {
         let length = (track * (scroll.shown() / scroll.total().max(px(1.)))).max(shortest);
@@ -300,8 +302,12 @@ pub fn bar(theme: &Theme, scroll: Scrolling, view: EntityId) -> impl IntoElement
                 bounds.left() + theme::GAP_HAIR,
                 bounds.top() + theme::GAP_HAIR + top,
             );
+            let shown = match scroll.hovered || scroll.held.is_some() {
+                true => strong,
+                false => colour,
+            };
             window.paint_quad(
-                fill(gpui::Bounds::new(at, size(width, length)), colour).corner_radii(width / 2.),
+                fill(gpui::Bounds::new(at, size(width, length)), shown).corner_radii(width / 2.),
             );
             drop(scroll);
             let (held, moved) = (drawn.clone(), drawn.clone());
@@ -331,6 +337,11 @@ pub fn bar(theme: &Theme, scroll: Scrolling, view: EntityId) -> impl IntoElement
             });
             window.on_mouse_event(move |event: &MouseMoveEvent, _, _, cx| {
                 let mut scroll = moved.borrow_mut();
+                let over = bounds.contains(&event.position);
+                if over != scroll.hovered {
+                    scroll.hovered = over;
+                    cx.notify(view);
+                }
                 let Some(grip) = scroll.held else {
                     return;
                 };
@@ -346,8 +357,11 @@ pub fn bar(theme: &Theme, scroll: Scrolling, view: EntityId) -> impl IntoElement
                 cx.notify(view);
             });
             let released = drawn.clone();
-            window
-                .on_mouse_event(move |_: &MouseUpEvent, _, _, _| released.borrow_mut().held = None);
+            window.on_mouse_event(move |_: &MouseUpEvent, _, _, cx| {
+                if released.borrow_mut().held.take().is_some() {
+                    cx.notify(view);
+                }
+            });
         },
     )
     .absolute()

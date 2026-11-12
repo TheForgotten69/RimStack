@@ -343,14 +343,14 @@ impl Mods {
         self.keep_selection(ids, in_active, cx);
     }
 
-    fn select_all(&mut self, side: Side, cx: &mut Context<Self>) {
+    /// Every mod the list shows, as `ModList.qml` chose from its first to its last.
+    pub(super) fn select_all(&mut self, side: Side, cx: &mut Context<Self>) {
         let ids = self
-            .order
-            .list(side)
-            .mods()
+            .shown(side)
+            .rows
             .iter()
-            .filter_map(|m| m.installed)
-            .map(ModId::to_qml)
+            .filter(|r| !r.is_header && r.mod_id >= 0)
+            .map(|r| r.mod_id)
             .collect();
         self.keep_selection(ids, side == Side::Active, cx);
     }
@@ -388,7 +388,7 @@ impl Mods {
     }
 
     /// The chosen mod's row brought into view, in the middle when `centre`.
-    fn reveal_selected(&mut self, side: Side, centre: bool, cx: &mut Context<Self>) {
+    pub(super) fn reveal_selected(&mut self, side: Side, centre: bool, cx: &mut Context<Self>) {
         let Some(id) = self.selected_id() else {
             return;
         };

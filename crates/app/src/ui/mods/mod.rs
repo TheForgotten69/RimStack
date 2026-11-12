@@ -70,6 +70,8 @@ pub struct Mods {
     orders: Orders,
     pub filter: Entity<TextField>,
     active_list: Entity<list::ModList>,
+    /// The load order takes the keys at the next frame, as it does once a comparison closes.
+    focus_wanted: bool,
     inactive_list: Entity<list::ModList>,
     focus: gpui::FocusHandle,
     overview: Option<Rc<Overview>>,
@@ -202,6 +204,11 @@ impl Mods {
                 marks: Rc::default(),
                 chosen: Rc::default(),
                 movable: false,
+                dimmed: false,
+                single: false,
+                previewing: false,
+                picking: false,
+                count: 0,
             };
             let (thumbs, mods) = (thumbs.clone(), cx.weak_entity());
             cx.new(|cx| list::ModList::new(side, shown, thumbs, mods, cx))
@@ -258,6 +265,7 @@ impl Mods {
             problems_open: false,
             hunting: false,
             picking: None,
+            focus_wanted: false,
             drafts: notes::Drafts::default(),
             notes_saved: false,
             chosen_read: Lane::default(),
@@ -641,6 +649,7 @@ impl Mods {
             Some(found) if !found.is_header => {
                 self.details_view.update(cx, |view, _| view.tab = tab);
                 self.choose(side, found.mod_id, cx);
+                self.reveal_selected(side, false, cx);
             }
             Some(_) => {}
             None => self.wanted = Some((row, tab)),
@@ -678,6 +687,12 @@ impl Mods {
                 },
                 chosen: Rc::new(chosen),
                 movable: in_order && !self.order.previewing() && !self.demo,
+                dimmed: self.order.list(side).left_out()
+                    == Some(rimstack_core::mods::list::LeftOut::Dimmed),
+                single: self.selection.len() == 1,
+                previewing: self.order.previewing(),
+                picking: self.picking.is_some(),
+                count: self.order.list(side).mods().len(),
             };
             self.list(side).update(cx, |list, cx| list.show(shown, cx));
         }

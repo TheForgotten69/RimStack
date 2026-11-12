@@ -1,21 +1,20 @@
 //! `ModRow.qml`: a category heading, a group under a tag, or a mod.
 
+mod cells;
+mod headings;
+
 use super::Mods;
 use crate::ui::theme::{self, CATEGORY_ICONS, Theme};
 use crate::ui::thumbs;
-use crate::ui::widgets::{
-    Chip, TextSized, chip_width, elide_middle, halo, icon, label, with_alpha,
-};
-use crate::words::{count, put};
+use crate::ui::widgets::{TextSized, halo, icon, with_alpha};
+use crate::words::put;
 use crate::workspace::load_order::{RowView, Side};
+use gpui::AppContext;
 use gpui::{
-    AnyElement, Hsla, InteractiveElement, IntoElement, ParentElement, Pixels, SharedString,
-    StatefulInteractiveElement, Styled, StyledImage, TextOverflow, WeakEntity, Window, div, img,
-    prelude::FluentBuilder, px,
+    AnyElement, Hsla, InteractiveElement, IntoElement, ParentElement, Pixels,
+    StatefulInteractiveElement, Styled, WeakEntity, Window, div, prelude::FluentBuilder, px,
 };
-use gpui::{AppContext, RenderImage};
 use rimstack_core::say;
-use std::sync::Arc;
 
 /// What the load order shows beside a mod's name, as `ModList.qml` fits it to its width.
 pub struct Columns {
@@ -64,7 +63,8 @@ pub struct Held {
     pub ids: Vec<rimstack_core::mods::library::ModId>,
 }
 
-/// What follows the pointer in a drag: nothing, as in Qt; the place it would land is marked.
+/// What follows the pointer while a divider or a heading is dragged: nothing; the drag shows
+/// in what it moves.
 pub struct Ghost;
 
 impl gpui::Render for Ghost {
@@ -73,12 +73,58 @@ impl gpui::Render for Ghost {
     }
 }
 
-/// What a row may do beyond being chosen: be dragged, and the mods chosen beside it.
-pub struct Moving<'a> {
+/// What follows the pointer while mods are dragged, as `ModsScreen.qml`'s ghost: what is held,
+/// beside the pointer. `grabbed` is where the row was taken, from the row's corner, which GPUI
+/// draws this at.
+pub struct HeldGhost {
+    pub name: String,
+    pub grabbed: gpui::Point<Pixels>,
+}
+
+impl gpui::Render for HeldGhost {
+    fn render(&mut self, _: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
+        let theme = cx.global::<Theme>().clone();
+        let tall = theme.sized(26.);
+        div()
+            .ml(self.grabbed.x + theme::GAP_MEDIUM)
+            .mt(self.grabbed.y - tall / 2.)
+            .w(theme.sized(300.))
+            .h(tall)
+            .px(theme::GAP_MEDIUM)
+            .flex()
+            .items_center()
+            .rounded(theme::CORNER)
+            .bg(theme.colours.accent)
+            .opacity(0.9)
+            .child(
+                div()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_ellipsis()
+                    .sized_text(&theme, theme.body())
+                    .text_color(gpui::white())
+                    .child(self.name.clone()),
+            )
+    }
+}
+
+/// What a row takes from its list and the screen beyond itself.
+pub struct Around<'a> {
+    /// Whether its mods may be dragged.
     pub movable: bool,
     pub chosen_ids: &'a [i32],
     /// The mods sharing textures with the one chosen: whether each loses them to it.
     pub marks: &'a Marks,
+    /// Whether one mod alone is chosen, in either list.
+    pub single: bool,
+    /// Whether a row's own buttons show: not while Sort is shown nor while a mod is picked.
+    pub buttons: bool,
+    pub previewing: bool,
+    /// Whether the load order's tags head groups, so a row tells only how many tags it has.
+    pub headed: bool,
+    /// Whether the column the load order is ordered by is shown, which then says the value.
+    pub order_shown: bool,
 }
 
 pub type Marks = std::collections::BTreeMap<
@@ -92,7 +138,7 @@ fn hover_buttons(
     side: Side,
     at: usize,
     row: &RowView,
-    chosen: bool,
+    alone: bool,
     mods: &WeakEntity<Mods>,
 ) -> AnyElement {
     let c = &theme.colours;
@@ -153,7 +199,7 @@ fn hover_buttons(
         })
         .child(
             button("row-menu", "ellipsis", put(&say!("Menu (right-click)")))
-                .when(!chosen, |d| {
+                .when(!alone, |d| {
                     d.invisible().group_hover("mod-row", |s| s.visible())
                 })
                 .on_click(move |event, window, cx| {
@@ -177,7 +223,7 @@ pub fn row(
     row: &RowView,
     columns: Option<&Columns>,
     chosen: bool,
-    moving: Moving<'_>,
+    around: &Around<'_>,
     mods: WeakEntity<Mods>,
     thumbs: &thumbs::Shared,
     shown_by: gpui::EntityId,
@@ -186,31 +232,17 @@ pub fn row(
     let c = &theme.colours;
     let colour = category_colour(theme, row.category);
     let big_header = row.is_header && !row.is_sub && !row.again;
+    let mark = rimstack_core::mods::library::ModId::from_qml(row.mod_id)
+        .and_then(|id| around.marks.get(&id))
+        .filter(|_| columns.is_some() && !row.is_header);
     let body = if row.is_sub {
-        sub(theme, row, side, at, mods.clone())
+        headings::sub(theme, row, side, at, mods.clone())
     } else if row.again {
-        again(theme, row)
+        headings::again(theme, row)
     } else if row.is_header {
-        heading(theme, row, colour)
+        headings::heading(theme, row, colour)
     } else {
-        let mut room = name_room;
-        let mut beside = |text: &str, most: Option<Pixels>| {
-            let wide = chip_width(window, theme, text, false);
-            room -= most.map_or(wide, |most| wide.min(most)) + theme::GAP_SMALL;
-        };
-        if row.outdated {
-            beside(&row.made_for, None);
-        }
-        if row.fresh {
-            beside(&put(&say!("New")), None);
-        }
-        for tag in row.tags.split(", ").filter(|t| !t.is_empty()).take(2) {
-            beside(tag, Some(theme.sized(110.)));
-        }
-        if row.version_ignored {
-            room -= theme.sized(12.) + theme::GAP_SMALL;
-        }
-        let name = elide_middle(window, theme, &put(&row.name), theme.body(), room);
+        let fitted = cells::fit(window, theme, row, name_room, columns, around);
         let picture = match columns.is_some_and(|c| c.tile) && !row.picture.is_empty() {
             true => {
                 let scale = window.scale_factor();
@@ -221,15 +253,24 @@ pub fn row(
             }
             false => None,
         };
-        let mark = rimstack_core::mods::library::ModId::from_qml(row.mod_id)
-            .and_then(|id| moving.marks.get(&id));
-        cells(theme, row, name, columns, chosen, colour, picture, mark)
+        let shown = cells::Shown {
+            columns,
+            chosen,
+            alone: chosen && around.single,
+            colour,
+            picture,
+            mark,
+        };
+        cells::cells(theme, row, fitted, shown)
     };
     let (is_header, is_sub, category, mod_id) =
         (row.is_header, row.is_sub, row.category, row.mod_id);
     let (mods_for_menu, at_row, mod_index) = (mods.clone(), at, row.mod_index);
+    let previewing = around.previewing;
     let ground = if chosen {
         Some(c.chosen)
+    } else if mark.is_some() {
+        Some(with_alpha(c.warn, 0.12))
     } else if row.moved_from > 0 {
         Some(with_alpha(c.moved, 0.1))
     } else {
@@ -244,6 +285,12 @@ pub fn row(
             at,
         ))
         .group("mod-row")
+        .role(match is_header {
+            true => gpui::Role::Heading,
+            false => gpui::Role::ListItem,
+        })
+        .aria_label(put(&row.accessible_name))
+        .when(!is_header, |d| d.aria_selected(chosen))
         .relative()
         .w_full()
         .h(height(theme, row, columns.is_some()))
@@ -305,9 +352,19 @@ pub fn row(
             )
         })
         .child(body)
-        .when(!is_header && row.mod_index >= 0, |d| {
-            d.child(hover_buttons(theme, side, at, row, chosen, &mods))
-        })
+        .when(
+            !is_header && row.mod_index >= 0 && around.buttons && !cx.has_active_drag(),
+            |d| {
+                d.child(hover_buttons(
+                    theme,
+                    side,
+                    at,
+                    row,
+                    chosen && around.single,
+                    &mods,
+                ))
+            },
+        )
         .when(!is_header, |d| {
             let landing = mods.clone();
             let index = row.mod_index.max(0) as usize;
@@ -320,6 +377,15 @@ pub fn row(
                     .h(px(3.))
                     .rounded(px(1.5))
                     .bg(c.focus)
+                    .child(
+                        div()
+                            .absolute()
+                            .left(px(-3.))
+                            .top(px(-3.))
+                            .size(px(9.))
+                            .rounded_full()
+                            .bg(c.focus),
+                    )
                     .invisible()
                     .group_drag_over::<Held>("mod-row", |s| s.visible()),
             )
@@ -330,10 +396,14 @@ pub fn row(
                 });
             })
         })
-        .when(moving.movable && !is_header && row.mod_index >= 0, |d| {
-            let ids = match chosen && moving.chosen_ids.len() > 1 {
-                true => moving.chosen_ids.to_vec(),
+        .when(around.movable && !is_header && row.mod_index >= 0, |d| {
+            let ids = match chosen && around.chosen_ids.len() > 1 {
+                true => around.chosen_ids.to_vec(),
                 false => vec![mod_id],
+            };
+            let name = match ids.len() > 1 {
+                true => put(&rimstack_core::say_n!(ids.len(), "{} mod", "{} mods")),
+                false => put(&row.name),
             };
             let held = Held {
                 side,
@@ -343,11 +413,16 @@ pub fn row(
                     .filter_map(rimstack_core::mods::library::ModId::from_qml)
                     .collect(),
             };
-            d.on_drag(held, |_, _, _, cx| cx.new(|_| Ghost))
+            d.on_drag(held, move |_, grabbed, _, cx| {
+                cx.new(|_| HeldGhost {
+                    name: name.clone(),
+                    grabbed,
+                })
+            })
         })
         .on_click(move |event, _, cx| {
             let (modifiers, command) = (event.modifiers(), event.modifiers().secondary(cx));
-            let twice = event.click_count() >= 2;
+            let twice = event.click_count() >= 2 && !previewing;
             let active = side == Side::Active;
             let _ = mods.update(cx, |mods, cx| match (is_header, is_sub) {
                 (true, true) => mods.toggle_sub(side, at, cx),
@@ -370,417 +445,4 @@ pub fn row(
             }
         })
         .into_any_element()
-}
-
-fn arrow(theme: &Theme, collapsed: bool, colour: Hsla) -> gpui::Div {
-    label(
-        theme,
-        theme.caption(),
-        colour,
-        if collapsed { "▸" } else { "▾" },
-    )
-    .w(theme.sized(10.))
-}
-
-/// `text` with `tip` shown while pointed at.
-fn tipped_label(id: String, text: gpui::Div, tip: String) -> AnyElement {
-    crate::ui::tip::tipped(div().id(SharedString::from(id)).child(text), tip.into())
-        .into_any_element()
-}
-
-fn heading(theme: &Theme, row: &RowView, colour: Hsla) -> AnyElement {
-    let c = &theme.colours;
-    div()
-        .absolute()
-        .left(theme::GAP_WIDE)
-        .bottom(theme::GAP_TINY)
-        .flex()
-        .items_center()
-        .gap(theme::GAP_SMALL)
-        .child(arrow(theme, row.collapsed, c.ink2))
-        .child(icon(category_icon(row.category), theme.icon(), colour))
-        .child(tipped_label(
-            format!("heading-{}", row.category),
-            label(theme, theme.small(), c.ink, put(&row.name)).font_weight(theme.semibold),
-            put(&match row.collapsed {
-                true => say!("Click to show its mods"),
-                false => say!("Click to hide its mods"),
-            }),
-        ))
-        .child(label(
-            theme,
-            theme.small(),
-            c.ink3,
-            count(row.count.max(0) as usize),
-        ))
-        .into_any_element()
-}
-
-fn sub(theme: &Theme, row: &RowView, side: Side, at: usize, mods: WeakEntity<Mods>) -> AnyElement {
-    let c = &theme.colours;
-    let counted = match row.group_size > row.count {
-        true => put(&say!(
-            "{} of {}",
-            count(row.count as usize),
-            count(row.group_size as usize)
-        )),
-        false => count(row.count.max(0) as usize),
-    };
-    div()
-        .absolute()
-        .inset_0()
-        .flex()
-        .items_center()
-        .pl(theme::GAP_WIDE + theme.sized(28.))
-        .gap(theme::GAP_SMALL)
-        .child(arrow(theme, row.collapsed, c.ink3))
-        .child(tipped_label(
-            format!("group-{}", put(&row.name)),
-            label(theme, theme.small(), c.ink2, put(&row.name)),
-            put(&match row.collapsed {
-                true => say!("Click to show its mods"),
-                false => say!("The mods whose first tag this is. Click to hide them."),
-            }),
-        ))
-        .child(label(theme, theme.small(), c.ink3, counted))
-        .child(div().flex_1())
-        .child(crate::ui::tip::tipped(
-            div()
-                .id(SharedString::from(format!("untag-{}", put(&row.name))))
-                .role(gpui::Role::Button)
-                .aria_label(put(&say!("Remove the tag {} from these mods", put(&row.name))))
-                .flex()
-                .items_center()
-                .justify_center()
-                .size(theme.sized(24.))
-                .mr(theme::GAP_CARD)
-                .rounded(theme::CORNER)
-                .bg(c.ctl)
-                .hover(|s| s.bg(c.ctl_hi))
-                .cursor_pointer()
-                .invisible()
-                .group_hover("mod-row", |s| s.visible())
-                .child(icon("x", theme.sized(12.), c.ink))
-                .on_click(move |_, _, cx| {
-                    cx.stop_propagation();
-                    let _ = mods.update(cx, |mods, cx| mods.remove_sub(side, at, cx));
-                }),
-            put(&say!("Takes this tag off these mods; they stay where they are")).into(),
-        ))
-        .when(row.again, |d| {
-            d.child(tipped_label(
-                format!("group-rest-{}", put(&row.name)),
-                label(theme, theme.small(), c.ink3, put(&say!("the rest of it"))),
-                put(&say!(
-                    "This group has mods further up as well: a rule keeps them apart, and Sort follows rules before groups."
-                )),
-            ))
-        })
-        .into_any_element()
-}
-
-fn again(theme: &Theme, row: &RowView) -> AnyElement {
-    let c = &theme.colours;
-    let said = format!("{}  {}", put(&row.name), count(row.count.max(0) as usize));
-    let tip = put(&say!(
-        "This category has mods further up as well. Sort brings a category's mods together."
-    ));
-    let line = div()
-        .id(SharedString::from(format!(
-            "again-{}-{}",
-            row.category, row.number
-        )))
-        .absolute()
-        .inset_0()
-        .flex()
-        .items_center()
-        .px(theme::GAP_WIDE)
-        .gap(theme::GAP_SMALL)
-        .child(arrow(theme, row.collapsed, c.ink3))
-        .child(label(theme, theme.caption(), c.ink3, said))
-        .child(label(
-            theme,
-            theme.caption(),
-            c.warn,
-            put(&say!("out of category order")),
-        ))
-        .child(div().flex_1().ml(theme::GAP_SMALL).h(px(1.)).bg(c.line));
-    crate::ui::tip::tipped(line, tip.into()).into_any_element()
-}
-
-fn tile(
-    theme: &Theme,
-    row: &RowView,
-    colour: Hsla,
-    picture: Option<Arc<RenderImage>>,
-) -> AnyElement {
-    let first: String = put(&row.name)
-        .chars()
-        .next()
-        .map(|c| c.to_uppercase().collect())
-        .unwrap_or_default();
-    div()
-        .relative()
-        .flex()
-        .flex_none()
-        .items_center()
-        .justify_center()
-        .w(theme.sized(64.))
-        .h(theme.sized(40.))
-        .rounded(theme::CORNER)
-        .bg(theme.colours.ctl)
-        .map(|d| match row.picture.is_empty() {
-            true => d
-                .child(
-                    div()
-                        .absolute()
-                        .inset_0()
-                        .rounded(theme::CORNER)
-                        .bg(with_alpha(colour, 0.16))
-                        .border_1()
-                        .border_color(with_alpha(colour, 0.28)),
-                )
-                .child(label(theme, theme.title(), colour, first).font_weight(theme.semibold)),
-            false => d.children(picture.map(|picture| {
-                img(picture)
-                    .absolute()
-                    .left(theme::GAP_LINE)
-                    .top(theme::GAP_LINE)
-                    .w(theme.sized(64.) - theme::GAP_LINE * 2.)
-                    .h(theme.sized(40.) - theme::GAP_LINE * 2.)
-                    .rounded(theme::CORNER)
-                    .object_fit(gpui::ObjectFit::Cover)
-            })),
-        })
-        .into_any_element()
-}
-
-#[allow(clippy::too_many_arguments)]
-fn cells(
-    theme: &Theme,
-    row: &RowView,
-    name: String,
-    columns: Option<&Columns>,
-    chosen: bool,
-    colour: Hsla,
-    picture: Option<Arc<RenderImage>>,
-    mark: Option<&rimstack_core::mods::details::Mark>,
-) -> AnyElement {
-    let c = &theme.colours;
-    let quiet = if chosen { c.on_selected_dim } else { c.ink2 };
-    let ink = if chosen { c.on_selected } else { c.ink };
-    let tags: Vec<String> = match row.tags.is_empty() {
-        true => Vec::new(),
-        false => row.tags.split(", ").take(2).map(String::from).collect(),
-    };
-    let name = div()
-        .flex()
-        .flex_1()
-        .min_w_0()
-        .items_center()
-        .gap(theme::GAP_SMALL)
-        .child(icon(
-            category_icon(row.category),
-            theme.sized(13.),
-            if chosen { c.on_selected } else { colour },
-        ))
-        .when(columns.is_some_and(|c| c.tile), |d| {
-            d.child(tile(theme, row, colour, picture))
-        })
-        .when(row.version_ignored, |d| {
-            d.child(tipped_label(
-                format!("ignored-{}", row.number),
-                div().child(icon(
-                    "eye-off",
-                    theme.sized(12.),
-                    if chosen { c.on_selected } else { c.ink3 },
-                )),
-                put(&say!(
-                    "Made for another game version; the warning is ignored"
-                )),
-            ))
-        })
-        .child(
-            div()
-                .min_w_0()
-                .overflow_hidden()
-                .whitespace_nowrap()
-                .text_overflow(TextOverflow::TruncateMiddle("…".into()))
-                .sized_text(theme, theme.body())
-                .text_color(ink)
-                .child(name),
-        )
-        .when(row.outdated, |d| {
-            d.child(
-                Chip::new(row.made_for.clone())
-                    .tone(c.warn)
-                    .on_accent(chosen),
-            )
-        })
-        .when(row.fresh, |d| {
-            d.child(Chip::new(put(&say!("New"))).tone(c.ok).on_accent(chosen))
-        })
-        .children(tags.into_iter().map(|tag| {
-            Chip::new(tag)
-                .max_width(theme.sized(110.))
-                .on_accent(chosen)
-        }))
-        .child(div().flex_1())
-        .when(!row.ordered_by.is_empty() && columns.is_none(), |d| {
-            d.child(label(theme, theme.small(), quiet, put(&row.ordered_by)))
-        })
-        .when(columns.is_none() && row.source == 2, |d| {
-            d.child(tipped_label(
-                format!("git-{}", put(&row.name)),
-                div().child(icon(
-                    "git-branch",
-                    theme.sized(12.),
-                    if chosen { c.on_selected } else { c.ink3 },
-                )),
-                put(&say!("A Git checkout")),
-            ))
-        });
-    let Some(columns) = columns else {
-        return div()
-            .absolute()
-            .inset_0()
-            .flex()
-            .items_center()
-            .px(theme::GAP_WIDE)
-            .gap(theme::GAP_LARGE)
-            .child(name)
-            .into_any_element();
-    };
-    let value = |key: &str| -> SharedString {
-        match key {
-            "author" => row.author.clone().into(),
-            "version" => row.version.clone().into(),
-            "load" => row.load_time.clone().into(),
-            "updated" => put(&row.updated_ago).into(),
-            "downloaded" => put(&row.downloaded_ago).into(),
-            "activated" => put(&row.activated_ago).into(),
-            _ => put(&row.size_text).into(),
-        }
-    };
-    let quick = quick_chip(theme, row, columns.wide, chosen, mark);
-    div()
-        .absolute()
-        .inset_0()
-        .flex()
-        .items_center()
-        .px(theme::GAP_WIDE)
-        .gap(theme::GAP_LARGE)
-        .child(
-            div()
-                .flex()
-                .flex_none()
-                .justify_end()
-                .w(columns.number)
-                .child(label(
-                    theme,
-                    theme.small(),
-                    if chosen { c.on_selected_dim } else { c.ink3 },
-                    row.number.to_string(),
-                )),
-        )
-        .child(name)
-        .children(columns.fitting.iter().map(|(key, width)| {
-            let right = matches!(*key, "load" | "size");
-            let colour = match (*key, chosen) {
-                ("load", true) => c.on_selected,
-                ("load", false) if row.load_seconds >= 0.1 => c.ink2,
-                ("load", false) => c.ink3,
-                _ => quiet,
-            };
-            let cell = div()
-                .id(SharedString::from(format!("cell-{key}")))
-                .flex()
-                .flex_none()
-                .w(*width)
-                .when(right, |d| d.justify_end())
-                .child(
-                    div()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .whitespace_nowrap()
-                        .text_ellipsis()
-                        .sized_text(theme, if right { theme.small() } else { theme.body() })
-                        .text_color(colour)
-                        .child(value(key)),
-                );
-            let tip = match (*key, row.load_time.is_empty()) {
-                ("load", false) => put(&say!("{} at the game's last start", row.load_time.clone())),
-                _ => String::new(),
-            };
-            crate::ui::tip::tipped(cell, tip.into())
-        }))
-        .child(
-            div()
-                .flex()
-                .flex_none()
-                .justify_end()
-                .w(columns.quick)
-                .children(quick),
-        )
-        .into_any_element()
-}
-
-/// The chip at a row's end: how far Sort moves it, or its problem.
-/// `ModRow`'s chip: how far Sort moves it, its share of a texture clash, or its problem.
-fn quick_chip(
-    theme: &Theme,
-    row: &RowView,
-    wide: bool,
-    chosen: bool,
-    mark: Option<&rimstack_core::mods::details::Mark>,
-) -> Option<Chip> {
-    let c = &theme.colours;
-    let chip = if row.moved_from > 0 {
-        let up = row.moved_from > row.number;
-        let tip = match row.why_moved.is_empty() {
-            true => say!("Sort moves it from {} to {}", row.moved_from, row.number),
-            false => say!(
-                "Sort moves it from {} to {}: {}",
-                row.moved_from,
-                row.number,
-                row.why_moved.inside()
-            ),
-        };
-        Chip::new(count(row.moved_from.abs_diff(row.number) as usize))
-            .tone(c.moved)
-            .icon(if up { "arrow-up" } else { "arrow-down" })
-            .tip(put(&tip))
-    } else if let Some(mark) = mark {
-        let (said, tip) = match mark.loses {
-            true => (
-                say!("loses textures"),
-                say!("The selected mod loads later and its textures are used"),
-            ),
-            false => (
-                say!("wins textures"),
-                say!("This mod loads later than the selected one and its textures are used"),
-            ),
-        };
-        Chip::new(if wide { put(&said) } else { String::new() })
-            .tone(c.warn)
-            .icon("image")
-            .tip(put(&tip))
-    } else if row.trouble > 0 {
-        let error = row.trouble == 2;
-        Chip::new(if wide {
-            put(&row.trouble_text)
-        } else {
-            String::new()
-        })
-        .tip(put(&row.trouble_text))
-        .tone(if error { c.err } else { c.warn })
-        .icon(if error {
-            "circle-alert"
-        } else {
-            "triangle-alert"
-        })
-    } else {
-        return None;
-    };
-    Some(chip.on_accent(chosen))
 }

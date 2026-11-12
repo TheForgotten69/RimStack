@@ -267,3 +267,40 @@ fn an_inactive_mod_shown_while_the_list_is_folded_unfolds_it() {
         })
     });
 }
+
+#[test]
+fn select_all_chooses_only_the_mods_the_filter_shows() {
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    cx.update(|cx| mods.update(cx, |mods, cx| mods.filter_by("Fixture Mod 04", cx)));
+    cx.update(|cx| mods.update(cx, |mods, cx| mods.select_all(Side::Inactive, cx)));
+    cx.update(|cx| {
+        let mods = mods.read(cx);
+        let mut shown: Vec<i32> = mods
+            .inactive
+            .rows
+            .iter()
+            .filter(|r| !r.is_header && r.mod_id >= 0)
+            .map(|r| r.mod_id)
+            .collect();
+        let mut chosen = mods.selection.clone();
+        shown.sort_unstable();
+        chosen.sort_unstable();
+        assert!(!shown.is_empty());
+        assert_eq!(chosen, shown);
+        assert!(chosen.len() < mods.count(Side::Inactive));
+    });
+}
+
+#[test]
+fn a_mod_dropped_below_the_last_row_goes_to_the_end_of_the_load_order() {
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            let list = mods.order.list(Side::Active).mods();
+            let (first, count) = (list[3].installed.unwrap(), list.len());
+            mods.drop_on((Side::Active, 3, vec![first]), (Side::Active, count), cx);
+            let list = mods.order.list(Side::Active).mods();
+            assert_eq!(list.last().and_then(|m| m.installed), Some(first));
+        })
+    });
+}

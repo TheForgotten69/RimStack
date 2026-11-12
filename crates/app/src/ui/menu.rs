@@ -422,6 +422,7 @@ impl Render for Menu {
             .border_color(c.line)
             .occlude()
             .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(gpui::MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .children(entries);
         div()
             .id("menu")
@@ -449,6 +450,10 @@ impl Render for Menu {
             }))
             .on_mouse_down(
                 gpui::MouseButton::Left,
+                cx.listener(|menu, _, window, cx| menu.close(window, cx)),
+            )
+            .on_mouse_down(
+                gpui::MouseButton::Right,
                 cx.listener(|menu, _, window, cx| menu.close(window, cx)),
             )
             .child(deferred(

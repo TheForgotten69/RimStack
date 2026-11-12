@@ -16,6 +16,10 @@ impl Focusable for Mods {
 impl Render for Mods {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Theme>().clone();
+        if std::mem::take(&mut self.focus_wanted) {
+            let focus = self.active_list.read(cx).focus_handle();
+            window.focus(&focus, cx);
+        }
         let handle = || {
             div()
                 .flex()
