@@ -22,7 +22,7 @@ fn drawn(text_scale: f32, window: &dyn Fn(&Theme) -> Size<Pixels>) -> Vec<Seen> 
         &path.join("data"),
         Default::default(),
     );
-    let text = gpui_platform::current_platform(true).text_system();
+    let text = crate::ui::made_up::text_system();
     let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(super::assets::Assets));
     let options = Options {
         demo: true,

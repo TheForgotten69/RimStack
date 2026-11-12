@@ -14,8 +14,8 @@ use gpui::{
 /// The sections made on their first visit, as `Theme.sections` numbers them.
 const TEXTURES: usize = 2;
 const WORKSHOP: usize = 3;
-const SAVES: usize = 4;
-const LOGS: usize = 5;
+pub(crate) const SAVES: usize = 4;
+pub(crate) const LOGS: usize = 5;
 const FIND: usize = 6;
 const SETTINGS: usize = 7;
 
@@ -95,6 +95,9 @@ impl Shell {
         }
         if options.still {
             mods.update(cx, |mods, _| mods.leave_off());
+        }
+        if options.sorting {
+            mods.update(cx, |mods, cx| mods.sort_when_read(cx));
         }
         if options.drawer {
             mods.update(cx, |mods, _| mods.drawer_open = true);

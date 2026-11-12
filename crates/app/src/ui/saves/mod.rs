@@ -110,6 +110,12 @@ impl Saves {
         }
     }
 
+    /// Read again now, as the command list asks.
+    pub fn reread(&mut self, cx: &mut Context<Self>) {
+        self.stale = true;
+        self.read(cx);
+    }
+
     fn read(&mut self, cx: &mut Context<Self>) {
         if !self.stale || self.demo {
             return;

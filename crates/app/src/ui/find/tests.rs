@@ -23,7 +23,7 @@ type Opened = (
 /// Search on the made-up install, `text` searched when there is one and the third row chosen.
 fn opened(text_scale: f32, window: Shape<'_>, text: Option<&str>) -> Opened {
     let (tmp, app) = made_up();
-    let gpu_text = gpui_platform::current_platform(true).text_system();
+    let gpu_text = crate::ui::made_up::text_system();
     let mut cx =
         HeadlessAppContext::with_asset_source(gpu_text, Arc::new(crate::ui::assets::Assets));
     let options = Options {

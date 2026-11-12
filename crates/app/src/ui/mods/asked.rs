@@ -172,4 +172,37 @@ impl Mods {
         self.sync_details(cx);
         cx.notify();
     }
+
+    /// Whether the inactive mods are folded into the rail.
+    pub fn inactive_hidden(&self) -> bool {
+        self.view.inactive_hidden
+    }
+
+    pub fn toggle_hidden(&mut self, cx: &mut Context<Self>) {
+        let hidden = !self.view.inactive_hidden;
+        self.set_hidden(hidden, cx);
+    }
+
+    /// Whether the inactive mods are shown by category, their own order.
+    pub fn inactive_by_category(&self) -> bool {
+        self.view.inactive_order.is_empty()
+    }
+
+    /// The inactive mods by name, or by category again, as the command list offers.
+    pub fn toggle_inactive_order(&mut self, cx: &mut Context<Self>) {
+        let then = if self.inactive_by_category() {
+            "name"
+        } else {
+            ""
+        };
+        self.order_inactive(then, cx);
+    }
+
+    /// Sort's preview, now or once the files are read.
+    pub fn sort_when_read(&mut self, cx: &mut Context<Self>) {
+        match self.files_read {
+            true => self.preview_sort(cx),
+            false => self.sort_wanted = true,
+        }
+    }
 }

@@ -96,7 +96,7 @@ fn drawn(part: usize) -> impl Fn(f32, Shape<'_>) -> Vec<Seen> {
             &path.join("data"),
             Default::default(),
         );
-        let text = gpui_platform::current_platform(true).text_system();
+        let text = crate::ui::made_up::text_system();
         let mut cx =
             HeadlessAppContext::with_asset_source(text, Arc::new(crate::ui::assets::Assets));
         let options = Options {

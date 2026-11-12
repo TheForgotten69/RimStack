@@ -365,6 +365,67 @@ impl Shell {
         );
         push(
             !demo,
+            say!("Update community rules"),
+            &say!("Sorting"),
+            none.clone(),
+            Rc::new(|_, _, cx| {
+                let app = super::app(cx);
+                crate::jobs::run(
+                    "community download",
+                    cx,
+                    move || app.download_databases(),
+                    |_, done, cx| {
+                        if let Err(problem) = done {
+                            super::notices::say(
+                                crate::words::said_of(&problem),
+                                super::notices::Tone::Err,
+                                cx,
+                            );
+                        }
+                    },
+                );
+            }),
+        );
+        push(
+            !demo,
+            say!("Read the saves again"),
+            &say!("Saves"),
+            none.clone(),
+            Rc::new(|shell, _, cx| {
+                shell.go(super::shell::SAVES, cx);
+                if let Some(saves) = shell.saves.clone() {
+                    saves.update(cx, |saves, cx| saves.reread(cx));
+                }
+            }),
+        );
+        push(
+            !demo,
+            say!("Read the log again"),
+            &say!("Logs"),
+            none.clone(),
+            Rc::new(|shell, _, cx| {
+                shell.go(super::shell::LOGS, cx);
+                if let Some(logs) = shell.logs.clone() {
+                    logs.update(cx, |logs, cx| logs.reread(cx));
+                }
+            }),
+        );
+        push(
+            !demo,
+            say!("Back up the newest save"),
+            &say!("Saves"),
+            none.clone(),
+            Rc::new(|_, _, cx| {
+                let app = super::app(cx);
+                crate::jobs::spawn("save backup", move || {
+                    if let Err(problem) = app.back_up_newest_save("save-backups", 5) {
+                        rimstack_core::problem!("save not backed up: {problem}");
+                    }
+                });
+            }),
+        );
+        push(
+            !demo,
             say!("Check for updates"),
             &say!("Downloads"),
             none.clone(),
@@ -464,6 +525,31 @@ impl Shell {
                 Rc::new(move |_, _, cx| super::keep_appearance("theme", theme.name(), cx)),
             );
         }
+        let hidden = mods.inactive_hidden();
+        push(
+            !demo,
+            match hidden {
+                true => say!("Show the inactive list"),
+                false => say!("Hide the inactive list"),
+            },
+            &view,
+            none.clone(),
+            Rc::new(|shell, _, cx| shell.mods.update(cx, |mods, cx| mods.toggle_hidden(cx))),
+        );
+        push(
+            !demo,
+            match mods.inactive_by_category() {
+                true => say!("Inactive mods by name"),
+                false => say!("Inactive mods by category"),
+            },
+            &view,
+            none.clone(),
+            Rc::new(|shell, _, cx| {
+                shell
+                    .mods
+                    .update(cx, |mods, cx| mods.toggle_inactive_order(cx))
+            }),
+        );
         let comfortable = cx.global::<Theme>().appearance.comfortable;
         let rows = match comfortable {
             true => say!("Compact rows"),

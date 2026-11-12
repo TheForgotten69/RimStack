@@ -42,6 +42,10 @@ pub struct DetailsShown {
     pub notes_saved: bool,
     pub files: Option<Rc<FilesRead>>,
     pub unhide_problem: String,
+    /// What Sort's preview moves, while it is shown.
+    pub sort_moves: Option<Rc<Vec<crate::workspace::load_order::SortGroup>>>,
+    /// The mod chosen alone, as `RowView::mod_id` gives it.
+    pub chosen_id: Option<i32>,
     /// Two mods' shared textures being compared: the details tell what was kept.
     pub comparison: Option<Rc<crate::workspace::textures::Comparison>>,
     /// The search for the broken mod runs: it is not offered again.
@@ -84,6 +88,7 @@ pub struct DetailsView {
     pub(super) note: gpui::Entity<crate::ui::text_field::TextField>,
     /// The picture shown small, as a click on it asks.
     pub(super) small_picture: bool,
+    paging: crate::ui::page::Paging,
 }
 
 impl DetailsView {
@@ -119,6 +124,7 @@ impl DetailsView {
             group,
             note,
             small_picture: false,
+            paging: crate::ui::page::Paging::new(cx.global::<Theme>().appearance.reduce_motion),
         }
     }
 
@@ -193,7 +199,17 @@ impl gpui::Render for DetailsView {
         let theme = cx.global::<Theme>().clone();
         let (_, _, width) =
             super::pane_widths(&theme, window.viewport_size().width, self.shown.panes);
-        self.details_pane(&theme, width, window, cx)
+        let pane = self.details_pane(&theme, width, window, cx);
+        div()
+            .size_full()
+            .bg(theme.colours.panel)
+            .child(crate::ui::page::page(
+                "details",
+                &self.paging,
+                &theme,
+                cx.entity_id(),
+                pane,
+            ))
     }
 }
 
@@ -334,6 +350,12 @@ impl DetailsView {
                     format!("{}", mb.round())
                 };
                 d.child(Chip::new(put(&say!("{} MB", shown))))
+            })
+            .when_some(details.updated, |d, at| {
+                let ago = rimstack_core::base::elapsed::ago(
+                    crate::workspace::now_secs().saturating_sub(at),
+                );
+                d.child(Chip::new(put(&say!("updated {}", ago.inside()))).max_width(inner))
             });
         let active = self.shown.selected_active;
         let toggle = if active {

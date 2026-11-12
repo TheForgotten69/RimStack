@@ -38,3 +38,12 @@ pub(crate) fn made_up() -> (tempfile::TempDir, App) {
     app.keep_setting("setupDone", "yes").unwrap();
     (tmp, app)
 }
+
+/// The platform's text system, made once for every test: a platform made per test leaves its
+/// sixteen worker threads behind, 4,700 threads by the end of a run (2026-11-12).
+pub(crate) fn text_system() -> std::sync::Arc<dyn gpui::PlatformTextSystem> {
+    static MADE: std::sync::OnceLock<std::sync::Arc<dyn gpui::PlatformTextSystem>> =
+        std::sync::OnceLock::new();
+    MADE.get_or_init(|| gpui_platform::current_platform(true).text_system())
+        .clone()
+}

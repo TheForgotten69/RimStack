@@ -20,7 +20,7 @@ pub(super) fn opened_with(
 ) -> (tempfile::TempDir, HeadlessAppContext, Entity<Mods>) {
     let (tmp, app) = made_up();
     prepare(tmp.path());
-    let text = gpui_platform::current_platform(true).text_system();
+    let text = crate::ui::made_up::text_system();
     let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(crate::ui::assets::Assets));
     let options = Options::default();
     cx.update(|cx| install(Arc::new(app), &options, cx));

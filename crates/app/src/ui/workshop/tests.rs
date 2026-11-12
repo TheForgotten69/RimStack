@@ -24,7 +24,7 @@ type Opened = (
 fn opened(text_scale: f32, window: Shape<'_>, browse: Option<&str>) -> Opened {
     let (tmp, app) = made_up();
     let app = app.browsing_fixture(true);
-    let text = gpui_platform::current_platform(true).text_system();
+    let text = crate::ui::made_up::text_system();
     let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(crate::ui::assets::Assets));
     let options = Options {
         section: 3,

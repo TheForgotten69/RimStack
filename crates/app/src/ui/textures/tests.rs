@@ -24,7 +24,7 @@ fn opened(
     Entity<Textures>,
 ) {
     let (tmp, app) = made_up();
-    let text = gpui_platform::current_platform(true).text_system();
+    let text = crate::ui::made_up::text_system();
     let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(crate::ui::assets::Assets));
     let options = Options {
         section: 2,

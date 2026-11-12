@@ -6,8 +6,8 @@ use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{Btn, Chip, TextSized, label};
 use crate::words::{count, put};
 use gpui::{
-    AnyElement, Context, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    StatefulInteractiveElement, Styled, div, prelude::FluentBuilder,
+    AnyElement, Context, FontWeight, IntoElement, ParentElement, Styled, div,
+    prelude::FluentBuilder,
 };
 use rimstack_core::{say, say_n};
 
@@ -56,18 +56,14 @@ impl DetailsView {
         width: gpui::Pixels,
         window: &gpui::Window,
         cx: &mut Context<Self>,
-    ) -> gpui::Stateful<gpui::Div> {
+    ) -> gpui::Div {
         let c = &theme.colours;
         let bar = crate::ui::page::room(theme);
         let scrolled = div()
-            .id("details")
             .flex()
             .flex_col()
-            .h_full()
-            .bg(c.panel)
             .p(theme::GAP_CARD)
-            .pr(theme::GAP_CARD + bar)
-            .overflow_y_scroll();
+            .pr(theme::GAP_CARD + bar);
         if self.shown.problems_open && !self.shown.previewing {
             let inner = width - bar - theme::GAP_CARD * 2.;
             if let Some(panel) = self.problems_pane(theme, inner, window) {
@@ -76,6 +72,14 @@ impl DetailsView {
         }
         if let Some(comparison) = self.shown.comparison.clone() {
             return scrolled.child(self.compare_summary(theme, &comparison));
+        }
+        if let Some(groups) = self
+            .shown
+            .sort_moves
+            .clone()
+            .filter(|_| self.shown.selection.is_none())
+        {
+            return scrolled.child(self.sort_moves(theme, &groups, cx));
         }
         if let Some(summary) = self.shown.selection.clone() {
             return scrolled.child(self.selection_pane(
@@ -121,6 +125,7 @@ impl DetailsView {
             .when(!self.shown.demo, |d| {
                 d.children(self.verdict(theme))
                     .children(self.review(theme, cx))
+                    .children(self.slowest(theme, cx))
                     .children(self.kept(theme, cx))
             })
     }

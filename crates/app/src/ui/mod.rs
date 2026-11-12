@@ -68,6 +68,8 @@ pub struct Options {
     pub comparing: bool,
     /// The inactive mods' drawer open, when they are folded into the rail.
     pub drawer: bool,
+    /// Sort's preview shown once the files are read, as `--sorting` asks.
+    pub sorting: bool,
     /// Typed into the Mods filter, which has the keys, as `--typing=` asks.
     pub typing: Option<String>,
     /// The filter's text at the start, as `--filter=` gives it.
@@ -111,6 +113,7 @@ impl Options {
                 "--several" => options.several = true,
                 "--comparing" => options.comparing = true,
                 "--drawer" => options.drawer = true,
+                "--sorting" => options.sorting = true,
                 "--typing" => options.typing = Some(value.to_string()),
                 "--filter" => options.filter = Some(value.to_string()),
                 "--pick" => options.pick = value.parse().ok(),

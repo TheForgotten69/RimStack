@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 /// The window on the made-up install, its load order read.
 fn opened() -> (tempfile::TempDir, HeadlessAppContext, WindowHandle<Shell>) {
     let (tmp, app) = made_up();
-    let text = gpui_platform::current_platform(true).text_system();
+    let text = crate::ui::made_up::text_system();
     let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(super::assets::Assets));
     let options = Options {
         still: true,
@@ -112,7 +112,7 @@ fn first_run(
     step: usize,
 ) -> (tempfile::TempDir, HeadlessAppContext, WindowHandle<Shell>) {
     let (tmp, app) = made_up();
-    let text = gpui_platform::current_platform(true).text_system();
+    let text = crate::ui::made_up::text_system();
     let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(super::assets::Assets));
     let options = Options {
         still: true,

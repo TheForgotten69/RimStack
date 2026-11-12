@@ -20,6 +20,7 @@ mod panes;
 mod problems;
 mod rows;
 mod selection;
+mod sort_moves;
 mod tabs;
 
 use super::text_field::{Edited, TextField};
@@ -124,6 +125,8 @@ pub struct Mods {
     compared: Option<Rc<crate::workspace::textures::Comparison>>,
     /// Two mods to compare once their files are read, as `--comparing` asks.
     compare_wanted: bool,
+    /// Sort's preview to show once the files are read, as `--sorting` asks.
+    sort_wanted: bool,
     /// How the tab is shown, as `[Mods]` keeps it.
     view: Rc<crate::workspace::ModsView>,
     /// Where the View and the inactive order buttons were drawn, for `--open=`.
@@ -248,6 +251,7 @@ impl Mods {
             comparing: None,
             compared: None,
             compare_wanted: false,
+            sort_wanted: false,
             view,
             menu_buttons: Default::default(),
             menu_wanted: None,
@@ -320,6 +324,9 @@ impl Mods {
             self.files_read = true;
             if std::mem::take(&mut self.compare_wanted) {
                 self.compare_first(cx);
+            }
+            if std::mem::take(&mut self.sort_wanted) {
+                self.preview_sort(cx);
             }
         }
         if changes.contains(Changes::TEXTURES) {
@@ -441,6 +448,11 @@ impl Mods {
                 .map(|(_, read)| read.clone()),
             unhide_problem: self.unhide_problem.clone(),
             comparison: self.compared.clone(),
+            sort_moves: self
+                .order
+                .previewing()
+                .then(|| Rc::new(self.order.sort_moves())),
+            chosen_id: self.selected_id(),
             hunting: self.hunting,
             previewing: self.order.previewing(),
             selected: self.selection.len(),
