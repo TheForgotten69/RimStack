@@ -4,11 +4,12 @@ use super::Mods;
 use super::rows::Columns;
 use super::scrollbar::bar_room;
 use crate::ui::theme::{self, Theme};
-use crate::ui::widgets::{Btn, Chip, Sized, btn_width, icon, label, measure, notice};
+use crate::ui::widgets::{Btn, Chip, Sized, btn_width, halo, icon, label, measure, notice};
 use crate::words::{count, put};
 use crate::workspace::load_order::Side;
 use gpui::{
-    Context, FontWeight, ParentElement, Pixels, Styled, Window, div, prelude::FluentBuilder, px,
+    Context, Focusable, FontWeight, InteractiveElement, ParentElement, Pixels,
+    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 use rimstack_core::{say, say_n};
 use std::rc::Rc;
@@ -209,7 +210,7 @@ impl Mods {
                     .flex_none()
                     .px(theme::GAP_LARGE)
                     .pb(theme::GAP)
-                    .child(self.filter_field(theme)),
+                    .child(self.filter_field(theme, window, cx)),
             )
             .child(headings)
             .child(self.list_area(theme, Side::Active, Some(columns), width, cx))
@@ -471,37 +472,92 @@ impl Mods {
     }
 
     /// `ModsFilter.qml` as it stands empty.
-    fn filter_field(&self, theme: &Theme) -> gpui::Div {
+    fn filter_field(
+        &self,
+        theme: &Theme,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::Stateful<gpui::Div> {
         let c = &theme.colours;
+        let field = self.filter.read(cx);
+        let (empty, focused) = (field.text().is_empty(), field.is_focused(window));
+        let focus = field.focus_handle(cx);
+        let found = match empty {
+            true => String::new(),
+            false => put(&self.order.filter_summary()),
+        };
+        let lead = theme::GAP_SMALL + theme.icon() + theme::GAP;
         div()
+            .id("filter")
+            .relative()
             .flex()
             .items_center()
             .h(theme.field())
-            .pl(theme::GAP)
+            .pl(lead + theme::GAP_TINY)
             .pr(theme::GAP)
+            .gap(theme::GAP)
             .rounded(theme::CORNER)
             .bg(c.well)
             .border_1()
-            .border_color(c.field_line)
-            .child(icon("funnel", theme.icon() - px(1.), c.ink3))
+            .border_color(if focused { c.focus } else { c.field_line })
+            .when(focused, |d| d.children(halo(c.focus, theme::CORNER)))
+            .cursor_text()
+            .on_click(move |_, window, cx| window.focus(&focus, cx))
             .child(
                 div()
+                    .absolute()
+                    .left(theme::GAP)
+                    .top_0()
+                    .bottom_0()
+                    .flex()
+                    .items_center()
+                    .child(icon("funnel", theme.icon() - px(1.), c.ink3)),
+            )
+            .child(
+                div()
+                    .relative()
                     .flex_1()
                     .min_w_0()
-                    .ml(theme::GAP_SMALL + theme::GAP_TINY + px(1.))
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_ellipsis()
-                    .sized_text(theme, theme.body())
-                    .text_color(c.ink3)
-                    .child(put(&say!("Filter active and inactive mods"))),
+                    .when(empty, |d| {
+                        d.child(
+                            div()
+                                .absolute()
+                                .inset_0()
+                                .overflow_hidden()
+                                .whitespace_nowrap()
+                                .text_ellipsis()
+                                .sized_text(theme, theme.body())
+                                .text_color(c.ink3)
+                                .child(put(&say!("Filter active and inactive mods"))),
+                        )
+                    })
+                    .child(self.filter.clone()),
             )
-            .child(label(
-                theme,
-                theme.caption(),
-                c.ink3,
-                put(&say!("Ctrl + F")),
-            ))
+            .when(!found.is_empty(), |d| {
+                d.child(label(theme, theme.small(), c.ink2, found))
+            })
+            .when(empty && !focused, |d| {
+                d.child(label(
+                    theme,
+                    theme.caption(),
+                    c.ink3,
+                    put(&say!("Ctrl + F")),
+                ))
+            })
+            .when(!empty, |d| {
+                let field = self.filter.clone();
+                d.child(
+                    div()
+                        .id("clear-filter")
+                        .cursor_pointer()
+                        .child(icon("x", theme.sized(12.), c.ink3))
+                        .on_click(move |_, window, cx| {
+                            field.update(cx, |field, cx| field.set_text("", cx));
+                            let focus = field.read(cx).focus_handle(cx);
+                            window.focus(&focus, cx);
+                        }),
+                )
+            })
     }
 }
 

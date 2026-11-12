@@ -4,6 +4,7 @@ pub mod assets;
 pub mod mods;
 pub mod shell;
 pub mod status_bar;
+pub mod text_field;
 pub mod theme;
 pub mod top_bar;
 pub mod widgets;
@@ -33,6 +34,8 @@ pub struct Options {
     pub text_scale: Option<f32>,
     /// Four mods of the load order chosen, as `--several` asks.
     pub several: bool,
+    /// The filter's text at the start, as `--filter=` gives it.
+    pub filter: Option<String>,
 }
 
 impl Options {
@@ -46,6 +49,7 @@ impl Options {
                 "--theme" => options.theme = ThemeName::named(value),
                 "--text-scale" => options.text_scale = value.parse().ok(),
                 "--several" => options.several = true,
+                "--filter" => options.filter = Some(value.to_string()),
                 _ => {}
             }
         }
@@ -132,6 +136,12 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     theme.descent = f32::from(text.descent(id, at)).abs() / 1000.;
     cx.set_global(theme);
     cx.set_global(Shared(app));
+    text_field::bind_keys(cx);
+    cx.bind_keys([gpui::KeyBinding::new(
+        crate::command!("f"),
+        mods::FocusFilter,
+        None,
+    )]);
 }
 
 pub fn run(app: Arc<App>, options: Options) {

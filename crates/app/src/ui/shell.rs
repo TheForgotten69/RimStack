@@ -7,20 +7,26 @@ use super::theme::Theme;
 use super::top_bar::top_bar;
 use crate::workspace::load_order::Side;
 use gpui::{
-    AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Window, div,
-    prelude::FluentBuilder,
+    AppContext, Context, Entity, Focusable, IntoElement, ParentElement, Render, Styled, Window,
+    div, prelude::FluentBuilder,
 };
 
 pub struct Shell {
     section: usize,
     demo: bool,
     mods: Entity<Mods>,
+    drawn: bool,
 }
 
 impl Shell {
-    pub fn new(options: &Options, _window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(options: &Options, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let demo = options.demo;
         let mods = cx.new(|cx| Mods::new(demo, cx));
+        let focus = mods.read(cx).focus_handle(cx);
+        window.focus(&focus, cx);
+        if let Some(text) = &options.filter {
+            mods.update(cx, |mods, cx| mods.filter_by(text, cx));
+        }
         if options.several {
             mods.update(cx, |mods, cx| {
                 mods.choose_nth(Side::Active, 14, false, cx);
@@ -33,6 +39,7 @@ impl Shell {
             section: options.section,
             demo,
             mods,
+            drawn: false,
         }
     }
 
@@ -44,6 +51,14 @@ impl Shell {
 
 impl Render for Shell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if !self.drawn {
+            self.drawn = true;
+            window.on_next_frame(|_, _| {
+                if let Some(started) = crate::STARTED.get() {
+                    rimstack_core::note!("first_frame_ms={}", started.elapsed().as_millis());
+                }
+            });
+        }
         let (in_the_way, last_start) = {
             let mods = self.mods.read(cx);
             (mods.in_the_way(cx), mods.last_start())

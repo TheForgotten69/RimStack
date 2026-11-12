@@ -6,13 +6,14 @@ mod inactive;
 mod rows;
 mod scrollbar;
 
+use super::text_field::{Edited, TextField};
 use super::theme::Theme;
 use crate::changes::Changes;
 use crate::jobs::Lane;
 use crate::workspace::load_order::{LoadOrder, Orders, Overview, RowView, Side};
 use gpui::{
-    Context, IntoElement, ListAlignment, ListState, ParentElement, Pixels, Render, Styled, Window,
-    div, px,
+    AppContext, Context, Entity, Focusable, InteractiveElement, IntoElement, ListAlignment,
+    ListState, ParentElement, Pixels, Render, Styled, Window, div, px,
 };
 use rimstack_core::mods::list::Category;
 use std::rc::Rc;
@@ -34,11 +35,15 @@ impl Shown {
     }
 }
 
+gpui::actions!(mods, [FocusFilter]);
+
 pub struct Mods {
     order: LoadOrder,
     active: Shown,
     inactive: Shown,
     orders: Orders,
+    filter: Entity<TextField>,
+    focus: gpui::FocusHandle,
     overview: Option<Overview>,
     summary: Option<crate::reports::Summary>,
     last_start: Option<crate::workspace::logs::LastStartSaid>,
@@ -57,13 +62,23 @@ pub struct Mods {
 impl Mods {
     pub fn new(demo: bool, cx: &mut Context<Self>) -> Self {
         let theme = cx.global::<Theme>();
-        let (inactive_width, details_width) = (theme.sized(290.), theme.sized(360.));
+        let (inactive_width, details_width, size) =
+            (theme.sized(290.), theme.sized(360.), theme.body());
         let order = if demo {
             LoadOrder::demo(2000, 300)
         } else {
             LoadOrder::demo(0, 0)
         };
+        let filter = cx.new(|cx| TextField::new(size, cx));
+        cx.subscribe(&filter, |mods, field, _: &Edited, cx| {
+            let text = field.read(cx).text().to_string();
+            mods.order.set_filter(&text);
+            mods.show(cx);
+        })
+        .detach();
         let mut mods = Self {
+            focus: cx.focus_handle(),
+            filter,
             orders: order.orders(),
             overview: None,
             summary: None,
@@ -250,6 +265,19 @@ impl Mods {
             .unwrap_or_default()
     }
 
+    /// How many mods of a list the filter lets through.
+    pub fn matching(&self, side: Side) -> usize {
+        self.order.list(side).matching()
+    }
+
+    pub fn filter_by(&mut self, text: &str, cx: &mut Context<Self>) {
+        self.filter.update(cx, |field, cx| field.set_text(text, cx));
+    }
+
+    pub fn filter_text(&self, cx: &gpui::App) -> String {
+        self.filter.read(cx).text().to_string()
+    }
+
     pub fn count(&self, side: Side) -> usize {
         self.order.list(side).mods().len()
     }
@@ -325,6 +353,12 @@ impl Mods {
     }
 }
 
+impl Focusable for Mods {
+    fn focus_handle(&self, _: &gpui::App) -> gpui::FocusHandle {
+        self.focus.clone()
+    }
+}
+
 impl Render for Mods {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Theme>().clone();
@@ -343,6 +377,10 @@ impl Render for Mods {
             .flex()
             .size_full()
             .min_h_0()
+            .track_focus(&self.focus)
+            .on_action(cx.listener(|mods, _: &FocusFilter, window, cx| {
+                window.focus(&mods.filter.focus_handle(cx), cx);
+            }))
             .child(
                 self.inactive_pane(&theme, inactive_width, window, cx)
                     .w(inactive_width)
@@ -358,3 +396,6 @@ impl Render for Mods {
             .child(self.details_pane(&theme, cx).w(details_width).flex_none())
     }
 }
+
+#[cfg(test)]
+mod tests;
