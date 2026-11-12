@@ -247,3 +247,23 @@ fn the_hints_go_one_after_the_other_and_are_not_shown_again() {
         })
     });
 }
+
+#[test]
+fn an_inactive_mod_shown_while_the_list_is_folded_unfolds_it() {
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            mods.set_hidden(true, cx);
+            let id = mods
+                .inactive
+                .rows
+                .iter()
+                .find(|r| !r.is_header)
+                .unwrap()
+                .mod_id;
+            mods.show_mod(id, cx);
+            assert!(!mods.view.inactive_hidden, "the list is pinned again");
+            assert_eq!(mods.selected_id(), Some(id));
+        })
+    });
+}

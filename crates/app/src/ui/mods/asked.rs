@@ -42,6 +42,9 @@ impl Mods {
                 .iter()
                 .position(|row| row.mod_id == mod_id && !row.is_header);
             if let Some(at) = at {
+                if side == Side::Inactive && self.view.inactive_hidden {
+                    self.set_hidden(false, cx);
+                }
                 self.choose(side, mod_id, cx);
                 self.list(side).update(cx, |list, cx| list.reveal(at, cx));
                 return;

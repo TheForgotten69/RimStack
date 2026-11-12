@@ -18,7 +18,7 @@ use rimstack_core::say;
 use std::time::Duration;
 
 /// The quiet after a divider stops before its width is kept.
-const SETTLED: Duration = Duration::from_millis(400);
+pub(super) const SETTLED: Duration = Duration::from_millis(400);
 
 /// The widths wanted for the inactive mods and the details, and whether the inactive mods are
 /// folded into the rail.
@@ -160,22 +160,13 @@ impl Mods {
     }
 
     fn keep_widths_soon(&mut self, cx: &mut Context<Self>) {
-        self.widths_kept.run(
-            "pane widths",
-            cx,
-            |turn| turn.after(SETTLED),
-            |mods, quiet, cx| {
-                if quiet {
-                    let (inactive, details) = (mods.inactive_width, mods.details_width);
-                    mods.keep_view(
-                        |view| {
-                            view.inactive = f32::from(inactive);
-                            view.details = f32::from(details);
-                        },
-                        cx,
-                    );
-                }
+        let (inactive, details) = (self.inactive_width, self.details_width);
+        self.keep_view_soon(
+            |view| {
+                view.inactive = f32::from(inactive);
+                view.details = f32::from(details);
             },
+            cx,
         );
     }
 

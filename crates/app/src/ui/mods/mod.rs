@@ -129,8 +129,6 @@ pub struct Mods {
     /// The first-run hint shown, 1 to 3; 0 for none.
     hint_step: u8,
     hint_anchors: hints::Anchors,
-    /// Frames the due hint's button has not been drawn in.
-    hint_misses: u8,
     unhide_problem: String,
     /// The shared textures of two mods, shown in place of the lists.
     comparing: Option<Entity<compare::CompareView>>,
@@ -150,7 +148,8 @@ pub struct Mods {
     pub drawer_open: bool,
     /// The drawer's own filter, as `ModsFilter` mirrored the load order's.
     mirror: Entity<TextField>,
-    widths_kept: Lane,
+    /// The view kept once dragging rests.
+    view_kept: Lane,
     left_off: left_off::LeftOff,
     /// Where a heading or a column's edge was pressed, and the column's width then.
     column_drag: Option<(Pixels, Pixels)>,
@@ -266,7 +265,6 @@ impl Mods {
             rescanning: false,
             hint_step: 0,
             hint_anchors: Default::default(),
-            hint_misses: 0,
             unhide_problem: String::new(),
             comparing: None,
             compared: None,
@@ -277,7 +275,7 @@ impl Mods {
             menu_wanted: None,
             drawer_open: false,
             mirror,
-            widths_kept: Lane::default(),
+            view_kept: Lane::default(),
             column_drag: None,
             filter_terms: Vec::new(),
             offers_shut: false,
@@ -743,3 +741,6 @@ mod details_tests;
 
 #[cfg(all(test, target_os = "linux"))]
 mod view_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+mod layout_tests;

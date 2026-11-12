@@ -354,7 +354,8 @@ impl Mods {
                                         "Opens the list of every problem, with the fix for each"
                                     )))
                                     .on_click(cx.listener(|m, _, _, cx| m.open_problems(cx))),
-                                self.hint_anchors.problems.clone(),
+                                &self.hint_anchors,
+                    self.hint_anchors.problems.clone(),
                             ))
                         })
                         .child(
@@ -414,6 +415,7 @@ impl Mods {
                         .tip(put(&say!("Shows the order the rules ask for, to keep or discard. Nothing is written before Save.")))
                         .enabled(!previewing && self.files_read)
                         .on_click(cx.listener(|m, _, _, cx| m.preview_sort(cx))),
+                    &self.hint_anchors,
                     self.hint_anchors.sort.clone(),
                 ))
                 .child(super::hints::anchored_at(
@@ -423,6 +425,7 @@ impl Mods {
                         .enabled(dirty)
                         .primary_if(dirty)
                         .on_click(cx.listener(|m, _, _, cx| m.save(None, cx))),
+                    &self.hint_anchors,
                     self.hint_anchors.save.clone(),
                 ))
             })

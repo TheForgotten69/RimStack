@@ -29,8 +29,14 @@ impl Render for Mods {
             pane_widths(&theme, window.viewport_size().width, self.panes_wanted());
         let bulk = self.bulk_bar(&theme, cx);
         let unread = self.unread(&theme, cx);
-        let hint = self.hint(&theme, window, cx);
         let is_unread = unread.is_some();
+        self.hint_anchors.forget_drawn();
+        let panes =
+            (self.comparing.is_none() && !is_unread).then(|| self.panes(&theme, window, cx));
+        let hint = match panes.is_some() {
+            true => self.hint(&theme, window, cx),
+            false => None,
+        };
         self.open_wanted_menu(window, cx);
         div()
             .flex()
@@ -78,7 +84,7 @@ impl Render for Mods {
             })
             .when_some(unread, |d, unread| d.child(unread))
             .when(self.comparing.is_none() && !is_unread, |d| {
-                d.child(self.panes(&theme, window, cx))
+                d.children(panes)
             })
             .children(bulk)
             .children(hint)

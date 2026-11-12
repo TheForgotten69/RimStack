@@ -267,6 +267,31 @@ impl Mods {
         }
     }
 
+    /// The view changed now and kept once the dragging that changes it rests.
+    pub(super) fn keep_view_soon(
+        &mut self,
+        change: impl FnOnce(&mut ModsView),
+        cx: &mut Context<Self>,
+    ) {
+        change(Rc::make_mut(&mut self.view));
+        if self.demo {
+            return;
+        }
+        self.view_kept.run(
+            "mods view",
+            cx,
+            |turn| turn.after(super::panes::SETTLED),
+            |mods, quiet, cx| {
+                if !quiet {
+                    return;
+                }
+                if let Err(problem) = super::super::app(cx).keep_mods_view(&mods.view) {
+                    notices::say(crate::words::said_of(&problem), notices::Tone::Err, cx);
+                }
+            },
+        );
+    }
+
     pub(super) fn set_headings(&mut self, headings: bool, cx: &mut Context<Self>) {
         self.keep_view(|view| view.headings = headings, cx);
         let app = super::super::app(cx);
@@ -296,7 +321,7 @@ impl Mods {
         };
         let grow = f32::from(cx.global::<Theme>().sized(1.));
         let wide = f32::from(from_width - (x - from_x)) / grow;
-        self.keep_view(
+        self.keep_view_soon(
             |view| view.column_sizes = kept::sized(&view.column_sizes, key, f64::from(wide)),
             cx,
         );

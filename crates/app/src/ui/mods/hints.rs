@@ -20,6 +20,8 @@ pub struct Anchors {
     pub problems: Rc<Cell<Option<Bounds<Pixels>>>>,
     pub sort: Rc<Cell<Option<Bounds<Pixels>>>>,
     pub save: Rc<Cell<Option<Bounds<Pixels>>>>,
+    /// Which buttons the title row holds in this render: problems, Sort, Save.
+    pub drawn: Rc<Cell<[bool; 3]>>,
 }
 
 impl Anchors {
@@ -31,19 +33,32 @@ impl Anchors {
         }
     }
 
-    /// Each forgotten, so that a button not drawn this time is not pointed at.
-    pub fn clear(&self) {
-        for at in [&self.problems, &self.sort, &self.save] {
-            at.set(None);
+    pub fn forget_drawn(&self) {
+        self.drawn.set([false; 3]);
+    }
+
+    /// A button drawn in this render, as `anchored_at` tells.
+    fn mark(&self, at: &Rc<Cell<Option<Bounds<Pixels>>>>) {
+        let mut drawn = self.drawn.get();
+        for (nth, one) in [&self.problems, &self.sort, &self.save]
+            .into_iter()
+            .enumerate()
+        {
+            if Rc::ptr_eq(one, at) {
+                drawn[nth] = true;
+            }
         }
+        self.drawn.set(drawn);
     }
 }
 
 /// `control` with where it is drawn kept for its hint.
 pub(super) fn anchored_at(
     control: impl IntoElement,
+    anchors: &Anchors,
     at: Rc<Cell<Option<Bounds<Pixels>>>>,
 ) -> gpui::Div {
+    anchors.mark(&at);
     div().relative().child(control).child(
         canvas(move |bounds, _, _| at.set(Some(bounds)), |_, _, _, _| {})
             .absolute()
@@ -97,18 +112,20 @@ impl Mods {
             return None;
         }
         let step = self.hint_step;
-        let drawn = self.hint_anchors.of(step).get();
-        self.hint_anchors.clear();
-        let Some(below) = drawn else {
-            window.refresh();
-            self.hint_misses += 1;
-            if self.hint_misses > 2 && self.files_read && self.overview.is_some() {
-                self.hint_misses = 0;
-                cx.defer_in(window, |mods, _, cx| mods.next_hint(cx));
+        if !self.hint_anchors.drawn.get()[usize::from(step - 1)] {
+            if self.files_read && self.overview.is_some() {
+                cx.defer_in(window, move |mods, _, cx| {
+                    if mods.hint_step == step {
+                        mods.next_hint(cx);
+                    }
+                });
             }
             return None;
+        }
+        let Some(below) = self.hint_anchors.of(step).get() else {
+            window.refresh();
+            return None;
         };
-        self.hint_misses = 0;
         let c = &theme.colours;
         let at_right = step > 1;
         let wide = theme.sized(280.);

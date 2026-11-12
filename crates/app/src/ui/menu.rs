@@ -460,3 +460,11 @@ impl Render for Menu {
             ))
     }
 }
+
+/// The menu drawn again, as a check that reads every text drawn asks.
+#[cfg(test)]
+pub(crate) fn redraw(cx: &mut App) {
+    if let Some(menu) = cx.try_global::<Shown>().map(|shown| shown.0.clone()) {
+        menu.update(cx, |_, cx| cx.notify());
+    }
+}

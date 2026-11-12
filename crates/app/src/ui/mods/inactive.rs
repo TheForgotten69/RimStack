@@ -25,18 +25,17 @@ impl Mods {
             true => put(&say!("Pin")),
             false => put(&say!("Hide")),
         };
-        // Qt's RowLayout gives its empty filler a gap too, and takes each item's width in whole
-        // pixels.
+        // Qt's RowLayout gives its empty filler a gap too.
         let fresh = (self.fresh > 0).then(|| put(&say!("{} new", count(self.fresh))));
-        let named = measure(window, theme, &title, theme.heading(), FontWeight::BOLD).ceil()
+        let named = measure(window, theme, &title, theme.heading(), FontWeight::BOLD)
             + theme::GAP * 2.
-            + measure(window, theme, &counted, theme.body(), FontWeight::NORMAL).ceil()
+            + measure(window, theme, &counted, theme.body(), FontWeight::NORMAL)
             + fresh.as_deref().map_or(px(0.), |said| {
-                chip_width(window, theme, said, false).ceil() + theme::GAP
+                chip_width(window, theme, said, false) + theme::GAP
             });
-        let acts = btn_width(window, theme, &order, true, true).ceil()
+        let acts = btn_width(window, theme, &order, true, true)
             + theme::GAP
-            + btn_width(window, theme, &hide, false, false).ceil();
+            + btn_width(window, theme, &hide, false, false);
         let room = width - theme::GAP_CARD - theme::GAP_LARGE;
         let stacked = named + acts + theme::GAP > room;
         let buttons = div()
