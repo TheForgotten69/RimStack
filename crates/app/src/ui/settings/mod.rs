@@ -81,6 +81,8 @@ pub struct Settings {
     /// `RimStack.conf`, read again after each appearance kept.
     prefs: rimstack_core::kept::prefs::Prefs,
     mods: Entity<super::mods::Mods>,
+    /// The part chosen holds the keys when Tab reaches the parts.
+    part_keys: gpui::FocusHandle,
 }
 
 impl EventEmitter<UseList> for Settings {}
@@ -155,6 +157,7 @@ impl Settings {
             font_scroll: super::rows::Scrolling::default(),
             prefs: super::app(cx).prefs(),
             mods,
+            part_keys: cx.focus_handle().tab_stop(true),
         };
         if !demo {
             settings.hear(cx);
@@ -280,6 +283,20 @@ impl Settings {
     /// The part shown, as a command asks.
     pub fn show_part(&mut self, part: usize, cx: &mut Context<Self>) {
         self.part = part;
+        cx.notify();
+    }
+
+    /// A part chosen from the list: the search is let go and the page starts at its top.
+    pub(super) fn pick_part(&mut self, part: usize, cx: &mut Context<Self>) {
+        if part >= self.parts().len() {
+            return;
+        }
+        self.fields
+            .find
+            .update(cx, |field, cx| field.set_text("", cx));
+        self.finding.clear();
+        self.part = part;
+        self.paging.scroll.borrow_mut().set_top(gpui::px(0.));
         cx.notify();
     }
 

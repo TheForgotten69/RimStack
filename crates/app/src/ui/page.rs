@@ -21,6 +21,14 @@ impl Paging {
         paging.scroll.borrow_mut().set_reduce_motion(reduce_motion);
         paging
     }
+
+    /// What was drawn from `top` to `bottom` of the window brought inside the page.
+    pub fn contain_drawn(&self, top: gpui::Pixels, bottom: gpui::Pixels) {
+        let shift = self.scroll.borrow().top() - self.handle.bounds().top();
+        self.scroll
+            .borrow_mut()
+            .contain(top + shift, bottom + shift);
+    }
 }
 
 /// `Scrolled.qml` keeps its bar's width free at the right of what it holds.

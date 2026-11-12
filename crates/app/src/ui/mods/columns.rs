@@ -401,7 +401,7 @@ impl Mods {
     fn column_entries(&self, noted: bool, cx: &Context<Self>) -> Vec<Entry> {
         let me = cx.entity().downgrade();
         let chosen = kept::chosen(&self.view.columns);
-        let how = self.load_times_how().filter(|_| noted);
+        let how = self.load_times_how();
         let mut named: Vec<(&'static str, String)> = ALL
             .into_iter()
             .map(|column| (column, put(&column_name(column))))
@@ -419,8 +419,9 @@ impl Mods {
                 } else {
                     ""
                 });
-                match (column, &how) {
-                    ("load", Some(how)) => item.note(how.clone()).into(),
+                match (column, &how, noted) {
+                    ("load", Some(how), true) => item.note(how.clone()).into(),
+                    ("load", Some(how), false) => item.tip(how.clone()).into(),
                     _ => item.into(),
                 }
             })

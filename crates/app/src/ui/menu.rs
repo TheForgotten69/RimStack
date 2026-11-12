@@ -27,6 +27,8 @@ pub enum Entry {
 pub struct Item {
     text: SharedString,
     note: Option<SharedString>,
+    /// Shown while pointed at, as a `Btn`'s tip in Qt's popups.
+    tip: SharedString,
     icon: Option<&'static str>,
     colour: Option<Hsla>,
     off: bool,
@@ -42,6 +44,7 @@ impl Entry {
         Item {
             text: text.into(),
             note: None,
+            tip: SharedString::default(),
             icon: None,
             colour: None,
             off: false,
@@ -60,6 +63,11 @@ impl Item {
     /// Words under the entry, smaller.
     pub fn note(mut self, note: impl Into<SharedString>) -> Self {
         self.note = Some(note.into());
+        self
+    }
+
+    pub fn tip(mut self, tip: impl Into<SharedString>) -> Self {
+        self.tip = tip.into();
         self
     }
 
@@ -346,7 +354,7 @@ impl Menu {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let c = &theme.colours;
-        div()
+        let shown = div()
             .id(("menu-button", at))
             .role(Role::MenuItem)
             .aria_label(item.text.clone())
@@ -375,8 +383,8 @@ impl Menu {
             )
             .when(!item.off, |d| {
                 d.on_click(cx.listener(move |menu, _, window, cx| menu.choose(at, window, cx)))
-            })
-            .into_any_element()
+            });
+        super::tip::tipped(shown, item.tip.clone()).into_any_element()
     }
 }
 

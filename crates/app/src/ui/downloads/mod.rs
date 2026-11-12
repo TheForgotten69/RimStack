@@ -91,6 +91,11 @@ pub struct Downloads {
     side_paging: Paging,
     list_paging: Paging,
     mods: Entity<super::mods::Mods>,
+    /// The changed mods' list, reached by Tab: the row its arrows are on, and where each row was
+    /// last drawn, to scroll the one reached into view.
+    changed_keys: gpui::FocusHandle,
+    changed_at: usize,
+    changed_drawn: Rc<std::cell::RefCell<Vec<gpui::Bounds<gpui::Pixels>>>>,
 }
 
 impl EventEmitter<ShowMod> for Downloads {}
@@ -152,6 +157,9 @@ impl Downloads {
             side_paging: Paging::new(reduce),
             list_paging: Paging::new(reduce),
             mods,
+            changed_keys: cx.focus_handle().tab_stop(true),
+            changed_at: 0,
+            changed_drawn: Rc::default(),
         };
         downloads.read(cx);
         if !demo {

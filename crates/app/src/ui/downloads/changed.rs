@@ -10,8 +10,8 @@ use crate::words::{count, put};
 use crate::workspace::changed::{ChangedShown, Only, since_shown};
 use crate::workspace::logs::{clock, day, moment};
 use gpui::{
-    AnyElement, Context, IntoElement, ParentElement, Pixels, Styled, Window, div,
-    prelude::FluentBuilder,
+    AnyElement, Context, InteractiveElement, IntoElement, ParentElement, Pixels,
+    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder,
 };
 use rimstack_core::{say, say_n};
 
@@ -25,6 +25,7 @@ impl Downloads {
         at: usize,
         shown: &ChangedShown,
         today: &str,
+        reached: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let c = &theme.colours;
@@ -50,10 +51,12 @@ impl Downloads {
             .child(icon(
                 if row.git { "git-branch" } else { "cloud" },
                 theme.icon(),
-                c.ink3,
+                if reached { c.focus } else { c.ink3 },
             ))
             .child(
-                text_fill(theme, theme.body(), c.ink, row.name.clone()).font_weight(theme.medium),
+                text_fill(theme, theme.body(), c.ink, row.name.clone())
+                    .font_weight(theme.medium)
+                    .when(reached, |d| d.underline()),
             )
             .when(!row.active, |d| d.child(Chip::new(put(&say!("inactive")))))
             .when(row.git, |d| {
@@ -132,6 +135,22 @@ impl Downloads {
             })
             .child(line)
             .children(said)
+            .child({
+                let drawn = self.changed_drawn.clone();
+                gpui::canvas(
+                    move |bounds, _, _| {
+                        let mut drawn = drawn.borrow_mut();
+                        if drawn.len() <= at {
+                            drawn.resize(at + 1, gpui::Bounds::default());
+                        }
+                        drawn[at] = bounds;
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .inset_0()
+            })
+            .relative()
             .into_any_element()
     }
 
@@ -152,19 +171,39 @@ impl Downloads {
         } else {
             FIRST
         };
+        let keyed = self.changed_keys.is_focused(window);
         let rows: Vec<AnyElement> = since
             .rows
             .iter()
             .take(most)
             .enumerate()
-            .map(|(at, shown)| self.changed_row(theme, at, shown, &today, cx))
+            .map(|(at, shown)| {
+                let reached = keyed && at == self.changed_at;
+                self.changed_row(theme, at, shown, &today, reached, cx)
+            })
+            .collect();
+        let shown: Vec<(i32, Option<String>)> = since
+            .rows
+            .iter()
+            .take(most)
+            .map(|shown| {
+                let row = shown.row;
+                (row.mod_id.to_qml(), (!row.git).then(|| row.id.clone()))
+            })
             .collect();
         let mut body = vec![
             div()
+                .id("changed-rows")
+                .track_focus(&self.changed_keys)
+                .role(gpui::Role::List)
+                .aria_label(put(&say!("Changed since the game last started")))
                 .flex()
                 .flex_col()
                 .gap(theme::GAP_LARGE)
                 .children(rows)
+                .on_key_down(cx.listener(move |d, event: &gpui::KeyDownEvent, _, cx| {
+                    d.changed_key(&shown, event, cx)
+                }))
                 .into_any_element(),
         ];
         if since.rows.len() > FIRST {
@@ -240,6 +279,43 @@ impl Downloads {
         .spacing(theme::GAP_LARGE)
         .body(body);
         Some(card.render(theme, Some((width, window))).into_any_element())
+    }
+
+    /// The changed list's keys, as `ChangedCard.qml` took them: the arrows go from row to row,
+    /// Enter shows the mod, N opens its change notes.
+    fn changed_key(
+        &mut self,
+        shown: &[(i32, Option<String>)],
+        event: &gpui::KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        let keys = &event.keystroke;
+        if keys.modifiers.modified() || shown.is_empty() {
+            return;
+        }
+        let at = self.changed_at.min(shown.len() - 1);
+        match keys.key.as_str() {
+            "up" | "down" => {
+                self.changed_at = match keys.key.as_str() {
+                    "up" => at.saturating_sub(1),
+                    _ => (at + 1).min(shown.len() - 1),
+                };
+                if let Some(drawn) = self.changed_drawn.borrow().get(self.changed_at) {
+                    let room = theme::GAP_LARGE;
+                    self.paging
+                        .contain_drawn(drawn.top() - room, drawn.bottom() + room);
+                }
+                cx.notify();
+            }
+            "enter" => cx.emit(ShowMod(shown[at].0)),
+            "n" => {
+                if let Some(id) = &shown[at].1 {
+                    cx.open_url(&crate::ui::change_notes(id));
+                }
+            }
+            _ => return,
+        }
+        cx.stop_propagation();
     }
 
     /// `AskSteam.qml`: what the notes button says while Steam is asked, or waited for.

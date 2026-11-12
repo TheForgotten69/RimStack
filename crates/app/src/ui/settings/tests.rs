@@ -137,3 +137,15 @@ fn every_part_of_settings_fits_at_every_text_size() {
         );
     }
 }
+
+#[gpui::test]
+fn the_arrows_go_from_part_to_part_once_tab_reached_them(cx: &mut TestAppContext) {
+    let (_root, settings, cx) = settings(cx, 0);
+    cx.update(|window, cx| {
+        let keys = settings.read(cx).part_keys.clone();
+        window.focus(&keys, cx);
+    });
+    cx.run_until_parked();
+    cx.simulate_keystrokes("down down up");
+    assert_eq!(settings.read_with(cx, |s, _| s.part), 1);
+}

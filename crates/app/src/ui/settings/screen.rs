@@ -12,7 +12,7 @@ use crate::words::put;
 use gpui::{
     AnyElement, Context, InteractiveElement, IntoElement, ParentElement, Pixels, Render, Role,
     SharedString, StatefulInteractiveElement, Styled, Window, anchored, deferred, div,
-    prelude::FluentBuilder, px,
+    prelude::FluentBuilder,
 };
 use rimstack_core::say;
 use std::rc::Rc;
@@ -73,9 +73,10 @@ impl Settings {
             found: None,
             keys: None,
         };
+        let reached_at = if finding { 0 } else { self.part };
         let parts = self.parts().into_iter().enumerate().map(|(at, name)| {
             let on = at == self.part && !finding;
-            div()
+            let part = div()
                 .id(("settings-part", at))
                 .role(Role::Tab)
                 .aria_label(name.clone())
@@ -93,13 +94,29 @@ impl Settings {
                     if on { c.on_selected } else { c.ink },
                     name,
                 ))
-                .on_click(cx.listener(move |s, _, _, cx| {
-                    s.fields.find.update(cx, |field, cx| field.set_text("", cx));
-                    s.finding.clear();
-                    s.part = at;
-                    s.paging.scroll.borrow_mut().set_top(px(0.));
-                    cx.notify();
-                }))
+                .on_click(cx.listener(move |s, _, _, cx| s.pick_part(at, cx)));
+            match at == reached_at {
+                true => crate::ui::focus::reachable(
+                    part.on_key_down(cx.listener(move |s, event: &gpui::KeyDownEvent, _, cx| {
+                        let keys = &event.keystroke;
+                        if keys.modifiers.modified() {
+                            return;
+                        }
+                        match keys.key.as_str() {
+                            "up" if at > 0 => s.pick_part(at - 1, cx),
+                            "down" => s.pick_part(at + 1, cx),
+                            _ => return,
+                        }
+                        cx.stop_propagation();
+                    })),
+                    &self.part_keys,
+                    theme::CORNER,
+                    on,
+                    window,
+                    theme,
+                ),
+                false => part,
+            }
         });
         div()
             .flex_none()
