@@ -14,6 +14,7 @@ use gpui::{
 
 /// The sections made on their first visit, as `Theme.sections` numbers them.
 const TEXTURES: usize = 2;
+const SAVES: usize = 4;
 const LOGS: usize = 5;
 const SETTINGS: usize = 7;
 
@@ -31,6 +32,8 @@ pub struct Shell {
     part: usize,
     /// Made the first time Logs is shown; `view` is the one it opens on.
     pub(crate) logs: Option<Entity<super::logs::Logs>>,
+    /// Made the first time Saves is shown.
+    pub(crate) saves: Option<Entity<super::saves::Saves>>,
     /// Made the first time Textures is shown.
     pub(crate) textures: Option<Entity<super::textures::Textures>>,
     view: usize,
@@ -86,6 +89,7 @@ impl Shell {
             part: options.part,
             logs: None,
             textures: None,
+            saves: None,
             view: options.view,
             prompt: super::prompt::install(cx),
             menu: super::menu::install(cx),
@@ -159,6 +163,17 @@ impl Shell {
         self.section = section;
         if section == 1 {
             self.downloads(cx);
+        }
+        if section == SAVES && self.saves.is_none() {
+            let demo = self.demo;
+            let saves = cx.new(|cx| super::saves::Saves::new(demo, cx));
+            cx.subscribe(&saves, |shell, _, super::saves::UseList(ids), cx| {
+                let ids = ids.clone();
+                shell.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
+                shell.go(0, cx);
+            })
+            .detach();
+            self.saves = Some(saves);
         }
         if section == TEXTURES && self.textures.is_none() {
             let demo = self.demo;
@@ -251,6 +266,7 @@ impl Shell {
             0 => Some(self.mods.clone().into()),
             1 => self.downloads.clone().map(Into::into),
             TEXTURES => self.textures.clone().map(Into::into),
+            SAVES => self.saves.clone().map(Into::into),
             LOGS => self.logs.clone().map(Into::into),
             SETTINGS => self.settings.clone().map(Into::into),
             _ => None,

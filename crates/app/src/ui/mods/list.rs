@@ -1,12 +1,13 @@
 //! `ModList.qml` and `Scroller.qml`: one list of rows, a view of its own so that scrolling it draws
 //! nothing else, with its bar always shown and its thumb held to scroll.
 
+use super::Mods;
 use super::active::columns;
 use super::rows;
 use super::rows::Columns;
-use super::{Mods, thumbs};
 use crate::ui::rows::{Scroll, Scrolling};
 use crate::ui::theme::{self, Theme};
+use crate::ui::thumbs;
 use crate::workspace::load_order::{Orders, RowView, Side};
 use gpui::{
     Context, InteractiveElement, IntoElement, ParentElement, Pixels, Render, Styled, WeakEntity,

@@ -7,7 +7,6 @@ mod details;
 mod inactive;
 mod list;
 mod rows;
-mod thumbs;
 
 use super::text_field::{Edited, TextField};
 use super::theme::{self, Theme};
@@ -98,7 +97,7 @@ impl Mods {
             mods.show(cx);
         })
         .detach();
-        let thumbs = thumbs::Shared::default();
+        let thumbs = super::thumbs::Shared::default();
         let orders = Rc::new(order.orders());
         let lists = [Side::Active, Side::Inactive].map(|side| {
             let shown = list::Shown {

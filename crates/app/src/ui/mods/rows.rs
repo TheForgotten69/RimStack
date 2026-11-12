@@ -1,7 +1,8 @@
 //! `ModRow.qml`: a category heading, a group under a tag, or a mod.
 
-use super::{Mods, thumbs};
+use super::Mods;
 use crate::ui::theme::{self, CATEGORY_ICONS, Theme};
+use crate::ui::thumbs;
 use crate::ui::widgets::{
     Chip, TextSized, chip_width, elide_middle, halo, icon, label, with_alpha,
 };
