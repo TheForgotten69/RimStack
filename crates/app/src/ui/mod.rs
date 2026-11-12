@@ -19,6 +19,7 @@ pub mod settings;
 pub mod shell;
 pub mod status_bar;
 pub mod text_field;
+pub mod textures;
 pub mod theme;
 pub mod tip;
 pub mod top_bar;

@@ -9,10 +9,11 @@ use super::top_bar::top_bar;
 use crate::workspace::load_order::Side;
 use gpui::{
     AppContext, Context, Entity, Focusable, InteractiveElement, IntoElement, ParentElement, Render,
-    Styled, Window, div, prelude::FluentBuilder,
+    Styled, Window, div,
 };
 
 /// The sections made on their first visit, as `Theme.sections` numbers them.
+const TEXTURES: usize = 2;
 const LOGS: usize = 5;
 const SETTINGS: usize = 7;
 
@@ -30,6 +31,8 @@ pub struct Shell {
     part: usize,
     /// Made the first time Logs is shown; `view` is the one it opens on.
     pub(crate) logs: Option<Entity<super::logs::Logs>>,
+    /// Made the first time Textures is shown.
+    pub(crate) textures: Option<Entity<super::textures::Textures>>,
     view: usize,
     prompt: Entity<super::prompt::Prompt>,
     menu: Entity<super::menu::Menu>,
@@ -82,6 +85,7 @@ impl Shell {
             settings: None,
             part: options.part,
             logs: None,
+            textures: None,
             view: options.view,
             prompt: super::prompt::install(cx),
             menu: super::menu::install(cx),
@@ -156,6 +160,10 @@ impl Shell {
         if section == 1 {
             self.downloads(cx);
         }
+        if section == TEXTURES && self.textures.is_none() {
+            let demo = self.demo;
+            self.textures = Some(cx.new(|cx| super::textures::Textures::new(demo, cx)));
+        }
         if section == LOGS && self.logs.is_none() {
             let (demo, view) = (self.demo, self.view);
             let logs = cx.new(|cx| super::logs::Logs::new(demo, view, cx));
@@ -228,28 +236,25 @@ impl Render for Shell {
                 window,
                 cx,
             ))
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .when(self.section == 0, |d| d.child(self.mods.clone()))
-                    .when_some(
-                        self.downloads.clone().filter(|_| self.section == 1),
-                        |d, downloads| d.child(downloads),
-                    )
-                    .when_some(
-                        self.logs.clone().filter(|_| self.section == LOGS),
-                        |d, logs| d.child(logs),
-                    )
-                    .when_some(
-                        self.settings.clone().filter(|_| self.section == SETTINGS),
-                        |d, settings| d.child(settings),
-                    ),
-            )
+            .child(div().flex_1().min_h_0().children(self.shown()))
             .child(status_bar(self.demo, last_start, cx))
             .child(self.notices.clone())
             .child(self.menu.clone())
             .child(self.prompt.clone())
+    }
+}
+
+impl Shell {
+    /// The view of the section shown, once it is made.
+    fn shown(&self) -> Option<gpui::AnyView> {
+        match self.section {
+            0 => Some(self.mods.clone().into()),
+            1 => self.downloads.clone().map(Into::into),
+            TEXTURES => self.textures.clone().map(Into::into),
+            LOGS => self.logs.clone().map(Into::into),
+            SETTINGS => self.settings.clone().map(Into::into),
+            _ => None,
+        }
     }
 }
 
