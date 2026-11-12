@@ -12,7 +12,8 @@ use gpui::{
     Styled, Window, div, prelude::FluentBuilder,
 };
 
-/// The section of the Settings screen, as `Theme.sections.settings`.
+/// The sections made on their first visit, as `Theme.sections` numbers them.
+const LOGS: usize = 5;
 const SETTINGS: usize = 7;
 
 pub struct Shell {
@@ -27,6 +28,9 @@ pub struct Shell {
     /// Made the first time Settings is shown; `part` is the one it opens on.
     pub(crate) settings: Option<Entity<super::settings::Settings>>,
     part: usize,
+    /// Made the first time Logs is shown; `view` is the one it opens on.
+    pub(crate) logs: Option<Entity<super::logs::Logs>>,
+    view: usize,
     prompt: Entity<super::prompt::Prompt>,
     menu: Entity<super::menu::Menu>,
     notices: Entity<super::notices::Notices>,
@@ -77,12 +81,17 @@ impl Shell {
             behind: 0,
             settings: None,
             part: options.part,
+            logs: None,
+            view: options.view,
             prompt: super::prompt::install(cx),
             menu: super::menu::install(cx),
             notices: super::notices::install(cx),
             drawn: false,
         };
         shell.downloads(cx);
+        if !demo {
+            keep_logs(cx);
+        }
         shell.go(section, cx);
         shell.show_asked(options, window, cx);
         shell
@@ -146,6 +155,23 @@ impl Shell {
         self.section = section;
         if section == 1 {
             self.downloads(cx);
+        }
+        if section == LOGS && self.logs.is_none() {
+            let (demo, view) = (self.demo, self.view);
+            let logs = cx.new(|cx| super::logs::Logs::new(demo, view, cx));
+            cx.subscribe(&logs, |shell, _, super::logs::ShowMod(mod_id), cx| {
+                let mod_id = *mod_id;
+                shell.go(0, cx);
+                shell.mods.update(cx, |mods, cx| mods.show_mod(mod_id, cx));
+            })
+            .detach();
+            cx.subscribe(&logs, |shell, _, super::logs::UseList(ids), cx| {
+                let ids = ids.clone();
+                shell.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
+                shell.go(0, cx);
+            })
+            .detach();
+            self.logs = Some(logs);
         }
         if section == SETTINGS && self.settings.is_none() {
             let (demo, part, mods) = (self.demo, self.part, self.mods.clone());
@@ -212,6 +238,10 @@ impl Render for Shell {
                         |d, downloads| d.child(downloads),
                     )
                     .when_some(
+                        self.logs.clone().filter(|_| self.section == LOGS),
+                        |d, logs| d.child(logs),
+                    )
+                    .when_some(
                         self.settings.clone().filter(|_| self.section == SETTINGS),
                         |d, settings| d.child(settings),
                     ),
@@ -232,4 +262,19 @@ impl Shell {
     pub(crate) fn behind(&self) -> usize {
         self.behind
     }
+}
+
+/// The game's logs copied among the kept ones at the start and each time they change, as Qt's
+/// `LogsData` did from the window's start.
+fn keep_logs(cx: &mut Context<Shell>) {
+    let app = super::app(cx);
+    let keeping = app.clone();
+    crate::jobs::spawn("keep logs", move || keeping.keep_logs());
+    let kept = app.clone();
+    app.listen(move |changes| {
+        if changes.contains(crate::changes::Changes::LOGS) {
+            let kept = kept.clone();
+            crate::jobs::spawn("keep logs", move || kept.keep_logs());
+        }
+    });
 }

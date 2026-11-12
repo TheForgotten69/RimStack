@@ -30,6 +30,9 @@ pub struct Scroll {
     /// While the bar's thumb is held: how far below the thumb's top it was taken.
     pub held: Option<Pixels>,
     reduce_motion: bool,
+    /// A row to bring into view once the list knows its height: its top and bottom, and
+    /// whether to put it in the middle rather than just inside.
+    asked: Option<(Pixels, Pixels, bool)>,
 }
 
 pub type Scrolling = Rc<RefCell<Scroll>>;
@@ -101,6 +104,25 @@ impl Scroll {
         (self.total, self.shown) = (total, shown);
         self.top = self.top.clamp(px(0.), self.most());
         self.goal = self.goal.clamp(px(0.), self.most());
+        if let Some((top, bottom, middle)) = self.asked.take() {
+            let to = match middle {
+                true => top - (shown - (bottom - top)) / 2.,
+                false if top < self.top => top,
+                false if bottom > self.top + shown => bottom - shown,
+                false => return,
+            };
+            self.set_top(to);
+        }
+    }
+
+    /// The row from `top` to `bottom` in the middle of the list, as `ListView.Center` put it.
+    pub fn centre(&mut self, top: Pixels, bottom: Pixels) {
+        self.asked = Some((top, bottom, true));
+    }
+
+    /// The row from `top` to `bottom` brought just inside the list, as `ListView.Contain` did.
+    pub fn contain(&mut self, top: Pixels, bottom: Pixels) {
+        self.asked = Some((top, bottom, false));
     }
 }
 

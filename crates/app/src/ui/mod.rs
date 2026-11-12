@@ -7,6 +7,7 @@ pub mod controls;
 pub mod downloads;
 pub mod field;
 pub mod focus;
+pub mod logs;
 pub mod menu;
 pub mod mods;
 pub mod notices;
@@ -60,6 +61,8 @@ pub struct Options {
     pub open: Option<String>,
     /// The part of Settings shown, as `--part=` gives it.
     pub part: usize,
+    /// The view of Logs shown, as `--view=` gives it.
+    pub view: usize,
 }
 
 impl Options {
@@ -80,6 +83,7 @@ impl Options {
                 "--notices" => options.notices = true,
                 "--open" => options.open = Some(value.to_string()),
                 "--part" => options.part = value.parse().unwrap_or(0),
+                "--view" => options.view = value.parse().unwrap_or(0),
                 _ => {}
             }
         }
@@ -147,6 +151,17 @@ fn system_family_for(generic: &str) -> Option<String> {
     }
     let _ = generic;
     None
+}
+
+/// `f` on the view, as a control's callback that is given a value.
+pub fn act<V: 'static, T: 'static>(
+    cx: &gpui::Context<V>,
+    f: impl Fn(&mut V, T, &mut gpui::Window, &mut gpui::Context<V>) + 'static,
+) -> impl Fn(T, &mut gpui::Window, &mut Cx) + 'static {
+    let me = cx.entity().downgrade();
+    move |value, window, cx| {
+        let _ = me.update(cx, |view, cx| f(view, value, window, cx));
+    }
 }
 
 /// The appearance kept in `RimStack.conf`, with the theme's own colours when they are used.
@@ -265,5 +280,7 @@ pub fn run(app: Arc<App>, options: Options) {
 mod gates;
 #[cfg(test)]
 pub(crate) mod layout_checks;
+#[cfg(all(test, target_os = "linux"))]
+pub(crate) mod made_up;
 #[cfg(test)]
 mod widget_tests;
