@@ -404,3 +404,47 @@ fn the_row_under_the_pointer_is_the_one_pointed_at_as_the_list_scrolls() {
     });
     assert_eq!(row, Some(4), "the list moved under a pointer that stayed");
 }
+
+#[test]
+fn a_mod_moved_slides_from_where_it_was() {
+    use crate::ui::widgets::watch;
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    let window = cx.update(|cx| cx.windows()[0]);
+    let draw = |cx: &mut gpui::HeadlessAppContext| {
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+    };
+    draw(&mut cx);
+    let (name, from, to) = cx.update(|cx| {
+        let mods = mods.read(cx);
+        let list = mods.order.list(Side::Active).mods();
+        (list[5].name.clone(), 5, 6)
+    });
+    let top_of = |cx: &mut gpui::HeadlessAppContext| {
+        watch::start();
+        cx.update(|cx| {
+            mods.read(cx)
+                .list(Side::Active)
+                .clone()
+                .update(cx, |_, cx| cx.notify())
+        });
+        cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+        watch::take()
+            .into_iter()
+            .find(|seen| seen.text.as_ref() == name)
+            .map(|seen| seen.bounds.top())
+    };
+    let before = top_of(&mut cx).expect("the mod is drawn");
+    cx.update(|cx| mods.update(cx, |mods, cx| mods.move_mod(Side::Active, from, to, cx)));
+    let sliding = top_of(&mut cx).expect("the mod is drawn while it slides");
+    cx.advance_clock(std::time::Duration::from_millis(500));
+    draw(&mut cx);
+    let landed = top_of(&mut cx).expect("the mod is drawn where it went");
+    assert!(landed > before, "it went down");
+    assert!(
+        sliding < landed - gpui::px(1.),
+        "it starts above where it lands: {sliding:?} then {landed:?}"
+    );
+}

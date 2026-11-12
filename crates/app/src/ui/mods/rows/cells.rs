@@ -185,14 +185,18 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
     } = shown;
     let quiet = if chosen { c.on_selected_dim } else { c.ink2 };
     let ink = if chosen { c.on_selected } else { c.ink };
-    let name_text = div()
-        .min_w_0()
-        .overflow_hidden()
-        .whitespace_nowrap()
-        .text_overflow(TextOverflow::TruncateMiddle("…".into()))
-        .sized_text(theme, theme.body())
-        .text_color(ink)
-        .child(fitted.name);
+    let name_text = crate::ui::widgets::watched(
+        div()
+            .min_w_0()
+            .overflow_hidden()
+            .whitespace_nowrap()
+            .text_overflow(TextOverflow::TruncateMiddle("…".into()))
+            .sized_text(theme, theme.body())
+            .text_color(ink),
+        put(&row.name).into(),
+        fitted.name,
+        true,
+    );
     let full_name = match fitted.cut && pointed {
         true => put(&row.name),
         false => String::new(),

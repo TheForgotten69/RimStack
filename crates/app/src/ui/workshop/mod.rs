@@ -94,6 +94,8 @@ pub struct Workshop {
     side_paging: super::page::Paging,
     details_paging: super::page::Paging,
     focus: FocusHandle,
+    /// Each part of the description shown, its words selectable.
+    description_picks: std::cell::RefCell<Vec<super::rich::Selection>>,
 }
 
 impl Workshop {
@@ -136,6 +138,7 @@ impl Workshop {
             settled: HashSet::new(),
             selected: String::new(),
             opened: Opened::default(),
+            description_picks: Default::default(),
             filters: false,
             list: false,
             enlarged: None,

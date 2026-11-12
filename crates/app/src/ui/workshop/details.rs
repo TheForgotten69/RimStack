@@ -354,11 +354,22 @@ impl Workshop {
                 .gap(theme::GAP_SMALL)
                 .child(Self::heading(theme, put(&say!("Description"))));
             for (at, part) in description.iter().enumerate() {
+                let pick = {
+                    let mut picks = self.description_picks.borrow_mut();
+                    while picks.len() <= at {
+                        picks.push(rich::Selection::new(cx));
+                    }
+                    picks[at].clone()
+                };
                 let piece = div()
                     .flex()
                     .flex_col()
                     .gap(theme::GAP_SMALL)
-                    .children(rich::blocks("description", theme, &part.blocks, &link))
+                    .child(
+                        pick.holding(div().flex().flex_col().gap(theme::GAP_SMALL).children(
+                            rich::blocks("description", theme, &part.blocks, &link, Some(&pick)),
+                        )),
+                    )
                     .when_some(part.note.as_ref(), |d, note| {
                         d.child(
                             div()

@@ -4,15 +4,98 @@
 use super::theme::{self, Theme};
 use super::widgets::{TextSized, with_alpha};
 use gpui::{
-    AnyElement, App, ElementId, FontStyle, FontWeight, HighlightStyle, InteractiveText,
-    IntoElement, ParentElement, Pixels, StrikethroughStyle, Styled, StyledText, UnderlineStyle,
-    Window, div, px,
+    AnyElement, App, ElementId, FontStyle, FontWeight, HighlightStyle, InteractiveElement,
+    InteractiveText, IntoElement, ParentElement, Pixels, StrikethroughStyle, Styled, StyledText,
+    UnderlineStyle, Window, div, px,
 };
 use rimstack_core::base::markup::{Block, Kind, Run};
 use std::ops::Range;
 use std::rc::Rc;
 
 pub type Link = Rc<dyn Fn(&str, &mut Window, &mut App)>;
+
+/// Where a press started and where the pointer is now, each a block and a byte in its words.
+#[derive(Default)]
+struct Picked {
+    from: (usize, usize),
+    to: (usize, usize),
+    held: bool,
+    /// Each block's words as last drawn: a selection of other words is let go.
+    texts: Vec<String>,
+}
+
+impl Picked {
+    fn ordered(&self) -> ((usize, usize), (usize, usize)) {
+        (self.from.min(self.to), self.from.max(self.to))
+    }
+
+    /// The part of block `at` selected.
+    fn within(&self, at: usize, len: usize) -> Option<Range<usize>> {
+        let (start, end) = self.ordered();
+        if start == end || at < start.0 || at > end.0 {
+            return None;
+        }
+        let from = if at == start.0 { start.1 } else { 0 };
+        let to = if at == end.0 { end.1 } else { len };
+        (from < to).then_some(from..to.min(len))
+    }
+
+    fn said(&self) -> String {
+        let (start, end) = self.ordered();
+        (start.0..=end.0)
+            .filter_map(|at| {
+                let text = self.texts.get(at)?;
+                self.within(at, text.len()).and_then(|part| text.get(part))
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+}
+
+/// A description's words selected with the mouse and copied with Ctrl + C, as `CopyText` let
+/// them be; `view` is drawn again as the selection moves.
+#[derive(Clone)]
+pub struct Selection {
+    picked: Rc<std::cell::RefCell<Picked>>,
+    focus: gpui::FocusHandle,
+    view: gpui::EntityId,
+}
+
+impl Selection {
+    pub fn new<V: 'static>(cx: &mut gpui::Context<V>) -> Self {
+        Self {
+            picked: Rc::default(),
+            focus: cx.focus_handle(),
+            view: cx.entity_id(),
+        }
+    }
+
+    /// What is selected now.
+    pub fn said(&self) -> String {
+        self.picked.borrow().said()
+    }
+
+    /// `blocks` taking the keys while they are pressed in, so Ctrl + C copies what is selected.
+    pub fn holding(&self, blocks: gpui::Div) -> gpui::Stateful<gpui::Div> {
+        let (copied, released) = (self.picked.clone(), self.picked.clone());
+        blocks
+            .id("selectable")
+            .track_focus(&self.focus)
+            .on_key_down(move |event: &gpui::KeyDownEvent, _, cx| {
+                let keys = &event.keystroke;
+                if keys.key == "c" && keys.modifiers.secondary(cx) && !keys.modifiers.alt {
+                    let said = copied.borrow().said();
+                    if !said.is_empty() {
+                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(said));
+                        cx.stop_propagation();
+                    }
+                }
+            })
+            .on_mouse_up(gpui::MouseButton::Left, move |_, _, _| {
+                released.borrow_mut().held = false
+            })
+    }
+}
 
 /// Qt indents a list and a quote by 40 at the text size it was made for.
 fn indent(theme: &Theme) -> Pixels {
@@ -43,8 +126,14 @@ fn styled(theme: &Theme, run: &Run) -> HighlightStyle {
     }
 }
 
-/// A block's words, styled, its links pressed.
-fn words(id: ElementId, theme: &Theme, block: &Block, link: &Link) -> AnyElement {
+/// A block's words, styled, its links pressed, and the part selected marked.
+fn words(
+    id: ElementId,
+    theme: &Theme,
+    (at, block): (usize, &Block),
+    link: &Link,
+    selection: Option<&Selection>,
+) -> AnyElement {
     let mut text = String::new();
     let mut marks = Vec::new();
     let mut links: Vec<(Range<usize>, String)> = Vec::new();
@@ -60,25 +149,84 @@ fn words(id: ElementId, theme: &Theme, block: &Block, link: &Link) -> AnyElement
             links.push((range, url.clone()));
         }
     }
+    let chosen = selection.and_then(|s| s.picked.borrow().within(at, text.len()));
+    let marked = HighlightStyle {
+        background_color: Some(with_alpha(theme.colours.accent, 0.45)),
+        ..HighlightStyle::default()
+    };
+    let marks: Vec<_> =
+        gpui::combine_highlights(marks, chosen.map(|part| (part, marked))).collect();
     let shown = StyledText::new(text).with_highlights(marks);
-    if links.is_empty() {
-        return shown.into_any_element();
-    }
-    let (ranges, urls): (Vec<_>, Vec<_>) = links.into_iter().unzip();
-    let link = link.clone();
-    InteractiveText::new(id, shown)
-        .on_click(ranges, move |at, window, cx| link(&urls[at], window, cx))
+    let laid = shown.layout().clone();
+    let words = match links.is_empty() {
+        true => shown.into_any_element(),
+        false => {
+            let (ranges, urls): (Vec<_>, Vec<_>) = links.into_iter().unzip();
+            let link = link.clone();
+            InteractiveText::new(id, shown)
+                .on_click(ranges, move |at, window, cx| link(&urls[at], window, cx))
+                .into_any_element()
+        }
+    };
+    let Some(selection) = selection.cloned() else {
+        return words;
+    };
+    let (pressed, moved) = (selection.clone(), selection);
+    let (pressed_at, moved_at) = (laid.clone(), laid);
+    div()
+        .child(words)
+        .on_mouse_down(gpui::MouseButton::Left, move |event, window, cx| {
+            let byte = pressed_at
+                .index_for_position(event.position)
+                .unwrap_or_else(|nearest| nearest);
+            let mut picked = pressed.picked.borrow_mut();
+            (picked.from, picked.to, picked.held) = ((at, byte), (at, byte), true);
+            window.focus(&pressed.focus, cx);
+            cx.notify(pressed.view);
+        })
+        .on_mouse_move(move |event, _, cx| {
+            let mut picked = moved.picked.borrow_mut();
+            if !picked.held || !event.dragging() {
+                return;
+            }
+            let byte = moved_at
+                .index_for_position(event.position)
+                .unwrap_or_else(|nearest| nearest);
+            if picked.to != (at, byte) {
+                picked.to = (at, byte);
+                cx.notify(moved.view);
+            }
+        })
         .into_any_element()
 }
 
-/// The blocks, one element each, in the body size.
-pub fn blocks(id: &'static str, theme: &Theme, blocks: &[Block], link: &Link) -> Vec<AnyElement> {
+/// The blocks, one element each, in the body size; their words selectable with `selection`.
+pub fn blocks(
+    id: &'static str,
+    theme: &Theme,
+    blocks: &[Block],
+    link: &Link,
+    selection: Option<&Selection>,
+) -> Vec<AnyElement> {
     let c = &theme.colours;
+    if let Some(selection) = selection {
+        let texts: Vec<String> = blocks
+            .iter()
+            .map(|block| block.runs.iter().map(|run| run.text.as_str()).collect())
+            .collect();
+        let mut picked = selection.picked.borrow_mut();
+        if picked.texts != texts {
+            *picked = Picked {
+                texts,
+                ..Picked::default()
+            };
+        }
+    }
     blocks
         .iter()
         .enumerate()
         .map(|(at, block)| {
-            let shown = words((id, at).into(), theme, block, link);
+            let shown = words((id, at).into(), theme, (at, block), link, selection);
             let text = div()
                 .w_full()
                 .sized_text(theme, theme.body())
@@ -129,4 +277,27 @@ pub fn blocks(id: &'static str, theme: &Theme, blocks: &[Block], link: &Link) ->
             .into_any_element()
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Picked;
+
+    #[test]
+    fn a_selection_across_blocks_says_each_part_on_its_own_line() {
+        let picked = Picked {
+            from: (2, 3),
+            to: (0, 6),
+            held: false,
+            texts: vec!["First block".into(), "Middle".into(), "Last one".into()],
+        };
+        assert_eq!(picked.said(), "block\nMiddle\nLas");
+        assert_eq!(picked.within(1, 6), Some(0..6));
+        let none = Picked {
+            from: (1, 2),
+            to: (1, 2),
+            ..picked
+        };
+        assert_eq!(none.said(), "", "a press alone selects nothing");
+    }
 }

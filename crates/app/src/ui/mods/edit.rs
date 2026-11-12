@@ -48,10 +48,22 @@ impl Mods {
             .collect()
     }
 
+    /// The mod at `from` moved to `to`, sliding there as `Mods.slide` made it.
     pub(super) fn move_mod(&mut self, side: Side, from: usize, to: usize, cx: &mut Context<Self>) {
         let app = super::super::app(cx);
+        let moved = self
+            .order
+            .list(side)
+            .mods()
+            .get(from)
+            .and_then(|m| m.installed);
         self.order.move_mod(&app, side, from, to);
         self.changed(cx);
+        if let Some(id) = moved {
+            let slides = [(id.to_qml(), from as i32 - to as i32)].into();
+            self.list(side)
+                .update(cx, |list, cx| list.slide(slides, cx));
+        }
     }
 
     /// The mod at `index` of `from` moved to the other list, at `to` or where it belongs.
@@ -264,6 +276,15 @@ impl Mods {
         self.order.preview_sort(&app);
         self.closed_note.clear();
         self.show(cx);
+        let slides = self
+            .active
+            .rows
+            .iter()
+            .filter(|r| !r.is_header && r.moved_from > 0)
+            .map(|r| (r.mod_id, r.moved_from - r.number))
+            .collect();
+        self.list(Side::Active)
+            .update(cx, |list, cx| list.slide(slides, cx));
         if let Some(position) = self.order.first_moved()
             && let Some(row) = self.order.list(Side::Active).row_of(position)
         {

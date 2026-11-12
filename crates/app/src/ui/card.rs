@@ -4,6 +4,7 @@
 use super::theme::{self, Theme};
 use super::widgets::{TextSized, icon, label, measure};
 use crate::words::put;
+use gpui::AnimationExt;
 use gpui::{
     AnyElement, App as Cx, ClickEvent, ElementId, Hsla, InteractiveElement, IntoElement,
     ParentElement, Pixels, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder,
@@ -12,6 +13,31 @@ use gpui::{
 use rimstack_core::base::sentence::Sentence;
 
 pub type Fold = Box<dyn Fn(&ClickEvent, &mut Window, &mut Cx)>;
+
+/// `Card.qml`'s `Behavior on shown`: `Theme.quick`.
+const UNFOLDING: std::time::Duration = std::time::Duration::from_millis(140);
+
+thread_local! {
+    /// The cards unfolded by a press, and when: only those fade their body in, not a card shown
+    /// with its page, as a QML `Behavior` runs on a change alone.
+    static UNFOLDED: std::cell::RefCell<std::collections::HashMap<ElementId, std::time::Instant>> =
+        Default::default();
+}
+
+/// One animation for each unfolding: a new press starts it again.
+fn turn_of(id: &ElementId, when: std::time::Instant) -> usize {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    (id, when).hash(&mut hasher);
+    hasher.finish() as usize
+}
+
+fn unfolded_just_now(id: &ElementId) -> Option<std::time::Instant> {
+    UNFOLDED.with_borrow_mut(|unfolded| {
+        unfolded.retain(|_, when| when.elapsed() < UNFOLDING * 3);
+        unfolded.get(id).copied()
+    })
+}
 
 pub struct Card {
     id: ElementId,
@@ -74,7 +100,15 @@ impl Card {
         fold: impl Fn(&ClickEvent, &mut Window, &mut Cx) + 'static,
     ) -> Self {
         self.folded = Some(folded);
-        self.on_fold = Some(Box::new(fold));
+        let id = self.id.clone();
+        self.on_fold = Some(Box::new(move |event, window, cx| {
+            if folded {
+                UNFOLDED.with_borrow_mut(|unfolded| {
+                    unfolded.insert(id.clone(), std::time::Instant::now())
+                });
+            }
+            fold(event, window, cx)
+        }));
         self
     }
 
@@ -193,6 +227,7 @@ impl Card {
             .sized_text(theme, theme.small())
             .text_color(c.ink3)
             .child(self.note);
+        let card_id = self.id.clone();
         let head = div()
             .id(self.id)
             .flex()
@@ -253,14 +288,20 @@ impl Card {
             .w_full()
             .child(head)
             .when(!folded, |d| {
-                d.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(self.spacing)
-                        .pb(px(6.))
-                        .children(self.body),
-                )
+                let body = div()
+                    .flex()
+                    .flex_col()
+                    .gap(self.spacing)
+                    .pb(px(6.))
+                    .children(self.body);
+                match unfolded_just_now(&card_id) {
+                    Some(when) => d.child(body.with_animation(
+                        ("unfolding", turn_of(&card_id, when)),
+                        gpui::Animation::new(UNFOLDING).with_easing(|t| 1. - (1. - t).powi(3)),
+                        |body, shown| body.opacity(shown),
+                    )),
+                    None => d.child(body),
+                }
             })
     }
 }

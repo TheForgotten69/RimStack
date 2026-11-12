@@ -81,6 +81,8 @@ impl gpui::EventEmitter<Asked> for DetailsView {}
 
 /// The details pane, a view of its own: choosing a mod or a tab draws nothing else.
 pub struct DetailsView {
+    /// The description's words selected.
+    pub(super) description: crate::ui::rich::Selection,
     pub shown: DetailsShown,
     pub tab: usize,
     /// The cards folded against how they start, by their key, as `Theme.folded` kept them.
@@ -127,6 +129,7 @@ impl DetailsView {
         cx.subscribe(&group, |view, _, _: &Entered, cx| view.keep_drafts(cx))
             .detach();
         Self {
+            description: crate::ui::rich::Selection::new(cx),
             shown: Default::default(),
             tab: 0,
             folded: Default::default(),

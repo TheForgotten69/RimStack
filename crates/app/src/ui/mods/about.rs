@@ -12,6 +12,7 @@ use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{TextSized, elide_middle_in, icon, label, measure};
 use crate::words::put;
 use crate::workspace::load_order::Details;
+use gpui::AnimationExt;
 use gpui::InteractiveElement as _;
 use gpui::{
     AnyElement, Context, FontWeight, IntoElement, ParentElement, Pixels, Styled, Window, div,
@@ -349,6 +350,11 @@ impl DetailsView {
         match self.shown.notes_saved {
             true => vec![
                 label(theme, theme.small(), theme.colours.ok, put(&say!("Saved")))
+                    .with_animation(
+                        "saved-fade",
+                        gpui::Animation::new(std::time::Duration::from_millis(140)),
+                        |label, shown| label.opacity(shown),
+                    )
                     .into_any_element(),
             ],
             false => Vec::new(),
@@ -680,11 +686,21 @@ impl DetailsView {
                 true => blocks(&details.description),
                 false => blocks(&details.description_rich),
             };
-            let text = div()
-                .flex()
-                .flex_col()
-                .gap(theme::GAP_SMALL)
-                .children(rich::blocks("mod-description", theme, &rich, &link));
+            let text =
+                self.description
+                    .holding(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(theme::GAP_SMALL)
+                            .children(rich::blocks(
+                                "mod-description",
+                                theme,
+                                &rich,
+                                &link,
+                                Some(&self.description),
+                            )),
+                    );
             shown.push(
                 Card::new("about-description", put(&say!("Description")))
                     .body(vec![text.into_any_element()])

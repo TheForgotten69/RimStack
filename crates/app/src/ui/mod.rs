@@ -233,6 +233,7 @@ fn kept_appearance(app: &App) -> Appearance {
 pub fn retheme(cx: &mut Cx) {
     let appearance = kept_appearance(&app(cx));
     let theme = cx.global::<Theme>().with_appearance(appearance);
+    cx.set_reduce_motion(theme.appearance.reduce_motion);
     cx.set_global(theme);
     cx.refresh_windows();
 }
@@ -275,6 +276,7 @@ pub fn use_font(family: &str, cx: &mut Cx) {
     let old = cx.global::<Theme>().clone();
     let mut theme = in_family(old.clone(), (!family.is_empty()).then_some(family), cx);
     theme.mono = old.mono;
+    cx.set_reduce_motion(theme.appearance.reduce_motion);
     cx.set_global(theme);
     cx.refresh_windows();
 }
@@ -297,6 +299,7 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     if let Some(mono) = system_family_for("monospace") {
         theme.mono = mono.into();
     }
+    cx.set_reduce_motion(theme.appearance.reduce_motion);
     cx.set_global(theme);
     cx.set_global(Shared(app));
     text_field::bind_keys(cx);

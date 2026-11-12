@@ -9,6 +9,7 @@ use crate::ui::rows::{Scroll, Scrolling};
 use crate::ui::theme::{self, Theme};
 use crate::ui::thumbs;
 use crate::workspace::load_order::{Orders, RowView, Side};
+use gpui::AnimationExt;
 use gpui::{
     Context, InteractiveElement, IntoElement, ParentElement, Pixels, Render,
     StatefulInteractiveElement, Styled, WeakEntity, Window, div, prelude::FluentBuilder, px,
@@ -66,7 +67,17 @@ pub struct ModList {
     /// drawn: which row it is on is read from them as the list scrolls under it.
     pointer: Option<Pixels>,
     drawn_top: Rc<std::cell::Cell<Pixels>>,
+    /// The mods sliding to the places they were moved to, and how many rows each comes from;
+    /// a new slide is a new turn, which starts each row's animation again.
+    slides: Rc<std::collections::HashMap<i32, i32>>,
+    slide_turn: u64,
+    slide_end: Option<gpui::Task<()>>,
 }
+
+/// `ModRow.qml`'s slide: `Theme.quick`, eased out; `Mods.qml` let the rows slide for 400 ms
+/// before a row drawn anew stops starting one.
+const SLIDE: std::time::Duration = std::time::Duration::from_millis(140);
+const SLIDES_FOR: std::time::Duration = std::time::Duration::from_millis(400);
 
 /// How often and how far a drag held at the list's edge scrolls it, as `ModList.qml`'s timer.
 const PULL_EVERY: std::time::Duration = std::time::Duration::from_millis(16);
@@ -129,6 +140,9 @@ impl ModList {
             pulling: None,
             pointer: None,
             drawn_top: Rc::default(),
+            slides: Rc::default(),
+            slide_turn: 0,
+            slide_end: None,
         }
     }
 
@@ -183,6 +197,25 @@ impl ModList {
         let first = self.top_row();
         let row = rows.get(first).filter(|r| r.is_sub || !r.is_header)?;
         Some((row.category, top))
+    }
+
+    /// Each mod of `slides` comes to its row from that many rows away, unless motion is reduced.
+    pub fn slide(&mut self, slides: std::collections::HashMap<i32, i32>, cx: &mut Context<Self>) {
+        if cx.global::<Theme>().appearance.reduce_motion || slides.is_empty() {
+            return;
+        }
+        self.slides = Rc::new(slides);
+        self.slide_turn += 1;
+        let turn = self.slide_turn;
+        self.slide_end = Some(cx.spawn(async move |list, cx| {
+            cx.background_executor().timer(SLIDES_FOR).await;
+            let _ = list.update(cx, |list, _| {
+                if list.slide_turn == turn {
+                    list.slides = Rc::default();
+                }
+            });
+        }));
+        cx.notify();
     }
 
     /// The row the pointer is on, which alone has its buttons.
@@ -289,6 +322,7 @@ impl Render for ModList {
         );
         let (made, list_id) = (self.made.clone(), cx.entity_id());
         let pointed = self.pointed_row(self.pointer);
+        let (slides, slide_turn) = (self.slides.clone(), self.slide_turn);
         let drawn_top = self.drawn_top.clone();
         let drawn_theme = theme.clone();
         let room = bar_room(&theme);
@@ -358,7 +392,27 @@ impl Render for ModList {
                             list_id,
                             cx,
                         );
-                        div().pr(room).child(drawn).into_any_element()
+                        let shown = div().pr(room).child(drawn);
+                        match slides.get(&row.mod_id) {
+                            Some(&places) if !row.is_header => {
+                                let most = theme.sized(400.);
+                                let from = (rows::height(theme, row, side == Side::Active)
+                                    * places as f32)
+                                    .clamp(-most, most);
+                                div()
+                                    .size_full()
+                                    .child(
+                                        shown.w_full().h_full().flex_none().with_animation(
+                                            ("slide", (slide_turn as usize) << 20 | at),
+                                            gpui::Animation::new(SLIDE)
+                                                .with_easing(|t| 1. - (1. - t).powi(3)),
+                                            move |row, done| row.mt(from * (1. - done)),
+                                        ),
+                                    )
+                                    .into_any_element()
+                            }
+                            _ => shown.into_any_element(),
+                        }
                     })
                     .collect()
             },

@@ -53,6 +53,9 @@ fn drawn(
         std::thread::sleep(Duration::from_millis(10));
     }
     cx.update(|cx| mods.update(cx, act));
+    // The test clock stands still: what slides or fades is let finish, as the checks are of the
+    // window at rest.
+    cx.advance_clock(Duration::from_secs(1));
     for _ in 0..3 {
         cx.run_until_parked();
         cx.update_window(shell.into(), |_, window, cx| window.draw(cx).clear(cx))
@@ -172,7 +175,7 @@ fn sorts_preview_fits() {
         Options::default(),
         nothing,
         |mods, cx| mods.preview_sort(cx),
-        &[],
+        &["Content"],
     );
 }
 
