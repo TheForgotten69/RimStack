@@ -203,8 +203,9 @@ impl Mods {
 
     /// The view changed by `change` and kept, as `ModsPrefs` kept each change.
     pub(super) fn keep_view(&mut self, change: impl FnOnce(&mut ModsView), cx: &mut Context<Self>) {
+        let before = (*self.view).clone();
         change(Rc::make_mut(&mut self.view));
-        if self.demo {
+        if self.demo || *self.view == before {
             return;
         }
         if let Err(problem) = super::super::app(cx).keep_mods_view(&self.view) {

@@ -23,6 +23,12 @@ pub struct ModsView {
     /// The panes' widths in pixels as last dragged; 0 until then.
     pub inactive: f32,
     pub details: f32,
+    /// Where the tab was left: the mod chosen by package id, its details' tab, the filter, and
+    /// how far the load order was scrolled.
+    pub last_mod: String,
+    pub last_tab: usize,
+    pub last_filter: String,
+    pub last_scroll: f32,
 }
 
 impl Default for ModsView {
@@ -35,6 +41,10 @@ impl Default for ModsView {
             inactive_hidden: false,
             inactive: 0.,
             details: 0.,
+            last_mod: String::new(),
+            last_tab: 0,
+            last_filter: String::new(),
+            last_scroll: 0.,
         }
     }
 }
@@ -54,6 +64,10 @@ impl ModsView {
             inactive_hidden: prefs.flag(Self::GROUP, "inactiveHidden").unwrap_or(false),
             inactive: number("inactive"),
             details: number("details"),
+            last_mod: text("lastMod", first.last_mod),
+            last_tab: prefs.number(Self::GROUP, "lastTab").unwrap_or(0.) as usize,
+            last_filter: text("lastFilter", first.last_filter),
+            last_scroll: number("lastScroll"),
         }
     }
 
@@ -67,6 +81,10 @@ impl ModsView {
             ("inactiveHidden", flag(self.inactive_hidden).into()),
             ("inactive", self.inactive.round().to_string()),
             ("details", self.details.round().to_string()),
+            ("lastMod", self.last_mod.clone()),
+            ("lastTab", self.last_tab.to_string()),
+            ("lastFilter", self.last_filter.clone()),
+            ("lastScroll", self.last_scroll.round().to_string()),
         ];
         for (key, value) in pairs {
             if prefs.get(Self::GROUP, key).as_deref() != Some(value.as_str()) {
@@ -145,6 +163,24 @@ mod tests {
         assert!(!again.headings);
         assert_eq!(again.inactive_order, "name down");
         assert_eq!(again.inactive, 480., "a width is kept in whole pixels");
+        let left = ModsView {
+            last_mod: "ludeon.rimworld".into(),
+            last_tab: 2,
+            last_filter: "is:new author:x".into(),
+            last_scroll: 312.4,
+            ..again
+        };
+        app.keep_mods_view(&left).unwrap();
+        let again = app.mods_view();
+        assert_eq!(
+            (
+                again.last_mod.as_str(),
+                again.last_tab,
+                again.last_filter.as_str(),
+                again.last_scroll
+            ),
+            ("ludeon.rimworld", 2, "is:new author:x", 312.)
+        );
     }
 
     #[test]

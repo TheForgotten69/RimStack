@@ -94,3 +94,43 @@ fn the_inactive_mods_fold_into_the_rail_and_the_dividers_keep_their_least() {
         })
     });
 }
+
+#[test]
+fn the_mod_tab_and_filter_left_come_back_and_a_new_choice_is_kept() {
+    let (_tmp, mut cx, mods) = opened_with(|root| {
+        std::fs::create_dir_all(root.join("settings/RimStack")).unwrap();
+        std::fs::write(
+            root.join("settings/RimStack/RimStack.conf"),
+            "[Mods]\nlastMod=fixture.mod010\nlastTab=2\nlastFilter=is:changed fixture\n",
+        )
+        .unwrap();
+    });
+    cx.run_until_parked();
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            assert_eq!(
+                mods.filter_text(cx),
+                "fixture",
+                "is:changed is not brought back"
+            );
+            let app = crate::ui::app(cx);
+            let chosen = mods
+                .selected_id()
+                .and_then(rimstack_core::mods::library::ModId::from_qml);
+            let key = chosen.and_then(|id| mods.order.package_of(&app, id));
+            assert_eq!(key.as_deref(), Some("fixture.mod010"));
+            assert_eq!(mods.details_view.read(cx).tab, 2);
+            let other = mods
+                .active
+                .rows
+                .iter()
+                .find(|r| !r.is_header && r.mod_id != chosen.unwrap().to_qml())
+                .unwrap()
+                .mod_id;
+            mods.choose(Side::Active, other, cx);
+            let kept = app.mods_view().last_mod;
+            assert_ne!(kept, "fixture.mod010");
+            assert!(!kept.is_empty(), "the mod chosen now is kept");
+        })
+    });
+}

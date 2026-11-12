@@ -88,6 +88,9 @@ impl Shell {
         if options.several {
             mods.update(cx, |mods, cx| mods.choose_several(cx));
         }
+        if options.still {
+            mods.update(cx, |mods, _| mods.leave_off());
+        }
         if options.drawer {
             mods.update(cx, |mods, _| mods.drawer_open = true);
         }
@@ -177,8 +180,10 @@ impl Shell {
             shell.start_first_run(options.step, cx);
         }
         if !demo && !options.still {
-            window.on_window_should_close(cx, |window, cx| {
+            let left = shell.mods.downgrade();
+            window.on_window_should_close(cx, move |window, cx| {
                 super::keep_window(window, cx);
+                let _ = left.update(cx, |mods, cx| mods.keep_left_scroll(cx));
                 true
             });
             check_release(cx);

@@ -640,6 +640,34 @@ pub struct FoundMod {
 }
 
 impl LoadOrder {
+    /// A mod's package id as a mod lists it among others, lower case; `None` for one not installed.
+    pub fn package_of(&self, app: &App, id: ModId) -> Option<String> {
+        let loaded = self.reading(app);
+        let Ok((library, _)) = &*loaded else {
+            return None;
+        };
+        library.get(id)?.key()
+    }
+
+    /// The mod of `side` with this package id, as `package_of` gives it.
+    pub fn with_package(&self, app: &App, side: Side, key: &str) -> Option<ModId> {
+        let loaded = self.reading(app);
+        let Ok((library, _)) = &*loaded else {
+            return None;
+        };
+        let has = |id: &ModId| {
+            library
+                .get(*id)
+                .and_then(|m| m.key())
+                .is_some_and(|k| k == key)
+        };
+        self.list(side)
+            .mods()
+            .iter()
+            .filter_map(|m| m.installed)
+            .find(has)
+    }
+
     pub fn found(&self, app: &App, text: &str, most: usize) -> Vec<FoundMod> {
         let loaded = self.reading(app);
         let Ok((library, _)) = &*loaded else {

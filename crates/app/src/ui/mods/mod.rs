@@ -11,6 +11,7 @@ mod compare;
 mod details;
 mod edit;
 mod inactive;
+mod left_off;
 mod list;
 mod menus;
 mod notes;
@@ -133,6 +134,7 @@ pub struct Mods {
     /// The drawer's own filter, as `ModsFilter` mirrored the load order's.
     mirror: Entity<TextField>,
     widths_kept: Lane,
+    left_off: left_off::LeftOff,
 }
 
 impl Mods {
@@ -169,6 +171,7 @@ impl Mods {
             let text = field.read(cx).text().to_string();
             mods.order.set_filter(&text);
             mods.show(cx);
+            mods.keep_left_filter(text, cx);
         })
         .detach();
         let thumbs = super::thumbs::Shared::default();
@@ -192,6 +195,7 @@ impl Mods {
             |mods, _, asked: &chosen::Asked, cx| match asked {
                 chosen::Asked::Section(section) => cx.emit(ShowSection(*section)),
                 chosen::Asked::Filter(text) => mods.filter_by(text, cx),
+                chosen::Asked::Tab(tab) => mods.keep_left_tab(*tab, cx),
             },
         )
         .detach();
@@ -248,6 +252,10 @@ impl Mods {
             drawer_open: false,
             mirror,
             widths_kept: Lane::default(),
+            left_off: match demo {
+                true => left_off::LeftOff::Off,
+                false => left_off::LeftOff::Waiting,
+            },
         };
         mods.show(cx);
         if !demo {
@@ -472,6 +480,7 @@ impl Mods {
                 mods.describe(cx);
                 give_back_freed();
                 mods.read_files(cx);
+                mods.restore_left_off(cx);
                 if let Some((row, tab)) = mods.wanted.take() {
                     mods.pick_row(Side::Active, row, tab, cx);
                 }
@@ -562,6 +571,7 @@ impl Mods {
             .map(|id| Rc::new(self.order.details(&app, id)));
         self.read_chosen(cx);
         self.sync_details(cx);
+        self.keep_left_mod(cx);
     }
 
     /// Chooses a row of a list by its place, headings counted, as `--pick` does.

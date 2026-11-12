@@ -63,6 +63,8 @@ pub type FilesRead = (
 pub enum Asked {
     Section(usize),
     Filter(&'static str),
+    /// The tab shown changed.
+    Tab(usize),
 }
 
 impl gpui::EventEmitter<Asked> for DetailsView {}
@@ -359,6 +361,7 @@ impl DetailsView {
                             )
                             .on_click(cx.listener(move |view, _, _, cx| {
                                 view.tab = at;
+                                cx.emit(Asked::Tab(at));
                                 cx.notify();
                             }))
                     })),
