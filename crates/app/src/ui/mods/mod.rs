@@ -53,6 +53,10 @@ pub struct Mods {
     wanted: Option<(usize, usize)>,
     summary: Option<crate::reports::Summary>,
     last_start: Option<crate::workspace::logs::LastStartSaid>,
+    /// Mods changed since the game last started, read off the window's thread.
+    changed_since: usize,
+    since_reading: Lane,
+    conflicts: usize,
     /// `RowView::mod_id`s, the first chosen first.
     selection: Vec<i32>,
     selected_active: bool,
@@ -92,6 +96,9 @@ impl Mods {
             wanted: None,
             summary: None,
             last_start: None,
+            changed_since: 0,
+            since_reading: Lane::default(),
+            conflicts: 0,
             order,
             active: Shown::new(),
             inactive: Shown::new(),
@@ -222,6 +229,17 @@ impl Mods {
         {
             self.last_start = app.last_start_said();
         }
+        if changes.contains(Changes::LIBRARY | Changes::UPDATES | Changes::LAUNCHES) {
+            self.since_reading.run(
+                "changed since launch",
+                cx,
+                move |_| app.since_launch().items.len(),
+                |mods, changed, cx| {
+                    mods.changed_since = changed;
+                    cx.notify();
+                },
+            );
+        }
     }
 
     /// `anew`: the mods were read again, so every id held before means nothing.
@@ -279,6 +297,11 @@ impl Mods {
             self.describe(cx);
         }
         self.overview = (!self.demo).then(|| self.order.overview(&app));
+        self.conflicts = if self.demo {
+            0
+        } else {
+            self.order.in_conflict(&app).len()
+        };
         if !self.demo {
             self.count_sort_moves(cx);
         }

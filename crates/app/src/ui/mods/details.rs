@@ -40,8 +40,11 @@ impl Card {
                     .h(theme.sized(if self.actions { 34. } else { 28. }))
                     .gap(theme::GAP)
                     .child(
-                        label(theme, theme.small(), self.tone, self.title)
-                            .font_weight(theme.semibold),
+                        label(theme, theme.small(), self.tone, self.title.clone())
+                            .font_weight(theme.semibold)
+                            .when(defined(&self.title), |d| {
+                                d.border_b_1().border_dashed().border_color(self.tone)
+                            }),
                     )
                     .child(
                         div()
@@ -78,6 +81,13 @@ impl Card {
                 )
             })
     }
+}
+
+/// Whether a title is one of the terms the window explains.
+fn defined(title: &str) -> bool {
+    theme::TERMS
+        .iter()
+        .any(|term| put(&Sentence::said(term, Vec::new())) == title)
 }
 
 /// `ListSummary.Line`: words, and a button beside them.
@@ -215,6 +225,7 @@ impl Mods {
             .child(head)
             .when(!self.demo, |d| {
                 d.children(self.verdict(theme, cx))
+                    .children(self.review(theme))
                     .children(self.kept(theme))
             })
     }
@@ -328,6 +339,49 @@ impl Mods {
             }
             .render(theme),
         )
+    }
+
+    /// `ListSummary`'s "To review": not problems, things to look at when there is time.
+    fn review(&self, theme: &Theme) -> Option<gpui::Div> {
+        let replacements = self.summary.as_ref().map_or(0, |s| s.replacements);
+        let show = || Some((put(&say!("Show")), false));
+        let mut body = Vec::new();
+        if self.conflicts > 0 {
+            let said = put(&say_n!(
+                self.conflicts,
+                "{} mod shares textures with another",
+                "{} mods share textures with another"
+            ));
+            body.push(line(theme, "review-conflicts", said, show()));
+        }
+        if self.changed_since > 0 {
+            let said = put(&say_n!(
+                self.changed_since,
+                "{} mod changed since the game was last started",
+                "{} mods changed since the game was last started"
+            ));
+            body.push(line(theme, "review-changed", said, show()));
+        }
+        if replacements > 0 {
+            let said = put(&say_n!(
+                replacements,
+                "{} mod has a replacement",
+                "{} mods have a replacement"
+            ));
+            body.push(line(theme, "review-replaced", said, show()));
+        }
+        (!body.is_empty()).then(|| {
+            Card {
+                title: put(&say!("To review")),
+                tone: theme.colours.ink2,
+                note: String::new(),
+                folds: Some(false),
+                actions: false,
+                spacing: theme::GAP,
+                body,
+            }
+            .render(theme)
+        })
     }
 
     fn kept(&self, theme: &Theme) -> Option<gpui::Div> {

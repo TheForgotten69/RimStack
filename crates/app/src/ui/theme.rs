@@ -205,6 +205,23 @@ pub const SWATCHES: [(&str, &str, &str); 13] = [
     ("Orange", "#e09a5c", "#a8621e"),
 ];
 
+/// The terms `Theme.terms` explains: a title or label that is one is underlined with dots.
+pub const TERMS: [&str; 13] = [
+    "Load order",
+    "Own rules",
+    "Community rules",
+    "Detected from files",
+    "Texture conflicts",
+    "Patched methods",
+    "Group",
+    "Textures set aside",
+    "Folders the game loads from",
+    "Requires",
+    "Filed under",
+    "DDS",
+    "To review",
+];
+
 /// The category names as `LoadOrder` gives them, in category order.
 pub const CATEGORY_NAMES: [&str; 9] = [
     "Loaders",
