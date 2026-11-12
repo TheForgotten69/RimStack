@@ -145,6 +145,12 @@ impl Logs {
         logs
     }
 
+    /// The view shown, as a command asks.
+    pub fn show_view(&mut self, view: usize, cx: &mut Context<Self>) {
+        self.view = [View::Errors, View::Mods, View::Log][view.min(2)];
+        cx.notify();
+    }
+
     /// Whether the search for the broken mod runs: its button hides then.
     pub fn set_hunting(&mut self, hunting: bool, cx: &mut Context<Self>) {
         self.hunting = hunting;

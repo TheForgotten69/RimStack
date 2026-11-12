@@ -29,15 +29,25 @@ pub fn sections() -> [String; 8] {
 /// The section whose tab counts the active mods with a newer Workshop version.
 const DOWNLOADS: usize = 1;
 
-pub fn top_bar(
-    section: usize,
-    demo: bool,
-    in_the_way: (usize, bool),
-    behind: usize,
-    running: bool,
-    window: &Window,
-    cx: &mut Context<Shell>,
-) -> impl IntoElement {
+/// What the top bar shows of the window's state.
+pub struct TopState {
+    pub section: usize,
+    pub demo: bool,
+    pub in_the_way: (usize, bool),
+    pub behind: usize,
+    pub running: bool,
+    pub lists_view: gpui::Entity<super::lists::Lists>,
+}
+
+pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> impl IntoElement {
+    let TopState {
+        section,
+        demo,
+        in_the_way,
+        behind,
+        running,
+        lists_view,
+    } = state;
     let theme = cx.global::<Theme>().clone();
     let c = theme.colours;
     let width = window.viewport_size().width;
@@ -68,7 +78,15 @@ pub fn top_bar(
         })
         .collect();
     let brand = put(&say!("RimStack"));
-    let lists = put(&say!("Lists"));
+    let list_name = super::app(cx)
+        .prefs()
+        .get("Mods", "listName")
+        .unwrap_or_default();
+    let lists = match list_name.is_empty() {
+        true => put(&say!("Lists")),
+        false => put(&say!("List: {}", list_name)),
+    };
+    let dirty = !demo && super::app(cx).session().is_dirty();
     let play = match running {
         true => put(&say!("Running")),
         false => put(&say!("Play")),
@@ -279,7 +297,34 @@ pub fn top_bar(
                     )
                 })
                 .when(!demo, |d| {
-                    d.child(Btn::new("lists", lists).icon("list").menu())
+                    d.child(
+                        div()
+                            .relative()
+                            .child(
+                                Btn::new("lists", lists)
+                                    .icon("list")
+                                    .tip(put(&say!("Load orders kept under a name, and the order as it was before each Sort")))
+                                    .opens(move |below, window, cx| {
+                                        lists_view.update(cx, |lists, cx| {
+                                            lists.toggle(super::lists::Which::Lists, below, window, cx)
+                                        })
+                                    }),
+                            )
+                            .when(dirty, |d| {
+                                let dot = div()
+                                    .id("unsaved-dot")
+                                    .absolute()
+                                    .top(px(-3.))
+                                    .right(px(-3.))
+                                    .size(px(8.))
+                                    .rounded(px(4.))
+                                    .bg(c.warn);
+                                d.child(super::tip::tipped(
+                                    dot,
+                                    put(&say!("The list has changes that are not saved")).into(),
+                                ))
+                            }),
+                    )
                 }),
         )
         .child(

@@ -153,6 +153,15 @@ impl Textures {
         cx.notify();
     }
 
+    /// What the status bar says of the count or the conversion under way.
+    pub(crate) fn task_said(&self) -> Option<String> {
+        use rimstack_core::say;
+        self.busy.then(|| match self.progress.is_empty() {
+            true => put(&say!("Counting textures…")),
+            false => self.progress.clone(),
+        })
+    }
+
     fn skip(&mut self, id: ModId, skip: bool, cx: &mut Context<Self>) {
         if let Err(problem) = super::app(cx).skip_textures(id, skip) {
             rimstack_core::problem!("{problem}");

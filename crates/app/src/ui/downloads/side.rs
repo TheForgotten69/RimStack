@@ -15,6 +15,18 @@ use rimstack_core::sources::downloads::Asked;
 use rimstack_core::{say, say_n};
 
 impl Downloads {
+    /// The work under way, as the status bar lists it.
+    pub(crate) fn tasks_said(&self) -> Vec<String> {
+        let mut said = Vec::new();
+        if self.updates_busy {
+            said.push(put(&say!("Asking Steam for updates…")));
+        }
+        if self.tasks.running && !self.tasks.note.is_empty() {
+            said.push(self.tasks.note.clone());
+        }
+        said
+    }
+
     /// The download list as last read.
     pub(crate) fn listed(&self) -> &crate::workspace::download_list::ListShown {
         &self.list

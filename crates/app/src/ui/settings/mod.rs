@@ -277,6 +277,12 @@ impl Settings {
         ))
     }
 
+    /// The part shown, as a command asks.
+    pub fn show_part(&mut self, part: usize, cx: &mut Context<Self>) {
+        self.part = part;
+        cx.notify();
+    }
+
     pub fn keep(&mut self, name: &str, value: &str, cx: &mut Context<Self>) {
         self.problem = super::app(cx)
             .keep_setting(name, value)

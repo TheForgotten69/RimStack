@@ -83,3 +83,24 @@ fn play_shows_what_is_in_its_way_before_starting() {
     assert!(!ways.is_empty(), "the made-up load order has an error");
     assert!(open);
 }
+
+#[test]
+fn ctrl_k_finds_a_command_by_its_words_and_runs_it() {
+    let (_tmp, mut cx, shell) = opened();
+    shell
+        .update(&mut cx, |shell, window, cx| shell.open_commands(window, cx))
+        .unwrap();
+    let commands = cx.update(|cx| shell.read(cx).unwrap().commands.clone().unwrap());
+    cx.update(|cx| {
+        commands.update(cx, |commands, cx| commands.type_text("sort load", cx));
+    });
+    cx.update_window(shell.into(), |_, window, cx| {
+        commands.update(cx, |commands, cx| commands.run_first(window, cx));
+    })
+    .unwrap();
+    let (closed, previewing) = cx.update(|cx| {
+        let shell = shell.read(cx).unwrap();
+        (shell.commands.is_none(), shell.mods.read(cx).previewing())
+    });
+    assert!(closed && previewing, "Sort was run");
+}

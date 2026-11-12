@@ -3,6 +3,8 @@
 pub mod assets;
 pub mod button;
 pub mod card;
+pub mod command_list;
+pub mod commands;
 pub mod controls;
 pub mod downloads;
 pub mod field;
@@ -10,6 +12,8 @@ pub mod find;
 pub mod focus;
 pub mod game;
 pub mod hunt;
+pub mod keys;
+pub mod lists;
 pub mod logs;
 pub mod menu;
 pub mod mods;
@@ -273,6 +277,7 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     cx.set_global(Shared(app));
     text_field::bind_keys(cx);
     focus::bind_keys(cx);
+    keys::bind_keys(cx);
     cx.bind_keys([
         gpui::KeyBinding::new(crate::command!("f"), mods::FocusFilter, None),
         gpui::KeyBinding::new(crate::command!("z"), mods::Undo, None),

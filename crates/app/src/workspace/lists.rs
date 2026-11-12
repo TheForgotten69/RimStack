@@ -110,7 +110,7 @@ pub struct Snapshot {
     pub title: Sentence,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryLine {
     pub time: u64,

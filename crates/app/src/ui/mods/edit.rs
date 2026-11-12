@@ -606,6 +606,55 @@ impl Mods {
         self.done_said(say!("Activated the needed mods"), cx);
     }
 
+    /// The mods `text` names, at most `most`, as Ctrl + K finds them.
+    pub fn found(
+        &self,
+        text: &str,
+        most: usize,
+        cx: &gpui::App,
+    ) -> Vec<crate::workspace::load_order::FoundMod> {
+        self.order.found(&super::super::app(cx), text, most)
+    }
+
+    /// How many mods have errors, and how many warnings.
+    pub fn problems(&self) -> (usize, usize) {
+        match self.demo {
+            true => (0, 0),
+            false => self.order.errors_and_warnings(),
+        }
+    }
+
+    pub fn chosen_details(&self) -> Option<std::rc::Rc<crate::workspace::load_order::Details>> {
+        self.details.clone()
+    }
+
+    pub fn selected_count(&self) -> usize {
+        self.selection.len()
+    }
+
+    pub fn selected_on_active(&self) -> bool {
+        self.selected_active
+    }
+
+    pub fn previewing(&self) -> bool {
+        self.order.previewing()
+    }
+
+    pub fn conflicts(&self) -> usize {
+        self.conflicts
+    }
+
+    /// The mod chosen moved to the other list.
+    pub fn toggle_selected(&mut self, cx: &mut Context<Self>) {
+        if let Some(id) = self.selected_id() {
+            self.toggle_mod(Side::of(self.selected_active), id, cx);
+        }
+    }
+
+    pub fn next_problem(&mut self, cx: &mut Context<Self>) {
+        self.show_problem(true, cx);
+    }
+
     /// What is under way on the load order: a change seen on disk waits for it.
     pub fn held(&self) -> bool {
         self.order.previewing() || self.saving

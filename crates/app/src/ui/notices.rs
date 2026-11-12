@@ -57,6 +57,18 @@ struct Told(Entity<Notices>);
 
 impl Global for Told {}
 
+/// This run's notices, newest first: their words, whether they told a failure, and when.
+pub fn earlier(cx: &App) -> Vec<(SharedString, bool, u64)> {
+    cx.try_global::<Told>().map_or_else(Vec::new, |told| {
+        told.0
+            .read(cx)
+            .earlier
+            .iter()
+            .map(|e| (e.text.clone(), matches!(e.tone, Tone::Err), e.time))
+            .collect()
+    })
+}
+
 pub fn install(cx: &mut App) -> Entity<Notices> {
     let notices = cx.new(|_| Notices {
         shown: Vec::new(),

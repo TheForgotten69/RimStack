@@ -128,9 +128,15 @@ impl Btn {
     }
 
     /// A button that opens a menu: `run` is given where the button is, to open it under.
-    pub fn opens(mut self, run: impl Fn(Bounds<Pixels>, &mut Window, &mut Cx) + 'static) -> Self {
+    pub fn opens(self, run: impl Fn(Bounds<Pixels>, &mut Window, &mut Cx) + 'static) -> Self {
+        let mut shown = self.pops(run);
+        shown.menu = true;
+        shown
+    }
+
+    /// A button that opens a popup with no menu mark: `run` is given where the button is.
+    pub fn pops(mut self, run: impl Fn(Bounds<Pixels>, &mut Window, &mut Cx) + 'static) -> Self {
         let at: Rc<Cell<Bounds<Pixels>>> = Rc::default();
-        self.menu = true;
         self.placed = Some(at.clone());
         self.on_click = Some(Box::new(move |_, window, cx| run(at.get(), window, cx)));
         self

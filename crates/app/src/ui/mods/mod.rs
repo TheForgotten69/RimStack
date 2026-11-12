@@ -534,6 +534,43 @@ impl Mods {
         }
     }
 
+    /// Whether the active mods' files are still being read.
+    pub fn reading_files(&self) -> bool {
+        !self.files_read && self.count(Side::Active) > 0 && !self.demo
+    }
+
+    /// The changes not saved, in words; empty when the list is saved.
+    pub fn unsaved(&self, cx: &gpui::App) -> Option<String> {
+        if self.demo {
+            return None;
+        }
+        let app = super::app(cx);
+        let session = app.session();
+        (session.is_dirty() && self.order.is_installed())
+            .then(|| crate::words::put(&session.changes().said()))
+    }
+
+    /// The active mods as text, one a line, as `Copy the load order` gives them.
+    pub fn listing(&self, cx: &gpui::App) -> String {
+        use rimstack_core::mods::share::{Entry, listing};
+        let app = super::app(cx);
+        let loaded = app.library();
+        let Ok((library, _)) = &*loaded else {
+            return String::new();
+        };
+        let mods = self.order.list(Side::Active).mods().iter();
+        let entries: Vec<Entry> = mods
+            .filter_map(|m| library.get(m.installed?))
+            .map(Entry::of)
+            .collect();
+        let paths = app.paths();
+        let version = paths
+            .full_game_version
+            .as_deref()
+            .unwrap_or(&library.game_version);
+        listing(version, &entries)
+    }
+
     /// Whether the search for the broken mod runs, as the window tells it.
     pub fn set_hunting(&mut self, hunting: bool, cx: &mut Context<Self>) {
         self.hunting = hunting;

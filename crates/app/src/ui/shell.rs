@@ -3,7 +3,6 @@
 use super::Options;
 use super::downloads::{BehindActive, Downloads, ShowMod};
 use super::mods::{Mods, ShowSection};
-use super::status_bar::status_bar;
 use super::theme::Theme;
 use super::top_bar::top_bar;
 use crate::workspace::load_order::Side;
@@ -26,12 +25,12 @@ pub struct Shell {
     pub(crate) mods: Entity<Mods>,
     /// Made with the window, as Qt's `DownloadsData` was: it counts the updates the top bar and
     /// the Mods tab show. What it reads of the `App` it reads off the window's thread.
-    downloads: Option<Entity<Downloads>>,
+    pub(crate) downloads: Option<Entity<Downloads>>,
     /// The active mods with a newer Workshop version, on the Downloads tab.
-    behind: usize,
+    pub(crate) behind: usize,
     /// Made the first time Settings is shown; `part` is the one it opens on.
     pub(crate) settings: Option<Entity<super::settings::Settings>>,
-    part: usize,
+    pub(crate) part: usize,
     /// Made the first time Logs is shown; `view` is the one it opens on.
     pub(crate) logs: Option<Entity<super::logs::Logs>>,
     /// Made the first time Saves is shown.
@@ -42,10 +41,17 @@ pub struct Shell {
     pub(crate) find: Option<Entity<super::find::Find>>,
     /// Made the first time Textures is shown.
     pub(crate) textures: Option<Entity<super::textures::Textures>>,
-    view: usize,
+    pub(crate) view: usize,
     pub(crate) game: Entity<super::game::Game>,
     /// The search for the broken mod, as `bisect.json` keeps it between starts.
     pub(crate) hunt: crate::workspace::search::Hunt,
+    /// The saved lists and the history, over the window when open.
+    pub(crate) lists: Entity<super::lists::Lists>,
+    /// Ctrl + K, open over the window.
+    pub(crate) commands: Option<Entity<super::commands::Commands>>,
+    /// The keys' sheet, open over the window.
+    pub(crate) keys_open: bool,
+    pub(crate) keys_focus: gpui::FocusHandle,
     /// `beforePlay`: what stands in Play's way, open under it.
     pub(crate) before_play: bool,
     prompt: Entity<super::prompt::Prompt>,
@@ -118,6 +124,10 @@ impl Shell {
             .detach();
         cx.observe(&game, |_, _, cx| cx.notify()).detach();
         let section = options.section;
+        let lists = {
+            let mods = mods.clone();
+            cx.new(|cx| super::lists::Lists::new(demo, mods, cx))
+        };
         let mut shell = Self {
             section: 0,
             demo,
@@ -133,6 +143,10 @@ impl Shell {
             workshop: None,
             view: options.view,
             game,
+            lists,
+            commands: None,
+            keys_open: false,
+            keys_focus: cx.focus_handle(),
             hunt: match demo {
                 true => Default::default(),
                 false => super::app(cx).hunt(),
@@ -179,6 +193,10 @@ impl Shell {
         match options.open.as_deref() {
             Some("play") => self.before_play = true,
             Some("problems") => self.mods.update(cx, |mods, cx| mods.open_problems(cx)),
+            Some("keys") => self.open_keys(window, cx),
+            Some("commands") => self.open_commands(window, cx),
+            Some("lists") => self.open_popup(super::lists::Which::Lists, window, cx),
+            Some("history") => self.open_popup(super::lists::Which::History, window, cx),
             _ => {}
         }
         if options.open.as_deref() == Some("ask") {
@@ -319,10 +337,7 @@ impl Render for Shell {
                 }
             });
         }
-        let (in_the_way, last_start) = {
-            let mods = self.mods.read(cx);
-            (mods.in_the_way(cx), mods.last_start())
-        };
+        let in_the_way = self.mods.read(cx).in_the_way(cx);
         let theme = cx.global::<Theme>();
         let (win, ink, family, body) = (
             theme.colours.win,
@@ -337,6 +352,22 @@ impl Render for Shell {
             .size_full()
             .on_action(|_: &super::focus::Next, window, cx| window.focus_next(cx))
             .on_action(|_: &super::focus::Previous, window, cx| window.focus_prev(cx))
+            .on_action(cx.listener(|shell, _: &super::keys::ShowKeys, window, cx| {
+                shell.open_keys(window, cx)
+            }))
+            .on_action(
+                cx.listener(|shell, _: &super::keys::OpenCommands, window, cx| {
+                    shell.open_commands(window, cx)
+                }),
+            )
+            .on_action(cx.listener(|shell, _: &super::keys::Section1, _, cx| shell.go(0, cx)))
+            .on_action(cx.listener(|shell, _: &super::keys::Section2, _, cx| shell.go(1, cx)))
+            .on_action(cx.listener(|shell, _: &super::keys::Section3, _, cx| shell.go(2, cx)))
+            .on_action(cx.listener(|shell, _: &super::keys::Section4, _, cx| shell.go(3, cx)))
+            .on_action(cx.listener(|shell, _: &super::keys::Section5, _, cx| shell.go(4, cx)))
+            .on_action(cx.listener(|shell, _: &super::keys::Section6, _, cx| shell.go(5, cx)))
+            .on_action(cx.listener(|shell, _: &super::keys::Section7, _, cx| shell.go(6, cx)))
+            .on_action(cx.listener(|shell, _: &super::keys::Section8, _, cx| shell.go(7, cx)))
             .on_action(
                 cx.listener(|shell, _: &super::find::FocusSearch, window, cx| {
                     shell.go(FIND, cx);
@@ -349,18 +380,24 @@ impl Render for Shell {
             .font_family(family)
             .text_size(body)
             .child(top_bar(
-                self.section,
-                self.demo,
-                in_the_way,
-                self.behind,
-                self.game.read(cx).running(),
+                super::top_bar::TopState {
+                    section: self.section,
+                    demo: self.demo,
+                    in_the_way,
+                    behind: self.behind,
+                    running: self.game.read(cx).running(),
+                    lists_view: self.lists.clone(),
+                },
                 window,
                 cx,
             ))
             .children(self.hunt_bar(cx))
             .child(div().flex_1().min_h_0().children(self.shown()))
-            .child(status_bar(self.demo, last_start, cx))
+            .child(self.status_bar(cx))
             .children(self.before_play_popup(cx))
+            .child(self.lists.clone())
+            .children(self.keys_sheet(window, cx))
+            .children(self.commands.clone())
             .child(self.notices.clone())
             .child(self.menu.clone())
             .child(self.prompt.clone())
