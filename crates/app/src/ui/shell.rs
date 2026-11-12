@@ -43,7 +43,7 @@ impl Shell {
 }
 
 impl Render for Shell {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         let (win, ink, family, body) = (
             theme.colours.win,
@@ -59,7 +59,7 @@ impl Render for Shell {
             .text_color(ink)
             .font_family(family)
             .text_size(body)
-            .child(top_bar(self.section, self.demo, cx))
+            .child(top_bar(self.section, self.demo, window, cx))
             .child(
                 div()
                     .flex_1()

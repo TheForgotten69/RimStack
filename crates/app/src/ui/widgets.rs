@@ -325,17 +325,33 @@ pub fn elide_middle(
 
 /// The width `Btn.qml` takes: its icon, its text, its menu arrow and the room around them.
 pub fn btn_width(window: &Window, theme: &Theme, text: &str, icon: bool, menu: bool) -> Pixels {
+    btn_width_of(window, theme, text, icon, menu, false)
+}
+
+/// As `btn_width`, for a large button too (`Btn.large`, as Play is).
+pub fn btn_width_of(
+    window: &Window,
+    theme: &Theme,
+    text: &str,
+    icon: bool,
+    menu: bool,
+    large: bool,
+) -> Pixels {
+    let (size, weight) = match large {
+        true => (theme.body(), theme.semibold),
+        false => (theme.small(), FontWeight::NORMAL),
+    };
     let parts = [
         icon.then(|| theme.icon()),
-        (!text.is_empty()).then(|| measure(window, theme, text, theme.small(), FontWeight::NORMAL)),
+        (!text.is_empty()).then(|| measure(window, theme, text, size, weight)),
         menu.then(|| theme.sized(12.)),
     ];
     let shown: Vec<Pixels> = parts.into_iter().flatten().collect();
     let gaps = theme::GAP_SMALL * shown.len().saturating_sub(1) as f32;
-    let room = if text.is_empty() && !menu {
-        theme.sized(14.)
-    } else {
-        theme.sized(20.)
+    let room = match (large, text.is_empty() && !menu) {
+        (true, _) => theme.sized(36.),
+        (false, true) => theme.sized(14.),
+        (false, false) => theme.sized(20.),
     };
     shown.into_iter().fold(gaps + room, |all, part| all + part)
 }

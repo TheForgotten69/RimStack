@@ -180,6 +180,25 @@ impl Mods {
     }
 }
 
+impl Mods {
+    /// The three panes' widths as Qt's SplitView gives them: the load order keeps its least width,
+    /// taken from the details first, then from the inactive mods, each down to its own least.
+    fn widths(&self, theme: &Theme, window: Pixels) -> (Pixels, Pixels, Pixels) {
+        let room = window - px(14.);
+        let (mut inactive, mut details) = (self.inactive_width, self.details_width);
+        let mut over = inactive + details + theme.sized(380.) - room;
+        if over > px(0.) {
+            let cut = over.min((details - theme.sized(260.)).max(px(0.)));
+            details -= cut;
+            over -= cut;
+        }
+        if over > px(0.) {
+            inactive -= over.min((inactive - theme.sized(200.)).max(px(0.)));
+        }
+        (inactive, (room - inactive - details).max(px(0.)), details)
+    }
+}
+
 impl Render for Mods {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Theme>().clone();
@@ -192,15 +211,15 @@ impl Render for Mods {
                 .h_full()
                 .child(div().w(px(1.)).h_full().bg(theme.colours.edge))
         };
-        let active_width =
-            window.viewport_size().width - self.inactive_width - self.details_width - px(14.);
+        let (inactive_width, active_width, details_width) =
+            self.widths(&theme, window.viewport_size().width);
         div()
             .flex()
             .size_full()
             .min_h_0()
             .child(
-                self.inactive_pane(&theme, window, cx)
-                    .w(self.inactive_width)
+                self.inactive_pane(&theme, inactive_width, window, cx)
+                    .w(inactive_width)
                     .flex_none(),
             )
             .child(handle())
@@ -210,10 +229,6 @@ impl Render for Mods {
                     .min_w_0(),
             )
             .child(handle())
-            .child(
-                self.details_pane(&theme, cx)
-                    .w(self.details_width)
-                    .flex_none(),
-            )
+            .child(self.details_pane(&theme, cx).w(details_width).flex_none())
     }
 }

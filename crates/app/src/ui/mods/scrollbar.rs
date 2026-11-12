@@ -31,6 +31,7 @@ impl Mods {
         theme: &Theme,
         side: Side,
         columns: Option<Rc<Columns>>,
+        width: Pixels,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let shown: &Shown = match side {
@@ -53,13 +54,7 @@ impl Mods {
         let last = shown.rows.len() + 1;
         let name_room = match &columns {
             Some(columns) => columns.name_room,
-            None => {
-                self.inactive_width
-                    - room
-                    - theme::GAP_WIDE * 2.
-                    - theme.sized(13.)
-                    - theme::GAP_SMALL * 2.
-            }
+            None => width - room - theme::GAP_WIDE * 2. - theme.sized(13.) - theme::GAP_SMALL * 2.,
         };
         let rows_list = list(shown.list.clone(), move |at, window: &mut Window, _cx| {
             let height = match at {

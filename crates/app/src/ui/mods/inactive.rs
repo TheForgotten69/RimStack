@@ -14,6 +14,7 @@ impl Mods {
     pub(super) fn inactive_pane(
         &self,
         theme: &Theme,
+        width: gpui::Pixels,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
@@ -28,7 +29,7 @@ impl Mods {
         let acts = btn_width(window, theme, &order, true, true)
             + theme::GAP
             + btn_width(window, theme, &hide, false, false);
-        let room = self.inactive_width - theme::GAP_CARD - theme::GAP_LARGE;
+        let room = width - theme::GAP_CARD - theme::GAP_LARGE;
         let stacked = named + acts + theme::GAP > room;
         let buttons = div()
             .flex()
@@ -71,6 +72,6 @@ impl Mods {
                     )
                     .child(buttons.when(stacked, |d| d.mb(theme::GAP))),
             )
-            .child(self.list_area(theme, Side::Inactive, None, cx))
+            .child(self.list_area(theme, Side::Inactive, None, width, cx))
     }
 }

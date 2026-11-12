@@ -231,7 +231,7 @@ impl Mods {
                     .child(self.filter_field(theme)),
             )
             .child(headings)
-            .child(self.list_area(theme, Side::Active, Some(columns), cx))
+            .child(self.list_area(theme, Side::Active, Some(columns), width, cx))
     }
 
     /// `ModsFilter.qml` as it stands empty.
