@@ -41,6 +41,8 @@ pub struct Lists {
     /// The popup open, and the button it opened from.
     open: Option<(Which, Bounds<Pixels>)>,
     turn: usize,
+    /// Closed, and drawn only while it fades out.
+    fading: Option<(Which, Bounds<Pixels>)>,
     focus: FocusHandle,
     before: Option<FocusHandle>,
 }
@@ -63,6 +65,7 @@ impl Lists {
             name,
             open: None,
             turn: 0,
+            fading: None,
             focus: cx.focus_handle(),
             before: None,
         };
@@ -116,10 +119,17 @@ impl Lists {
         self.problem.clear();
         self.clipboard_problem.clear();
         self.open = Some((which, below));
+        self.fading = None;
         self.turn = super::motion::opening();
         self.before = window.focused(cx);
         window.focus(&self.focus, cx);
         cx.notify();
+    }
+
+    /// Whether a popup is drawn, open or fading out.
+    #[cfg(test)]
+    pub(crate) fn drawn(&self) -> bool {
+        self.open.is_some() || self.fading.is_some()
     }
 
     pub fn is_open(&self, which: Which) -> bool {
@@ -127,7 +137,16 @@ impl Lists {
     }
 
     fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.open = None;
+        let closed = self.open.take();
+        if super::motion::fades_out(cx) {
+            self.fading = closed;
+            let turn = self.turn;
+            super::motion::after_fade(cx, move |lists: &mut Self, cx| {
+                if lists.turn == turn && lists.fading.take().is_some() {
+                    cx.notify();
+                }
+            });
+        }
         if let Some(before) = self.before.take() {
             window.focus(&before, cx);
         }
@@ -588,9 +607,10 @@ impl Lists {
 
 impl Render for Lists {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let Some((which, below)) = self.open else {
+        let Some((which, below)) = self.open.or(self.fading) else {
             return div().id("lists-closed");
         };
+        let fading = self.open.is_none();
         let theme = cx.global::<Theme>().clone();
         let c = theme.colours;
         let viewport = window.viewport_size();
@@ -611,7 +631,7 @@ impl Render for Lists {
             .bg(c.bar)
             .border_1()
             .border_color(c.line)
-            .occlude()
+            .when(!fading, |d| d.occlude())
             .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation());
         let popup = match which {
             Which::Lists => popup
@@ -634,6 +654,16 @@ impl Render for Lists {
                         .child(column),
                 ),
         };
+        if fading {
+            return div()
+                .id("lists-scrim")
+                .absolute()
+                .inset_0()
+                .child(super::motion::pop_out(
+                    popup.child(super::motion::shield()),
+                    self.turn,
+                ));
+        }
         div()
             .id("lists-scrim")
             .track_focus(&self.focus)

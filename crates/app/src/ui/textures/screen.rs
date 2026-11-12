@@ -10,9 +10,9 @@ use crate::ui::widgets::{TextSized, label, measure, notice, with_alpha};
 use crate::words::{count, put};
 use crate::workspace::textures::{RowShown, TexturesShown, shown};
 use gpui::{
-    AnyElement, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, ParentElement,
-    Pixels, Render, Role, SharedString, StatefulInteractiveElement, Styled, Window, div,
-    prelude::FluentBuilder, px,
+    AnimationExt, AnyElement, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent,
+    ParentElement, Pixels, Render, Role, SharedString, StatefulInteractiveElement, Styled, Window,
+    div, prelude::FluentBuilder, px,
 };
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::{say, say_n};
@@ -200,7 +200,11 @@ impl Textures {
                     .h(px(6.))
                     .rounded(px(3.))
                     .bg(c.chip)
-                    .child(div().h_full().w(gpui::relative(part)).rounded(px(3.)).bg(if have == total { c.ok } else { c.accent })),
+                    .child(div().h_full().rounded(px(3.)).bg(if have == total { c.ok } else { c.accent }).with_spring(
+                        "have",
+                        crate::ui::motion::towards(gpui::AnimationPhase(part), 0.001, crate::ui::motion::CALM),
+                        |d, part| d.w(gpui::relative(part.0.clamp(0., 1.))),
+                    )),
             )
             .child(
                 div()

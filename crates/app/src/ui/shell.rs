@@ -40,6 +40,8 @@ pub struct Shell {
     /// The Background work popup open over the status bar.
     pub(crate) tray_open: bool,
     pub(crate) tray_turn: usize,
+    /// The Background work popup closed, while it fades out.
+    pub(crate) tray_fading: bool,
     /// The turn of the section shown last, which fades it in; none for the first.
     shown_turn: usize,
     /// The turning arrows beside the work under way, a view of its own so that only it is drawn
@@ -187,6 +189,7 @@ impl Shell {
             saves: None,
             tray_open: false,
             tray_turn: 0,
+            tray_fading: false,
             shown_turn: 0,
             spinner: cx.new(|_| super::status_bar::Spinner),
             release: None,

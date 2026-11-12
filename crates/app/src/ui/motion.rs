@@ -3,7 +3,7 @@
 //! scales no `div`, so `PopIn`'s growth from 0.97 is left out. Reduce motion stills them all
 //! (`AnimationExt` reads `App::reduce_motion`).
 
-use gpui::{Animation, AnimationExt, ElementId, IntoElement, Styled};
+use gpui::{Animation, AnimationExt, ElementId, InteractiveElement, IntoElement, Styled};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
@@ -84,4 +84,89 @@ pub fn playback(id: &ElementId) -> gpui::SpringPlayback {
         true => gpui::SpringPlayback::Running,
         false => gpui::SpringPlayback::Completed,
     }
+}
+
+/// Laid over what fades out: it stops the presses, so nothing in it is pressed while it goes,
+/// and lets the wheel and the pointer through to what is under it.
+pub fn shield() -> gpui::Div {
+    gpui::div()
+        .absolute()
+        .inset_0()
+        .on_any_mouse_down(|_, _, cx| cx.stop_propagation())
+}
+
+/// Whether what closes fades out: not with Reduce motion.
+pub fn fades_out(cx: &gpui::App) -> bool {
+    !cx.reduce_motion()
+}
+
+/// `done` once a fade-out begun now is over.
+pub fn after_fade<V: 'static>(
+    cx: &mut gpui::Context<V>,
+    done: impl FnOnce(&mut V, &mut gpui::Context<V>) + 'static,
+) {
+    cx.spawn(async move |view, cx| {
+        cx.background_executor().timer(QUICK).await;
+        let _ = view.update(cx, done);
+    })
+    .detach();
+}
+
+/// Whether the pointer is on the control `id`, kept between renders, and what its `on_hover`
+/// is given to keep it: the view drawing it is drawn again when it changes.
+pub fn hovered(
+    id: &ElementId,
+    window: &mut gpui::Window,
+    cx: &mut gpui::App,
+) -> (
+    bool,
+    impl Fn(&bool, &mut gpui::Window, &mut gpui::App) + 'static,
+) {
+    let kept = window.use_keyed_state(ElementId::from((id.clone(), "hovered")), cx, |_, _| false);
+    let now = *kept.read(cx);
+    let keep = move |on: &bool, _: &mut gpui::Window, cx: &mut gpui::App| {
+        let on = *on;
+        kept.update(cx, |kept, cx| {
+            if *kept != on {
+                *kept = on;
+                cx.notify();
+            }
+        });
+    };
+    (now, keep)
+}
+
+/// `Behavior on color` for a ground that changes with a state (pointed at, focused): `over`
+/// laid on it, fading in as `on` becomes true and out as it becomes false, in `QUICK`.
+pub fn layer(over: gpui::Div, on: bool) -> impl IntoElement {
+    over.with_spring(
+        "layer",
+        towards(gpui::AnimationPhase(f32::from(u8::from(on))), 0.01, QUICK),
+        |d, phase| d.opacity(phase.0.clamp(0., 1.)),
+    )
+}
+
+/// The colour that, laid over `ground`, shows `wanted`: itself when opaque, else the same hue
+/// at the alpha that composes to `wanted`'s.
+pub fn over(ground: gpui::Hsla, wanted: gpui::Hsla) -> gpui::Hsla {
+    match wanted.a >= 1. || ground.a >= 1. {
+        true => wanted,
+        false => gpui::Hsla {
+            a: ((wanted.a - ground.a) / (1. - ground.a)).clamp(0., 1.),
+            ..wanted
+        },
+    }
+}
+
+/// `ModsScreen.qml`'s drawer: slid in from its own width to the left, in `CALM`.
+pub fn slid_in<E: Styled + IntoElement + 'static>(
+    element: E,
+    width: gpui::Pixels,
+    id: impl Into<ElementId>,
+) -> impl IntoElement {
+    element.with_animation(
+        id,
+        Animation::new(CALM).with_easing(out_cubic),
+        move |e, t| e.left(-width * (1. - t)),
+    )
 }

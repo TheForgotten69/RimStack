@@ -5,8 +5,8 @@ use super::text_field::TextField;
 use super::theme::{self, Theme};
 use super::widgets::{TextSized, halo, icon, label};
 use gpui::{
-    App as Cx, Entity, Focusable, InteractiveElement, ParentElement, StatefulInteractiveElement,
-    Styled, Window, div, prelude::FluentBuilder, px,
+    App as Cx, Entity, Focusable, InteractiveElement, IntoElement, ParentElement,
+    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
 pub struct Field<'a> {
@@ -43,7 +43,8 @@ impl Field<'_> {
             .rounded(theme::CORNER)
             .bg(c.well)
             .border_1()
-            .border_color(if focused { c.focus } else { c.field_line })
+            .border_color(c.field_line)
+            .child(focus_line(theme, focused))
             .when(focused, |d| d.children(halo(c.focus, theme::CORNER)))
             .cursor_text()
             .on_click(move |_, window, cx| window.focus(&focus, cx))
@@ -119,7 +120,8 @@ impl Field<'_> {
             .rounded(theme::CORNER)
             .bg(c.well)
             .border_1()
-            .border_color(if focused { c.focus } else { c.field_line })
+            .border_color(c.field_line)
+            .child(focus_line(theme, focused))
             .when(focused, |d| d.children(halo(c.focus, theme::CORNER)))
             .cursor_text()
             .on_click(move |_, window, cx| window.focus(&focus, cx))
@@ -136,4 +138,22 @@ impl Field<'_> {
             })
             .child(self.text.clone())
     }
+}
+
+/// `FilterField.qml`'s `Behavior on border.color`: the focus colour drawn over the border, fading
+/// in and out.
+fn focus_line(theme: &Theme, focused: bool) -> impl IntoElement {
+    let edge = -px(1.);
+    super::motion::layer(
+        div()
+            .absolute()
+            .top(edge)
+            .left(edge)
+            .right(edge)
+            .bottom(edge)
+            .rounded(theme::CORNER)
+            .border_1()
+            .border_color(theme.colours.focus),
+        focused,
+    )
 }

@@ -174,3 +174,99 @@ fn ctrl_k_survives_any_mix_of_keys_clicks_and_waits() {
             .unwrap();
     }
 }
+
+fn key(cx: &mut HeadlessAppContext, shell: WindowHandle<Shell>, k: &'static str) {
+    cx.update_window(shell.into(), |_, window, cx| {
+        window.dispatch_keystroke(gpui::Keystroke::parse(k).unwrap(), cx)
+    })
+    .unwrap();
+}
+
+/// After a close: `drawn` holds while the popup fades, and not once it has.
+fn fades_then_goes(
+    cx: &mut HeadlessAppContext,
+    shell: WindowHandle<Shell>,
+    what: &str,
+    drawn: impl Fn(&mut gpui::App) -> bool,
+) {
+    assert!(
+        cx.update(|cx| drawn(cx)),
+        "{what} is drawn while it fades out"
+    );
+    assert!(settled(cx, shell, 60) > 3, "{what} faded out");
+    for _ in 0..3 {
+        frame(cx, shell);
+    }
+    assert!(!cx.update(|cx| drawn(cx)), "{what} is gone once faded out");
+}
+
+#[test]
+fn menus_questions_lists_and_the_tray_fade_out_and_go() {
+    let (_tmp, mut cx, shell) = opened();
+    settled(&mut cx, shell, 60);
+    cx.update_window(shell.into(), |_, window, cx| {
+        let entries = vec![super::menu::Entry::item("One", |_, _| {}).into()];
+        super::menu::open_at(
+            gpui::point(gpui::px(80.), gpui::px(80.)),
+            entries,
+            window,
+            cx,
+        );
+    })
+    .unwrap();
+    frame(&mut cx, shell);
+    key(&mut cx, shell, "escape");
+    fades_then_goes(&mut cx, shell, "the menu", |cx| super::menu::drawn(cx));
+
+    cx.update_window(shell.into(), |_, window, cx| {
+        let question = super::prompt::Question {
+            title: "Sure?".into(),
+            lines: Vec::new(),
+            label: "Yes".into(),
+            danger: false,
+            run: Box::new(|_, _| {}),
+        };
+        super::prompt::ask(question, window, cx);
+    })
+    .unwrap();
+    frame(&mut cx, shell);
+    key(&mut cx, shell, "escape");
+    fades_then_goes(&mut cx, shell, "the question", |cx| {
+        super::prompt::drawn(cx)
+    });
+
+    let lists = cx.update(|cx| shell.read(cx).unwrap().lists.clone());
+    cx.update_window(shell.into(), |_, window, cx| {
+        lists.update(cx, |lists, cx| {
+            lists.toggle(
+                super::lists::Which::Lists,
+                gpui::Bounds::default(),
+                window,
+                cx,
+            )
+        })
+    })
+    .unwrap();
+    frame(&mut cx, shell);
+    key(&mut cx, shell, "escape");
+    fades_then_goes(&mut cx, shell, "Lists", move |cx| lists.read(cx).drawn());
+
+    cx.update(|cx| {
+        shell
+            .update(cx, |shell, _, cx| {
+                shell.tray_open = true;
+                cx.notify();
+            })
+            .unwrap()
+    });
+    frame(&mut cx, shell);
+    cx.update(|cx| {
+        shell
+            .update(cx, |shell, _, cx| shell.close_tray(cx))
+            .unwrap()
+    });
+    fades_then_goes(&mut cx, shell, "the tray", move |cx| {
+        let shell = shell.read(cx).unwrap();
+        shell.tray_open || shell.tray_fading
+    });
+}

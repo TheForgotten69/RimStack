@@ -146,6 +146,7 @@ impl Btn {
 impl RenderOnce for Btn {
     fn render(self, window: &mut Window, cx: &mut Cx) -> impl IntoElement {
         let handle = focus::handle(self.id.clone(), window, cx);
+        let (pointed, keep_pointed) = super::motion::hovered(&self.id, window, cx);
         let theme = cx.global::<Theme>();
         let c = &theme.colours;
         let toned = self.tone.filter(|_| !self.primary);
@@ -206,7 +207,16 @@ impl RenderOnce for Btn {
             .px(padding / 2.)
             .rounded(theme::CORNER)
             .bg(with_alpha(ground, frame))
-            .when(self.enabled, |d| d.hover(move |s| s.bg(hovered)))
+            .when(self.enabled, |d| {
+                d.on_hover(keep_pointed).child(super::motion::layer(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .rounded(theme::CORNER)
+                        .bg(super::motion::over(ground, hovered)),
+                    pointed,
+                ))
+            })
             .when(theme.appearance.high_contrast, |d| {
                 d.border_1().border_color(with_alpha(line, frame))
             })
@@ -351,6 +361,10 @@ impl RenderOnce for Chip {
             .on_click
             .as_ref()
             .map(|_| focus::handle(id.clone(), window, cx));
+        let pointed = self
+            .on_click
+            .as_ref()
+            .map(|_| super::motion::hovered(&id, window, cx));
         let theme = cx.global::<Theme>();
         let tone = self.tone.unwrap_or(theme.colours.ink2);
         let ink = if self.on_accent {
@@ -387,6 +401,18 @@ impl RenderOnce for Chip {
             .px(theme::GAP_CARD / 2.)
             .rounded(height / 2.)
             .bg(ground)
+            .when_some(pointed, |d, (pointed, keep_pointed)| {
+                d.cursor_pointer()
+                    .on_hover(keep_pointed)
+                    .child(super::motion::layer(
+                        div()
+                            .absolute()
+                            .inset_0()
+                            .rounded(height / 2.)
+                            .bg(super::motion::over(ground, hovered)),
+                        pointed,
+                    ))
+            })
             .when(self.held, |d| d.border_2().border_color(tone))
             .when_some(self.max_width, |d, most| d.max_w(most))
             .when_some(self.icon, |d, name| {
@@ -413,9 +439,6 @@ impl RenderOnce for Chip {
                     shown,
                     true,
                 ))
-            })
-            .when(pressed, |d| {
-                d.cursor_pointer().hover(move |s| s.bg(hovered))
             })
             .when_some(self.on_click, |d, run| {
                 d.on_click(move |event, window, cx| {

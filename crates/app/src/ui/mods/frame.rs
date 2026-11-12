@@ -101,7 +101,7 @@ impl Render for Mods {
             .when(self.comparing.is_none() && !is_unread, |d| {
                 d.children(panes)
             })
-            .children(bulk)
+            .child(bulk)
             .children(hint)
     }
 }

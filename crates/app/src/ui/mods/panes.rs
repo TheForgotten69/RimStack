@@ -117,6 +117,9 @@ impl Mods {
     }
 
     pub(super) fn set_drawer(&mut self, open: bool, cx: &mut Context<Self>) {
+        if open && !self.drawer_open {
+            self.drawer_turn = crate::ui::motion::opening();
+        }
         self.drawer_open = open;
         if open {
             let text = self.filter.read(cx).text().to_string();
@@ -331,7 +334,7 @@ impl Mods {
                     .bg(c.scrim)
                     .on_click(cx.listener(|mods, _, _, cx| mods.set_drawer(false, cx))),
             )
-            .child(
+            .child(crate::ui::motion::slid_in(
                 div()
                     .id("drawer")
                     .absolute()
@@ -362,7 +365,9 @@ impl Mods {
                             .w(theme::GAP_LARGE)
                             .bg(shade),
                     ),
-            )
+                wide,
+                ("drawer-in", self.drawer_turn),
+            ))
             .into_any_element()
     }
 

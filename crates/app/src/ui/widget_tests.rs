@@ -129,7 +129,14 @@ fn frames_asked(cx: &mut VisualTestContext) -> usize {
 #[gpui::test]
 fn a_value_from_elsewhere_shows_at_once_and_a_pick_slides_to_its_place(cx: &mut TestAppContext) {
     let (_root, bench, cx) = bench(cx);
-    frames_asked(cx);
+    cx.simulate_mouse_move(
+        gpui::point(gpui::px(900.), gpui::px(900.)),
+        None,
+        gpui::Modifiers::none(),
+    );
+    while frames_asked(cx) > 0 {
+        cx.executor().advance_clock(Duration::from_millis(16));
+    }
     bench.update(cx, |b, cx| {
         b.picked = 2;
         b.on = true;
@@ -144,6 +151,23 @@ fn a_value_from_elsewhere_shows_at_once_and_a_pick_slides_to_its_place(cx: &mut 
         frames_asked(cx) == 0
     });
     assert!(settled.is_some(), "the slide comes to rest");
+}
+
+#[gpui::test]
+fn a_button_pointed_at_fades_to_its_hover_colour_and_rests(cx: &mut TestAppContext) {
+    let (_root, _bench, cx) = bench(cx);
+    frames_asked(cx);
+    cx.simulate_mouse_move(
+        gpui::point(gpui::px(6.), gpui::px(6.)),
+        None,
+        gpui::Modifiers::none(),
+    );
+    assert!(frames_asked(cx) > 0, "the hover colour fades in");
+    let settled = (0..60).find(|_| {
+        cx.executor().advance_clock(Duration::from_millis(16));
+        frames_asked(cx) == 0
+    });
+    assert!(settled.is_some(), "the fade comes to rest");
 }
 
 #[gpui::test]

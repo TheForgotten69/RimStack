@@ -28,7 +28,28 @@ impl Mods {
     }
 
     /// The bar under the panes while several mods are chosen.
-    pub(super) fn bulk_bar(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
+    /// `BulkBar.qml`: the actions on the mods selected, growing in as a second one is selected
+    /// and shrinking away as the selection goes below two.
+    pub(super) fn bulk_bar(&self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
+        use gpui::AnimationExt;
+        let actions = self.bulk_actions(theme, cx);
+        let height = match actions.is_some() {
+            true => theme.header(),
+            false => px(0.),
+        };
+        div()
+            .flex_none()
+            .overflow_hidden()
+            .children(actions)
+            .with_spring(
+                "bulk-height",
+                crate::ui::motion::towards(height, 0.5, crate::ui::motion::QUICK),
+                |d, height| d.h(height),
+            )
+            .into_any_element()
+    }
+
+    fn bulk_actions(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
         if self.selection.len() < 2 || self.order.previewing() || self.comparing.is_some() {
             return None;
         }

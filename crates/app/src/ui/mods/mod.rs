@@ -151,6 +151,8 @@ pub struct Mods {
     pub menu_wanted: Option<&'static str>,
     /// The inactive mods shown over the load order, from the rail.
     pub drawer_open: bool,
+    /// The turn of the drawer's last opening, which slides it in.
+    drawer_turn: usize,
     /// The drawer's own filter, as `ModsFilter` mirrored the load order's.
     mirror: Entity<TextField>,
     /// The view kept once dragging rests.
@@ -287,6 +289,7 @@ impl Mods {
             menu_buttons: Default::default(),
             menu_wanted: None,
             drawer_open: false,
+            drawer_turn: 0,
             mirror,
             view_kept: Lane::default(),
             column_drag: None,

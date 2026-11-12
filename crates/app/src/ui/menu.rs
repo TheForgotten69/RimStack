@@ -108,6 +108,8 @@ pub struct Menu {
     focus: FocusHandle,
     before: Option<FocusHandle>,
     turn: usize,
+    /// Closed, and drawn only while it fades out.
+    fading: bool,
 }
 
 struct Shown(Entity<Menu>);
@@ -118,6 +120,7 @@ impl Global for Shown {}
 pub fn install(cx: &mut App) -> Entity<Menu> {
     let menu = cx.new(|cx| Menu {
         turn: 0,
+        fading: false,
         entries: Vec::new(),
         at: Point::default(),
         corner: gpui::Anchor::TopLeft,
@@ -185,6 +188,7 @@ fn show(
         menu.chosen = None;
         menu.before = before;
         menu.turn = super::motion::opening();
+        menu.fading = false;
         window.focus(&menu.focus, cx);
         cx.notify();
     });
@@ -192,7 +196,20 @@ fn show(
 
 impl Menu {
     fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.entries.clear();
+        match super::motion::fades_out(cx) {
+            true => {
+                self.fading = true;
+                let turn = self.turn;
+                super::motion::after_fade(cx, move |menu: &mut Self, cx| {
+                    if menu.fading && menu.turn == turn {
+                        menu.fading = false;
+                        menu.entries.clear();
+                        cx.notify();
+                    }
+                });
+            }
+            false => self.entries.clear(),
+        }
         if let Some(before) = self.before.take() {
             window.focus(&before, cx);
         }
@@ -200,6 +217,9 @@ impl Menu {
     }
 
     fn choose(&mut self, at: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if self.fading {
+            return;
+        }
         let Some(Entry::Item(item)) = self
             .entries
             .get(at)
@@ -431,10 +451,22 @@ impl Render for Menu {
             .bg(c.bar)
             .border_1()
             .border_color(c.line)
-            .occlude()
+            .when(!self.fading, |d| d.occlude())
             .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_mouse_down(gpui::MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .children(entries);
+        if self.fading {
+            return div().id("menu").absolute().inset_0().child(deferred(
+                anchored()
+                    .anchor(self.corner)
+                    .position(self.at)
+                    .snap_to_window_with_margin(theme::GAP_TINY)
+                    .child(super::motion::pop_out(
+                        list.child(super::motion::shield()),
+                        self.turn,
+                    )),
+            ));
+        }
         div()
             .id("menu")
             .track_focus(&self.focus)
@@ -475,6 +507,13 @@ impl Render for Menu {
                     .child(super::motion::pop_in(list, self.turn)),
             ))
     }
+}
+
+/// Whether the menu is drawn, open or fading out.
+#[cfg(test)]
+pub(crate) fn drawn(cx: &App) -> bool {
+    cx.try_global::<Shown>()
+        .is_some_and(|shown| !shown.0.read(cx).entries.is_empty())
 }
 
 /// The menu drawn again, as a check that reads every text drawn asks.

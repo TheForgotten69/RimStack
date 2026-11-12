@@ -54,6 +54,8 @@ pub struct Prompt {
     /// What had the keys before the question, given them back after.
     before: Option<FocusHandle>,
     turn: usize,
+    /// Answered or cancelled, drawn only while it fades out; its answer is gone.
+    fading: Option<Question>,
 }
 
 struct Asking(Entity<Prompt>);
@@ -67,6 +69,7 @@ pub fn install(cx: &mut App) -> Entity<Prompt> {
         focus: cx.focus_handle(),
         before: None,
         turn: 0,
+        fading: None,
     });
     cx.set_global(Asking(prompt.clone()));
     prompt
@@ -82,6 +85,7 @@ pub fn ask(question: Question, window: &mut Window, cx: &mut App) {
         prompt.asked = Some(question);
         prompt.before = before;
         prompt.turn = super::motion::opening();
+        prompt.fading = None;
         match field {
             Some(field) => {
                 cx.subscribe_in(
@@ -102,21 +106,34 @@ pub fn ask(question: Question, window: &mut Window, cx: &mut App) {
 }
 
 impl Prompt {
-    fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<Question> {
-        let asked = self.asked.take();
+    /// Closes the question and gives its answer, to run or to drop.
+    fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<Answer> {
+        let run = self.asked.take().map(|mut asked| {
+            let run = std::mem::replace(&mut asked.run, Box::new(|_, _| {}));
+            if super::motion::fades_out(cx) {
+                self.fading = Some(asked);
+                let turn = self.turn;
+                super::motion::after_fade(cx, move |prompt: &mut Self, cx| {
+                    if prompt.turn == turn && prompt.fading.take().is_some() {
+                        cx.notify();
+                    }
+                });
+            }
+            run
+        });
         if let Some(before) = self.before.take() {
             window.focus(&before, cx);
         }
         cx.notify();
-        asked
+        run
     }
 
     fn answer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.asked.as_ref().is_some_and(|asked| !asked.filled(cx)) {
             return;
         }
-        if let Some(asked) = self.close(window, cx) {
-            (asked.run)(window, cx);
+        if let Some(run) = self.close(window, cx) {
+            run(window, cx);
         }
     }
 }
@@ -129,9 +146,10 @@ impl Focusable for Prompt {
 
 impl Render for Prompt {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let Some(asked) = &self.asked else {
-            return div().id("prompt");
+        let Some(asked) = self.asked.as_ref().or(self.fading.as_ref()) else {
+            return div().id("prompt").into_any_element();
         };
+        let fading = self.asked.is_none();
         let theme = cx.global::<Theme>().clone();
         let c = theme.colours;
         let viewport = window.viewport_size();
@@ -184,7 +202,7 @@ impl Render for Prompt {
             .bg(c.bar)
             .border_1()
             .border_color(c.line)
-            .occlude()
+            .when(!fading, |d| d.occlude())
             .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(
                 div()
@@ -211,16 +229,24 @@ impl Render for Prompt {
                     .child(cancel)
                     .child(answer),
             );
-        div()
+        let dimmed = div()
             .id("prompt")
-            .track_focus(&self.focus)
             .absolute()
             .inset_0()
             .flex()
             .items_center()
             .justify_center()
             // Qt Basic's modal dimmer: the palette's shadow, black, at half.
-            .bg(super::widgets::with_alpha(gpui::black(), 0.5))
+            .bg(super::widgets::with_alpha(gpui::black(), 0.5));
+        if fading {
+            return super::motion::pop_out(
+                dimmed.child(sheet.child(super::motion::shield())),
+                self.turn,
+            )
+            .into_any_element();
+        }
+        dimmed
+            .track_focus(&self.focus)
             .occlude()
             .on_key_down(cx.listener(|prompt, event: &KeyDownEvent, window, cx| {
                 if event.keystroke.key == "escape" {
@@ -234,7 +260,17 @@ impl Render for Prompt {
                 }),
             )
             .child(super::motion::pop_in(sheet, self.turn))
+            .into_any_element()
     }
+}
+
+/// Whether a question is drawn, asked or fading out.
+#[cfg(test)]
+pub(crate) fn drawn(cx: &App) -> bool {
+    cx.try_global::<Asking>().is_some_and(|asking| {
+        let prompt = asking.0.read(cx);
+        prompt.asked.is_some() || prompt.fading.is_some()
+    })
 }
 
 /// The question shown, if any: its title, its lines, and whether its answer is a danger.

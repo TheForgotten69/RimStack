@@ -68,7 +68,7 @@ impl Shell {
         let last = self.mods.read(cx).last_start();
         let tasks = self.tasks(cx);
         let lists = self.lists.clone();
-        let tray = (!tasks.is_empty() || self.tray_open).then(|| {
+        let tray = (!tasks.is_empty() || self.tray_open || self.tray_fading).then(|| {
             let said = match tasks.len() {
                 0 => String::new(),
                 1 => tasks[0].0.clone(),
@@ -85,12 +85,16 @@ impl Shell {
                 .aria_label(put(&say!("Background work")))
                 .child(self.spinner.clone())
                 .child(label(&theme, theme.small(), c.ink, said))
-                .on_click(cx.listener(|shell, _, _, cx| {
-                    shell.tray_open = !shell.tray_open;
-                    shell.tray_turn = super::motion::opening();
-                    cx.notify();
+                .on_click(cx.listener(|shell, _, _, cx| match shell.tray_open {
+                    true => shell.close_tray(cx),
+                    false => {
+                        shell.tray_open = true;
+                        shell.tray_fading = false;
+                        shell.tray_turn = super::motion::opening();
+                        cx.notify();
+                    }
                 }))
-                .when(self.tray_open, |d| {
+                .when(self.tray_open || self.tray_fading, |d| {
                     d.child(self.tray_popup(&theme, &tasks, cx))
                 })
         });
@@ -246,42 +250,58 @@ impl Shell {
                     )
                 })
         });
-        gpui::deferred(super::motion::pop_in(
-            div()
-                .id("tray-popup")
-                .absolute()
-                .bottom(theme.strip())
-                .right_0()
-                .w(theme.sized(380.))
-                .p(theme::GAP_LARGE)
-                .flex()
-                .flex_col()
-                .gap(theme::GAP)
-                .rounded(theme::CORNER_LARGE)
-                .bg(c.bar)
-                .border_1()
-                .border_color(c.line)
-                .occlude()
-                .on_mouse_down_out(cx.listener(|shell, _, _, cx| {
-                    shell.tray_open = false;
+        let popup = div()
+            .id("tray-popup")
+            .absolute()
+            .bottom(theme.strip())
+            .right_0()
+            .w(theme.sized(380.))
+            .p(theme::GAP_LARGE)
+            .flex()
+            .flex_col()
+            .gap(theme::GAP)
+            .rounded(theme::CORNER_LARGE)
+            .bg(c.bar)
+            .border_1()
+            .border_color(c.line)
+            .when(!self.tray_fading, |d| d.occlude())
+            .when(self.tray_open, |d| {
+                d.on_mouse_down_out(cx.listener(|shell, _, _, cx| shell.close_tray(cx)))
+            })
+            .child(
+                label(theme, theme.title(), c.ink, put(&say!("Background work")))
+                    .font_weight(theme.semibold),
+            )
+            .when(tasks.is_empty(), |d| {
+                d.child(label(
+                    theme,
+                    theme.body(),
+                    c.ink2,
+                    put(&say!("Nothing running")),
+                ))
+            })
+            .children(rows);
+        let popup = match self.tray_fading {
+            true => super::motion::pop_out(popup.child(super::motion::shield()), self.tray_turn)
+                .into_any_element(),
+            false => super::motion::pop_in(popup, self.tray_turn).into_any_element(),
+        };
+        gpui::deferred(popup).into_any_element()
+    }
+
+    pub(crate) fn close_tray(&mut self, cx: &mut Context<Self>) {
+        self.tray_open = false;
+        if super::motion::fades_out(cx) {
+            self.tray_fading = true;
+            let turn = self.tray_turn;
+            super::motion::after_fade(cx, move |shell: &mut Self, cx| {
+                if shell.tray_turn == turn && shell.tray_fading {
+                    shell.tray_fading = false;
                     cx.notify();
-                }))
-                .child(
-                    label(theme, theme.title(), c.ink, put(&say!("Background work")))
-                        .font_weight(theme.semibold),
-                )
-                .when(tasks.is_empty(), |d| {
-                    d.child(label(
-                        theme,
-                        theme.body(),
-                        c.ink2,
-                        put(&say!("Nothing running")),
-                    ))
-                })
-                .children(rows),
-            self.tray_turn,
-        ))
-        .into_any_element()
+                }
+            });
+        }
+        cx.notify();
     }
 }
 
