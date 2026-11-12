@@ -534,6 +534,15 @@ impl Mods {
         }
     }
 
+    /// The load order as read, for the first run: its active and inactive mods, or why it was not.
+    pub fn read_as(&self) -> (usize, usize, String) {
+        (
+            self.count(Side::Active),
+            self.count(Side::Inactive),
+            crate::words::put(&self.order.problem),
+        )
+    }
+
     /// Whether the active mods' files are still being read.
     pub fn reading_files(&self) -> bool {
         !self.files_read && self.count(Side::Active) > 0 && !self.demo

@@ -219,6 +219,11 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
             .on_click(cx.listener(move |shell, _, _, cx| shell.go(at, cx)))
     });
     let search = div()
+        .id("top-search")
+        .role(gpui::Role::Button)
+        .aria_label(put(&say!("Search mods, commands and settings")))
+        .cursor_text()
+        .on_click(cx.listener(|shell, _, window, cx| shell.open_commands(window, cx)))
         .flex()
         .flex_none()
         .items_center()
@@ -250,6 +255,13 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
                 put(&say!("Ctrl + K")),
             ))
         });
+    let search = super::tip::tipped(
+        search,
+        put(&say!(
+            "Finds mods in both lists, commands and settings (Ctrl + K)"
+        ))
+        .into(),
+    );
     div()
         .relative()
         .flex_none()

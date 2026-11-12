@@ -47,6 +47,8 @@ pub struct Shell {
     pub(crate) hunt: crate::workspace::search::Hunt,
     /// The saved lists and the history, over the window when open.
     pub(crate) lists: Entity<super::lists::Lists>,
+    /// The first start's setup, in place of everything until Start.
+    pub(crate) first_run: Option<Entity<super::first_run::FirstRun>>,
     /// Ctrl + K, open over the window.
     pub(crate) commands: Option<Entity<super::commands::Commands>>,
     /// The keys' sheet, open over the window.
@@ -145,6 +147,7 @@ impl Shell {
             game,
             lists,
             commands: None,
+            first_run: None,
             keys_open: false,
             keys_focus: cx.focus_handle(),
             hunt: match demo {
@@ -163,6 +166,17 @@ impl Shell {
         }
         shell.go(section, cx);
         shell.tell_hunting(cx);
+        let unset = !demo && !options.still && !super::app(cx).settings_report().setup_done;
+        if options.first || unset {
+            shell.start_first_run(options.step, cx);
+        }
+        if !demo && !options.still {
+            window.on_window_should_close(cx, |window, cx| {
+                super::keep_window(window, cx);
+                true
+            });
+            check_release(cx);
+        }
         if let Some(asked) = &options.browse {
             let workshop = shell.workshop(cx);
             workshop.update(cx, |workshop, cx| workshop.show_asked(asked, cx));
@@ -345,6 +359,22 @@ impl Render for Shell {
             theme.family.clone(),
             theme.body(),
         );
+        if let Some(first) = self.first_run.clone() {
+            let theme = cx.global::<Theme>();
+            return div()
+                .relative()
+                .size_full()
+                .bg(theme.colours.win)
+                .text_color(theme.colours.ink)
+                .font_family(theme.family.clone())
+                .text_size(theme.body())
+                .on_action(|_: &super::focus::Next, window, cx| window.focus_next(cx))
+                .on_action(|_: &super::focus::Previous, window, cx| window.focus_prev(cx))
+                .child(first)
+                .child(self.notices.clone())
+                .child(self.menu.clone())
+                .child(self.prompt.clone());
+        }
         div()
             .relative()
             .flex()
@@ -445,4 +475,99 @@ fn keep_logs(cx: &mut Context<Shell>) {
             crate::jobs::spawn("keep logs", move || kept.keep_logs());
         }
     });
+}
+
+/// A newer RimStack told once the window has settled, when Settings asks for the check.
+fn check_release(cx: &mut Context<Shell>) {
+    use super::notices;
+    use crate::words::put;
+    use rimstack_core::say;
+    const SETTLED: std::time::Duration = std::time::Duration::from_secs(4);
+    let app = super::app(cx);
+    if !app.settings_report().self_check {
+        return;
+    }
+    cx.spawn(async move |shell, cx| {
+        cx.background_executor().timer(SETTLED).await;
+        let _ = shell.update(cx, |_, cx| {
+            let nightly = app.settings().nightly_updates();
+            crate::jobs::run(
+                "release check",
+                cx,
+                move || crate::workspace::newest_release(nightly),
+                |_, found, cx| {
+                    if let crate::reports::ReleaseSaid::Newer { version, page } = found {
+                        let running = super::app(cx).settings_report().version;
+                        notices::offer(
+                            put(&say!(
+                                "RimStack {} is published; this is {}",
+                                version,
+                                running
+                            )),
+                            put(&say!("Open its page")),
+                            move |_, cx| cx.open_url(&page),
+                            cx,
+                        );
+                    }
+                },
+            );
+        });
+    })
+    .detach();
+}
+
+impl Shell {
+    fn start_first_run(&mut self, step: usize, cx: &mut Context<Self>) {
+        let first = cx.new(|cx| super::first_run::FirstRun::new(step, cx));
+        cx.subscribe(
+            &first,
+            |shell, _, started: &super::first_run::Started, cx| {
+                shell.end_first_run(started.with_data, started.with_rimsort, cx)
+            },
+        )
+        .detach();
+        cx.observe(&self.mods, |shell, mods, cx| {
+            let Some(first) = shell.first_run.clone() else {
+                return;
+            };
+            let (active, inactive, problem) = mods.read(cx).read_as();
+            first.update(cx, |first, cx| {
+                first.set_mods(active, inactive, problem, cx)
+            });
+        })
+        .detach();
+        self.first_run = Some(first);
+        cx.notify();
+    }
+
+    /// Start: the setup is done, the community data fetched and RimSort's rules read when asked.
+    fn end_first_run(&mut self, with_data: bool, with_rimsort: bool, cx: &mut Context<Self>) {
+        use super::notices;
+        use crate::words::put;
+        let app = super::app(cx);
+        if let Err(problem) = app.keep_setting("setupDone", "yes") {
+            notices::say(crate::words::said_of(&problem), notices::Tone::Err, cx);
+        }
+        let overview = self.mods.read(cx).overview();
+        let missing = overview.is_none_or(|o| o.community_mods.is_none() || o.works_on == 0);
+        if with_data && missing {
+            let fetching = app.clone();
+            crate::jobs::run(
+                "community download",
+                cx,
+                move || fetching.download_databases(),
+                |_, done, cx| {
+                    if let Err(problem) = done {
+                        notices::say(crate::words::said_of(&problem), notices::Tone::Err, cx);
+                    }
+                },
+            );
+        }
+        if with_rimsort {
+            let said = app.import_rimsort_rules();
+            notices::say(put(&said), notices::Tone::Ok, cx);
+        }
+        self.first_run = None;
+        cx.notify();
+    }
 }

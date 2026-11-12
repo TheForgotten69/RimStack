@@ -34,5 +34,7 @@ pub(crate) fn made_up() -> (tempfile::TempDir, App) {
         &root.join("data"),
         given,
     );
+    // As `just shot-fx` writes it: the first run is behind, as on an install in use.
+    app.keep_setting("setupDone", "yes").unwrap();
     (tmp, app)
 }

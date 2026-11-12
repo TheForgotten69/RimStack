@@ -9,6 +9,7 @@ pub mod controls;
 pub mod downloads;
 pub mod field;
 pub mod find;
+pub mod first_run;
 pub mod focus;
 pub mod game;
 pub mod hunt;
@@ -85,6 +86,9 @@ pub struct Options {
     pub browse: Option<String>,
     /// For a picture: the disk is not watched, so nothing changes while it is taken.
     pub still: bool,
+    /// The first run shown, as `--first` asks, on the step `--step=` gives.
+    pub first: bool,
+    pub step: usize,
 }
 
 impl Options {
@@ -108,6 +112,8 @@ impl Options {
                 "--view" => options.view = value.parse().unwrap_or(0),
                 "--find" => options.find = Some(value.to_string()),
                 "--browse" => options.browse = Some(value.to_string()),
+                "--first" => options.first = true,
+                "--step" => options.step = value.parse().unwrap_or(0),
                 _ => {}
             }
         }
@@ -291,15 +297,65 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     )]);
 }
 
+/// Where the window opens: where it was last closed, kept inside the screens there are now.
+fn window_start(app: &App, cx: &Cx) -> WindowBounds {
+    use rimstack_core::base::window::Area;
+    let screens: Vec<Area> = cx
+        .displays()
+        .iter()
+        .map(|display| {
+            let b = display.bounds();
+            Area {
+                x: f32::from(b.origin.x) as i32,
+                y: f32::from(b.origin.y) as i32,
+                width: f32::from(b.size.width) as i32,
+                height: f32::from(b.size.height) as i32,
+            }
+        })
+        .collect();
+    let (area, maximized) = app.window_start(&screens);
+    let bounds = Bounds::new(
+        gpui::point(gpui::px(area.x as f32), gpui::px(area.y as f32)),
+        size(gpui::px(area.width as f32), gpui::px(area.height as f32)),
+    );
+    match maximized {
+        true => WindowBounds::Maximized(bounds),
+        false => WindowBounds::Windowed(bounds),
+    }
+}
+
+/// The window's place kept as it closes, for its next start.
+pub(crate) fn keep_window(window: &gpui::Window, cx: &Cx) {
+    use rimstack_core::base::window::Area;
+    let (bounds, maximized) = match window.window_bounds() {
+        WindowBounds::Windowed(bounds) => (bounds, false),
+        WindowBounds::Maximized(bounds) | WindowBounds::Fullscreen(bounds) => (bounds, true),
+    };
+    let area = Area {
+        x: f32::from(bounds.origin.x) as i32,
+        y: f32::from(bounds.origin.y) as i32,
+        width: f32::from(bounds.size.width) as i32,
+        height: f32::from(bounds.size.height) as i32,
+    };
+    if let Err(problem) = app(cx).keep_window(area, maximized) {
+        rimstack_core::problem!("{problem}");
+    }
+}
+
 pub fn run(app: Arc<App>, options: Options) {
     gpui_platform::application()
         .with_assets(assets::Assets)
         .run(move |cx: &mut Cx| {
+            let started = window_start(&app, cx);
             install(app, &options, cx);
-            let bounds = Bounds::centered(None, size(WINDOW.0, WINDOW.1), cx);
+            let least = {
+                let theme = cx.global::<theme::Theme>();
+                size(theme.sized(1000.), theme.sized(560.))
+            };
             let opened = cx.open_window(
                 WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    window_bounds: Some(started),
+                    window_min_size: Some(least),
                     titlebar: Some(TitlebarOptions {
                         title: Some("RimStack".into()),
                         ..Default::default()
