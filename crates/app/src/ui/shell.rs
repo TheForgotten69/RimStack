@@ -27,6 +27,10 @@ impl Shell {
         if let Some(text) = &options.filter {
             mods.update(cx, |mods, cx| mods.filter_by(text, cx));
         }
+        if let Some(row) = options.pick {
+            let tab = options.tab;
+            mods.update(cx, |mods, cx| mods.pick_row(Side::Active, row, tab, cx));
+        }
         if options.several {
             mods.update(cx, |mods, cx| {
                 mods.choose_nth(Side::Active, 14, false, cx);

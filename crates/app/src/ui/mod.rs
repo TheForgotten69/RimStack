@@ -36,6 +36,9 @@ pub struct Options {
     pub several: bool,
     /// The filter's text at the start, as `--filter=` gives it.
     pub filter: Option<String>,
+    /// A row of the load order chosen, and the tab shown, as `--pick=` and `--tab=` give them.
+    pub pick: Option<usize>,
+    pub tab: usize,
 }
 
 impl Options {
@@ -50,6 +53,8 @@ impl Options {
                 "--text-scale" => options.text_scale = value.parse().ok(),
                 "--several" => options.several = true,
                 "--filter" => options.filter = Some(value.to_string()),
+                "--pick" => options.pick = value.parse().ok(),
+                "--tab" => options.tab = value.parse().unwrap_or(0),
                 _ => {}
             }
         }
@@ -97,20 +102,26 @@ fn weights_of(_family: &str) -> Vec<f32> {
 
 /// The family Qt takes for its texts: the system's sans-serif.
 fn system_family() -> String {
+    system_family_for("sans-serif").unwrap_or_else(|| ".SystemUIFont".to_string())
+}
+
+/// The family fontconfig gives for a generic name, as Qt asks it.
+fn system_family_for(generic: &str) -> Option<String> {
     #[cfg(target_os = "linux")]
     {
         let mut asked = rimstack_core::base::program::command("fc-match");
-        asked.args(["-f", "%{family[0]}", "sans-serif"]);
+        asked.args(["-f", "%{family[0]}", generic]);
         let told = rimstack_core::base::program::run(&mut asked, std::time::Duration::from_secs(2));
         if let Ok(told) = told
             && told.status.success()
             && let Ok(family) = String::from_utf8(told.stdout)
             && !family.trim().is_empty()
         {
-            return family.trim().to_string();
+            return Some(family.trim().to_string());
         }
     }
-    ".SystemUIFont".to_string()
+    let _ = generic;
+    None
 }
 
 pub fn appearance(options: &Options) -> Appearance {
@@ -129,6 +140,9 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     let family = system_family();
     let weights = weights_of(&family);
     let mut theme = Theme::new(appearance(options), family).with_weights(&weights);
+    if let Some(mono) = system_family_for("monospace") {
+        theme.mono = mono.into();
+    }
     let text = cx.text_system();
     let id = text.resolve_font(&font(theme.family.clone()));
     let at = px(1000.);

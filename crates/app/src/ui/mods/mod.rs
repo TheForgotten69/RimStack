@@ -1,6 +1,7 @@
 //! `ModsScreen.qml`: the inactive mods, the load order and the details, side by side.
 
 mod active;
+mod chosen;
 mod details;
 mod inactive;
 mod rows;
@@ -10,7 +11,7 @@ use super::text_field::{Edited, TextField};
 use super::theme::Theme;
 use crate::changes::Changes;
 use crate::jobs::Lane;
-use crate::workspace::load_order::{LoadOrder, Orders, Overview, RowView, Side};
+use crate::workspace::load_order::{Details, LoadOrder, Orders, Overview, RowView, Side};
 use gpui::{
     AppContext, Context, Entity, Focusable, InteractiveElement, IntoElement, ListAlignment,
     ListState, ParentElement, Pixels, Render, Styled, Window, div, px,
@@ -45,6 +46,10 @@ pub struct Mods {
     filter: Entity<TextField>,
     focus: gpui::FocusHandle,
     overview: Option<Overview>,
+    details: Option<Details>,
+    tab: usize,
+    /// A row to choose once the list is read: its place and the tab to show.
+    wanted: Option<(usize, usize)>,
     summary: Option<crate::reports::Summary>,
     last_start: Option<crate::workspace::logs::LastStartSaid>,
     /// `RowView::mod_id`s, the first chosen first.
@@ -81,6 +86,9 @@ impl Mods {
             filter,
             orders: order.orders(),
             overview: None,
+            details: None,
+            tab: 0,
+            wanted: None,
             summary: None,
             last_start: None,
             order,
@@ -199,6 +207,9 @@ impl Mods {
                 mods.order = order;
                 mods.show(cx);
                 mods.read_files(cx);
+                if let Some((row, tab)) = mods.wanted.take() {
+                    mods.pick_row(Side::Active, row, tab, cx);
+                }
                 if let Some(started) = crate::STARTED.get() {
                     rimstack_core::note!("mods_shown_ms={}", started.elapsed().as_millis());
                 }
@@ -219,6 +230,9 @@ impl Mods {
             shown.rows = Rc::new(rows);
         }
         self.orders = self.order.orders();
+        if self.details.is_some() {
+            self.describe(cx);
+        }
         self.overview = (!self.demo).then(|| self.order.overview(&app));
         self.summary = (!self.demo).then(|| app.summary());
         self.last_start = if self.demo {
@@ -302,7 +316,36 @@ impl Mods {
     pub fn choose(&mut self, side: Side, mod_id: i32, cx: &mut Context<Self>) {
         self.selection = vec![mod_id];
         self.selected_active = side == Side::Active;
+        self.describe(cx);
         cx.notify();
+    }
+
+    /// What the details show of the mod chosen, when one alone is.
+    fn describe(&mut self, cx: &mut Context<Self>) {
+        let app = super::app(cx);
+        let alone = match self.selection.as_slice() {
+            [one] => rimstack_core::mods::library::ModId::from_qml(*one),
+            _ => None,
+        };
+        self.details = alone
+            .filter(|_| self.order.is_installed())
+            .map(|id| self.order.details(&app, id));
+    }
+
+    /// Chooses a row of a list by its place, headings counted, as `--pick` does.
+    pub fn pick_row(&mut self, side: Side, row: usize, tab: usize, cx: &mut Context<Self>) {
+        let rows = match side {
+            Side::Active => self.active.rows.clone(),
+            Side::Inactive => self.inactive.rows.clone(),
+        };
+        match rows.get(row) {
+            Some(found) if !found.is_header => {
+                self.tab = tab;
+                self.choose(side, found.mod_id, cx);
+            }
+            Some(_) => {}
+            None => self.wanted = Some((row, tab)),
+        }
     }
 
     pub fn is_chosen(&self, side: Side, mod_id: i32) -> bool {
@@ -393,7 +436,11 @@ impl Render for Mods {
                     .min_w_0(),
             )
             .child(handle())
-            .child(self.details_pane(&theme, cx).w(details_width).flex_none())
+            .child(
+                self.details_pane(&theme, details_width, window, cx)
+                    .w(details_width)
+                    .flex_none(),
+            )
     }
 }
 

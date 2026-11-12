@@ -343,10 +343,21 @@ pub fn measure(
     size: Pixels,
     weight: FontWeight,
 ) -> Pixels {
+    measure_in(window, theme, theme.family.clone(), text, size, weight)
+}
+
+pub fn measure_in(
+    window: &Window,
+    theme: &Theme,
+    family: SharedString,
+    text: &str,
+    size: Pixels,
+    weight: FontWeight,
+) -> Pixels {
     if text.is_empty() {
         return Pixels::ZERO;
     }
-    let mut font = gpui::font(theme.family.clone());
+    let mut font = gpui::font(family);
     font.weight = weight;
     let run = gpui::TextRun {
         len: text.len(),
@@ -370,7 +381,27 @@ pub fn elide_middle(
     size: Pixels,
     room: Pixels,
 ) -> String {
-    let fits = |shown: &str| measure(window, theme, shown, size, FontWeight::NORMAL) <= room;
+    elide_middle_in(window, theme, theme.family.clone(), text, size, room)
+}
+
+pub fn elide_middle_in(
+    window: &Window,
+    theme: &Theme,
+    family: SharedString,
+    text: &str,
+    size: Pixels,
+    room: Pixels,
+) -> String {
+    let fits = |shown: &str| {
+        measure_in(
+            window,
+            theme,
+            family.clone(),
+            shown,
+            size,
+            FontWeight::NORMAL,
+        ) <= room
+    };
     if fits(text) {
         return text.to_string();
     }

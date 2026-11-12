@@ -6,24 +6,27 @@ use crate::ui::widgets::{Btn, Chip, Sized, icon, label};
 use crate::words::{count, put};
 use crate::workspace::load_order::{ProblemSaid, Side};
 use gpui::{
-    AnyElement, Context, FontWeight, HighlightStyle, Hsla, IntoElement, ParentElement, Styled,
-    StyledText, div, prelude::FluentBuilder, px,
+    AnyElement, Context, FontWeight, HighlightStyle, Hsla, InteractiveElement, IntoElement,
+    ParentElement, StatefulInteractiveElement, Styled, StyledText, div, prelude::FluentBuilder, px,
 };
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::{say, say_n};
 
 /// `Card.qml`: a titled part of the details, with a note beside its title and an arrow when it folds.
-struct Card {
-    title: String,
-    tone: Hsla,
-    note: String,
-    folds: Option<bool>,
-    spacing: gpui::Pixels,
-    body: Vec<AnyElement>,
+pub(super) struct Card {
+    pub title: String,
+    pub tone: Hsla,
+    pub note: String,
+    /// `Some(folded)` for a card that folds.
+    pub folds: Option<bool>,
+    /// A card with room for actions beside its title has a taller head.
+    pub actions: bool,
+    pub spacing: gpui::Pixels,
+    pub body: Vec<AnyElement>,
 }
 
 impl Card {
-    fn render(self, theme: &Theme) -> gpui::Div {
+    pub(super) fn render(self, theme: &Theme) -> gpui::Div {
         let c = &theme.colours;
         let folded = self.folds == Some(true);
         div()
@@ -34,7 +37,7 @@ impl Card {
                 div()
                     .flex()
                     .items_center()
-                    .h(theme.sized(28.))
+                    .h(theme.sized(if self.actions { 34. } else { 28. }))
                     .gap(theme::GAP)
                     .child(
                         label(theme, theme.small(), self.tone, self.title)
@@ -106,7 +109,7 @@ fn line(
 fn problem(theme: &Theme, at: usize, said: &ProblemSaid) -> AnyElement {
     let c = &theme.colours;
     let tone = if said.error { c.err } else { c.warn };
-    let text = format!("{}  {}", said.name, put(&said.words));
+    let text = format!("{} {}", said.name, put(&said.words));
     let bold = HighlightStyle {
         font_weight: Some(FontWeight::BOLD),
         ..HighlightStyle::default()
@@ -136,9 +139,12 @@ fn problem(theme: &Theme, at: usize, said: &ProblemSaid) -> AnyElement {
                 .min_w_0()
                 .gap(theme::GAP_TINY)
                 .child(
+                    // Qt's `lineHeight: 1.25` puts the added room under each line, not around it.
                     div()
+                        .mt(-(theme.line(theme.body()) * 0.125))
+                        .mb(theme.line(theme.body()) * 0.125)
                         .text_size(theme.body())
-                        .line_height((theme.line(theme.body()) * 1.25).round())
+                        .line_height(theme.line(theme.body()) * 1.25)
                         .text_color(c.ink)
                         .child(StyledText::new(text).with_highlights([(0..said.name.len(), bold)])),
                 )
@@ -156,8 +162,28 @@ fn problem(theme: &Theme, at: usize, said: &ProblemSaid) -> AnyElement {
 }
 
 impl Mods {
-    pub(super) fn details_pane(&self, theme: &Theme, cx: &mut Context<Self>) -> gpui::Div {
+    pub(super) fn details_pane(
+        &self,
+        theme: &Theme,
+        width: gpui::Pixels,
+        window: &gpui::Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::Stateful<gpui::Div> {
         let c = &theme.colours;
+        // `Scrolled.qml` keeps its bar's width free at the right.
+        let bar = theme.sized(9.) + theme::GAP_HAIR * 2.;
+        let scrolled = div()
+            .id("details")
+            .flex()
+            .flex_col()
+            .h_full()
+            .bg(c.panel)
+            .p(theme::GAP_CARD)
+            .pr(theme::GAP_CARD + bar)
+            .overflow_y_scroll();
+        if let Some(details) = &self.details {
+            return scrolled.child(self.chosen_pane(theme, details, width, window, cx));
+        }
         let title = match self.demo {
             true => put(&say!("Demo data")),
             false => put(&say!("Load order")),
@@ -184,12 +210,7 @@ impl Mods {
                         count(self.count(Side::Inactive))
                     )))),
             );
-        div()
-            .flex()
-            .flex_col()
-            .h_full()
-            .bg(c.panel)
-            .p(theme::GAP_CARD)
+        scrolled
             .gap(theme::GAP_CARD)
             .child(head)
             .when(!self.demo, |d| {
@@ -301,6 +322,7 @@ impl Mods {
                 tone,
                 note,
                 folds: None,
+                actions: false,
                 spacing: theme::GAP,
                 body,
             }
@@ -316,6 +338,7 @@ impl Mods {
                 tone: theme.colours.ink2,
                 note: put(&summary.kept_note),
                 folds: Some(true),
+                actions: false,
                 spacing: theme::GAP_SMALL,
                 body: Vec::new(),
             }

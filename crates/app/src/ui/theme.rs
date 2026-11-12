@@ -205,6 +205,19 @@ pub const SWATCHES: [(&str, &str, &str); 13] = [
     ("Orange", "#e09a5c", "#a8621e"),
 ];
 
+/// The category names as `LoadOrder` gives them, in category order.
+pub const CATEGORY_NAMES: [&str; 9] = [
+    "Loaders",
+    "Game and DLC",
+    "Libraries",
+    "Content",
+    "Patches",
+    "Textures",
+    "Interface",
+    "Performance & tweaks",
+    "Loads last",
+];
+
 pub const CATEGORY_ICONS: [&str; 9] = [
     "plug",
     "gamepad-2",
@@ -291,6 +304,8 @@ pub struct Theme {
     pub colours: Palette,
     pub light: bool,
     pub family: gpui::SharedString,
+    /// The system's monospace family, for paths.
+    pub mono: gpui::SharedString,
     /// The font's ascent and descent over its size: Qt gives a line their two roundings.
     pub ascent: f32,
     pub descent: f32,
@@ -337,6 +352,7 @@ impl Theme {
             colours: Palette::of(colour),
             light: appearance.theme == ThemeName::Light,
             family: family.into(),
+            mono: "monospace".into(),
             ascent: 1.069,
             descent: 0.293,
             semibold: gpui::FontWeight::SEMIBOLD,

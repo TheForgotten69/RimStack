@@ -234,7 +234,7 @@ impl TextField {
             .count()
     }
 
-    fn from_utf16(&self, offset: usize) -> usize {
+    fn offset_of_utf16(&self, offset: usize) -> usize {
         let mut counted = 0;
         for (at, c) in self.text.char_indices() {
             if counted >= offset {
@@ -249,8 +249,8 @@ impl TextField {
         self.to_utf16(range.start)..self.to_utf16(range.end)
     }
 
-    fn range_from_utf16(&self, range: &Range<usize>) -> Range<usize> {
-        self.from_utf16(range.start)..self.from_utf16(range.end)
+    fn range_of_utf16(&self, range: &Range<usize>) -> Range<usize> {
+        self.offset_of_utf16(range.start)..self.offset_of_utf16(range.end)
     }
 
     fn shape(&self, window: &Window, theme: &Theme) -> ShapedLine {
@@ -283,7 +283,7 @@ impl EntityInputHandler for TextField {
         _: &mut Window,
         _: &mut Context<Self>,
     ) -> Option<String> {
-        let range = self.range_from_utf16(&range);
+        let range = self.range_of_utf16(&range);
         adjusted.replace(self.range_to_utf16(&range));
         Some(self.text[range].to_string())
     }
@@ -317,7 +317,7 @@ impl EntityInputHandler for TextField {
     ) {
         let range = range
             .as_ref()
-            .map(|range| self.range_from_utf16(range))
+            .map(|range| self.range_of_utf16(range))
             .or(self.marked.clone())
             .unwrap_or(self.selected.clone());
         self.text = format!(
@@ -343,7 +343,7 @@ impl EntityInputHandler for TextField {
     ) {
         let range = range
             .as_ref()
-            .map(|range| self.range_from_utf16(range))
+            .map(|range| self.range_of_utf16(range))
             .or(self.marked.clone())
             .unwrap_or(self.selected.clone());
         self.text = format!(
@@ -367,7 +367,7 @@ impl EntityInputHandler for TextField {
         _: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
         let (shaped, _) = self.shaped.as_ref()?;
-        let range = self.range_from_utf16(&range);
+        let range = self.range_of_utf16(&range);
         Some(Bounds::from_corners(
             point(
                 bounds.left() + shaped.x_for_index(range.start),
