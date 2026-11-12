@@ -1,10 +1,10 @@
 //! `DetailsPane.qml` and `ListSummary.qml`: the list as a whole when no mod is chosen.
 
-use super::Mods;
+use super::chosen::DetailsView;
 use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{Btn, Chip, TextSized, icon, label};
 use crate::words::{count, put};
-use crate::workspace::load_order::{ProblemSaid, Side};
+use crate::workspace::load_order::ProblemSaid;
 use gpui::{
     AnyElement, Context, FontWeight, HighlightStyle, Hsla, InteractiveElement, IntoElement,
     ParentElement, StatefulInteractiveElement, Styled, StyledText, div, prelude::FluentBuilder, px,
@@ -171,7 +171,7 @@ fn problem(theme: &Theme, at: usize, said: &ProblemSaid) -> AnyElement {
         .into_any_element()
 }
 
-impl Mods {
+impl DetailsView {
     pub(super) fn details_pane(
         &self,
         theme: &Theme,
@@ -191,10 +191,10 @@ impl Mods {
             .p(theme::GAP_CARD)
             .pr(theme::GAP_CARD + bar)
             .overflow_y_scroll();
-        if let Some(details) = &self.details {
+        if let Some(details) = &self.shown.details {
             return scrolled.child(self.chosen_pane(theme, details, width, window, cx));
         }
-        let title = match self.demo {
+        let title = match self.shown.demo {
             true => put(&say!("Demo data")),
             false => put(&say!("Load order")),
         };
@@ -208,33 +208,33 @@ impl Mods {
                     .flex_wrap()
                     .pt(theme::GAP_SMALL)
                     .gap(theme::GAP_TINY)
-                    .when(!self.demo, |d| {
-                        d.child(Chip::new(put(&say!("RimWorld {}", self.game_version()))))
+                    .when(!self.shown.demo, |d| {
+                        d.child(Chip::new(put(&say!(
+                            "RimWorld {}",
+                            self.shown.game_version.clone()
+                        ))))
                     })
-                    .child(Chip::new(put(&say!(
-                        "{} active",
-                        count(self.count(Side::Active))
-                    ))))
+                    .child(Chip::new(put(&say!("{} active", count(self.shown.active)))))
                     .child(Chip::new(put(&say!(
                         "{} inactive",
-                        count(self.count(Side::Inactive))
+                        count(self.shown.inactive)
                     )))),
             );
         scrolled
             .gap(theme::GAP_CARD)
             .child(head)
-            .when(!self.demo, |d| {
-                d.children(self.verdict(theme, cx))
+            .when(!self.shown.demo, |d| {
+                d.children(self.verdict(theme))
                     .children(self.review(theme))
                     .children(self.kept(theme))
             })
     }
 
-    fn verdict(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<gpui::Div> {
+    fn verdict(&self, theme: &Theme) -> Option<gpui::Div> {
         let c = &theme.colours;
-        let overview = self.overview.as_ref()?;
-        let (_, warnings) = self.order.errors_and_warnings();
-        let dirty = crate::ui::app(cx).session().is_dirty();
+        let overview = self.shown.overview.as_ref()?;
+        let warnings = self.shown.warnings;
+        let dirty = self.shown.dirty;
         let errors = overview.error_count;
         let playable = errors == 0 && !dirty;
         let title = match (playable, warnings) {
@@ -257,7 +257,7 @@ impl Mods {
             .enumerate()
             .map(|(at, said)| problem(theme, at, said))
             .collect();
-        let troubled = self.order.troubles().iter().any(|t| !t.is_empty());
+        let troubled = self.shown.troubled;
         if troubled {
             let text = if overview.more_errors > 0 {
                 put(&say_n!(
@@ -283,7 +283,7 @@ impl Mods {
                 Some((put(&say!("All problems")), false)),
             ));
         }
-        if let Some(start) = &self.last_start {
+        if let Some(start) = &self.shown.last_start {
             let logged = start.start.errors.unwrap_or(0) > 0;
             body.push(
                 div()
@@ -305,8 +305,7 @@ impl Mods {
             );
         }
         if dirty {
-            let unsaved = crate::ui::app(cx).session().changes().said();
-            let said = put(&say!("Not saved: {}", put(&unsaved)));
+            let said = put(&say!("Not saved: {}", self.shown.unsaved.clone()));
             body.push(line(
                 theme,
                 "save-list",
@@ -343,20 +342,20 @@ impl Mods {
 
     /// `ListSummary`'s "To review": not problems, things to look at when there is time.
     fn review(&self, theme: &Theme) -> Option<gpui::Div> {
-        let replacements = self.summary.as_ref().map_or(0, |s| s.replacements);
+        let replacements = self.shown.summary.as_ref().map_or(0, |s| s.replacements);
         let show = || Some((put(&say!("Show")), false));
         let mut body = Vec::new();
-        if self.conflicts > 0 {
+        if self.shown.conflicts > 0 {
             let said = put(&say_n!(
-                self.conflicts,
+                self.shown.conflicts,
                 "{} mod shares textures with another",
                 "{} mods share textures with another"
             ));
             body.push(line(theme, "review-conflicts", said, show()));
         }
-        if self.changed_since > 0 {
+        if self.shown.changed_since > 0 {
             let said = put(&say_n!(
-                self.changed_since,
+                self.shown.changed_since,
                 "{} mod changed since the game was last started",
                 "{} mods changed since the game was last started"
             ));
@@ -385,7 +384,7 @@ impl Mods {
     }
 
     fn kept(&self, theme: &Theme) -> Option<gpui::Div> {
-        let summary = self.summary.as_ref()?;
+        let summary = self.shown.summary.as_ref()?;
         Some(
             Card {
                 title: put(&say!("Kept")),

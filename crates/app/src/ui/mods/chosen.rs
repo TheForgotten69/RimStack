@@ -1,10 +1,9 @@
 //! `ModHeader.qml`, `Choice.qml` and the tabs under it: the mod chosen in a list.
 
-use super::Mods;
 use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{Btn, Chip, TextSized, elide_middle_in, icon, label, measure};
 use crate::words::put;
-use crate::workspace::load_order::Details;
+use crate::workspace::load_order::{Details, Overview};
 use gpui::{
     AnyElement, Context, FontWeight, InteractiveElement, IntoElement, ObjectFit, ParentElement,
     Pixels, StatefulInteractiveElement, Styled, StyledImage, TextOverflow, Window, div, img,
@@ -13,6 +12,51 @@ use gpui::{
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::details::Named;
 use rimstack_core::say;
+use std::rc::Rc;
+
+/// What the details show, handed over by the Mods screen when it changes.
+#[derive(Clone, Default)]
+pub struct DetailsShown {
+    pub demo: bool,
+    pub active: usize,
+    pub inactive: usize,
+    pub game_version: String,
+    pub overview: Option<Rc<Overview>>,
+    pub details: Option<Rc<Details>>,
+    pub summary: Option<Rc<crate::reports::Summary>>,
+    pub last_start: Option<Rc<crate::workspace::logs::LastStartSaid>>,
+    pub warnings: usize,
+    pub troubled: bool,
+    pub dirty: bool,
+    pub unsaved: String,
+    pub conflicts: usize,
+    pub changed_since: usize,
+    pub selected_active: bool,
+    /// The widths wanted for the inactive mods and the details, for `pane_widths`.
+    pub panes: (Pixels, Pixels),
+}
+
+/// The details pane, a view of its own: choosing a mod or a tab draws nothing else.
+pub struct DetailsView {
+    pub shown: DetailsShown,
+    pub tab: usize,
+}
+
+impl DetailsView {
+    pub fn show(&mut self, shown: DetailsShown, cx: &mut Context<Self>) {
+        self.shown = shown;
+        cx.notify();
+    }
+}
+
+impl gpui::Render for DetailsView {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.global::<Theme>().clone();
+        let (_, _, width) =
+            super::pane_widths(&theme, window.viewport_size().width, self.shown.panes);
+        self.details_pane(&theme, width, window, cx)
+    }
+}
 
 fn tabs() -> [String; 3] {
     [
@@ -126,7 +170,7 @@ fn names(theme: &Theme, title: String, named: &[Named]) -> Option<AnyElement> {
     })
 }
 
-impl Mods {
+impl DetailsView {
     pub(super) fn chosen_pane(
         &self,
         theme: &Theme,
@@ -199,7 +243,7 @@ impl Mods {
                 };
                 d.child(Chip::new(put(&say!("{} MB", shown))))
             });
-        let active = self.selected_active;
+        let active = self.shown.selected_active;
         let toggle = if active {
             put(&say!("Deactivate"))
         } else {
@@ -250,8 +294,8 @@ impl Mods {
                                 label(theme, theme.small(), if on { c.ink } else { c.ink2 }, name)
                                     .font_weight(weight),
                             )
-                            .on_click(cx.listener(move |mods, _, _, cx| {
-                                mods.tab = at;
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                view.tab = at;
                                 cx.notify();
                             }))
                     })),

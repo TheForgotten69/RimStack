@@ -2,10 +2,10 @@
 
 use super::Mods;
 use crate::ui::theme::{self, Theme};
-use crate::ui::widgets::{Btn, btn_width, label, measure};
+use crate::ui::widgets::{Btn, Chip, btn_width, chip_width, label, measure};
 use crate::words::{count, put};
 use crate::workspace::load_order::Side;
-use gpui::{Context, FontWeight, ParentElement, Styled, Window, div, prelude::FluentBuilder};
+use gpui::{Context, FontWeight, ParentElement, Styled, Window, div, prelude::FluentBuilder, px};
 use rimstack_core::say;
 
 impl Mods {
@@ -22,9 +22,13 @@ impl Mods {
         let order = put(&self.orders.inactive_said);
         let hide = put(&say!("Hide"));
         // Qt's RowLayout gives its empty filler a gap too.
+        let fresh = (self.fresh > 0).then(|| put(&say!("{} new", count(self.fresh))));
         let named = measure(window, theme, &title, theme.heading(), FontWeight::BOLD)
             + theme::GAP * 2.
-            + measure(window, theme, &counted, theme.body(), FontWeight::NORMAL);
+            + measure(window, theme, &counted, theme.body(), FontWeight::NORMAL)
+            + fresh.as_deref().map_or(px(0.), |said| {
+                chip_width(window, theme, said, false) + theme::GAP
+            });
         let acts = btn_width(window, theme, &order, true, true)
             + theme::GAP
             + btn_width(window, theme, &hide, false, false);
@@ -67,7 +71,10 @@ impl Mods {
                                 label(theme, theme.heading(), c.ink, title)
                                     .font_weight(FontWeight::BOLD),
                             )
-                            .child(label(theme, theme.body(), c.ink3, counted)),
+                            .child(label(theme, theme.body(), c.ink3, counted))
+                            .when_some(fresh, |d, said| {
+                                d.child(Chip::new(said).tone(c.ok).pressable())
+                            }),
                     )
                     .child(buttons.when(stacked, |d| d.mb(theme::GAP))),
             )

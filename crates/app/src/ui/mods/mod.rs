@@ -49,17 +49,19 @@ pub struct Mods {
     active_list: Entity<list::ModList>,
     inactive_list: Entity<list::ModList>,
     focus: gpui::FocusHandle,
-    overview: Option<Overview>,
-    details: Option<Details>,
-    tab: usize,
+    overview: Option<Rc<Overview>>,
+    details: Option<Rc<Details>>,
+    details_view: Entity<chosen::DetailsView>,
     /// A row to choose once the list is read: its place and the tab to show.
     wanted: Option<(usize, usize)>,
-    summary: Option<crate::reports::Summary>,
-    last_start: Option<crate::workspace::logs::LastStartSaid>,
+    summary: Option<Rc<crate::reports::Summary>>,
+    last_start: Option<Rc<crate::workspace::logs::LastStartSaid>>,
     /// Mods changed since the game last started, read off the window's thread.
     changed_since: usize,
     since_reading: Lane,
     conflicts: usize,
+    /// Inactive mods installed since the game was last started from RimStack.
+    fresh: usize,
     /// `RowView::mod_id`s, the first chosen first.
     selection: Vec<i32>,
     selected_active: bool,
@@ -101,6 +103,10 @@ impl Mods {
             cx.new(|cx| list::ModList::new(side, shown, thumbs, mods, cx))
         });
         let [active_list, inactive_list] = lists;
+        let details_view = cx.new(|_| chosen::DetailsView {
+            shown: Default::default(),
+            tab: 0,
+        });
         let mut mods = Self {
             focus: cx.focus_handle(),
             filter,
@@ -109,13 +115,14 @@ impl Mods {
             orders: order.orders(),
             overview: None,
             details: None,
-            tab: 0,
+            details_view,
             wanted: None,
             summary: None,
             last_start: None,
             changed_since: 0,
             since_reading: Lane::default(),
             conflicts: 0,
+            fresh: 0,
             order,
             active: Shown::default(),
             inactive: Shown::default(),
@@ -239,12 +246,12 @@ impl Mods {
             | Changes::COMMUNITY
             | Changes::LANGUAGE;
         if changes.contains(counted) {
-            self.summary = Some(app.summary());
+            self.summary = Some(Rc::new(app.summary()));
         }
         if changes
             .contains(Changes::LAUNCHES | Changes::LOGS | Changes::FOLDERS | Changes::LANGUAGE)
         {
-            self.last_start = app.last_start_said();
+            self.last_start = app.last_start_said().map(Rc::new);
         }
         if changes.contains(Changes::LIBRARY | Changes::UPDATES | Changes::LAUNCHES) {
             self.since_reading.run(
@@ -253,10 +260,45 @@ impl Mods {
                 move |_| app.since_launch().items.len(),
                 |mods, changed, cx| {
                     mods.changed_since = changed;
-                    cx.notify();
+                    mods.sync_details(cx);
                 },
             );
         }
+    }
+
+    /// Hands the details pane what it shows.
+    fn sync_details(&mut self, cx: &mut Context<Self>) {
+        let (dirty, unsaved) = match self.demo {
+            true => (false, String::new()),
+            false => {
+                let app = super::app(cx);
+                let session = app.session();
+                (
+                    session.is_dirty(),
+                    crate::words::put(&session.changes().said()),
+                )
+            }
+        };
+        let shown = chosen::DetailsShown {
+            demo: self.demo,
+            active: self.count(Side::Active),
+            inactive: self.count(Side::Inactive),
+            game_version: self.game_version(),
+            overview: self.overview.clone(),
+            details: self.details.clone(),
+            summary: self.summary.clone(),
+            last_start: self.last_start.clone(),
+            warnings: self.order.errors_and_warnings().1,
+            troubled: self.order.troubles().iter().any(|t| !t.is_empty()),
+            dirty,
+            unsaved,
+            conflicts: self.conflicts,
+            changed_since: self.changed_since,
+            selected_active: self.selected_active,
+            panes: (self.inactive_width, self.details_width),
+        };
+        self.details_view
+            .update(cx, |view, cx| view.show(shown, cx));
     }
 
     /// `anew`: the mods were read again, so every id held before means nothing.
@@ -306,7 +348,12 @@ impl Mods {
         if self.details.is_some() {
             self.describe(cx);
         }
-        self.overview = (!self.demo).then(|| self.order.overview(&app));
+        self.overview = (!self.demo).then(|| Rc::new(self.order.overview(&app)));
+        self.fresh = if self.demo {
+            0
+        } else {
+            self.order.fresh(&app, Side::Inactive).len()
+        };
         self.conflicts = if self.demo {
             0
         } else {
@@ -315,6 +362,7 @@ impl Mods {
         if !self.demo {
             self.count_sort_moves(cx);
         }
+        self.sync_details(cx);
         cx.notify();
     }
 
@@ -394,7 +442,6 @@ impl Mods {
         self.selected_active = side == Side::Active;
         self.describe(cx);
         self.sync_lists(cx);
-        cx.notify();
     }
 
     /// What the details show of the mod chosen, when one alone is.
@@ -406,7 +453,8 @@ impl Mods {
         };
         self.details = alone
             .filter(|_| self.order.is_installed())
-            .map(|id| self.order.details(&app, id));
+            .map(|id| Rc::new(self.order.details(&app, id)));
+        self.sync_details(cx);
     }
 
     /// Chooses a row of a list by its place, headings counted, as `--pick` does.
@@ -417,7 +465,7 @@ impl Mods {
         };
         match rows.get(row) {
             Some(found) if !found.is_header => {
-                self.tab = tab;
+                self.details_view.update(cx, |view, _| view.tab = tab);
                 self.choose(side, found.mod_id, cx);
             }
             Some(_) => {}
@@ -496,8 +544,19 @@ impl Mods {
     /// The three panes' widths as Qt's SplitView gives them: the load order keeps its least width,
     /// taken from the details first, then from the inactive mods, each down to its own least.
     fn widths(&self, theme: &Theme, window: Pixels) -> (Pixels, Pixels, Pixels) {
+        pane_widths(theme, window, (self.inactive_width, self.details_width))
+    }
+}
+
+/// The three panes' widths for the widths wanted for the inactive mods and the details.
+pub fn pane_widths(
+    theme: &Theme,
+    window: Pixels,
+    (inactive, details): (Pixels, Pixels),
+) -> (Pixels, Pixels, Pixels) {
+    {
         let room = window - theme::HANDLE * 2.;
-        let (mut inactive, mut details) = (self.inactive_width, self.details_width);
+        let (mut inactive, mut details) = (inactive, details);
         let mut over = inactive + details + theme.sized(380.) - room;
         if over > px(0.) {
             let cut = over.min((details - theme.sized(260.)).max(px(0.)));
@@ -552,9 +611,11 @@ impl Render for Mods {
             )
             .child(handle())
             .child(
-                self.details_pane(&theme, details_width, window, cx)
+                div()
                     .w(details_width)
-                    .flex_none(),
+                    .flex_none()
+                    .h_full()
+                    .child(self.details_view.clone()),
             )
     }
 }
