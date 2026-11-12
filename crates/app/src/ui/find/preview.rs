@@ -2,7 +2,7 @@
 //! search inside it.
 
 use super::Find;
-use super::screen::Layout;
+use super::layout::Layout;
 use crate::ui::button::Btn;
 use crate::ui::controls::Toggle;
 use crate::ui::field::Field;

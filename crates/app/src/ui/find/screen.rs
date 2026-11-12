@@ -2,14 +2,13 @@
 //! options and the preview; `FindRow.qml` and `FindKeys.qml` for the matches.
 
 use super::Find;
+use super::layout::Layout;
 use crate::ui::button::{Btn, Chip};
 use crate::ui::field::Field;
 use crate::ui::menu::{self, Entry};
 use crate::ui::rows::{bar, rows};
 use crate::ui::theme::{self, Theme};
-use crate::ui::widgets::{
-    TextSized, elide_start_in, icon, label, measure, measure_in, watched, with_alpha,
-};
+use crate::ui::widgets::{TextSized, elide_start_in, icon, label, measure, watched, with_alpha};
 use crate::words::put;
 use crate::workspace::find::{RowRef, Shown};
 use gpui::{
@@ -20,63 +19,7 @@ use gpui::{
 use rimstack_core::{say, say_n};
 use std::rc::Rc;
 
-/// Where the screen's parts go at the window's width.
-#[derive(Clone, Copy)]
-pub(super) struct Layout {
-    /// Five digits of the monospace family at the small size: a line number's column.
-    pub digits: Pixels,
-    pub preview_width: Pixels,
-    pub wide: bool,
-    pub side_shown: bool,
-    pub side_width: Pixels,
-    pub preview_shown: bool,
-    pub results_shown: bool,
-    /// The matches' column.
-    pub middle: Pixels,
-}
-
 impl Find {
-    pub(super) fn layout(&self, theme: &Theme, window: &Window) -> Layout {
-        let width = window.viewport_size().width;
-        let digits = measure_in(
-            window,
-            theme,
-            theme.mono.clone(),
-            "00000",
-            theme.small(),
-            FontWeight::NORMAL,
-        );
-        let preview_width = (width * 0.36).min(theme.sized(620.));
-        let line_width = digits * 16.;
-        let wide = width - preview_width - theme.sized(250.) >= line_width + theme::GAP_LARGE * 4.;
-        let side_shown = wide || self.filters;
-        let results_shown = wide || !self.filters;
-        let preview_shown = self.preview.is_some() && results_shown;
-        let side_width = theme.sized(250.);
-        let middle = width
-            - theme::GAP_LARGE
-            - if side_shown {
-                side_width + theme::GAP_LARGE
-            } else {
-                px(0.)
-            }
-            - if preview_shown {
-                preview_width + theme::GAP_LARGE
-            } else {
-                px(0.)
-            };
-        Layout {
-            digits,
-            preview_width,
-            wide,
-            side_shown,
-            side_width,
-            preview_shown,
-            results_shown,
-            middle,
-        }
-    }
-
     fn search_row(
         &self,
         theme: &Theme,

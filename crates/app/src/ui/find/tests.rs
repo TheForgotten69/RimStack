@@ -158,6 +158,19 @@ fn file_types_offer_what_the_mods_hold_and_complete_the_one_chosen() {
     });
 }
 
+#[test]
+fn the_filters_are_beside_the_matches_and_the_preview_where_the_window_holds_them() {
+    let wide = |_: &Theme| size(gpui::px(1600.), crate::ui::WINDOW.1);
+    let (_tmp, mut cx, shell, find) = opened(1.15, &wide, Some("Fixture"));
+    let layout = cx
+        .update_window(shell.into(), |_, window, cx| {
+            find.read(cx).layout(cx.global::<Theme>(), window)
+        })
+        .unwrap();
+    assert!(layout.wide && layout.side_shown && layout.results_shown && layout.preview_shown);
+    assert!(!layout.side_fills);
+}
+
 fn drawn_with(text: Option<&'static str>, filters: bool) -> impl Fn(f32, Shape<'_>) -> Vec<Seen> {
     move |text_scale, window| {
         let (_tmp, mut cx, shell, find) = opened(text_scale, window, text);

@@ -1,6 +1,7 @@
 //! `FindScreen.qml`: the text of the mods' files searched, the matches by mod and file, where and
 //! what is searched beside them, and the file of the match chosen.
 
+mod layout;
 mod preview;
 mod screen;
 mod side;

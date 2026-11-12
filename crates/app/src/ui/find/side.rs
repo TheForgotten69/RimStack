@@ -2,7 +2,7 @@
 //! they are typed, and the mods with matches to keep one of.
 
 use super::Find;
-use super::screen::Layout;
+use super::layout::Layout;
 use crate::ui::field::Field;
 use crate::ui::focus;
 use crate::ui::rows::{bar, rows};
@@ -329,9 +329,9 @@ impl Find {
         let c = &theme.colours;
         let options = self.options.clone();
         let heading = |text: String| div().pt(theme::GAP).child(caps(theme, &text));
-        let inner = match layout.wide {
-            true => layout.side_width,
-            false => window.viewport_size().width - theme::GAP_LARGE * 2.,
+        let inner = match layout.side_fills {
+            false => layout.side_width,
+            true => window.viewport_size().width - theme::GAP_LARGE * 2.,
         } - theme::GAP_CARD * 2.;
         let field_width = inner - crate::ui::page::room(theme);
         let types_problem = options.types.problem.as_ref().map(put);
@@ -413,8 +413,8 @@ impl Find {
             .flex_col()
             .flex_none()
             .h_full()
-            .when(layout.wide, |d| d.w(layout.side_width))
-            .when(!layout.wide, |d| d.flex_1().mr(theme::GAP_LARGE))
+            .when(!layout.side_fills, |d| d.w(layout.side_width))
+            .when(layout.side_fills, |d| d.flex_1().mr(theme::GAP_LARGE))
             .gap(theme::GAP_SMALL)
             .rounded(theme::CORNER_LARGE)
             .bg(c.panel)
