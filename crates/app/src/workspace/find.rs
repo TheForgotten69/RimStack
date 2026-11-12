@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 mod results;
-pub use results::{Cell, Folded, FoundMods, MOST_HITS, Op, Part, ROLES, Results, RowRef};
+pub use results::{Folded, FoundMods, MOST_HITS, Op, Results, RowRef, Shown};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Place {

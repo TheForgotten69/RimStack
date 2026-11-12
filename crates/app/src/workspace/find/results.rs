@@ -3,7 +3,6 @@ use rimstack_core::mods::find::{FileHits, Hit, Line, lines_of};
 use rimstack_core::mods::library::ModId;
 use rimstack_core::say;
 use serde::Serialize;
-use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -83,7 +82,6 @@ struct FileGroup {
 }
 
 struct Group {
-    key: Option<ModId>,
     name: Sentence,
     files: Vec<FileGroup>,
     collapsed: bool,
@@ -159,35 +157,27 @@ pub struct FoundMods {
     pub rows: Vec<FoundMod>,
 }
 
-pub enum Cell<'a> {
-    Flag(bool),
-    Number(i32),
-    Text(Cow<'a, str>),
-    Said(&'a Sentence),
-    Parts(Vec<Part<'a>>),
+/// What a row shows: a mod, a file of it, or a line of that file.
+pub enum Shown<'a> {
+    Mod {
+        name: &'a Sentence,
+        matches: usize,
+        files: usize,
+        collapsed: bool,
+    },
+    File {
+        path: &'a str,
+        matches: usize,
+        collapsed: bool,
+    },
+    /// A gap's `number` is that of the line after it.
+    Line {
+        number: usize,
+        matched: bool,
+        gap: bool,
+        parts: Vec<(&'a str, bool)>,
+    },
 }
-
-#[derive(Serialize)]
-pub struct Part<'a> {
-    text: &'a str,
-    marked: bool,
-}
-
-/// The roles of the model, in the order `Results::cell` answers them.
-pub const ROLES: [&str; 12] = [
-    "isMod",
-    "isFile",
-    "name",
-    "modId",
-    "file",
-    "count",
-    "files",
-    "collapsed",
-    "number",
-    "isMatch",
-    "isGap",
-    "parts",
-];
 
 pub struct Located {
     pub file: PathBuf,
@@ -252,7 +242,6 @@ impl Results {
                     .picked
                     .is_some_and(|picked| picked != self.groups.len());
                 self.groups.push(Group {
-                    key: found.key,
                     name: name(),
                     files: Vec::new(),
                     collapsed: false,
@@ -386,7 +375,7 @@ impl Results {
         if at.is_mod() {
             return false;
         }
-        at.is_file() || !matches!(self.cell(at, 10), Some(Cell::Flag(true)))
+        at.is_file() || !matches!(self.shown(at), Some(Shown::Line { gap: true, .. }))
     }
 
     /// The position of the file or line row `by` such rows from `from` in `rows`, none past
@@ -440,39 +429,30 @@ impl Results {
         })
     }
 
-    pub fn cell(&self, at: RowRef, field: usize) -> Option<Cell<'_>> {
+    pub fn shown(&self, at: RowRef) -> Option<Shown<'_>> {
         let group = self.groups.get(at.group as usize)?;
-        let file = group.files.get(at.file as usize);
-        let line = file
-            .zip(Some(at.hit))
-            .and_then(|(f, l)| f.lines.get(l as usize));
-        let (is_mod, is_file) = (at.is_mod(), at.is_file());
-        let text = |t: &'static str| Cell::Text(Cow::Borrowed(t));
-        Some(match field {
-            0 => Cell::Flag(is_mod),
-            1 => Cell::Flag(is_file),
-            2 if is_mod => Cell::Said(&group.name),
-            2 => text(""),
-            3 => Cell::Number(group.key.map_or(-1, ModId::to_qml)),
-            4 => Cell::Text(Cow::Borrowed(
-                file.filter(|_| is_file).map_or("", |f| f.shown.as_str()),
-            )),
-            5 if is_mod => Cell::Number(group.matches as i32),
-            5 => Cell::Number(file.map_or(0, |f| f.visible.len() as i32)),
-            6 => Cell::Number(if is_mod { group.shown_files as i32 } else { 0 }),
-            7 if is_mod => Cell::Flag(group.collapsed),
-            7 => Cell::Flag(file.is_some_and(|f| f.collapsed && is_file)),
-            8 => Cell::Number(line.filter(|l| !l.gap).map_or(0, |l| l.number as i32)),
-            9 => Cell::Flag(line.is_some_and(Line::is_match)),
-            10 => Cell::Flag(line.is_some_and(|l| l.gap)),
-            11 => Cell::Parts(
-                line.map(Line::parts)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|(text, marked)| Part { text, marked })
-                    .collect(),
-            ),
-            _ => return None,
+        if at.is_mod() {
+            return Some(Shown::Mod {
+                name: &group.name,
+                matches: group.matches,
+                files: group.shown_files,
+                collapsed: group.collapsed,
+            });
+        }
+        let file = group.files.get(at.file as usize)?;
+        if at.is_file() {
+            return Some(Shown::File {
+                path: &file.shown,
+                matches: file.visible.len(),
+                collapsed: file.collapsed,
+            });
+        }
+        let line = file.lines.get(at.hit as usize)?;
+        Some(Shown::Line {
+            number: line.number,
+            matched: line.is_match(),
+            gap: line.gap,
+            parts: line.parts(),
         })
     }
 
@@ -658,21 +638,22 @@ mod tests {
         put(&mut results, found);
         let rows = results.refs();
         assert_eq!(rows.len(), 2 + 3);
-        let cell = |at: RowRef, field| results.cell(at, field).unwrap();
-        let number = |at| match cell(at, 8) {
-            Cell::Number(n) => n,
-            _ => panic!("not a number"),
+        let line = |at| match results.shown(at) {
+            Some(Shown::Line {
+                number,
+                matched,
+                parts,
+                ..
+            }) => (number, matched, parts),
+            _ => panic!("not a line"),
         };
         assert_eq!(
-            [number(rows[2]), number(rows[3]), number(rows[4])],
+            [line(rows[2]).0, line(rows[3]).0, line(rows[4]).0],
             [4, 5, 6]
         );
-        assert!(matches!(cell(rows[3], 9), Cell::Flag(true)));
-        assert!(matches!(cell(rows[2], 9), Cell::Flag(false)));
-        let Cell::Parts(parts) = cell(rows[3], 11) else {
-            panic!("not parts");
-        };
-        let marked: Vec<&str> = parts.iter().filter(|p| p.marked).map(|p| p.text).collect();
+        assert!(line(rows[3]).1 && !line(rows[2]).1);
+        let parts = line(rows[3]).2;
+        let marked: Vec<&str> = parts.iter().filter(|p| p.1).map(|p| p.0).collect();
         assert_eq!(marked, ["Steel", "Steel"]);
         let located = results.locate(rows[1]).unwrap();
         assert_eq!(
@@ -690,7 +671,7 @@ mod tests {
         found.hits.push(hit(9, "other Steel", "Steel"));
         put(&mut results, found);
         let rows = results.refs();
-        let is_gap = |at| matches!(results.cell(at, 10), Some(Cell::Flag(true)));
+        let is_gap = |at| matches!(results.shown(at), Some(Shown::Line { gap: true, .. }));
         assert_eq!(rows.len(), 5);
         assert!(is_gap(rows[3]));
         assert_eq!(results.locate(rows[3]).unwrap().line, 9);
@@ -704,7 +685,7 @@ mod tests {
         put(&mut results, found);
         put(&mut results, file(2, "b.xml", 1));
         let rows = results.refs();
-        let is_gap = |at| matches!(results.cell(at, 10), Some(Cell::Flag(true)));
+        let is_gap = |at| matches!(results.shown(at), Some(Shown::Line { gap: true, .. }));
         assert!(rows[0].is_mod() && rows[1].is_file() && is_gap(rows[3]) && rows[5].is_mod());
         let step = |from, by| results.step(&rows, from, by);
         assert_eq!(step(None, 1), Some(1));

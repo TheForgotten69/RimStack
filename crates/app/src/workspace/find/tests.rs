@@ -1,6 +1,6 @@
 use super::*;
 use crate::workspace::find::type_offers;
-use crate::workspace::find::{Cell, Look};
+use crate::workspace::find::{Look, Shown};
 use crate::workspace::tests::installed;
 use std::sync::Mutex;
 
@@ -197,7 +197,7 @@ fn hits_past_the_cap_are_not_kept_and_the_summary_says_so() {
         let hits = r
             .refs()
             .iter()
-            .filter(|&&at| matches!(r.cell(at, 9), Some(Cell::Flag(true))))
+            .filter(|&&at| matches!(r.shown(at), Some(Shown::Line { matched: true, .. })))
             .count();
         assert_eq!(hits, MOST_HITS);
         assert_eq!(r.mods_found(), 1);
@@ -216,7 +216,7 @@ fn a_row_resolves_to_its_file_folder_line_and_preview_without_a_path_from_outsid
     let matched = app.find_results(|r| {
         rows.iter()
             .copied()
-            .find(|&at| matches!(r.cell(at, 9), Some(Cell::Flag(true))))
+            .find(|&at| matches!(r.shown(at), Some(Shown::Line { matched: true, .. })))
     });
     let matched = matched.unwrap();
     assert_eq!(app.find_file(matched), Some(roads.clone()));

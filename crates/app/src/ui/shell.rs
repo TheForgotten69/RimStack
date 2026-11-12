@@ -16,12 +16,13 @@ use gpui::{
 const TEXTURES: usize = 2;
 const SAVES: usize = 4;
 const LOGS: usize = 5;
+const FIND: usize = 6;
 const SETTINGS: usize = 7;
 
 pub struct Shell {
     section: usize,
     demo: bool,
-    mods: Entity<Mods>,
+    pub(crate) mods: Entity<Mods>,
     /// Made with the window, as Qt's `DownloadsData` was: it counts the updates the top bar and
     /// the Mods tab show. What it reads of the `App` it reads off the window's thread.
     downloads: Option<Entity<Downloads>>,
@@ -34,6 +35,8 @@ pub struct Shell {
     pub(crate) logs: Option<Entity<super::logs::Logs>>,
     /// Made the first time Saves is shown.
     pub(crate) saves: Option<Entity<super::saves::Saves>>,
+    /// Made the first time Search is shown.
+    pub(crate) find: Option<Entity<super::find::Find>>,
     /// Made the first time Textures is shown.
     pub(crate) textures: Option<Entity<super::textures::Textures>>,
     view: usize,
@@ -90,6 +93,7 @@ impl Shell {
             logs: None,
             textures: None,
             saves: None,
+            find: None,
             view: options.view,
             prompt: super::prompt::install(cx),
             menu: super::menu::install(cx),
@@ -101,6 +105,10 @@ impl Shell {
             keep_logs(cx);
         }
         shell.go(section, cx);
+        if let Some(text) = &options.find {
+            let find = shell.find(cx);
+            find.update(cx, |find, cx| find.search_for(text, Some(2), cx));
+        }
         shell.show_asked(options, window, cx);
         shell
     }
@@ -159,8 +167,28 @@ impl Shell {
         downloads
     }
 
+    pub(crate) fn find(&mut self, cx: &mut Context<Self>) -> Entity<super::find::Find> {
+        if let Some(find) = &self.find {
+            return find.clone();
+        }
+        let (demo, mods) = (self.demo, self.mods.clone());
+        let find = cx.new(|cx| super::find::Find::new(demo, mods, cx));
+        cx.subscribe(&find, |shell, _, super::find::ShowInMods, cx| {
+            shell
+                .mods
+                .update(cx, |mods, cx| mods.filter_by("in:search", cx));
+            shell.go(0, cx);
+        })
+        .detach();
+        self.find = Some(find.clone());
+        find
+    }
+
     pub fn go(&mut self, section: usize, cx: &mut Context<Self>) {
         self.section = section;
+        if section == FIND {
+            self.find(cx);
+        }
         if section == 1 {
             self.downloads(cx);
         }
@@ -239,6 +267,13 @@ impl Render for Shell {
             .size_full()
             .on_action(|_: &super::focus::Next, window, cx| window.focus_next(cx))
             .on_action(|_: &super::focus::Previous, window, cx| window.focus_prev(cx))
+            .on_action(
+                cx.listener(|shell, _: &super::find::FocusSearch, window, cx| {
+                    shell.go(FIND, cx);
+                    let find = shell.find(cx);
+                    find.update(cx, |find, cx| find.focus_search(window, cx));
+                }),
+            )
             .bg(win)
             .text_color(ink)
             .font_family(family)
@@ -268,6 +303,7 @@ impl Shell {
             TEXTURES => self.textures.clone().map(Into::into),
             SAVES => self.saves.clone().map(Into::into),
             LOGS => self.logs.clone().map(Into::into),
+            FIND => self.find.clone().map(Into::into),
             SETTINGS => self.settings.clone().map(Into::into),
             _ => None,
         }

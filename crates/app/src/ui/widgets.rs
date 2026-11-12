@@ -241,6 +241,64 @@ pub fn elide_middle_in(
     shown(low)
 }
 
+/// `text` cut at its start to fit `room`, as `Text.ElideLeft` cuts a path.
+pub fn elide_start_in(
+    window: &Window,
+    theme: &Theme,
+    family: SharedString,
+    text: &str,
+    size: Pixels,
+    room: Pixels,
+) -> String {
+    let fits = |shown: &str| {
+        measure_in(
+            window,
+            theme,
+            family.clone(),
+            shown,
+            size,
+            FontWeight::NORMAL,
+        ) <= room
+    };
+    if fits(text) {
+        return text.to_string();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let shown = |kept: usize| {
+        let end: String = chars[chars.len() - kept..].iter().collect();
+        format!("…{end}")
+    };
+    let (mut low, mut high) = (0, chars.len().saturating_sub(1));
+    while low < high {
+        let middle = (low + high).div_ceil(2);
+        match fits(&shown(middle)) {
+            true => low = middle,
+            false => high = middle - 1,
+        }
+    }
+    shown(low)
+}
+
+/// A caption in capitals a pixel apart, as `font.capitalization: Font.AllUppercase` with
+/// `font.letterSpacing: 1` drew it; GPUI has no spacing of its own, so each letter is placed.
+pub fn caps(theme: &Theme, text: &str) -> gpui::Div {
+    let shown = text.to_uppercase();
+    let letters = shown.chars().map(|letter| div().child(letter.to_string()));
+    watched(
+        div()
+            .flex()
+            .flex_none()
+            .overflow_hidden()
+            .whitespace_nowrap()
+            .sized_text(theme, theme.caption())
+            .font_weight(theme.semibold)
+            .text_color(theme.colours.ink3),
+        SharedString::from(shown.clone()),
+        div().flex().gap(theme::GAP_LINE / 2.).children(letters),
+        false,
+    )
+}
+
 /// The width `Chip.qml` takes: its icon, its text and the room around them.
 pub fn chip_width(window: &Window, theme: &Theme, text: &str, icon: bool) -> Pixels {
     let shown = if icon {

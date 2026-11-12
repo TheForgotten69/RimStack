@@ -433,6 +433,11 @@ impl Mods {
         }
     }
 
+    /// The mod chosen first, as `Mods.selectedId` gave it.
+    pub fn selected_id(&self) -> Option<i32> {
+        self.selection.first().copied()
+    }
+
     pub fn game_version(&self) -> String {
         self.overview
             .as_ref()

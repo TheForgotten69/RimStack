@@ -6,6 +6,7 @@ pub mod card;
 pub mod controls;
 pub mod downloads;
 pub mod field;
+pub mod find;
 pub mod focus;
 pub mod logs;
 pub mod menu;
@@ -66,6 +67,8 @@ pub struct Options {
     pub part: usize,
     /// The view of Logs shown, as `--view=` gives it.
     pub view: usize,
+    /// A search made at the start, as `--find=` gives its text, for pictures.
+    pub find: Option<String>,
 }
 
 impl Options {
@@ -87,6 +90,7 @@ impl Options {
                 "--open" => options.open = Some(value.to_string()),
                 "--part" => options.part = value.parse().unwrap_or(0),
                 "--view" => options.view = value.parse().unwrap_or(0),
+                "--find" => options.find = Some(value.to_string()),
                 _ => {}
             }
         }
@@ -249,6 +253,11 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     cx.bind_keys([gpui::KeyBinding::new(
         crate::command!("f"),
         mods::FocusFilter,
+        None,
+    )]);
+    cx.bind_keys([gpui::KeyBinding::new(
+        crate::command!("shift-f"),
+        find::FocusSearch,
         None,
     )]);
 }
