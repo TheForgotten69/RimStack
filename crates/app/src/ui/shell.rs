@@ -273,6 +273,8 @@ impl Shell {
             cx.notify();
         })
         .detach();
+        self.mods
+            .update(cx, |mods, cx| mods.set_downloads(&downloads, cx));
         self.downloads = Some(downloads.clone());
         downloads
     }

@@ -677,6 +677,7 @@ impl DetailsView {
         shown.extend(self.copies(theme, details));
         shown.push(self.facts(theme, details, inner, window, cx));
         shown.push(self.notes(theme, details, window, cx));
+        shown.extend(self.latest(theme, details, window, cx));
         shown
     }
 }

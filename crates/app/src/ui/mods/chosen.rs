@@ -44,6 +44,8 @@ pub struct DetailsShown {
     pub unhide_problem: String,
     /// What Sort's preview moves, while it is shown.
     pub sort_moves: Option<Rc<Vec<crate::workspace::load_order::SortGroup>>>,
+    /// A Git checkout's last commits, read off the window's thread.
+    pub commits: Option<Rc<Vec<rimstack_core::sources::changes::Note>>>,
     /// The mod chosen alone, as `RowView::mod_id` gives it.
     pub chosen_id: Option<i32>,
     /// Two mods' shared textures being compared: the details tell what was kept.
@@ -89,6 +91,8 @@ pub struct DetailsView {
     /// The picture shown small, as a click on it asks.
     pub(super) small_picture: bool,
     paging: crate::ui::page::Paging,
+    /// Where a Workshop mod's change notes are fetched and kept.
+    pub(super) downloads: Option<gpui::WeakEntity<crate::ui::downloads::Downloads>>,
 }
 
 impl DetailsView {
@@ -124,6 +128,7 @@ impl DetailsView {
             group,
             note,
             small_picture: false,
+            downloads: None,
             paging: crate::ui::page::Paging::new(cx.global::<Theme>().appearance.reduce_motion),
         }
     }

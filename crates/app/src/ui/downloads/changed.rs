@@ -243,7 +243,7 @@ impl Downloads {
     }
 
     /// `AskSteam.qml`: what the notes button says while Steam is asked, or waited for.
-    fn ask_steam_label(&self) -> String {
+    pub fn ask_steam_label(&self) -> String {
         let Some(state) = self.notes_state.as_ref().filter(|_| self.notes_busy) else {
             return match self.notes_busy {
                 true => put(&say!("Asking Steam…")),

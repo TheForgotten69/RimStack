@@ -12,6 +12,7 @@ mod details;
 mod edit;
 mod filter;
 mod inactive;
+mod latest;
 mod left_off;
 mod list;
 mod menus;
@@ -118,6 +119,9 @@ pub struct Mods {
     chosen_read: Lane,
     /// What the Files tab shows of the chosen mod, read off the window's thread.
     chosen_files: Option<(ModId, Rc<chosen::FilesRead>)>,
+    /// A Git checkout's last commits, for its Latest changes.
+    chosen_commits: Option<(ModId, Rc<Vec<rimstack_core::sources::changes::Note>>)>,
+    commits_read: Lane,
     unhide_problem: String,
     /// The shared textures of two mods, shown in place of the lists.
     comparing: Option<Entity<compare::CompareView>>,
@@ -247,6 +251,8 @@ impl Mods {
             notes_saved: false,
             chosen_read: Lane::default(),
             chosen_files: None,
+            chosen_commits: None,
+            commits_read: Lane::default(),
             unhide_problem: String::new(),
             comparing: None,
             compared: None,
@@ -453,6 +459,11 @@ impl Mods {
                 .previewing()
                 .then(|| Rc::new(self.order.sort_moves())),
             chosen_id: self.selected_id(),
+            commits: self
+                .chosen_commits
+                .as_ref()
+                .filter(|(of, _)| self.selected_id().and_then(ModId::from_qml) == Some(*of))
+                .map(|(_, read)| read.clone()),
             hunting: self.hunting,
             previewing: self.order.previewing(),
             selected: self.selection.len(),

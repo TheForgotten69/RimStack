@@ -366,6 +366,21 @@ impl Downloads {
     /// The change notes of the Workshop mods changed since the game last started.
     pub fn fetch_since_notes(&mut self, cx: &mut Context<Self>) {
         let asked = notes_asked(&self.changed);
+        self.fetch_notes(asked, cx);
+    }
+
+    /// One mod's change notes, as its details' Latest changes card asks.
+    pub fn fetch_notes_of(
+        &mut self,
+        id: rimstack_core::mods::library::ModId,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(workshop) = super::super::app(cx).workshop_id(id) {
+            self.fetch_notes(vec![(workshop, 0)], cx);
+        }
+    }
+
+    fn fetch_notes(&mut self, asked: Vec<(String, u64)>, cx: &mut Context<Self>) {
         if self.notes_busy || self.demo || asked.is_empty() {
             return;
         }

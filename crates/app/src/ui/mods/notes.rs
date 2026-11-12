@@ -219,6 +219,7 @@ impl Mods {
             self.chosen_files = None;
             return;
         };
+        self.read_commits(id, cx);
         if self.chosen_files.as_ref().is_some_and(|(of, _)| *of == id) {
             return;
         }
@@ -234,6 +235,32 @@ impl Mods {
             },
             move |mods, read, cx| {
                 mods.chosen_files = Some((id, std::rc::Rc::new(read)));
+                mods.sync_details(cx);
+            },
+        );
+    }
+
+    /// A Git checkout's last commits, for the Latest changes card.
+    fn read_commits(&mut self, id: ModId, cx: &mut Context<Self>) {
+        let git = self
+            .details
+            .as_ref()
+            .is_some_and(|d| !d.workshop && !d.repository.is_empty());
+        if !git
+            || self
+                .chosen_commits
+                .as_ref()
+                .is_some_and(|(of, _)| *of == id)
+        {
+            return;
+        }
+        let app = super::super::app(cx);
+        self.commits_read.run(
+            "commits of a mod",
+            cx,
+            move |_| app.commits_of(id),
+            move |mods, commits, cx| {
+                mods.chosen_commits = Some((id, std::rc::Rc::new(commits)));
                 mods.sync_details(cx);
             },
         );

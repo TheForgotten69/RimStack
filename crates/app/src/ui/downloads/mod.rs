@@ -97,6 +97,20 @@ impl EventEmitter<ShowMod> for Downloads {}
 impl EventEmitter<BehindActive> for Downloads {}
 
 impl Downloads {
+    /// A Workshop mod's change notes, once fetched.
+    pub fn fetched_notes(
+        &self,
+        workshop_id: &str,
+    ) -> Option<&Vec<rimstack_core::sources::changes::Note>> {
+        self.fetched.get(workshop_id)
+    }
+
+    pub fn notes_busy(&self) -> bool {
+        self.notes_busy
+    }
+}
+
+impl Downloads {
     pub fn new(demo: bool, mods: Entity<super::mods::Mods>, cx: &mut Context<Self>) -> Self {
         let theme = cx.global::<Theme>().clone();
         let pasted = cx.new(|cx| TextField::new(theme.body(), cx));
