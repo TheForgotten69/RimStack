@@ -187,7 +187,14 @@ impl Mods {
                     .flex_none()
                     .px(theme::GAP_LARGE)
                     .pb(theme::GAP)
-                    .child(self.filter_field(theme, window, cx)),
+                    .child(self.filter_field(
+                        &self.filter.clone(),
+                        "filter",
+                        width - theme::GAP_LARGE * 2.,
+                        theme,
+                        window,
+                        cx,
+                    )),
             )
             .child(headings)
             .child(
@@ -523,25 +530,6 @@ impl Mods {
             );
         }
         shown
-    }
-
-    /// `ModsFilter.qml` and `FilterField.qml`: the filter, its count of what it lets through, and its clear button.
-    fn filter_field(
-        &self,
-        theme: &Theme,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) -> gpui::Stateful<gpui::Div> {
-        let typed = !self.filter.read(cx).text().is_empty();
-        crate::ui::field::Field {
-            id: "filter",
-            text: &self.filter,
-            icon: "funnel",
-            placeholder: put(&say!("Filter active and inactive mods")),
-            found: typed.then(|| put(&self.order.filter_summary())),
-            keys: Some(put(&say!("Ctrl + F"))),
-        }
-        .render(theme, window, cx)
     }
 }
 

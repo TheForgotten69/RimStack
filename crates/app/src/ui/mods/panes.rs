@@ -119,7 +119,7 @@ impl Mods {
     pub(super) fn set_drawer(&mut self, open: bool, cx: &mut Context<Self>) {
         self.drawer_open = open;
         if open {
-            let text = self.filter_text(cx);
+            let text = self.filter.read(cx).text().to_string();
             self.mirror
                 .update(cx, |field, cx| field.set_text_quietly(&text, cx));
         }

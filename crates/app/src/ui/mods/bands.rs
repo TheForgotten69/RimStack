@@ -20,7 +20,7 @@ const NOTE_STAYS: Duration = Duration::from_secs(8);
 impl Mods {
     /// A term added to the filter, or taken out when it is there, as `toggleTerm` did.
     pub(super) fn toggle_term(&mut self, term: &str, cx: &mut Context<Self>) {
-        let text = self.filter.read(cx).text().to_string();
+        let text = self.filter_text(cx);
         let had = text.split(' ').any(|word| word == term);
         let mut words: Vec<&str> = text
             .split(' ')

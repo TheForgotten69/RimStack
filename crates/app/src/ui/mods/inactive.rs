@@ -65,17 +65,17 @@ impl Mods {
                     .on_click(cx.listener(|mods, _, _, cx| mods.set_hidden(true, cx))),
             });
         let mirror = drawer.then(|| {
-            div().px(theme::GAP_LARGE).pb(theme::GAP).child(
-                crate::ui::field::Field {
-                    id: "drawer-filter",
-                    text: &self.mirror,
-                    icon: "funnel",
-                    placeholder: put(&say!("Filter active and inactive mods")),
-                    found: None,
-                    keys: Some(put(&say!("Ctrl + F"))),
-                }
-                .render(theme, window, cx),
-            )
+            div()
+                .px(theme::GAP_LARGE)
+                .pb(theme::GAP)
+                .child(self.filter_field(
+                    &self.mirror.clone(),
+                    "drawer-filter",
+                    width - theme::GAP_LARGE * 2.,
+                    theme,
+                    window,
+                    cx,
+                ))
         });
         let only_new = self.fresh > 0 && self.filter_text(cx) == "is:new";
         let activate = only_new.then(|| {

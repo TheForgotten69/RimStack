@@ -68,6 +68,8 @@ pub struct Options {
     pub comparing: bool,
     /// The inactive mods' drawer open, when they are folded into the rail.
     pub drawer: bool,
+    /// Typed into the Mods filter, which has the keys, as `--typing=` asks.
+    pub typing: Option<String>,
     /// The filter's text at the start, as `--filter=` gives it.
     pub filter: Option<String>,
     /// A row of the load order chosen, and the tab shown, as `--pick=` and `--tab=` give them.
@@ -109,6 +111,7 @@ impl Options {
                 "--several" => options.several = true,
                 "--comparing" => options.comparing = true,
                 "--drawer" => options.drawer = true,
+                "--typing" => options.typing = Some(value.to_string()),
                 "--filter" => options.filter = Some(value.to_string()),
                 "--pick" => options.pick = value.parse().ok(),
                 "--tab" => options.tab = value.parse().unwrap_or(0),

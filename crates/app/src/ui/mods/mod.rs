@@ -10,6 +10,7 @@ mod columns;
 mod compare;
 mod details;
 mod edit;
+mod filter;
 mod inactive;
 mod left_off;
 mod list;
@@ -65,7 +66,7 @@ pub struct Mods {
     active: Shown,
     inactive: Shown,
     orders: Orders,
-    filter: Entity<TextField>,
+    pub filter: Entity<TextField>,
     active_list: Entity<list::ModList>,
     inactive_list: Entity<list::ModList>,
     focus: gpui::FocusHandle,
@@ -137,6 +138,10 @@ pub struct Mods {
     left_off: left_off::LeftOff,
     /// Where a heading or a column's edge was pressed, and the column's width then.
     column_drag: Option<(Pixels, Pixels)>,
+    /// The filter's terms shown as chips; the field holds what is typed after them.
+    filter_terms: Vec<String>,
+    /// The offers under the filter put away until it is typed in or clicked again.
+    offers_shut: bool,
 }
 
 impl Mods {
@@ -157,10 +162,7 @@ impl Mods {
         );
         let mirror = cx.new(|cx| TextField::new(size, cx));
         cx.subscribe(&mirror, |mods, field, _: &Edited, cx| {
-            let text = field.read(cx).text().to_string();
-            if text != mods.filter_text(cx) {
-                mods.filter_by(&text, cx);
-            }
+            mods.filter_edited(&field, cx)
         })
         .detach();
         let order = if demo {
@@ -170,10 +172,7 @@ impl Mods {
         };
         let filter = cx.new(|cx| TextField::new(size, cx));
         cx.subscribe(&filter, |mods, field, _: &Edited, cx| {
-            let text = field.read(cx).text().to_string();
-            mods.order.set_filter(&text);
-            mods.show(cx);
-            mods.keep_left_filter(text, cx);
+            mods.filter_edited(&field, cx)
         })
         .detach();
         let thumbs = super::thumbs::Shared::default();
@@ -256,6 +255,8 @@ impl Mods {
             mirror,
             widths_kept: Lane::default(),
             column_drag: None,
+            filter_terms: Vec::new(),
+            offers_shut: false,
             left_off: match demo {
                 true => left_off::LeftOff::Off,
                 false => left_off::LeftOff::Waiting,
@@ -466,7 +467,7 @@ impl Mods {
                 order
             },
             move |mods, mut order, cx| {
-                let text = mods.filter.read(cx).text().to_string();
+                let text = mods.filter_text(cx);
                 order.set_filter(&text);
                 if anew {
                     let same = mods.order.same_mods_in(&order);

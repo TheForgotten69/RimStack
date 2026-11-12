@@ -167,3 +167,65 @@ fn a_column_is_sized_by_its_edge_and_moved_by_its_heading() {
         })
     });
 }
+
+#[test]
+fn filter_terms_become_chips_and_are_taken_off_one_by_one() {
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            mods.filter_by("is:warning fixture tag:x", cx)
+        })
+    });
+    cx.update(|cx| {
+        let mods = mods.read(cx);
+        assert_eq!(mods.filter_terms, ["is:warning", "tag:x"]);
+        assert_eq!(mods.filter.read(cx).text(), "fixture");
+        assert_eq!(mods.filter_text(cx), "is:warning tag:x fixture");
+    });
+    let field = cx.update(|cx| mods.read(cx).filter.clone());
+    cx.update(|cx| field.update(cx, |f, cx| f.set_text("fixture !is:error mod", cx)));
+    cx.update(|cx| {
+        let mods = mods.read(cx);
+        assert_eq!(
+            mods.filter_terms,
+            ["is:warning", "tag:x", "!is:error"],
+            "a finished term becomes a chip"
+        );
+        assert_eq!(mods.filter.read(cx).text(), "fixture mod");
+    });
+    cx.update(|cx| mods.update(cx, |mods, cx| mods.drop_term(0, cx)));
+    cx.update(|cx| assert_eq!(mods.read(cx).filter_text(cx), "tag:x !is:error fixture mod"));
+    cx.update(|cx| mods.update(cx, |mods, cx| mods.clear_filter(cx)));
+    cx.update(|cx| assert_eq!(mods.read(cx).filter_text(cx), ""));
+}
+
+#[test]
+fn a_term_toggled_and_a_reread_keep_the_chips() {
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    cx.update(|cx| mods.update(cx, |mods, cx| mods.filter_by("tag:x fixture", cx)));
+    cx.update(|cx| mods.update(cx, |mods, cx| mods.toggle_term("is:warning", cx)));
+    cx.update(|cx| assert_eq!(mods.read(cx).filter_text(cx), "tag:x is:warning fixture"));
+    cx.update(|cx| mods.update(cx, |mods, cx| mods.toggle_term("tag:x", cx)));
+    cx.update(|cx| assert_eq!(mods.read(cx).filter_text(cx), "is:warning fixture"));
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            mods.load(true, cx);
+            mods.order = crate::workspace::load_order::LoadOrder::demo(0, 0);
+        })
+    });
+    let started = Instant::now();
+    while cx.update(|cx| mods.read(cx).count(Side::Active) == 0) {
+        assert!(started.elapsed() < Duration::from_secs(20));
+        cx.run_until_parked();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let shown = cx.update(|cx| mods.read(cx).order.filter_summary());
+    let whole = cx.update(|cx| {
+        let mods = mods.read(cx);
+        (mods.count(Side::Active), mods.matching(Side::Active))
+    });
+    assert!(
+        whole.1 < whole.0,
+        "the reread list is still filtered: {shown}"
+    );
+}

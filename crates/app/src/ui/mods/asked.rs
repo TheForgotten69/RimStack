@@ -172,12 +172,4 @@ impl Mods {
         self.sync_details(cx);
         cx.notify();
     }
-
-    pub fn filter_by(&mut self, text: &str, cx: &mut Context<Self>) {
-        self.filter.update(cx, |field, cx| field.set_text(text, cx));
-    }
-
-    pub fn filter_text(&self, cx: &gpui::App) -> String {
-        self.filter.read(cx).text().to_string()
-    }
 }

@@ -71,6 +71,11 @@ impl Shell {
         if let Some(text) = &options.filter {
             mods.update(cx, |mods, cx| mods.filter_by(text, cx));
         }
+        if let Some(text) = &options.typing {
+            let field = mods.read(cx).filter.clone();
+            field.update(cx, |field, cx| field.set_text(text, cx));
+            window.focus(&gpui::Focusable::focus_handle(field.read(cx), cx), cx);
+        }
         if let Some(row) = options.pick {
             let tab = options.tab;
             mods.update(cx, |mods, cx| mods.pick_row(Side::Active, row, tab, cx));
