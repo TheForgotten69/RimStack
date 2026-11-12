@@ -13,6 +13,7 @@ impl Mods {
         &self,
         theme: &Theme,
         width: gpui::Pixels,
+        drawer: bool,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
@@ -20,18 +21,22 @@ impl Mods {
         let title = put(&say!("Inactive"));
         let counted = count(self.count(Side::Inactive));
         let order = put(&self.orders.inactive_said);
-        let hide = put(&say!("Hide"));
-        // Qt's RowLayout gives its empty filler a gap too.
+        let hide = match drawer {
+            true => put(&say!("Pin")),
+            false => put(&say!("Hide")),
+        };
+        // Qt's RowLayout gives its empty filler a gap too, and takes each item's width in whole
+        // pixels.
         let fresh = (self.fresh > 0).then(|| put(&say!("{} new", count(self.fresh))));
-        let named = measure(window, theme, &title, theme.heading(), FontWeight::BOLD)
+        let named = measure(window, theme, &title, theme.heading(), FontWeight::BOLD).ceil()
             + theme::GAP * 2.
-            + measure(window, theme, &counted, theme.body(), FontWeight::NORMAL)
+            + measure(window, theme, &counted, theme.body(), FontWeight::NORMAL).ceil()
             + fresh.as_deref().map_or(px(0.), |said| {
-                chip_width(window, theme, said, false) + theme::GAP
+                chip_width(window, theme, said, false).ceil() + theme::GAP
             });
-        let acts = btn_width(window, theme, &order, true, true)
+        let acts = btn_width(window, theme, &order, true, true).ceil()
             + theme::GAP
-            + btn_width(window, theme, &hide, false, false);
+            + btn_width(window, theme, &hide, false, false).ceil();
         let room = width - theme::GAP_CARD - theme::GAP_LARGE;
         let stacked = named + acts + theme::GAP > room;
         let buttons = div()
@@ -49,9 +54,29 @@ impl Mods {
                     });
                 super::columns::placed(button, self.menu_buttons.order.clone())
             })
-            .child(Btn::new("hide-inactive", hide).tip(put(&say!(
-                "Folds the list into a bar at the left edge; its button opens the list over the load order"
-            ))));
+            .child(match drawer {
+                true => Btn::new("pin-inactive", hide)
+                    .tip(put(&say!("Beside the load order, always open")))
+                    .on_click(cx.listener(|mods, _, _, cx| mods.set_hidden(false, cx))),
+                false => Btn::new("hide-inactive", hide)
+                    .tip(put(&say!(
+                        "Folds the list into a bar at the left edge; its button opens the list over the load order"
+                    )))
+                    .on_click(cx.listener(|mods, _, _, cx| mods.set_hidden(true, cx))),
+            });
+        let mirror = drawer.then(|| {
+            div().px(theme::GAP_LARGE).pb(theme::GAP).child(
+                crate::ui::field::Field {
+                    id: "drawer-filter",
+                    text: &self.mirror,
+                    icon: "funnel",
+                    placeholder: put(&say!("Filter active and inactive mods")),
+                    found: None,
+                    keys: Some(put(&say!("Ctrl + F"))),
+                }
+                .render(theme, window, cx),
+            )
+        });
         let only_new = self.fresh > 0 && self.filter_text(cx) == "is:new";
         let activate = only_new.then(|| {
             div()
@@ -115,6 +140,7 @@ impl Mods {
                     )
                     .child(buttons.when(stacked, |d| d.mb(theme::GAP))),
             )
+            .children(mirror)
             .children(activate)
             .child(
                 div()

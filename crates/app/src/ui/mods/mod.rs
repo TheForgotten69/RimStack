@@ -14,6 +14,7 @@ mod inactive;
 mod list;
 mod menus;
 mod notes;
+mod panes;
 mod problems;
 mod rows;
 mod selection;
@@ -127,17 +128,37 @@ pub struct Mods {
     menu_buttons: columns::Placed,
     /// A menu to open once its button is drawn, as `--open=view` or `--open=order` asks.
     pub menu_wanted: Option<&'static str>,
+    /// The inactive mods shown over the load order, from the rail.
+    pub drawer_open: bool,
+    /// The drawer's own filter, as `ModsFilter` mirrored the load order's.
+    mirror: Entity<TextField>,
+    widths_kept: Lane,
 }
 
 impl Mods {
     pub fn new(demo: bool, cx: &mut Context<Self>) -> Self {
         let theme = cx.global::<Theme>();
-        let (inactive_width, details_width, size) =
-            (theme.sized(290.), theme.sized(360.), theme.body());
+        let ((first_inactive, first_details), size) = (panes::first_widths(theme), theme.body());
         let view = Rc::new(match demo {
             true => crate::workspace::ModsView::default(),
             false => super::app(cx).mods_view(),
         });
+        let kept = |width: f32, first: Pixels| match width > 0. {
+            true => px(width),
+            false => first,
+        };
+        let (inactive_width, details_width) = (
+            kept(view.inactive, first_inactive),
+            kept(view.details, first_details),
+        );
+        let mirror = cx.new(|cx| TextField::new(size, cx));
+        cx.subscribe(&mirror, |mods, field, _: &Edited, cx| {
+            let text = field.read(cx).text().to_string();
+            if text != mods.filter_text(cx) {
+                mods.filter_by(&text, cx);
+            }
+        })
+        .detach();
         let order = if demo {
             LoadOrder::demo(2000, 300)
         } else {
@@ -224,6 +245,9 @@ impl Mods {
             view,
             menu_buttons: Default::default(),
             menu_wanted: None,
+            drawer_open: false,
+            mirror,
+            widths_kept: Lane::default(),
         };
         mods.show(cx);
         if !demo {
@@ -388,7 +412,7 @@ impl Mods {
             changed_since: self.changed_since,
             behind: self.behind,
             selected_active: self.selected_active,
-            panes: (self.inactive_width, self.details_width),
+            panes: self.panes_wanted(),
             problems_open: self.problems_open,
             position: self
                 .selected_id()
@@ -637,35 +661,7 @@ impl Mods {
     }
 }
 
-impl Mods {
-    /// The three panes' widths as Qt's SplitView gives them: the load order keeps its least width,
-    /// taken from the details first, then from the inactive mods, each down to its own least.
-    fn widths(&self, theme: &Theme, window: Pixels) -> (Pixels, Pixels, Pixels) {
-        pane_widths(theme, window, (self.inactive_width, self.details_width))
-    }
-}
-
-/// The three panes' widths for the widths wanted for the inactive mods and the details.
-pub fn pane_widths(
-    theme: &Theme,
-    window: Pixels,
-    (inactive, details): (Pixels, Pixels),
-) -> (Pixels, Pixels, Pixels) {
-    {
-        let room = window - theme::HANDLE * 2.;
-        let (mut inactive, mut details) = (inactive, details);
-        let mut over = inactive + details + theme.sized(380.) - room;
-        if over > px(0.) {
-            let cut = over.min((details - theme.sized(260.)).max(px(0.)));
-            details -= cut;
-            over -= cut;
-        }
-        if over > px(0.) {
-            inactive -= over.min((inactive - theme.sized(200.)).max(px(0.)));
-        }
-        (inactive, (room - inactive - details).max(px(0.)), details)
-    }
-}
+pub use panes::pane_widths;
 
 impl Focusable for Mods {
     fn focus_handle(&self, _: &gpui::App) -> gpui::FocusHandle {
@@ -685,11 +681,10 @@ impl Render for Mods {
                 .h_full()
                 .child(div().w(px(1.)).h_full().bg(theme.colours.edge))
         };
-        let (inactive_width, active_width, details_width) =
-            self.widths(&theme, window.viewport_size().width);
+        let (_, _, details_width) =
+            pane_widths(&theme, window.viewport_size().width, self.panes_wanted());
         let bulk = self.bulk_bar(&theme, cx);
         self.open_wanted_menu(window, cx);
-        let panes = div().flex().flex_1().min_h_0().w_full();
         div()
             .flex()
             .flex_col()
@@ -697,7 +692,17 @@ impl Render for Mods {
             .min_h_0()
             .track_focus(&self.focus)
             .on_action(cx.listener(|mods, _: &FocusFilter, window, cx| {
-                window.focus(&mods.filter.focus_handle(cx), cx);
+                let field = match mods.drawer_open && mods.view.inactive_hidden {
+                    true => &mods.mirror,
+                    false => &mods.filter,
+                };
+                window.focus(&field.focus_handle(cx), cx);
+            }))
+            .capture_key_down(cx.listener(|mods, event: &gpui::KeyDownEvent, _, cx| {
+                if mods.drawer_open && event.keystroke.key == "escape" {
+                    mods.set_drawer(false, cx);
+                    cx.stop_propagation();
+                }
             }))
             .on_action(cx.listener(|mods, _: &Undo, _, cx| mods.undo(cx)))
             .on_action(cx.listener(|mods, _: &Redo, _, cx| mods.redo(cx)))
@@ -725,28 +730,7 @@ impl Render for Mods {
                 )
             })
             .when(self.comparing.is_none(), |d| {
-                d.child(
-                    panes
-                        .child(
-                            self.inactive_pane(&theme, inactive_width, window, cx)
-                                .w(inactive_width)
-                                .flex_none(),
-                        )
-                        .child(handle())
-                        .child(
-                            self.active_pane(&theme, active_width, window, cx)
-                                .flex_1()
-                                .min_w_0(),
-                        )
-                        .child(handle())
-                        .child(
-                            div()
-                                .w(details_width)
-                                .flex_none()
-                                .h_full()
-                                .child(self.details_view.clone()),
-                        ),
-                )
+                d.child(self.panes(&theme, window, cx))
             })
             .children(bulk)
     }

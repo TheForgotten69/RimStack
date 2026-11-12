@@ -66,6 +66,8 @@ pub struct Options {
     pub several: bool,
     /// The first two active mods that share textures compared, as `--comparing` asks.
     pub comparing: bool,
+    /// The inactive mods' drawer open, when they are folded into the rail.
+    pub drawer: bool,
     /// The filter's text at the start, as `--filter=` gives it.
     pub filter: Option<String>,
     /// A row of the load order chosen, and the tab shown, as `--pick=` and `--tab=` give them.
@@ -106,6 +108,7 @@ impl Options {
                 "--text-scale" => options.text_scale = value.parse().ok(),
                 "--several" => options.several = true,
                 "--comparing" => options.comparing = true,
+                "--drawer" => options.drawer = true,
                 "--filter" => options.filter = Some(value.to_string()),
                 "--pick" => options.pick = value.parse().ok(),
                 "--tab" => options.tab = value.parse().unwrap_or(0),

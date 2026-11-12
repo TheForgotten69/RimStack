@@ -43,3 +43,54 @@ fn the_view_chosen_is_kept_and_read_again_with_the_mods() {
         );
     });
 }
+
+#[test]
+fn the_inactive_mods_fold_into_the_rail_and_the_dividers_keep_their_least() {
+    use super::panes::{Grip, pane_widths};
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    cx.update(|cx| {
+        let theme = cx.global::<crate::ui::theme::Theme>().clone();
+        mods.update(cx, |mods, cx| {
+            mods.set_hidden(true, cx);
+            assert!(crate::ui::app(cx).mods_view().inactive_hidden);
+            let window = gpui::px(1440.);
+            let (inactive, active, details) = pane_widths(&theme, window, mods.panes_wanted());
+            assert_eq!(inactive, gpui::px(0.));
+            assert_eq!(
+                inactive
+                    + active
+                    + details
+                    + super::panes::rail_width(&theme)
+                    + crate::ui::theme::HANDLE,
+                window
+            );
+            let area = gpui::Bounds::new(
+                gpui::point(gpui::px(0.), gpui::px(0.)),
+                gpui::size(window, gpui::px(800.)),
+            );
+            mods.drag_grip(
+                Grip::Details,
+                gpui::point(gpui::px(1400.), gpui::px(10.)),
+                area,
+                cx,
+            );
+            assert_eq!(
+                mods.details_width,
+                theme.sized(260.),
+                "the details keep their least width"
+            );
+            mods.drag_grip(
+                Grip::Inactive,
+                gpui::point(gpui::px(500.), gpui::px(10.)),
+                area,
+                cx,
+            );
+            assert_eq!(
+                mods.inactive_width,
+                gpui::px(500.) - crate::ui::theme::HANDLE / 2.
+            );
+            mods.set_hidden(false, cx);
+            assert!(!mods.panes_wanted().hidden);
+        })
+    });
+}

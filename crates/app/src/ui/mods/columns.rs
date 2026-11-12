@@ -202,7 +202,7 @@ impl Mods {
     }
 
     /// The view changed by `change` and kept, as `ModsPrefs` kept each change.
-    fn keep_view(&mut self, change: impl FnOnce(&mut ModsView), cx: &mut Context<Self>) {
+    pub(super) fn keep_view(&mut self, change: impl FnOnce(&mut ModsView), cx: &mut Context<Self>) {
         change(Rc::make_mut(&mut self.view));
         if self.demo {
             return;

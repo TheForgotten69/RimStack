@@ -32,8 +32,8 @@ pub struct DetailsShown {
     /// The active mods with a newer Workshop version.
     pub behind: usize,
     pub selected_active: bool,
-    /// The widths wanted for the inactive mods and the details, for `pane_widths`.
-    pub panes: (Pixels, Pixels),
+    /// What `pane_widths` is given.
+    pub panes: super::panes::Panes,
     /// The problems panel shown in place of the rest.
     pub problems_open: bool,
     pub picking: Option<super::notes::Picking>,

@@ -88,6 +88,9 @@ impl Shell {
         if options.several {
             mods.update(cx, |mods, cx| mods.choose_several(cx));
         }
+        if options.drawer {
+            mods.update(cx, |mods, _| mods.drawer_open = true);
+        }
         if options.comparing {
             mods.update(cx, |mods, cx| mods.compare_first(cx));
         }
