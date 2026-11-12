@@ -1,6 +1,6 @@
 //! The window's picture with no window shown: `just shot <out.png> [--theme=… --text-scale=…]`.
 
-use gpui::{AppContext, HeadlessAppContext, px, size};
+use gpui::{AppContext, HeadlessAppContext, size};
 use rimstack_app::{App, ui};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -28,7 +28,7 @@ fn main() {
     );
     cx.update(|cx| ui::install(app, &options, cx));
     let window = cx
-        .open_window(size(px(ui::WINDOW.0), px(ui::WINDOW.1)), |window, cx| {
+        .open_window(size(ui::WINDOW.0, ui::WINDOW.1), |window, cx| {
             cx.new(|cx| ui::shell::Shell::new(&options, window, cx))
         })
         .expect("a window opens with no display");

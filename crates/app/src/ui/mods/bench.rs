@@ -1,9 +1,8 @@
 //! `--selftest`: the load order scrolled from top to bottom in ten seconds, as `ModsChecks.qml`
-//! did. Each frame moves the list and draws the whole Mods view again: harder than the wheel,
-//! whose scroll gpui-fast draws without the view.
+//! did. Each frame moves the list and draws it again, as a wheel's glide does.
 
-use super::Mods;
-use gpui::{Context, Window, point, px};
+use super::list::ModList;
+use gpui::{Context, Window};
 use std::time::{Duration, Instant};
 
 const LENGTH: Duration = Duration::from_secs(10);
@@ -38,7 +37,7 @@ fn cpu_time() -> Duration {
     Duration::from_millis((ticks(11) + ticks(12)) * 10)
 }
 
-impl Mods {
+impl ModList {
     pub fn start_bench(&mut self, cx: &mut Context<Self>) {
         let now = Instant::now();
         self.bench = Some(Bench {
@@ -53,6 +52,7 @@ impl Mods {
     }
 
     pub(super) fn bench_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let scroll = self.scroll().clone();
         let Some(bench) = &mut self.bench else {
             return;
         };
@@ -64,18 +64,15 @@ impl Mods {
         }
         (bench.frames, bench.last) = (bench.frames + 1, now);
         let part = ((now - bench.started).as_secs_f32() / LENGTH.as_secs_f32()).min(1.);
-        let most = self.active.list.max_offset_for_scrollbar().y;
-        self.active
-            .list
-            .set_offset_from_scrollbar(point(px(0.), -(most * part)));
+        let most = scroll.borrow().most();
+        scroll.borrow_mut().set_top(most * part);
         if part < 1. {
             window.request_animation_frame();
             return;
         }
         let cpu = cpu_time() - bench.cpu;
-        let built = super::scrollbar::ROWS_BUILT.load(std::sync::atomic::Ordering::Relaxed);
         println!(
-            "scroll frames={} slow={} worst_ms={:.1} cpu_ms={} rows_built={built}",
+            "scroll frames={} slow={} worst_ms={:.1} cpu_ms={}",
             bench.frames,
             bench.slow,
             bench.worst.as_secs_f64() * 1000.,

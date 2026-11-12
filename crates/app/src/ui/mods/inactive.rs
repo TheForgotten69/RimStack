@@ -14,7 +14,7 @@ impl Mods {
         theme: &Theme,
         width: gpui::Pixels,
         window: &Window,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) -> gpui::Div {
         let c = &theme.colours;
         let title = put(&say!("Inactive"));
@@ -71,6 +71,12 @@ impl Mods {
                     )
                     .child(buttons.when(stacked, |d| d.mb(theme::GAP))),
             )
-            .child(self.list_area(theme, Side::Inactive, None, width, cx))
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .child(self.list(Side::Inactive).clone()),
+            )
     }
 }

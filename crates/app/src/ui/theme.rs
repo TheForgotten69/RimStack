@@ -335,6 +335,12 @@ pub struct Theme {
 
 impl Global for Theme {}
 
+/// The window as it first opens, as Qt's first start opened it.
+pub const WINDOW: (Pixels, Pixels) = (px(1440.), px(860.));
+/// The edge between two panes: `SplitView`'s handle, a line in its middle.
+pub const HANDLE: Pixels = px(7.);
+/// The size a font's ascent and descent are read at, to be kept as parts of its size.
+pub const PROBE: Pixels = px(1000.);
 pub const CORNER: Pixels = px(6.);
 pub const CORNER_LARGE: Pixels = px(9.);
 pub const GAP_LINE: Pixels = px(1.);

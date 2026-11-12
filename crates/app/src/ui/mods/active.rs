@@ -1,12 +1,12 @@
 //! `ActivePane.qml` and `Columns.qml`: the load order, its filter and its column headings.
 
 use super::Mods;
+use super::list::bar_room;
 use super::rows::Columns;
-use super::scrollbar::bar_room;
 use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{Btn, Chip, TextSized, btn_width, halo, icon, label, measure, notice};
 use crate::words::{count, put};
-use crate::workspace::load_order::Side;
+use crate::workspace::load_order::{Orders, Side};
 use gpui::{
     Context, Focusable, FontWeight, InteractiveElement, ParentElement, Pixels,
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
@@ -38,80 +38,7 @@ impl Mods {
 
     /// `Columns.widths` and `ModList.fitting` for a list this wide.
     fn columns(&self, theme: &Theme, width: Pixels, window: &Window) -> Columns {
-        let heading = |key: &str| {
-            let text = format!("{} ▾", put(&column_name(key)));
-            measure(window, theme, &text, theme.caption(), theme.medium)
-        };
-        let widest = |key: &str, size: Pixels| {
-            let text = self.orders.widest.get(key).cloned().unwrap_or_default();
-            measure(window, theme, &text, size, FontWeight::NORMAL)
-        };
-        let column_width = |key: &str| match key {
-            "author" => heading(key).max(widest(key, theme.body())),
-            "version" => heading(key).max(widest(key, theme.body())),
-            "load" => heading(key).max(widest(key, theme.small())),
-            _ => heading(key),
-        };
-        let timed = self.orders.active_by.contains_key("load");
-        let chosen: Vec<&'static str> = CHOSEN
-            .into_iter()
-            .filter(|k| *k != "load" || timed)
-            .collect();
-        let wide = width >= theme.sized(620.);
-        let roomy = width >= theme.sized(440.);
-        let view = btn_width(window, theme, &put(&say!("View")), false, true);
-        let quick = view.max(theme.sized(if wide { 124. } else { 44. }));
-        let number = theme.sized(28.);
-        let room_beside = |shown: &[&str]| {
-            let taken = shown.iter().fold(px(0.), |all, key| {
-                all + column_width(key) + theme::GAP_LARGE
-            });
-            width
-                - bar_room(theme)
-                - quick
-                - number
-                - theme::GAP_WIDE * 2.
-                - theme::GAP_LARGE * 2.
-                - taken
-        };
-        let mut shown: Vec<&'static str> = if roomy { chosen } else { Vec::new() };
-        for dropped in DROPPED_FIRST {
-            if room_beside(&shown) >= theme.sized(180.) {
-                break;
-            }
-            shown.retain(|key| *key != dropped);
-        }
-        let tile = width - bar_room(theme) >= theme.sized(420.);
-        let fitting: Vec<(&'static str, Pixels)> = shown
-            .into_iter()
-            .map(|key| (key, column_width(key)))
-            .collect();
-        let beside = fitting
-            .iter()
-            .fold(px(0.), |all, (_, width)| all + *width + theme::GAP_LARGE);
-        let tile_room = if tile {
-            theme.sized(64.) + theme::GAP_SMALL
-        } else {
-            px(0.)
-        };
-        let name_room = width
-            - bar_room(theme)
-            - theme::GAP_WIDE * 2.
-            - number
-            - theme::GAP_LARGE * 2.
-            - beside
-            - quick
-            - theme.sized(13.)
-            - theme::GAP_SMALL * 2.
-            - tile_room;
-        Columns {
-            number,
-            name_room,
-            fitting,
-            quick,
-            wide,
-            tile,
-        }
+        columns(theme, &self.orders, width, window)
     }
 
     pub(super) fn active_pane(
@@ -213,7 +140,13 @@ impl Mods {
                     .child(self.filter_field(theme, window, cx)),
             )
             .child(headings)
-            .child(self.list_area(theme, Side::Active, Some(columns), width, cx))
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .child(self.list(Side::Active).clone()),
+            )
     }
 
     /// The pane's title row: the count, the problems, Undo and Redo, Sort and Save.
@@ -558,6 +491,84 @@ impl Mods {
                         }),
                 )
             })
+    }
+}
+
+/// `Columns.widths` and `ModList.fitting` for a load order this wide.
+pub(super) fn columns(theme: &Theme, orders: &Orders, width: Pixels, window: &Window) -> Columns {
+    let heading = |key: &str| {
+        let text = format!("{} ▾", put(&column_name(key)));
+        measure(window, theme, &text, theme.caption(), theme.medium)
+    };
+    let widest = |key: &str, size: Pixels| {
+        let text = orders.widest.get(key).cloned().unwrap_or_default();
+        measure(window, theme, &text, size, FontWeight::NORMAL)
+    };
+    let column_width = |key: &str| match key {
+        "author" => heading(key).max(widest(key, theme.body())),
+        "version" => heading(key).max(widest(key, theme.body())),
+        "load" => heading(key).max(widest(key, theme.small())),
+        _ => heading(key),
+    };
+    let timed = orders.active_by.contains_key("load");
+    let chosen: Vec<&'static str> = CHOSEN
+        .into_iter()
+        .filter(|k| *k != "load" || timed)
+        .collect();
+    let wide = width >= theme.sized(620.);
+    let roomy = width >= theme.sized(440.);
+    let view = btn_width(window, theme, &put(&say!("View")), false, true);
+    let quick = view.max(theme.sized(if wide { 124. } else { 44. }));
+    let number = theme.sized(28.);
+    let room_beside = |shown: &[&str]| {
+        let taken = shown.iter().fold(px(0.), |all, key| {
+            all + column_width(key) + theme::GAP_LARGE
+        });
+        width
+            - bar_room(theme)
+            - quick
+            - number
+            - theme::GAP_WIDE * 2.
+            - theme::GAP_LARGE * 2.
+            - taken
+    };
+    let mut shown: Vec<&'static str> = if roomy { chosen } else { Vec::new() };
+    for dropped in DROPPED_FIRST {
+        if room_beside(&shown) >= theme.sized(180.) {
+            break;
+        }
+        shown.retain(|key| *key != dropped);
+    }
+    let tile = width - bar_room(theme) >= theme.sized(420.);
+    let fitting: Vec<(&'static str, Pixels)> = shown
+        .into_iter()
+        .map(|key| (key, column_width(key)))
+        .collect();
+    let beside = fitting
+        .iter()
+        .fold(px(0.), |all, (_, width)| all + *width + theme::GAP_LARGE);
+    let tile_room = if tile {
+        theme.sized(64.) + theme::GAP_SMALL
+    } else {
+        px(0.)
+    };
+    let name_room = width
+        - bar_room(theme)
+        - theme::GAP_WIDE * 2.
+        - number
+        - theme::GAP_LARGE * 2.
+        - beside
+        - quick
+        - theme.sized(13.)
+        - theme::GAP_SMALL * 2.
+        - tile_room;
+    Columns {
+        number,
+        name_room,
+        fitting,
+        quick,
+        wide,
+        tile,
     }
 }
 

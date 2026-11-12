@@ -2,6 +2,7 @@
 
 pub mod assets;
 pub mod mods;
+pub mod rows;
 pub mod shell;
 pub mod status_bar;
 pub mod text_field;
@@ -11,8 +12,7 @@ pub mod widgets;
 
 use crate::App;
 use gpui::{
-    App as Cx, AppContext, Bounds, Global, TitlebarOptions, WindowBounds, WindowOptions, font, px,
-    size,
+    App as Cx, AppContext, Bounds, Global, TitlebarOptions, WindowBounds, WindowOptions, font, size,
 };
 use std::sync::Arc;
 use theme::{Appearance, Theme, ThemeName};
@@ -65,7 +65,7 @@ impl Options {
     }
 }
 
-pub const WINDOW: (f32, f32) = (1440., 860.);
+pub use theme::WINDOW;
 
 /// The weights fontconfig has for a family, as CSS numbers.
 #[cfg(target_os = "linux")]
@@ -148,9 +148,9 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     }
     let text = cx.text_system();
     let id = text.resolve_font(&font(theme.family.clone()));
-    let at = px(1000.);
-    theme.ascent = f32::from(text.ascent(id, at)) / 1000.;
-    theme.descent = f32::from(text.descent(id, at)).abs() / 1000.;
+    let at = theme::PROBE;
+    theme.ascent = text.ascent(id, at) / at;
+    theme.descent = text.descent(id, at).abs() / at;
     cx.set_global(theme);
     cx.set_global(Shared(app));
     text_field::bind_keys(cx);
@@ -166,7 +166,7 @@ pub fn run(app: Arc<App>, options: Options) {
         .with_assets(assets::Assets)
         .run(move |cx: &mut Cx| {
             install(app, &options, cx);
-            let bounds = Bounds::centered(None, size(px(WINDOW.0), px(WINDOW.1)), cx);
+            let bounds = Bounds::centered(None, size(WINDOW.0, WINDOW.1), cx);
             let opened = cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -186,3 +186,6 @@ pub fn run(app: Arc<App>, options: Options) {
             cx.activate(true);
         });
 }
+
+#[cfg(test)]
+mod gates;

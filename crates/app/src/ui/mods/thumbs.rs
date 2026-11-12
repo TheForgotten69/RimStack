@@ -1,8 +1,7 @@
 //! Previews as small as their tiles, decoded off the window's thread. GPUI's `img` keeps a
 //! picture whole; a list of 2,000 mods' previews held that way took 150 MB.
 
-use super::Mods;
-use gpui::{App as Cx, RenderImage, WeakEntity};
+use gpui::{App as Cx, EntityId, RenderImage};
 use image::imageops::FilterType;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -21,12 +20,13 @@ pub struct Thumbs {
 
 pub type Shared = Rc<RefCell<Thumbs>>;
 
-/// The picture at `path` cut to fill `width` by `height` device pixels, once it is decoded.
+/// The picture at `path` cut to fill `width` by `height` device pixels, once it is decoded;
+/// `shown_by` is drawn again when it is.
 pub fn thumb(
     thumbs: &Shared,
     path: &str,
     (width, height): (u32, u32),
-    mods: WeakEntity<Mods>,
+    shown_by: EntityId,
     cx: &mut Cx,
 ) -> Option<Arc<RenderImage>> {
     let key = (path.to_string(), width, height);
@@ -55,7 +55,7 @@ pub fn thumb(
             }
         }
         drop(held);
-        let _ = mods.update(cx, |_, cx| cx.notify());
+        cx.update(|cx| cx.notify(shown_by));
     })
     .detach();
     None

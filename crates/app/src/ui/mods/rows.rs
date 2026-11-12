@@ -67,6 +67,7 @@ pub fn row(
     chosen: bool,
     mods: WeakEntity<Mods>,
     thumbs: &thumbs::Shared,
+    shown_by: gpui::EntityId,
     cx: &mut gpui::App,
 ) -> AnyElement {
     let c = &theme.colours;
@@ -103,7 +104,7 @@ pub fn row(
                 let device =
                     |logical: f32| f32::from(theme.sized(logical) - theme::GAP_LINE * 2.) * scale;
                 let size = (device(64.).round() as u32, device(40.).round() as u32);
-                thumbs::thumb(thumbs, &row.picture, size, mods.clone(), cx)
+                thumbs::thumb(thumbs, &row.picture, size, shown_by, cx)
             }
             false => None,
         };

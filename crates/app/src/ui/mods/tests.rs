@@ -70,34 +70,46 @@ fn a_category_heading_folds_its_mods_away(cx: &mut gpui::TestAppContext) {
     assert_eq!(after, before - first.count as usize);
 }
 
+/// The middle of the load order's first heading, from the Theme: the inactive pane and its edge,
+/// then the title row, the filter, the headings and the room above the rows.
+fn first_heading(cx: &mut gpui::VisualTestContext) -> gpui::Point<gpui::Pixels> {
+    use crate::ui::theme::{self, Theme};
+    let theme = cx.update(|_, cx| cx.global::<Theme>().clone());
+    let x = theme.sized(290.) + theme::HANDLE + theme.sized(120.);
+    let y = theme.header()
+        + theme.field()
+        + theme::GAP
+        + theme.control()
+        + theme::GAP_TINY
+        + theme.sized(32.) / 2.;
+    gpui::point(x, y)
+}
+
 #[gpui::test]
 fn a_click_on_a_category_heading_folds_it(cx: &mut gpui::TestAppContext) {
-    use gpui::{Modifiers, point, px};
     let _root = demo(cx);
     let (mods, cx) = cx.add_window_view(|_, cx| Mods::new(true, cx));
     cx.run_until_parked();
     let (before, first) = mods.read_with(cx, |mods, _| {
         (mods.active.rows.len(), mods.active.rows[0].clone())
     });
-    // At text size 1: the inactive pane and its edge, then the title row, the filter and the headings.
-    let x = px(290. + 7. + 120.);
-    let y = px(42. + 28. + 8. + 24. + 4. + 16.);
-    cx.simulate_click(point(x, y), Modifiers::none());
+    let at = first_heading(cx);
+    cx.simulate_click(at, gpui::Modifiers::none());
     let after = mods.read_with(cx, |mods, _| mods.active.rows.len());
     assert_eq!(after, before - first.count as usize);
 }
 
 #[gpui::test]
 fn a_fold_keeps_the_list_where_it_was_scrolled(cx: &mut gpui::TestAppContext) {
-    use gpui::{ListOffset, px};
     let _root = demo(cx);
     let (mods, cx) = cx.add_window_view(|_, cx| Mods::new(true, cx));
     cx.run_until_parked();
-    let at = ListOffset {
-        item_ix: 300,
-        offset_in_item: px(0.),
-    };
-    mods.update(cx, |mods, _| mods.active.list.scroll_to(at));
+    let scrolled = mods.read_with(cx, |mods, cx| {
+        mods.list(Side::Active).read(cx).scroll().clone()
+    });
+    let most = scrolled.borrow().most();
+    scrolled.borrow_mut().set_top(most / 2.);
+    let at = scrolled.borrow().top();
     let last = mods
         .read_with(cx, |mods, _| {
             mods.active.rows.iter().rev().find(|r| r.is_header).cloned()
@@ -106,30 +118,129 @@ fn a_fold_keeps_the_list_where_it_was_scrolled(cx: &mut gpui::TestAppContext) {
     mods.update(cx, |mods, cx| {
         mods.toggle_category(Side::Active, last.category, cx)
     });
-    let kept = mods.read_with(cx, |mods, _| mods.active.list.logical_scroll_top());
-    assert_eq!(kept.item_ix, 300);
+    cx.run_until_parked();
+    assert!(at > gpui::px(0.));
+    assert_eq!(scrolled.borrow().top(), at);
 }
 
 #[gpui::test]
-fn the_wheel_scrolls_the_load_order(cx: &mut gpui::TestAppContext) {
-    use gpui::{MouseMoveEvent, ScrollDelta, ScrollEvent, point, px};
+fn the_touchpad_moves_the_load_order_as_it_goes(cx: &mut gpui::TestAppContext) {
+    use gpui::{MouseMoveEvent, ScrollDelta, ScrollEvent, point};
     let _root = demo(cx);
     let (mods, cx) = cx.add_window_view(|_, cx| Mods::new(true, cx));
     cx.run_until_parked();
-    let over = point(px(600.), px(500.));
+    let over = first_heading(cx);
     cx.simulate_event(MouseMoveEvent {
         position: over,
         ..MouseMoveEvent::default()
     });
+    let step = cx.update(|_, cx| cx.global::<crate::ui::theme::Theme>().sized(200.));
     for _ in 0..40 {
         let wheel = ScrollEvent {
             position: over,
-            delta: ScrollDelta::Pixels(point(px(0.), px(-200.))),
+            delta: ScrollDelta::Pixels(point(gpui::px(0.), -step)),
             ..ScrollEvent::default()
         };
         cx.simulate_event(wheel);
         cx.run_until_parked();
     }
-    let top = mods.read_with(cx, |mods, _| mods.active.list.logical_scroll_top().item_ix);
+    let top = mods.read_with(cx, |mods, cx| mods.list(Side::Active).read(cx).top_row());
     assert!(top > 100, "the load order shows row {top} at its top");
+}
+
+#[gpui::test]
+fn a_wheel_notch_glides_three_lines_down(cx: &mut gpui::TestAppContext) {
+    use gpui::{MouseMoveEvent, ScrollDelta, ScrollEvent, point};
+    let _root = demo(cx);
+    let (mods, cx) = cx.add_window_view(|_, cx| Mods::new(true, cx));
+    cx.run_until_parked();
+    let over = first_heading(cx);
+    cx.simulate_event(MouseMoveEvent {
+        position: over,
+        ..MouseMoveEvent::default()
+    });
+    let notch = ScrollEvent {
+        position: over,
+        delta: ScrollDelta::Lines(point(0., -3.)),
+        ..ScrollEvent::default()
+    };
+    cx.simulate_event(notch);
+    let list = mods.read_with(cx, |mods, _| mods.list(Side::Active).clone());
+    let scrolled = list.read_with(cx, |list, _| list.scroll().clone());
+    assert!(
+        scrolled.borrow().top() < gpui::px(1.),
+        "a notch lands over time, not at once"
+    );
+    std::thread::sleep(std::time::Duration::from_millis(250));
+    list.update(cx, |_, cx| cx.notify());
+    cx.run_until_parked();
+    let line = cx.update(|_, cx| cx.global::<crate::ui::theme::Theme>().sized(40.));
+    assert_eq!(scrolled.borrow().top(), line * 3.);
+}
+
+/// What drawing the scrolling load order costs, frame by frame, with no screen to wait on:
+/// `just test scroll_cost -- --ignored --nocapture`.
+#[gpui::test]
+#[ignore]
+fn scroll_cost(cx: &mut gpui::TestAppContext) {
+    let _root = demo(cx);
+    let (mods, cx) = cx.add_window_view(|_, cx| Mods::new(true, cx));
+    cx.run_until_parked();
+    let list = mods.read_with(cx, |mods, _| mods.list(Side::Active).clone());
+    let scrolled = list.read_with(cx, |list, _| list.scroll().clone());
+    let most = scrolled.borrow().most();
+    const FRAMES: usize = 1440;
+    let started = std::time::Instant::now();
+    for frame in 0..FRAMES {
+        scrolled
+            .borrow_mut()
+            .set_top(most * (frame as f32 / FRAMES as f32));
+        list.update(cx, |_, cx| cx.notify());
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+    }
+    let each = started.elapsed() / FRAMES as u32;
+    let reached = list.read_with(cx, |list, _| list.top_row());
+    eprintln!(
+        "scroll_cost frame_us={} reached_row={reached}",
+        each.as_micros()
+    );
+}
+
+#[gpui::test]
+fn the_thumb_drags_the_load_order(cx: &mut gpui::TestAppContext) {
+    use crate::ui::theme::{self, Theme};
+    use gpui::{MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, point};
+    let _root = demo(cx);
+    let (mods, cx) = cx.add_window_view(|_, cx| Mods::new(true, cx));
+    cx.run_until_parked();
+    let (theme, window) =
+        cx.update(|window, cx| (cx.global::<Theme>().clone(), window.viewport_size()));
+    // The load order's bar runs down its right edge, left of its edge with the details.
+    let x = window.width - theme.sized(360.) - theme::HANDLE - super::list::bar_room(&theme) / 2.;
+    let top = first_heading(cx).y;
+    let press = |y: Pixels| MouseDownEvent {
+        button: MouseButton::Left,
+        position: point(x, y),
+        click_count: 1,
+        ..MouseDownEvent::default()
+    };
+    cx.simulate_event(press(top));
+    let to = point(x, window.height / 2.);
+    cx.simulate_event(MouseMoveEvent {
+        position: to,
+        pressed_button: Some(MouseButton::Left),
+        ..MouseMoveEvent::default()
+    });
+    cx.simulate_event(MouseUpEvent {
+        button: MouseButton::Left,
+        position: to,
+        click_count: 1,
+        ..MouseUpEvent::default()
+    });
+    let list = mods.read_with(cx, |mods, _| mods.list(Side::Active).clone());
+    let row = list.read_with(cx, |list, _| list.top_row());
+    assert!(
+        row > 200,
+        "the thumb held halfway down shows row {row} at the top"
+    );
 }

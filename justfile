@@ -66,13 +66,33 @@ shot out *args:
     trap 'rm -rf "$scratch"' EXIT
     XDG_CONFIG_HOME="$scratch/settings" XDG_DATA_HOME="$scratch/data" target/release/examples/shot {{out}} {{args}}
 
-# The Qt build's picture of the Mods tab, to set beside it: `just qt-shot /tmp/qt.png rim 1 --several`
-qt-shot out theme="rim" scale="1" *args:
-    target/qt-reference/shot.sh {{out}} {{theme}} {{scale}} {{args}}
+# The Qt build of `main`, into target/qt-main-build, to compare with: an export of main, not a worktree
+qt-build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf target/qt-main && mkdir -p target/qt-main
+    git archive main | tar -x -C target/qt-main
+    cd target/qt-main && CARGO_TARGET_DIR="{{justfile_directory()}}/target/qt-main-build" cargo build --release -q -p rimstack-app
 
-# The scripted ten-second scroll on made-up mods, in a real window: frames, slow frames, the worst
+# The Qt build's picture at 2x, to set beside `just shot`: `just qt-shot /tmp/qt.png rim 1 --demo`
+qt-shot out theme="rim" scale="1" *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    scratch="$(mktemp -d -p target)"
+    trap 'rm -rf "$scratch"' EXIT
+    mkdir -p "$scratch/settings/RimStack" "$scratch/data"
+    printf '{ "setupDone": "yes" }' > "$scratch/settings/RimStack/settings.json"
+    printf '[Appearance]\ntheme=%s\ntextScale=%s\nhintsSeen=true\n' {{theme}} {{scale}} > "$scratch/settings/RimStack/RimStack.conf"
+    XDG_DATA_HOME="$scratch/data" XDG_CONFIG_HOME="$scratch/settings" QT_SCALE_FACTOR=2 QT_QPA_PLATFORM=offscreen \
+        timeout 60 target/qt-main-build/release/rimstack --section=0 --shot={{out}} {{args}} >/dev/null 2>&1
+
+# The scripted ten-second scroll on made-up mods, in a real window: frames, slow frames, the worst, the CPU it took
 scroll: build
     {{app}} --selftest 2>&1 | grep -E "scroll frames|_ms="
+
+# What drawing the scrolling load order costs per frame, with no screen to wait on
+scroll-cost:
+    cargo test --release -q -p rimstack-app scroll_cost -- --ignored --nocapture 2>&1 | grep scroll_cost
 
 # A release: the version in Cargo.toml and Cargo.lock, `just ready`, the commit and its tag; pushing them stays by hand
 release version:

@@ -5,38 +5,27 @@ mod bench;
 mod chosen;
 mod details;
 mod inactive;
+mod list;
 mod rows;
-mod scrollbar;
 mod thumbs;
 
 use super::text_field::{Edited, TextField};
-use super::theme::Theme;
+use super::theme::{self, Theme};
 use crate::changes::Changes;
 use crate::jobs::Lane;
 use crate::workspace::load_order::{Details, LoadOrder, Orders, Overview, RowView, Side};
 use gpui::{
-    AppContext, Context, Entity, Focusable, InteractiveElement, IntoElement, ListAlignment,
-    ListState, ParentElement, Pixels, Render, Styled, Window, div, px,
+    AppContext, Context, Entity, Focusable, InteractiveElement, IntoElement, ParentElement, Pixels,
+    Render, Styled, Window, div, px,
 };
 use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::list::Category;
 use std::rc::Rc;
 
-/// A list's rows, with the spacer above them and the footer below that `ModList.qml` gives it.
+/// A list's rows as last read from the load order.
+#[derive(Default)]
 pub struct Shown {
     pub rows: Rc<Vec<RowView>>,
-    pub list: ListState,
-    pub count: usize,
-}
-
-impl Shown {
-    fn new() -> Self {
-        Self {
-            rows: Rc::new(Vec::new()),
-            list: ListState::new(2, ListAlignment::Top, px(200.)),
-            count: 0,
-        }
-    }
 }
 
 gpui::actions!(mods, [FocusFilter]);
@@ -57,8 +46,8 @@ pub struct Mods {
     inactive: Shown,
     orders: Orders,
     filter: Entity<TextField>,
-    thumbs: thumbs::Shared,
-    bench: Option<bench::Bench>,
+    active_list: Entity<list::ModList>,
+    inactive_list: Entity<list::ModList>,
     focus: gpui::FocusHandle,
     overview: Option<Overview>,
     details: Option<Details>,
@@ -100,11 +89,23 @@ impl Mods {
             mods.show(cx);
         })
         .detach();
+        let thumbs = thumbs::Shared::default();
+        let orders = Rc::new(order.orders());
+        let lists = [Side::Active, Side::Inactive].map(|side| {
+            let shown = list::Shown {
+                rows: Rc::default(),
+                orders: orders.clone(),
+                chosen: Rc::default(),
+            };
+            let (thumbs, mods) = (thumbs.clone(), cx.weak_entity());
+            cx.new(|cx| list::ModList::new(side, shown, thumbs, mods, cx))
+        });
+        let [active_list, inactive_list] = lists;
         let mut mods = Self {
             focus: cx.focus_handle(),
             filter,
-            thumbs: thumbs::Shared::default(),
-            bench: None,
+            active_list,
+            inactive_list,
             orders: order.orders(),
             overview: None,
             details: None,
@@ -116,8 +117,8 @@ impl Mods {
             since_reading: Lane::default(),
             conflicts: 0,
             order,
-            active: Shown::new(),
-            inactive: Shown::new(),
+            active: Shown::default(),
+            inactive: Shown::default(),
             selection: Vec::new(),
             selected_active: true,
             demo,
@@ -296,20 +297,12 @@ impl Mods {
 
     fn show(&mut self, cx: &mut Context<Self>) {
         let app = super::app(cx);
-        let theme = cx.global::<Theme>().clone();
         for side in [Side::Active, Side::Inactive] {
             let rows = self.order.rows(&app, side);
-            let shown = self.shown_mut(side);
-            shown.count = rows.len();
-            // A reset scrolls to the top: the place kept is given back.
-            let kept = shown.list.logical_scroll_top();
-            shown
-                .list
-                .reset_with_uniform_height(rows.len() + 2, theme.row());
-            shown.list.scroll_to(kept);
-            shown.rows = Rc::new(rows);
+            self.shown_mut(side).rows = Rc::new(rows);
         }
         self.orders = self.order.orders();
+        self.sync_lists(cx);
         if self.details.is_some() {
             self.describe(cx);
         }
@@ -363,6 +356,10 @@ impl Mods {
         self.order.list(side).matching()
     }
 
+    pub fn start_bench(&mut self, cx: &mut Context<Self>) {
+        self.active_list.update(cx, |list, cx| list.start_bench(cx));
+    }
+
     pub fn filter_by(&mut self, text: &str, cx: &mut Context<Self>) {
         self.filter.update(cx, |field, cx| field.set_text(text, cx));
     }
@@ -396,6 +393,7 @@ impl Mods {
         self.selection = vec![mod_id];
         self.selected_active = side == Side::Active;
         self.describe(cx);
+        self.sync_lists(cx);
         cx.notify();
     }
 
@@ -427,6 +425,43 @@ impl Mods {
         }
     }
 
+    /// Hands each list its rows and what is chosen in it.
+    fn sync_lists(&mut self, cx: &mut Context<Self>) {
+        let orders = Rc::new(self.order.orders());
+        for side in [Side::Active, Side::Inactive] {
+            let on_side = self.selected_active == (side == Side::Active);
+            let chosen = match on_side {
+                true => self
+                    .selection
+                    .iter()
+                    .copied()
+                    .filter(|id| *id >= 0)
+                    .collect(),
+                false => std::collections::HashSet::new(),
+            };
+            let shown = list::Shown {
+                rows: self.shown(side).rows.clone(),
+                orders: orders.clone(),
+                chosen: Rc::new(chosen),
+            };
+            self.list(side).update(cx, |list, cx| list.show(shown, cx));
+        }
+    }
+
+    fn shown(&self, side: Side) -> &Shown {
+        match side {
+            Side::Active => &self.active,
+            Side::Inactive => &self.inactive,
+        }
+    }
+
+    pub fn list(&self, side: Side) -> &Entity<list::ModList> {
+        match side {
+            Side::Active => &self.active_list,
+            Side::Inactive => &self.inactive_list,
+        }
+    }
+
     pub fn is_chosen(&self, side: Side, mod_id: i32) -> bool {
         mod_id >= 0
             && self.selected_active == (side == Side::Active)
@@ -452,6 +487,7 @@ impl Mods {
             false => self.selection = vec![id],
         }
         self.selected_active = side == Side::Active;
+        self.sync_lists(cx);
         cx.notify();
     }
 }
@@ -460,7 +496,7 @@ impl Mods {
     /// The three panes' widths as Qt's SplitView gives them: the load order keeps its least width,
     /// taken from the details first, then from the inactive mods, each down to its own least.
     fn widths(&self, theme: &Theme, window: Pixels) -> (Pixels, Pixels, Pixels) {
-        let room = window - px(14.);
+        let room = window - theme::HANDLE * 2.;
         let (mut inactive, mut details) = (self.inactive_width, self.details_width);
         let mut over = inactive + details + theme.sized(380.) - room;
         if over > px(0.) {
@@ -489,11 +525,10 @@ impl Render for Mods {
                 .flex()
                 .flex_none()
                 .justify_center()
-                .w(px(7.))
+                .w(theme::HANDLE)
                 .h_full()
                 .child(div().w(px(1.)).h_full().bg(theme.colours.edge))
         };
-        self.bench_frame(window, cx);
         let (inactive_width, active_width, details_width) =
             self.widths(&theme, window.viewport_size().width);
         div()
