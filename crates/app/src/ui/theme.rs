@@ -353,6 +353,8 @@ pub struct Appearance {
     pub reduce_motion: bool,
     /// The user's own colours for this theme, from theme.json, when they are used.
     pub own: Vec<(String, String)>,
+    /// `categoryColours`: a swatch's name for a category painted otherwise, as `3=Rose,5=Teal`.
+    pub category_colours: String,
 }
 
 impl Default for Appearance {
@@ -365,6 +367,7 @@ impl Default for Appearance {
             high_contrast: false,
             reduce_motion: false,
             own: Vec::new(),
+            category_colours: String::new(),
         }
     }
 }
@@ -402,6 +405,31 @@ pub const COLOUR_NAMES: [&str; 28] = [
 ];
 
 impl Appearance {
+    /// The swatch a category was painted with, when not its own.
+    pub fn swatch_of(&self, category: usize) -> Option<&str> {
+        self.category_colours.split(',').find_map(|pair| {
+            let (at, name) = pair.split_once('=')?;
+            (at.parse() == Ok(category) && !name.is_empty()).then_some(name)
+        })
+    }
+
+    /// `paintCategory`: `categoryColours` with `category` painted `name`, or its own colour for "".
+    pub fn painted(&self, category: usize, name: &str) -> String {
+        let own = SWATCHES.get(category).map_or("", |s| s.0);
+        let mut kept: Vec<(usize, String)> = (0..CATEGORY_NAMES.len())
+            .filter(|at| *at != category)
+            .filter_map(|at| self.swatch_of(at).map(|n| (at, n.to_string())))
+            .collect();
+        if !name.is_empty() && name != own {
+            kept.push((category, name.to_string()));
+            kept.sort();
+        }
+        kept.iter()
+            .map(|(at, name)| format!("{at}={name}"))
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
     /// `Theme.colour(key)` as its text: high contrast first, then the user's own, then the theme.
     pub fn colour_text(&self, key: &str) -> Option<String> {
         let (own, high) = self.theme.tables();
@@ -444,6 +472,7 @@ impl Appearance {
             } else {
                 Vec::new()
             },
+            category_colours: prefs.get(group, "categoryColours").unwrap_or_default(),
         }
     }
 }
@@ -619,8 +648,19 @@ impl Theme {
     }
 
     pub fn category_colour(&self, category: usize) -> Hsla {
-        let (_, dark, light) = SWATCHES[category.min(SWATCHES.len() - 1)];
+        let own = SWATCHES[category.min(SWATCHES.len() - 1)];
+        let chosen = self.appearance.swatch_of(category);
+        let (_, dark, light) = chosen
+            .and_then(|name| SWATCHES.iter().find(|s| s.0 == name))
+            .copied()
+            .unwrap_or(own);
         hex(if self.light { light } else { dark })
+    }
+
+    /// A swatch's colour by its name, in this theme.
+    pub fn swatch(&self, name: &str) -> Option<Hsla> {
+        let (_, dark, light) = SWATCHES.iter().find(|s| s.0 == name)?;
+        Some(hex(if self.light { light } else { dark }))
     }
 }
 

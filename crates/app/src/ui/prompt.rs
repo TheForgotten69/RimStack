@@ -15,6 +15,26 @@ pub enum Line {
     Text(String),
     /// A file or folder: in the system's monospace family, broken anywhere.
     Path(String),
+    /// A name to type: the answer waits for it, and Enter in it answers.
+    Field {
+        text: Entity<super::text_field::TextField>,
+        placeholder: String,
+    },
+}
+
+impl Question {
+    fn field(&self) -> Option<&Entity<super::text_field::TextField>> {
+        self.lines.iter().find_map(|line| match line {
+            Line::Field { text, .. } => Some(text),
+            _ => None,
+        })
+    }
+
+    /// Whether every field holds something.
+    fn filled(&self, cx: &App) -> bool {
+        self.field()
+            .is_none_or(|field| !field.read(cx).text().trim().is_empty())
+    }
 }
 
 /// What the answer does.
@@ -56,9 +76,24 @@ pub fn ask(question: Question, window: &mut Window, cx: &mut App) {
     };
     let before = window.focused(cx);
     prompt.update(cx, |prompt, cx| {
+        let field = question.field().cloned();
         prompt.asked = Some(question);
         prompt.before = before;
-        window.focus(&prompt.focus, cx);
+        match field {
+            Some(field) => {
+                cx.subscribe_in(
+                    &field,
+                    window,
+                    |prompt, _, _: &super::text_field::Entered, window, cx| {
+                        prompt.answer(window, cx)
+                    },
+                )
+                .detach();
+                cx.observe(&field, |_, _, cx| cx.notify()).detach();
+                window.focus(&field.focus_handle(cx), cx);
+            }
+            None => window.focus(&prompt.focus, cx),
+        }
         cx.notify();
     });
 }
@@ -74,6 +109,9 @@ impl Prompt {
     }
 
     fn answer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.asked.as_ref().is_some_and(|asked| !asked.filled(cx)) {
+            return;
+        }
         if let Some(asked) = self.close(window, cx) {
             (asked.run)(window, cx);
         }
@@ -101,16 +139,28 @@ impl Render for Prompt {
                 Line::Text(text) => div()
                     .sized_text(&theme, theme.body())
                     .text_color(c.ink2)
-                    .child(text.clone()),
+                    .child(text.clone())
+                    .into_any_element(),
                 Line::Path(path) => div()
                     .sized_text(&theme, theme.small())
                     .font_family(theme.mono.clone())
                     .text_color(c.ink)
-                    .child(super::widgets::breakable(path)),
+                    .child(super::widgets::breakable(path))
+                    .into_any_element(),
+                Line::Field { text, placeholder } => super::field::Field {
+                    id: "prompt-field",
+                    text,
+                    icon: "",
+                    placeholder: placeholder.clone(),
+                    found: None,
+                    keys: None,
+                }
+                .render(&theme, window, cx)
+                .into_any_element(),
             })
-            .map(IntoElement::into_any_element)
             .collect();
         let answer = Btn::new("prompt-answer", asked.label.clone())
+            .enabled(asked.filled(cx))
             .primary_if(!asked.danger)
             .when(asked.danger, Btn::danger)
             .on_click(cx.listener(|prompt, _, window, cx| prompt.answer(window, cx)));
@@ -191,6 +241,7 @@ pub(crate) fn shown(cx: &App) -> Option<(String, Vec<String>, bool)> {
     let asked = prompt.asked.as_ref()?;
     let lines = asked.lines.iter().map(|line| match line {
         Line::Text(text) | Line::Path(text) => text.clone(),
+        Line::Field { placeholder, .. } => placeholder.clone(),
     });
     Some((asked.title.clone(), lines.collect(), asked.danger))
 }

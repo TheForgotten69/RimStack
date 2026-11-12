@@ -1,0 +1,243 @@
+//! The bands of `ActivePane.qml` under its title: what is not saved, why a save failed, the
+//! list changed on disk, and what Sort would do.
+
+use super::Mods;
+use crate::ui::button::Btn;
+use crate::ui::theme::{self, Theme};
+use crate::ui::widgets::{TextSized, notice};
+use crate::words::put;
+use gpui::{
+    AnyElement, Context, FontWeight, HighlightStyle, IntoElement, ParentElement, Styled,
+    StyledText, div, prelude::FluentBuilder, px,
+};
+use rimstack_core::base::sentence::Sentence;
+use rimstack_core::say;
+use std::time::Duration;
+
+/// How long the note of a Sort already applied stays.
+const NOTE_STAYS: Duration = Duration::from_secs(8);
+
+impl Mods {
+    /// A term added to the filter, or taken out when it is there, as `toggleTerm` did.
+    pub(super) fn toggle_term(&mut self, term: &str, cx: &mut Context<Self>) {
+        let text = self.filter.read(cx).text().to_string();
+        let had = text.split(' ').any(|word| word == term);
+        let mut words: Vec<&str> = text
+            .split(' ')
+            .filter(|w| !w.is_empty() && *w != term)
+            .collect();
+        if !had {
+            words.push(term);
+        }
+        let text = words.join(" ");
+        self.filter_by(&text, cx);
+    }
+
+    fn sort_note(&self) -> Option<(String, String)> {
+        let (first, rest) = self.order.sort_note.split_first()?;
+        let more = put(&Sentence::joined(" ", rest.to_vec()));
+        Some((put(first), more))
+    }
+
+    /// The note of a Sort applied closes by itself after a while.
+    fn close_note_later(&mut self, note: String, cx: &mut Context<Self>) {
+        if self.note_timer == note {
+            return;
+        }
+        self.note_timer = note.clone();
+        cx.spawn(async move |mods, cx| {
+            cx.background_executor().timer(NOTE_STAYS).await;
+            let _ = mods.update(cx, |mods, cx| {
+                if mods.sort_note().is_some_and(|(shown, _)| shown == note) {
+                    mods.closed_note = note;
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    pub(super) fn bands(&mut self, theme: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let c = &theme.colours;
+        let mut shown = Vec::new();
+        if self.demo {
+            return shown;
+        }
+        let previewing = self.order.previewing();
+        let (dirty, unsaved) = {
+            let app = crate::ui::app(cx);
+            let session = app.session();
+            (
+                session.is_dirty() && self.order.is_installed(),
+                put(&session.changes().said()),
+            )
+        };
+        let band = |tone| {
+            div()
+                .flex_none()
+                .px(theme::GAP_LARGE)
+                .pb(theme::GAP)
+                .child(notice(tone))
+        };
+        if dirty && !previewing {
+            shown.push(
+                band(c.warn)
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(theme::GAP)
+                            .h(theme.sized(34.))
+                            .pl(theme::GAP_LARGE)
+                            .pr(theme::GAP_TINY)
+                            .child(div().flex_none().size(px(7.)).rounded(px(3.5)).bg(c.warn))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .overflow_hidden()
+                                    .whitespace_nowrap()
+                                    .text_ellipsis()
+                                    .sized_text(theme, theme.body())
+                                    .text_color(c.ink)
+                                    .child(put(&say!("Not saved: {}", unsaved))),
+                            )
+                            .child(
+                                Btn::new("show-changed", put(&say!("Show")))
+                                    .tip(put(&say!(
+                                        "Only the mods moved or activated since the last save"
+                                    )))
+                                    .on_click(
+                                        cx.listener(|m, _, _, cx| m.toggle_term("is:changed", cx)),
+                                    ),
+                            )
+                            .child(
+                                Btn::new("discard-changes", put(&say!("Discard")))
+                                    .tip(put(&say!(
+                                        "Back to the saved list. Undo brings the changes back."
+                                    )))
+                                    .on_click(cx.listener(|m, _, _, cx| m.discard_changes(cx))),
+                            )
+                            .child(
+                                Btn::new("save-band", put(&say!("Save")))
+                                    .primary()
+                                    .on_click(cx.listener(|m, _, _, cx| m.save(None, cx))),
+                            ),
+                    )
+                    .into_any_element(),
+            );
+        }
+        if !self.save_problem.is_empty() {
+            shown.push(
+                div()
+                    .flex_none()
+                    .px(theme::GAP_CARD)
+                    .pb(theme::GAP)
+                    .sized_text(theme, theme.body())
+                    .text_color(c.err)
+                    .child(put(&say!(
+                        "The list was not saved. {}",
+                        self.save_problem.clone()
+                    )))
+                    .into_any_element(),
+            );
+        }
+        if self.file_changed {
+            shown.push(
+                div()
+                    .flex()
+                    .flex_none()
+                    .gap(theme::GAP)
+                    .pl(theme::GAP_CARD)
+                    .pb(theme::GAP)
+                    .child(
+                        Btn::new("use-file", put(&say!("Use the file's")))
+                            .tip(put(&say!(
+                                "Replaces the list here with the one now in ModsConfig.xml"
+                            )))
+                            .on_click(cx.listener(|m, _, _, cx| m.keep_file(true, cx))),
+                    )
+                    .child(
+                        Btn::new("keep-mine", put(&say!("Keep mine")))
+                            .tip(put(&say!(
+                                "Keeps the list here; the next Save overwrites ModsConfig.xml"
+                            )))
+                            .on_click(cx.listener(|m, _, _, cx| m.keep_file(false, cx))),
+                    )
+                    .into_any_element(),
+            );
+        }
+        if let Some((note, more)) = self
+            .sort_note()
+            .filter(|(note, _)| *note != self.closed_note)
+        {
+            if !previewing {
+                self.close_note_later(note.clone(), cx);
+            }
+            let mut text = note.clone();
+            let bold = 0..text.len();
+            let mut marks = vec![(
+                bold,
+                HighlightStyle {
+                    font_weight: Some(FontWeight::BOLD),
+                    ..HighlightStyle::default()
+                },
+            )];
+            if previewing {
+                let start = text.len() + 1;
+                text = format!("{text} {}", put(&say!("Nothing has changed yet.")));
+                marks.push((
+                    start..text.len(),
+                    HighlightStyle {
+                        color: Some(c.ink2),
+                        ..HighlightStyle::default()
+                    },
+                ));
+            }
+            if !more.is_empty() {
+                text = format!("{text} {more}");
+            }
+            shown.push(
+                band(c.focus)
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(theme::GAP)
+                            .py(theme::GAP_SMALL)
+                            .pl(theme::GAP_LARGE)
+                            .pr(theme::GAP)
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .spaced_text(theme, theme.body(), 1.25)
+                                    .text_color(c.ink)
+                                    .child(StyledText::new(text).with_highlights(marks)),
+                            )
+                            .when(previewing, |d| {
+                                d.child(
+                                    Btn::new("apply-sort", put(&say!("Apply")))
+                                        .primary()
+                                        .on_click(cx.listener(|m, _, _, cx| m.end_sort(true, cx))),
+                                )
+                                .child(
+                                    Btn::new("discard-sort", put(&say!("Discard")))
+                                        .on_click(cx.listener(|m, _, _, cx| m.end_sort(false, cx))),
+                                )
+                            })
+                            .when(!previewing, |d| {
+                                d.child(Btn::new("close-sort-note", put(&say!("OK"))).on_click(
+                                    cx.listener(move |m, _, _, cx| {
+                                        m.closed_note = note.clone();
+                                        cx.notify();
+                                    }),
+                                ))
+                            }),
+                    )
+                    .into_any_element(),
+            );
+        }
+        shown
+    }
+}

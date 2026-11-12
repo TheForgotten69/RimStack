@@ -249,3 +249,27 @@ impl Card {
             })
     }
 }
+
+/// `GroupTitle`: a defined term is underlined with dots, with an info mark, and means its tip.
+pub fn group_title(theme: &Theme, title: String) -> AnyElement {
+    use gpui::SharedString;
+    let c = &theme.colours;
+    let meaning = meaning(&title);
+    let name = super::widgets::label(theme, theme.small(), c.ink2, title.clone())
+        .font_weight(theme.semibold)
+        .when(meaning.is_some(), |d| {
+            d.border_b_1().border_dashed().border_color(c.ink2)
+        });
+    let row = div()
+        .id(SharedString::from(format!("group-{title}")))
+        .flex()
+        .items_center()
+        .gap(theme::GAP_SMALL)
+        .pt(theme::GAP_WIDE)
+        .pb(theme::GAP_SMALL)
+        .child(name)
+        .when(meaning.is_some(), |d| {
+            d.child(super::widgets::icon("info", theme.sized(11.), c.ink3))
+        });
+    super::tip::tipped(row, meaning.unwrap_or_default().into()).into_any_element()
+}

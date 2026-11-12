@@ -4,7 +4,7 @@
 use super::Settings;
 use crate::ui::field::Field;
 use crate::ui::theme::{self, Theme};
-use crate::ui::widgets::{Btn, TextSized, elide_middle_in, label, measure_in};
+use crate::ui::widgets::{Btn, TextSized, elide_middle_in, measure_in};
 use crate::words::put;
 use gpui::{
     AnyElement, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels,
@@ -83,25 +83,7 @@ pub(super) fn named(theme: &Theme) -> Pixels {
 
 /// `GroupTitle`: a defined term is underlined with dots, with an info mark, and means its tip.
 pub(super) fn group(theme: &Theme, title: String) -> AnyElement {
-    let c = &theme.colours;
-    let meaning = crate::ui::card::meaning(&title);
-    let name = label(theme, theme.small(), c.ink2, title.clone())
-        .font_weight(theme.semibold)
-        .when(meaning.is_some(), |d| {
-            d.border_b_1().border_dashed().border_color(c.ink2)
-        });
-    let row = div()
-        .id(SharedString::from(format!("group-{title}")))
-        .flex()
-        .items_center()
-        .gap(theme::GAP_SMALL)
-        .pt(theme::GAP_WIDE)
-        .pb(theme::GAP_SMALL)
-        .child(name)
-        .when(meaning.is_some(), |d| {
-            d.child(crate::ui::widgets::icon("info", theme.sized(11.), c.ink3))
-        });
-    crate::ui::tip::tipped(row, meaning.unwrap_or_default().into()).into_any_element()
+    crate::ui::card::group_title(theme, title)
 }
 
 pub(super) fn note(theme: &Theme, text: String) -> AnyElement {

@@ -266,11 +266,12 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     cx.set_global(Shared(app));
     text_field::bind_keys(cx);
     focus::bind_keys(cx);
-    cx.bind_keys([gpui::KeyBinding::new(
-        crate::command!("f"),
-        mods::FocusFilter,
-        None,
-    )]);
+    cx.bind_keys([
+        gpui::KeyBinding::new(crate::command!("f"), mods::FocusFilter, None),
+        gpui::KeyBinding::new(crate::command!("z"), mods::Undo, None),
+        gpui::KeyBinding::new(crate::command!("shift-z"), mods::Redo, None),
+        gpui::KeyBinding::new(crate::command!("s"), mods::Save, None),
+    ]);
     cx.bind_keys([gpui::KeyBinding::new(
         crate::command!("shift-f"),
         find::FocusSearch,

@@ -303,6 +303,23 @@ impl Downloads {
         self.ask_steam(SteamAsk::Unsubscribe, workshop.into_iter().collect(), cx);
     }
 
+    pub fn subscribe(&mut self, workshop_id: String, cx: &mut Context<Self>) {
+        self.ask_steam(SteamAsk::Subscribe, vec![workshop_id], cx);
+    }
+
+    pub fn redownload(&mut self, mod_id: i32, cx: &mut Context<Self>) {
+        let Some(id) = ModId::from_qml(mod_id) else {
+            return;
+        };
+        let app = crate::ui::app(cx);
+        self.task(
+            say!("Downloading again with SteamCMD…"),
+            None,
+            move || app.redownload(id),
+            cx,
+        );
+    }
+
     pub fn update_from_git(&mut self, mod_id: i32, cx: &mut Context<Self>) {
         let Some(id) = ModId::from_qml(mod_id) else {
             return;

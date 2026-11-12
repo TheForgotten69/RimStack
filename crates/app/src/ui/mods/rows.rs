@@ -8,12 +8,12 @@ use crate::ui::widgets::{
 };
 use crate::words::{count, put};
 use crate::workspace::load_order::{RowView, Side};
-use gpui::RenderImage;
 use gpui::{
     AnyElement, Hsla, InteractiveElement, IntoElement, ParentElement, Pixels, SharedString,
     StatefulInteractiveElement, Styled, StyledImage, TextOverflow, WeakEntity, Window, div, img,
     prelude::FluentBuilder, px,
 };
+use gpui::{AppContext, RenderImage};
 use rimstack_core::say;
 use std::sync::Arc;
 
@@ -56,6 +56,110 @@ fn category_icon(category: i32) -> &'static str {
         .unwrap_or("package")
 }
 
+/// A mod held in a drag: its list, its place there, and the mods it takes along.
+#[derive(Clone)]
+pub struct Held {
+    pub side: Side,
+    pub index: usize,
+    pub ids: Vec<rimstack_core::mods::library::ModId>,
+}
+
+/// What follows the pointer in a drag: nothing, as in Qt; the place it would land is marked.
+pub struct Ghost;
+
+impl gpui::Render for Ghost {
+    fn render(&mut self, _: &mut Window, _: &mut gpui::Context<Self>) -> impl IntoElement {
+        div()
+    }
+}
+
+/// What a row may do beyond being chosen: be dragged, and the mods chosen beside it.
+pub struct Moving<'a> {
+    pub movable: bool,
+    pub chosen_ids: &'a [i32],
+}
+
+/// The buttons a mod's row shows while pointed at or chosen: across, its folder, its menu.
+fn hover_buttons(
+    theme: &Theme,
+    side: Side,
+    at: usize,
+    row: &RowView,
+    chosen: bool,
+    mods: &WeakEntity<Mods>,
+) -> AnyElement {
+    let c = &theme.colours;
+    let size = theme.sized(24.);
+    let (mod_id, index) = (row.mod_id, row.mod_index);
+    let button = |key: &'static str, name: &'static str, tip: String| {
+        let shown = div()
+            .id((key, at))
+            .flex()
+            .items_center()
+            .justify_center()
+            .size(size)
+            .rounded(theme::CORNER)
+            .bg(c.ctl)
+            .hover(|d| d.bg(c.ctl_hi))
+            .cursor_pointer()
+            .role(gpui::Role::Button)
+            .aria_label(tip.clone())
+            .child(icon(name, theme.sized(13.), c.ink));
+        crate::ui::tip::tipped(shown, tip.into())
+    };
+    let (across, folder, menu) = (mods.clone(), mods.clone(), mods.clone());
+    let active = side == Side::Active;
+    div()
+        .absolute()
+        .right(theme::GAP_CARD)
+        .top_0()
+        .bottom_0()
+        .flex()
+        .items_center()
+        .gap(theme::GAP_HAIR)
+        .child(
+            button(
+                "row-across",
+                if active { "minus" } else { "plus" },
+                match active {
+                    true => put(&say!("Deactivate")),
+                    false => put(&say!("Activate")),
+                },
+            )
+            .invisible()
+            .group_hover("mod-row", |s| s.visible())
+            .on_click(move |_, _, cx| {
+                cx.stop_propagation();
+                let _ = across.update(cx, |mods, cx| mods.toggle_mod(side, mod_id, cx));
+            }),
+        )
+        .when(mod_id >= 0, |d| {
+            d.child(
+                button("row-folder", "folder-open", put(&say!("Open folder")))
+                    .invisible()
+                    .group_hover("mod-row", |s| s.visible())
+                    .on_click(move |_, _, cx| {
+                        cx.stop_propagation();
+                        let _ = folder.update(cx, |mods, cx| mods.open_folder(mod_id, cx));
+                    }),
+            )
+        })
+        .child(
+            button("row-menu", "ellipsis", put(&say!("Menu (right-click)")))
+                .when(!chosen, |d| {
+                    d.invisible().group_hover("mod-row", |s| s.visible())
+                })
+                .on_click(move |event, window, cx| {
+                    cx.stop_propagation();
+                    let at = event.position();
+                    let _ = menu.update(cx, |mods, cx| {
+                        mods.row_menu(side, index, mod_id, at, window, cx)
+                    });
+                }),
+        )
+        .into_any_element()
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn row(
     window: &Window,
@@ -66,6 +170,7 @@ pub fn row(
     row: &RowView,
     columns: Option<&Columns>,
     chosen: bool,
+    moving: Moving<'_>,
     mods: WeakEntity<Mods>,
     thumbs: &thumbs::Shared,
     shown_by: gpui::EntityId,
@@ -113,6 +218,7 @@ pub fn row(
     };
     let (is_header, is_sub, category, mod_id) =
         (row.is_header, row.is_sub, row.category, row.mod_id);
+    let (mods_for_menu, at_row, mod_index) = (mods.clone(), at, row.mod_index);
     let ground = if chosen {
         Some(c.chosen)
     } else if row.moved_from > 0 {
@@ -190,12 +296,69 @@ pub fn row(
             )
         })
         .child(body)
-        .on_click(move |_, _, cx| {
+        .when(!is_header && row.mod_index >= 0, |d| {
+            d.child(hover_buttons(theme, side, at, row, chosen, &mods))
+        })
+        .when(!is_header, |d| {
+            let landing = mods.clone();
+            let index = row.mod_index.max(0) as usize;
+            d.child(
+                div()
+                    .absolute()
+                    .left(theme::GAP_SMALL)
+                    .right(theme::GAP_SMALL)
+                    .top(px(-1.5))
+                    .h(px(3.))
+                    .rounded(px(1.5))
+                    .bg(c.focus)
+                    .invisible()
+                    .group_drag_over::<Held>("mod-row", |s| s.visible()),
+            )
+            .on_drop(move |held: &Held, _, cx| {
+                let held = held.clone();
+                let _ = landing.update(cx, |mods, cx| {
+                    mods.drop_on((held.side, held.index, held.ids), (side, index), cx)
+                });
+            })
+        })
+        .when(moving.movable && !is_header && row.mod_index >= 0, |d| {
+            let ids = match chosen && moving.chosen_ids.len() > 1 {
+                true => moving.chosen_ids.to_vec(),
+                false => vec![mod_id],
+            };
+            let held = Held {
+                side,
+                index: row.mod_index as usize,
+                ids: ids
+                    .into_iter()
+                    .filter_map(rimstack_core::mods::library::ModId::from_qml)
+                    .collect(),
+            };
+            d.on_drag(held, |_, _, _, cx| cx.new(|_| Ghost))
+        })
+        .on_click(move |event, _, cx| {
+            let (modifiers, command) = (event.modifiers(), event.modifiers().secondary(cx));
+            let twice = event.click_count() >= 2;
+            let active = side == Side::Active;
             let _ = mods.update(cx, |mods, cx| match (is_header, is_sub) {
                 (true, true) => mods.toggle_sub(side, at, cx),
                 (true, false) => mods.toggle_category(side, category, cx),
+                (false, _) if twice => mods.toggle_mod(side, mod_id, cx),
+                (false, _) if command => mods.select_also(mod_id, active, cx),
+                (false, _) if modifiers.shift => mods.select_through(mod_id, active, cx),
                 (false, _) => mods.choose(side, mod_id, cx),
             });
+        })
+        .on_mouse_down(gpui::MouseButton::Right, {
+            let menu = mods_for_menu;
+            move |event, window, cx| {
+                let at = event.position;
+                let _ = menu.update(cx, |mods, cx| match (is_header, is_sub) {
+                    (true, true) => mods.sub_menu(side, at_row, at, window, cx),
+                    (true, false) => mods.category_menu(category, at, window, cx),
+                    (false, _) => mods.row_menu(side, mod_index, mod_id, at, window, cx),
+                });
+            }
         })
         .into_any_element()
 }

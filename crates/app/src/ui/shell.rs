@@ -73,15 +73,30 @@ impl Shell {
             .detach();
         }
         if options.several {
-            mods.update(cx, |mods, cx| {
-                mods.choose_nth(Side::Active, 14, false, cx);
-                for at in [15, 16, 19] {
-                    mods.choose_nth(Side::Active, at, true, cx);
-                }
-            });
+            mods.update(cx, |mods, cx| mods.choose_several(cx));
         }
         cx.subscribe(&mods, |shell, _, ShowSection(section), cx| {
             shell.go(*section, cx)
+        })
+        .detach();
+        cx.subscribe(&mods, |shell, _, wanted: &super::mods::Wanted, cx| {
+            use super::mods::Wanted;
+            match wanted {
+                Wanted::Browse(text) => {
+                    let (text, workshop) = (text.clone(), shell.workshop(cx));
+                    workshop.update(cx, |workshop, cx| workshop.browse(text, cx));
+                }
+                wanted => {
+                    let downloads = shell.downloads(cx);
+                    downloads.update(cx, |downloads, cx| match wanted {
+                        Wanted::Subscribe(id) => downloads.subscribe(id.clone(), cx),
+                        Wanted::Redownload(id) => downloads.redownload(*id, cx),
+                        Wanted::Unsubscribe(id) => downloads.unsubscribe(*id, cx),
+                        Wanted::UpdateFromGit(id) => downloads.update_from_git(*id, cx),
+                        Wanted::Browse(_) => {}
+                    });
+                }
+            }
         })
         .detach();
         let section = options.section;

@@ -9,21 +9,21 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Serialize)]
 pub struct Chosen {
-    name: String,
-    category: i32,
-    load: String,
-    trouble: i32,
+    pub name: String,
+    pub category: i32,
+    pub load: String,
+    pub trouble: i32,
 }
 
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SelectionSummary {
-    place: Sentence,
+    pub place: Sentence,
     /// Those with a row in view, in the order of their list.
-    rows: Vec<Chosen>,
+    pub rows: Vec<Chosen>,
     /// Empty when none has a problem.
-    troubled: Sentence,
-    not_in_view: usize,
+    pub troubled: Sentence,
+    pub not_in_view: usize,
 }
 
 impl LoadOrder {

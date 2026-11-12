@@ -24,7 +24,7 @@ mod sorting;
 mod summary;
 
 pub use details::{Details, Files, Overview, ProblemSaid};
-pub use menu::{Clicked, Entry};
+pub use menu::{Action, Ask, Clicked, Entry};
 pub use orders::{OrderEntry, Orders};
 pub use rows::RowView;
 pub use summary::SelectionSummary;

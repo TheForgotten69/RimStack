@@ -37,6 +37,9 @@ pub struct DetailsShown {
     pub selected_active: bool,
     /// The widths wanted for the inactive mods and the details, for `pane_widths`.
     pub panes: (Pixels, Pixels),
+    /// With several mods chosen, how many and what they are.
+    pub selected: usize,
+    pub selection: Option<Rc<crate::workspace::load_order::SelectionSummary>>,
 }
 
 /// What the details ask of the Mods tab.
@@ -53,6 +56,8 @@ pub struct DetailsView {
     pub tab: usize,
     /// The cards folded against how they start, by their key, as `Theme.folded` kept them.
     pub folded: std::collections::HashSet<&'static str>,
+    /// The names of the mods chosen all shown, not the first ones only.
+    pub summary_open: bool,
 }
 
 impl DetailsView {

@@ -55,6 +55,15 @@ impl DetailsView {
             .p(theme::GAP_CARD)
             .pr(theme::GAP_CARD + bar)
             .overflow_y_scroll();
+        if let Some(summary) = self.shown.selection.clone() {
+            return scrolled.child(self.selection_pane(
+                theme,
+                &summary,
+                width - bar - theme::GAP_CARD * 2.,
+                window,
+                cx,
+            ));
+        }
         if let Some(details) = &self.shown.details {
             return scrolled.child(self.chosen_pane(theme, details, width, window, cx));
         }

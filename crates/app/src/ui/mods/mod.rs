@@ -1,12 +1,16 @@
 //! `ModsScreen.qml`: the inactive mods, the load order and the details, side by side.
 
 mod active;
+mod bands;
 mod bench;
 mod chosen;
 mod details;
+mod edit;
 mod inactive;
 mod list;
+mod menus;
 mod rows;
+mod selection;
 
 use super::text_field::{Edited, TextField};
 use super::theme::{self, Theme};
@@ -27,7 +31,9 @@ pub struct Shown {
     pub rows: Rc<Vec<RowView>>,
 }
 
-gpui::actions!(mods, [FocusFilter]);
+gpui::actions!(mods, [FocusFilter, Undo, Redo, Save]);
+
+pub use menus::Wanted;
 
 /// glibc keeps what a thread freed in that thread's heap; after the scan's threads that was
 /// 100 MB (measured 2026-11-12). Capping the heaps instead made the scan wait on their locks.
@@ -78,6 +84,17 @@ pub struct Mods {
     sort_pending: usize,
     inactive_width: Pixels,
     details_width: Pixels,
+    saving: bool,
+    save_problem: String,
+    /// ModsConfig.xml was written outside RimStack since it was read: Save refused to overwrite it.
+    file_changed: bool,
+    /// The Sort note closed, by its words; and the one whose closing is on its way.
+    closed_note: String,
+    note_timer: String,
+    /// The row of the problem last shown by the arrows beside the problems.
+    problem_row: Option<usize>,
+    /// Four mods to choose once the list is read, as `--several` asks.
+    several: bool,
 }
 
 impl Mods {
@@ -104,6 +121,7 @@ impl Mods {
                 rows: Rc::default(),
                 orders: orders.clone(),
                 chosen: Rc::default(),
+                movable: false,
             };
             let (thumbs, mods) = (thumbs.clone(), cx.weak_entity());
             cx.new(|cx| list::ModList::new(side, shown, thumbs, mods, cx))
@@ -113,6 +131,7 @@ impl Mods {
             shown: Default::default(),
             tab: 0,
             folded: Default::default(),
+            summary_open: false,
         });
         cx.subscribe(
             &details_view,
@@ -151,6 +170,13 @@ impl Mods {
             sort_pending: 0,
             inactive_width,
             details_width,
+            saving: false,
+            save_problem: String::new(),
+            file_changed: false,
+            closed_note: String::new(),
+            note_timer: String::new(),
+            problem_row: None,
+            several: false,
         };
         mods.show(cx);
         if !demo {
@@ -313,6 +339,8 @@ impl Mods {
             behind: self.behind,
             selected_active: self.selected_active,
             panes: (self.inactive_width, self.details_width),
+            selected: self.selection.len(),
+            selection: self.selection_summary(),
         };
         self.details_view
             .update(cx, |view, cx| view.show(shown, cx));
@@ -346,6 +374,9 @@ impl Mods {
                 mods.read_files(cx);
                 if let Some((row, tab)) = mods.wanted.take() {
                     mods.pick_row(Side::Active, row, tab, cx);
+                }
+                if std::mem::take(&mut mods.several) {
+                    mods.choose_several(cx);
                 }
                 if let Some(started) = crate::STARTED.get() {
                     rimstack_core::note!("mods_shown_ms={}", started.elapsed().as_millis());
@@ -515,10 +546,7 @@ impl Mods {
     }
 
     pub fn choose(&mut self, side: Side, mod_id: i32, cx: &mut Context<Self>) {
-        self.selection = vec![mod_id];
-        self.selected_active = side == Side::Active;
-        self.describe(cx);
-        self.sync_lists(cx);
+        self.select(Some(mod_id), side == Side::Active, cx);
     }
 
     /// What the details show of the mod chosen, when one alone is.
@@ -564,10 +592,12 @@ impl Mods {
                     .collect(),
                 false => std::collections::HashSet::new(),
             };
+            let in_order = side == Side::Inactive || orders.active_key.is_empty();
             let shown = list::Shown {
                 rows: self.shown(side).rows.clone(),
                 orders: orders.clone(),
                 chosen: Rc::new(chosen),
+                movable: in_order && !self.order.previewing() && !self.demo,
             };
             self.list(side).update(cx, |list, cx| list.show(shown, cx));
         }
@@ -593,6 +623,18 @@ impl Mods {
             && self.selection.contains(&mod_id)
     }
 
+    /// Four mods of the load order chosen, as `--several` asks: once the list is read.
+    pub fn choose_several(&mut self, cx: &mut Context<Self>) {
+        if self.active.rows.is_empty() {
+            self.several = true;
+            return;
+        }
+        self.choose_nth(Side::Active, 14, false, cx);
+        for at in [15, 16, 19] {
+            self.choose_nth(Side::Active, at, true, cx);
+        }
+    }
+
     /// Chooses the `nth` mod of a list, as `--several` and the checks do.
     pub fn choose_nth(&mut self, side: Side, nth: usize, also: bool, cx: &mut Context<Self>) {
         let rows = match side {
@@ -607,13 +649,12 @@ impl Mods {
         else {
             return;
         };
-        match also {
-            true => self.selection.push(id),
-            false => self.selection = vec![id],
-        }
-        self.selected_active = side == Side::Active;
-        self.sync_lists(cx);
-        cx.notify();
+        let mut ids = match also {
+            true => self.selection.clone(),
+            false => Vec::new(),
+        };
+        ids.push(id);
+        self.keep_selection(ids, side == Side::Active, cx);
     }
 }
 
@@ -667,35 +708,52 @@ impl Render for Mods {
         };
         let (inactive_width, active_width, details_width) =
             self.widths(&theme, window.viewport_size().width);
+        let bulk = self.bulk_bar(&theme, cx);
+        let panes = div().flex().flex_1().min_h_0().w_full();
         div()
             .flex()
+            .flex_col()
             .size_full()
             .min_h_0()
             .track_focus(&self.focus)
             .on_action(cx.listener(|mods, _: &FocusFilter, window, cx| {
                 window.focus(&mods.filter.focus_handle(cx), cx);
             }))
+            .on_action(cx.listener(|mods, _: &Undo, _, cx| mods.undo(cx)))
+            .on_action(cx.listener(|mods, _: &Redo, _, cx| mods.redo(cx)))
+            .on_action(cx.listener(|mods, _: &Save, _, cx| {
+                if crate::ui::app(cx).session().is_dirty() {
+                    mods.save(None, cx);
+                }
+            }))
             .child(
-                self.inactive_pane(&theme, inactive_width, window, cx)
-                    .w(inactive_width)
-                    .flex_none(),
+                panes
+                    .child(
+                        self.inactive_pane(&theme, inactive_width, window, cx)
+                            .w(inactive_width)
+                            .flex_none(),
+                    )
+                    .child(handle())
+                    .child(
+                        self.active_pane(&theme, active_width, window, cx)
+                            .flex_1()
+                            .min_w_0(),
+                    )
+                    .child(handle())
+                    .child(
+                        div()
+                            .w(details_width)
+                            .flex_none()
+                            .h_full()
+                            .child(self.details_view.clone()),
+                    ),
             )
-            .child(handle())
-            .child(
-                self.active_pane(&theme, active_width, window, cx)
-                    .flex_1()
-                    .min_w_0(),
-            )
-            .child(handle())
-            .child(
-                div()
-                    .w(details_width)
-                    .flex_none()
-                    .h_full()
-                    .child(self.details_view.clone()),
-            )
+            .children(bulk)
     }
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(all(test, target_os = "linux"))]
+mod edit_tests;

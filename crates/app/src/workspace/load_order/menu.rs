@@ -79,9 +79,9 @@ pub enum Action {
 
 #[derive(Serialize)]
 pub struct Ask {
-    title: Sentence,
-    lines: Vec<Line>,
-    label: Sentence,
+    pub title: Sentence,
+    pub lines: Vec<Line>,
+    pub label: Sentence,
 }
 
 fn unset(flag: &bool) -> bool {
@@ -97,19 +97,19 @@ fn empty(icon: &&str) -> bool {
 #[serde(rename_all = "camelCase")]
 pub struct Entry {
     #[serde(skip_serializing_if = "Option::is_none")]
-    title: Option<Sentence>,
+    pub title: Option<Sentence>,
     #[serde(skip_serializing_if = "unset")]
-    line: bool,
+    pub line: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    text: Option<Sentence>,
+    pub text: Option<Sentence>,
     #[serde(skip_serializing_if = "empty")]
-    icon: &'static str,
+    pub icon: &'static str,
     #[serde(skip_serializing_if = "unset")]
-    off: bool,
+    pub off: bool,
     #[serde(skip_serializing_if = "unset")]
-    danger: bool,
+    pub danger: bool,
     #[serde(flatten)]
-    action: Option<Action>,
+    pub action: Option<Action>,
 }
 
 impl Entry {

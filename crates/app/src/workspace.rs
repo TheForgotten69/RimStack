@@ -34,7 +34,7 @@ pub mod secret;
 mod settings;
 pub mod sweep;
 pub mod textures;
-mod upkeep;
+pub mod upkeep;
 mod window;
 pub use key::KeyState;
 pub use settings::{judge_folder, newest_release, short_contrast};

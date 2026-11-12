@@ -41,7 +41,7 @@ impl Mods {
     }
 
     pub(super) fn active_pane(
-        &self,
+        &mut self,
         theme: &Theme,
         width: Pixels,
         window: &Window,
@@ -130,7 +130,8 @@ impl Mods {
             .flex_col()
             .h_full()
             .child(self.head(theme, width, window, cx))
-            .children(self.notices(theme, width, window))
+            .children(self.notices(theme, width, window, cx))
+            .children(self.bands(theme, cx))
             .child(
                 div()
                     .flex_none()
@@ -272,7 +273,8 @@ impl Mods {
                     Chip::new(warned)
                         .tone(c.warn)
                         .icon("triangle-alert")
-                        .pressable(),
+                        .tip(put(&say!("Mods with a warning: the game runs, but parts of these mods may not work. Click to show only these.")))
+                        .on_click("warnings-chip", cx.listener(|m, _, _, cx| m.toggle_term("is:warning", cx))),
                 )
             })
             .when(problems > 0 && !tight, |d| {
@@ -287,8 +289,20 @@ impl Mods {
                                     .tone(problem_tone),
                             )
                         })
-                        .child(Btn::new("problem-up", "").icon("chevron-up"))
-                        .child(Btn::new("problem-down", "").icon("chevron-down")),
+                        .child(
+                            Btn::new("problem-up", "")
+                                .icon("chevron-up")
+                                .spoken(put(&say!("Previous problem")))
+                                .tip(put(&say!("Previous problem")))
+                                .on_click(cx.listener(|m, _, _, cx| m.show_problem(false, cx))),
+                        )
+                        .child(
+                            Btn::new("problem-down", "")
+                                .icon("chevron-down")
+                                .spoken(put(&say!("Next problem")))
+                                .tip(put(&say!("Next problem")))
+                                .on_click(cx.listener(|m, _, _, cx| m.show_problem(true, cx))),
+                        ),
                 )
             })
             .child(div().flex_1())
@@ -306,12 +320,16 @@ impl Mods {
                         .child(
                             Btn::new("undo", "")
                                 .icon("undo-2")
-                                .enabled(can_undo && !previewing),
+                                .tip(put(&say!("Undo (Ctrl + Z)")))
+                                .enabled(can_undo && !previewing)
+                                .on_click(cx.listener(|m, _, _, cx| m.undo(cx))),
                         )
                         .child(
                             Btn::new("redo", "")
                                 .icon("redo-2")
-                                .enabled(can_redo && !previewing),
+                                .tip(put(&say!("Redo (Ctrl + Shift + Z)")))
+                                .enabled(can_redo && !previewing)
+                                .on_click(cx.listener(|m, _, _, cx| m.redo(cx))),
                         ),
                 )
             })
@@ -320,13 +338,17 @@ impl Mods {
                     Btn::new("sort", sort)
                         .icon("arrow-up-down")
                         .tone(c.moved)
-                        .enabled(!previewing && self.files_read),
+                        .tip(put(&say!("Shows the order the rules ask for, to keep or discard. Nothing is written before Save.")))
+                        .enabled(!previewing && self.files_read)
+                        .on_click(cx.listener(|m, _, _, cx| m.preview_sort(cx))),
                 )
                 .child(
                     Btn::new("save", save)
                         .icon("save")
+                        .tip(put(&say!("Writes the load order to ModsConfig.xml (Ctrl + S). The file as it was is copied beside it first.")))
                         .enabled(dirty)
-                        .primary_if(dirty),
+                        .primary_if(dirty)
+                        .on_click(cx.listener(|m, _, _, cx| m.save(None, cx))),
                 )
             })
             .when(tight && !self.demo, |d| {
@@ -349,7 +371,13 @@ impl Mods {
     }
 
     /// The bands under the title: what is not saved, and mods made for another game version.
-    fn notices(&self, theme: &Theme, width: Pixels, window: &Window) -> Vec<gpui::Div> {
+    fn notices(
+        &self,
+        theme: &Theme,
+        width: Pixels,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<gpui::Div> {
         let c = &theme.colours;
         let mut shown = Vec::new();
         if self.demo {
@@ -380,8 +408,19 @@ impl Mods {
                 .flex_none()
                 .justify_end()
                 .gap(theme::GAP)
-                .child(Btn::new("show-warnings", show))
-                .child(Btn::new("ignore-version", ignore));
+                .child(
+                    Btn::new("show-warnings", show)
+                        .tip(put(&say!("Only the mods with a warning")))
+                        .on_click(cx.listener(|m, _, _, cx| m.toggle_term("is:warning", cx))),
+                )
+                .child(
+                    Btn::new("ignore-version", ignore)
+                        .tip(put(&say!("No warning about the game version while RimWorld stays on this version. The switch is in Settings, Sorting.")))
+                        .on_click(cx.listener(move |m, _, _, cx| {
+                            let version = m.game_version();
+                            m.set_version_aside(version, cx)
+                        })),
+                );
             shown.push(
                 div().flex_none().px(theme::GAP_LARGE).pb(theme::GAP).child(
                     notice(c.warn).child(

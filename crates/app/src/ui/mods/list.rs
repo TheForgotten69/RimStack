@@ -10,8 +10,8 @@ use crate::ui::theme::{self, Theme};
 use crate::ui::thumbs;
 use crate::workspace::load_order::{Orders, RowView, Side};
 use gpui::{
-    Context, InteractiveElement, IntoElement, ParentElement, Pixels, Render, Styled, WeakEntity,
-    Window, div, px,
+    Context, InteractiveElement, IntoElement, ParentElement, Pixels, Render,
+    StatefulInteractiveElement, Styled, WeakEntity, Window, div, prelude::FluentBuilder, px,
 };
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -24,6 +24,8 @@ pub struct Shown {
     pub orders: Rc<Orders>,
     /// The `mod_id`s chosen in this list.
     pub chosen: Rc<HashSet<i32>>,
+    /// Whether its mods may be dragged: not while Sort is shown, nor in an order of a column.
+    pub movable: bool,
 }
 
 /// The columns fitted to the width the list was last drawn at.
@@ -43,6 +45,7 @@ pub struct ModList {
     mods: WeakEntity<Mods>,
     made: Rc<RefCell<Made>>,
     pub(super) bench: Option<super::bench::Bench>,
+    focus: gpui::FocusHandle,
 }
 
 pub use crate::ui::rows::bar_room;
@@ -98,6 +101,7 @@ impl ModList {
             mods,
             made: Rc::default(),
             bench: None,
+            focus: cx.focus_handle(),
         }
     }
 
@@ -126,6 +130,14 @@ impl ModList {
         scroll.set_top(top - shown / 2.);
         drop(scroll);
         cx.notify();
+    }
+
+    /// Scrolls just enough for row `at` to show whole, as `ListView.Contain` did.
+    pub fn contain(&mut self, at: usize, cx: &mut Context<Self>) {
+        if let (Some(&top), Some(&bottom)) = (self.tops.get(at), self.tops.get(at + 1)) {
+            self.scroll.borrow_mut().contain(top, bottom);
+            cx.notify();
+        }
     }
 
     /// The row at the list's top.
@@ -175,6 +187,7 @@ impl Render for ModList {
                             - theme::GAP_SMALL * 2.
                     }
                 };
+                let chosen_ids: Vec<i32> = shown.chosen.iter().copied().collect();
                 range
                     .map(|at| {
                         let row = &shown.rows[at];
@@ -188,6 +201,10 @@ impl Render for ModList {
                             row,
                             made.columns.as_deref(),
                             chosen,
+                            rows::Moving {
+                                movable: shown.movable,
+                                chosen_ids: &chosen_ids,
+                            },
                             mods.clone(),
                             &thumbs,
                             list_id,
@@ -198,11 +215,31 @@ impl Render for ModList {
                     .collect()
             },
         );
+        let focused = self.focus.is_focused(window);
+        let (keyed, focus) = (self.mods.clone(), self.focus.clone());
         div()
             .id(("mod-list-pane", side as usize))
+            .track_focus(&self.focus)
+            .role(gpui::Role::List)
             .relative()
             .size_full()
+            .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
+                window.focus(&focus, cx)
+            })
+            .on_key_down(move |event: &gpui::KeyDownEvent, window, cx| {
+                let _ = keyed.update(cx, |mods, cx| mods.list_key(side, event, window, cx));
+            })
             .child(list)
+            .when(focused, |d| {
+                d.child(
+                    div()
+                        .absolute()
+                        .inset(theme::GAP_LINE)
+                        .rounded(theme::CORNER)
+                        .border_2()
+                        .border_color(theme.colours.focus),
+                )
+            })
             .child(crate::ui::rows::bar(
                 &theme,
                 self.scroll.clone(),
