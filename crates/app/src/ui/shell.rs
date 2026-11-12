@@ -14,6 +14,7 @@ use gpui::{
 
 /// The sections made on their first visit, as `Theme.sections` numbers them.
 const TEXTURES: usize = 2;
+const WORKSHOP: usize = 3;
 const SAVES: usize = 4;
 const LOGS: usize = 5;
 const FIND: usize = 6;
@@ -35,6 +36,8 @@ pub struct Shell {
     pub(crate) logs: Option<Entity<super::logs::Logs>>,
     /// Made the first time Saves is shown.
     pub(crate) saves: Option<Entity<super::saves::Saves>>,
+    /// Made the first time Workshop is shown.
+    pub(crate) workshop: Option<Entity<super::workshop::Workshop>>,
     /// Made the first time Search is shown.
     pub(crate) find: Option<Entity<super::find::Find>>,
     /// Made the first time Textures is shown.
@@ -94,6 +97,7 @@ impl Shell {
             textures: None,
             saves: None,
             find: None,
+            workshop: None,
             view: options.view,
             prompt: super::prompt::install(cx),
             menu: super::menu::install(cx),
@@ -105,6 +109,10 @@ impl Shell {
             keep_logs(cx);
         }
         shell.go(section, cx);
+        if let Some(asked) = &options.browse {
+            let workshop = shell.workshop(cx);
+            workshop.update(cx, |workshop, cx| workshop.show_asked(asked, cx));
+        }
         if let Some(text) = &options.find {
             let find = shell.find(cx);
             find.update(cx, |find, cx| find.search_for(text, Some(2), cx));
@@ -167,6 +175,16 @@ impl Shell {
         downloads
     }
 
+    pub(crate) fn workshop(&mut self, cx: &mut Context<Self>) -> Entity<super::workshop::Workshop> {
+        if let Some(workshop) = &self.workshop {
+            return workshop.clone();
+        }
+        let (demo, downloads) = (self.demo, self.downloads(cx));
+        let workshop = cx.new(|cx| super::workshop::Workshop::new(demo, downloads, cx));
+        self.workshop = Some(workshop.clone());
+        workshop
+    }
+
     pub(crate) fn find(&mut self, cx: &mut Context<Self>) -> Entity<super::find::Find> {
         if let Some(find) = &self.find {
             return find.clone();
@@ -186,6 +204,9 @@ impl Shell {
 
     pub fn go(&mut self, section: usize, cx: &mut Context<Self>) {
         self.section = section;
+        if section == WORKSHOP {
+            self.workshop(cx);
+        }
         if section == FIND {
             self.find(cx);
         }
@@ -304,6 +325,7 @@ impl Shell {
             SAVES => self.saves.clone().map(Into::into),
             LOGS => self.logs.clone().map(Into::into),
             FIND => self.find.clone().map(Into::into),
+            WORKSHOP => self.workshop.clone().map(Into::into),
             SETTINGS => self.settings.clone().map(Into::into),
             _ => None,
         }

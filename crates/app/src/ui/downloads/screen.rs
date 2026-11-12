@@ -222,10 +222,7 @@ impl Downloads {
         let c = &theme.colours;
         let row = shown.row;
         let mod_id = row.mod_id.to_qml();
-        let notes = format!(
-            "https://steamcommunity.com/sharedfiles/filedetails/changelog/{}",
-            row.id
-        );
+        let notes = crate::ui::change_notes(&row.id);
         div()
             .flex()
             .items_center()
@@ -502,10 +499,7 @@ impl Downloads {
         };
         let rows = self.replacements.iter().enumerate().map(|(at, old)| {
             let mod_id = old.mod_id.to_qml();
-            let page = format!(
-                "https://steamcommunity.com/sharedfiles/filedetails/?id={}",
-                old.new_id
-            );
+            let page = crate::ui::workshop_page(&old.new_id);
             div()
                 .flex()
                 .items_center()

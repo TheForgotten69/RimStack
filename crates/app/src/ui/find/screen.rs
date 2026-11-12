@@ -413,39 +413,15 @@ impl Find {
 
 /// `EmptyState.qml`, in the middle of what holds it.
 fn empty_state(theme: &Theme, width: Pixels, title: String, hint: String) -> AnyElement {
-    let c = &theme.colours;
     div()
         .absolute()
         .inset_0()
         .flex()
         .items_center()
         .justify_center()
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .items_center()
-                .gap(theme::GAP_SMALL)
-                .w(width)
-                .child(icon("search", theme.sized(28.), c.ink3))
-                .child(
-                    div()
-                        .w_full()
-                        .text_center()
-                        .sized_text(theme, theme.title())
-                        .font_weight(theme.semibold)
-                        .text_color(c.ink)
-                        .child(title),
-                )
-                .child(
-                    div()
-                        .w_full()
-                        .text_center()
-                        .spaced_text(theme, theme.body(), 1.3)
-                        .text_color(c.ink2)
-                        .child(hint),
-                ),
-        )
+        .child(crate::ui::widgets::empty_state(
+            theme, width, "search", title, hint,
+        ))
         .into_any_element()
 }
 

@@ -1,5 +1,5 @@
 use super::sidebar::Sidebar;
-use rimstack_core::base::markup::{Piece, pieces};
+use rimstack_core::base::markup::{Block, Piece, blocks, pieces};
 use rimstack_core::base::{elapsed::ago, sentence::Sentence, sizes};
 use rimstack_core::rimworld::workshop::{Details, Votes};
 use rimstack_core::rimworld::workshopindex::Entry;
@@ -99,7 +99,8 @@ pub struct Stat {
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Part {
-    pub html: String,
+    #[serde(skip)]
+    pub blocks: Vec<Block>,
     pub image: String,
     pub note: Option<Sentence>,
 }
@@ -160,12 +161,12 @@ impl Shown {
             .iter()
             .map(|piece| match piece {
                 Piece::Html(html) => Part {
-                    html: html.clone(),
+                    blocks: blocks(html),
                     image: String::new(),
                     note: None,
                 },
                 Piece::Image(url) => Part {
-                    html: String::new(),
+                    blocks: Vec::new(),
                     image: files.get(url).cloned().unwrap_or_default(),
                     note: (!files.contains_key(url)).then(|| say!("A picture is on its way…")),
                 },

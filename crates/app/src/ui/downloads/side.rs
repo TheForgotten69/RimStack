@@ -15,16 +15,18 @@ use rimstack_core::sources::downloads::Asked;
 use rimstack_core::{say, say_n};
 
 impl Downloads {
+    /// The download list as last read.
+    pub(crate) fn listed(&self) -> &crate::workspace::download_list::ListShown {
+        &self.list
+    }
+
     fn asked_row(&self, theme: &Theme, at: usize, asked: &Asked) -> AnyElement {
         let c = &theme.colours;
         let megabytes = asked.megabytes.map(|n| match n < 10. {
             true => put(&say!("{} MB", format!("{n:.1}"))),
             false => put(&say!("{} MB", crate::words::count(n.round() as usize))),
         });
-        let page = format!(
-            "https://steamcommunity.com/sharedfiles/filedetails/?id={}",
-            asked.id
-        );
+        let page = crate::ui::workshop_page(&asked.id);
         div()
             .flex()
             .items_center()
@@ -206,8 +208,15 @@ impl Downloads {
         )
     }
 
-    /// `ListPane.qml` as the Downloads page shows it: the list, and what can be done with it.
-    fn download_list(&self, theme: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    /// `ListPane.qml`: the list, and what can be done with it. In a `pane` of its own, as the
+    /// Workshop shows it, the rows fill the pane and SteamCMD's install is offered with it.
+    pub(crate) fn download_list(
+        &self,
+        theme: &Theme,
+        pane: bool,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let offers_install = pane;
         let c = &theme.colours;
         let list = &self.list;
         if list.count == 0 {
@@ -219,6 +228,7 @@ impl Downloads {
                     .pb(theme::GAP)
                     .child(said)
                     .into_any_element(),
+                div().when(pane, |d| d.flex_1()).into_any_element(),
             ];
         }
         let rows: Vec<AnyElement> = list
@@ -279,7 +289,8 @@ impl Downloads {
             .children(rows);
         let mut shown = vec![
             div()
-                .h(tall.min(theme.sized(240.)))
+                .when(pane, |d| d.flex_1().min_h_0())
+                .when(!pane, |d| d.h(tall.min(theme.sized(240.))))
                 .child(crate::ui::page::page(
                     "download-list-rows",
                     &self.list_paging,
@@ -299,6 +310,7 @@ impl Downloads {
             );
         }
         let action = &list.action;
+        let asks_install = offers_install && action.install_steamcmd;
         shown.push(
             div()
                 .flex()
@@ -319,9 +331,18 @@ impl Downloads {
                         Btn::new("subscribe-wanted", put(&say!("Subscribe in Steam")))
                             .tip(put(&say!("Steam must be running. It subscribes to each and downloads it, then keeps them up to date.")))
                             .icon("plus")
-                            .primary_if(!action.download)
+                            .primary_if(!action.download && !asks_install)
                             .enabled(action.subscribe_enabled)
                             .on_click(cx.listener(|d, _, _, cx| d.subscribe_wanted(cx))),
+                    )
+                })
+                .when(asks_install, |d| {
+                    d.child(
+                        Btn::new("install-steamcmd-listed", put(&action.label))
+                            .icon("download")
+                            .primary()
+                            .enabled(action.enabled)
+                            .on_click(cx.listener(|d, _, window, cx| d.ask_install_steamcmd(window, cx))),
                     )
                 })
                 .when(list.failures, |d| {
@@ -354,7 +375,7 @@ impl Downloads {
         let list_note = self.list.size_said.as_ref().map(put).unwrap_or_default();
         let list = Card::new("download-list", put(&say!("Download list")))
             .note(list_note)
-            .body(self.download_list(theme, cx));
+            .body(self.download_list(theme, false, cx));
         let installed = put(&say!("Installed"));
         let steamcmd_actions = match self.steamcmd {
             true => (

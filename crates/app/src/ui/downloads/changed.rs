@@ -42,10 +42,7 @@ impl Downloads {
                 format!("{} → {to}", day(row.was))
             }
         };
-        let notes = format!(
-            "https://steamcommunity.com/sharedfiles/filedetails/changelog/{}",
-            row.id
-        );
+        let notes = crate::ui::change_notes(&row.id);
         let line = div()
             .flex()
             .items_center()

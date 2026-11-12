@@ -299,6 +299,41 @@ pub fn caps(theme: &Theme, text: &str) -> gpui::Div {
     )
 }
 
+/// `EmptyState.qml`: an icon, a title and a hint under it, `width` wide and centred.
+pub fn empty_state(
+    theme: &Theme,
+    width: Pixels,
+    icon_name: &str,
+    title: String,
+    hint: String,
+) -> gpui::Div {
+    let c = &theme.colours;
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(theme::GAP_SMALL)
+        .w(width)
+        .child(icon(icon_name, theme.sized(28.), c.ink3))
+        .child(
+            div()
+                .w_full()
+                .text_center()
+                .sized_text(theme, theme.title())
+                .font_weight(theme.semibold)
+                .text_color(c.ink)
+                .child(title),
+        )
+        .child(
+            div()
+                .w_full()
+                .text_center()
+                .spaced_text(theme, theme.body(), 1.3)
+                .text_color(c.ink2)
+                .child(hint),
+        )
+}
+
 /// The width `Chip.qml` takes: its icon, its text and the room around them.
 pub fn chip_width(window: &Window, theme: &Theme, text: &str, icon: bool) -> Pixels {
     let shown = if icon {

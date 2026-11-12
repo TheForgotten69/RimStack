@@ -1,5 +1,9 @@
 //! Workshop descriptions are BBCode; the game's own tags (`<b>`, `<color=…>`) are read too.
 
+mod blocks;
+
+pub use blocks::{Block, Kind, Run, blocks};
+
 const PAIRS: [(&str, &str); 12] = [
     ("b", "b"),
     ("i", "i"),

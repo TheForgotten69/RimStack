@@ -15,6 +15,7 @@ pub mod notices;
 pub mod page;
 pub mod problem;
 pub mod prompt;
+pub mod rich;
 pub mod rows;
 pub mod saves;
 pub mod settings;
@@ -27,6 +28,7 @@ pub mod thumbs;
 pub mod tip;
 pub mod top_bar;
 pub mod widgets;
+pub mod workshop;
 
 use crate::App;
 use gpui::{
@@ -69,6 +71,9 @@ pub struct Options {
     pub view: usize,
     /// A search made at the start, as `--find=` gives its text, for pictures.
     pub find: Option<String>,
+    /// What the Workshop shows at the start, as `--browse=` names it: `list`, `details` or
+    /// `filters`, for pictures.
+    pub browse: Option<String>,
 }
 
 impl Options {
@@ -91,6 +96,7 @@ impl Options {
                 "--part" => options.part = value.parse().unwrap_or(0),
                 "--view" => options.view = value.parse().unwrap_or(0),
                 "--find" => options.find = Some(value.to_string()),
+                "--browse" => options.browse = Some(value.to_string()),
                 _ => {}
             }
         }
@@ -158,6 +164,16 @@ fn system_family_for(generic: &str) -> Option<String> {
     }
     let _ = generic;
     None
+}
+
+/// An item's page on the Workshop, as `Theme.openWorkshop` opened it.
+pub fn workshop_page(id: &str) -> String {
+    format!("https://steamcommunity.com/sharedfiles/filedetails/?id={id}")
+}
+
+/// An item's change notes on the Workshop, as `Theme.openChangeNotes` opened them.
+pub fn change_notes(id: &str) -> String {
+    format!("https://steamcommunity.com/sharedfiles/filedetails/changelog/{id}")
 }
 
 /// `f` on the view, as a control's callback that is given a value.
