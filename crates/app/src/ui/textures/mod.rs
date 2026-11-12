@@ -28,7 +28,7 @@ pub struct Textures {
     active_only: bool,
     selected: Option<ModId>,
     confirm_remove: bool,
-    stop: Arc<AtomicBool>,
+    pub(crate) stop: Arc<AtomicBool>,
     scroll: Scrolling,
     focus: gpui::FocusHandle,
 }

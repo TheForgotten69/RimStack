@@ -6,6 +6,7 @@ use super::lists::Which;
 use super::shell::Shell;
 use super::theme::{self, Theme};
 use super::widgets::{icon, label};
+use crate::ui::widgets::TextSized;
 use crate::words::put;
 use crate::workspace::logs::moment;
 use gpui::{
@@ -15,19 +16,32 @@ use gpui::{
 use rimstack_core::{say, say_n};
 
 impl Shell {
-    /// The work under way across the window, as `Main.qml`'s `tasks`.
-    fn tasks(&self, cx: &gpui::App) -> Vec<String> {
+    /// The work under way across the window, as `Main.qml`'s `tasks`, each with how it is
+    /// stopped when it can be.
+    fn tasks(&self, cx: &gpui::App) -> Vec<(String, Option<Stop>)> {
+        let mut tasks: Vec<(String, Option<Stop>)> = self
+            .task_texts(cx)
+            .into_iter()
+            .map(|said| (said, None))
+            .collect();
+        if let Some(textures) = &self.textures
+            && let Some(said) = textures.read(cx).task_said()
+        {
+            let stop = textures.read(cx).stop.clone();
+            let stop: Stop =
+                std::rc::Rc::new(move || stop.store(true, std::sync::atomic::Ordering::Relaxed));
+            tasks.push((said, Some(stop)));
+        }
+        tasks
+    }
+
+    fn task_texts(&self, cx: &gpui::App) -> Vec<String> {
         let mut tasks = Vec::new();
         if self.mods.read(cx).rescanning && !self.demo {
             tasks.push(put(&say!("Reading the mod folders…")));
         }
         if self.mods.read(cx).reading_files() {
             tasks.push(put(&say!("Reading the active mods' files…")));
-        }
-        if let Some(textures) = &self.textures
-            && let Some(said) = textures.read(cx).task_said()
-        {
-            tasks.push(said);
         }
         if let Some(downloads) = &self.downloads {
             tasks.extend(downloads.read(cx).tasks_said());
@@ -51,17 +65,37 @@ impl Shell {
         let last = self.mods.read(cx).last_start();
         let tasks = self.tasks(cx);
         let lists = self.lists.clone();
-        let tray = (!tasks.is_empty()).then(|| {
+        let tray = (!tasks.is_empty() || self.tray_open).then(|| {
             let said = match tasks.len() {
-                1 => tasks[0].clone(),
+                0 => String::new(),
+                1 => tasks[0].0.clone(),
                 n => put(&say!("{} tasks running", n)),
             };
             div()
+                .id("tray")
+                .relative()
                 .flex()
                 .items_center()
                 .gap(theme::GAP_SMALL)
+                .cursor_pointer()
+                .role(gpui::Role::Button)
+                .aria_label(put(&say!("Background work")))
                 .child(icon("refresh-cw", theme.sized(12.), c.moved))
                 .child(label(&theme, theme.small(), c.ink, said))
+                .on_click(cx.listener(|shell, _, _, cx| {
+                    shell.tray_open = !shell.tray_open;
+                    cx.notify();
+                }))
+                .when(self.tray_open, |d| {
+                    d.child(self.tray_popup(&theme, &tasks, cx))
+                })
+        });
+        let release = self.release.clone().map(|(version, page)| {
+            Btn::new("get-release", put(&say!("Get {}", version)))
+                .icon("external-link")
+                .height(height)
+                .tip(put(&say!("A newer version is published; opens its page")))
+                .on_click(move |_, _, cx| cx.open_url(&page))
         });
         div()
             .flex()
@@ -132,6 +166,7 @@ impl Shell {
                     .items_center()
                     .gap(theme::GAP_LARGE)
                     .children(tray)
+                    .children(release)
                     .child(
                         Btn::new("keys", put(&say!("? Keys")))
                             .height(height)
@@ -157,4 +192,75 @@ impl Shell {
             )
             .into_any_element()
     }
+
+    /// `trayMenu`: each task under way, with Cancel where it can stop.
+    fn tray_popup(
+        &self,
+        theme: &Theme,
+        tasks: &[(String, Option<Stop>)],
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let c = &theme.colours;
+        let rows = tasks.iter().enumerate().map(|(at, (said, stop))| {
+            div()
+                .flex()
+                .items_center()
+                .gap(theme::GAP)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .sized_text(theme, theme.body())
+                        .text_color(c.ink)
+                        .child(said.clone()),
+                )
+                .when_some(stop.clone(), |d, stop| {
+                    d.child(
+                        Btn::new(("tray-cancel", at), put(&say!("Cancel")))
+                            .tip(put(&say!(
+                                "Stops after the current mod; what is already done is kept"
+                            )))
+                            .on_click(move |_, _, _| stop()),
+                    )
+                })
+        });
+        gpui::deferred(
+            div()
+                .id("tray-popup")
+                .absolute()
+                .bottom(theme.strip())
+                .right_0()
+                .w(theme.sized(380.))
+                .p(theme::GAP_LARGE)
+                .flex()
+                .flex_col()
+                .gap(theme::GAP)
+                .rounded(theme::CORNER_LARGE)
+                .bg(c.bar)
+                .border_1()
+                .border_color(c.line)
+                .occlude()
+                .on_mouse_down_out(cx.listener(|shell, _, _, cx| {
+                    shell.tray_open = false;
+                    cx.notify();
+                }))
+                .child(
+                    label(theme, theme.title(), c.ink, put(&say!("Background work")))
+                        .font_weight(theme.semibold),
+                )
+                .when(tasks.is_empty(), |d| {
+                    d.child(label(
+                        theme,
+                        theme.body(),
+                        c.ink2,
+                        put(&say!("Nothing running")),
+                    ))
+                })
+                .children(rows),
+        )
+        .into_any_element()
+    }
 }
+
+/// How a task under way is stopped.
+type Stop = std::rc::Rc<dyn Fn()>;

@@ -35,6 +35,10 @@ pub struct Shell {
     pub(crate) logs: Option<Entity<super::logs::Logs>>,
     /// Made the first time Saves is shown.
     pub(crate) saves: Option<Entity<super::saves::Saves>>,
+    /// The Background work popup open over the status bar.
+    pub(crate) tray_open: bool,
+    /// A newer RimStack found: its version and its page.
+    pub(crate) release: Option<(String, String)>,
     /// Made the first time Workshop is shown.
     pub(crate) workshop: Option<Entity<super::workshop::Workshop>>,
     /// Made the first time Search is shown.
@@ -158,6 +162,8 @@ impl Shell {
             logs: None,
             textures: None,
             saves: None,
+            tray_open: false,
+            release: None,
             find: None,
             workshop: None,
             view: options.view,
@@ -230,6 +236,7 @@ impl Shell {
             Some("commands") => self.open_commands(window, cx),
             Some("lists") => self.open_popup(super::lists::Which::Lists, window, cx),
             Some("history") => self.open_popup(super::lists::Which::History, window, cx),
+            Some("tray") => self.tray_open = true,
             Some("view") => self
                 .mods
                 .update(cx, |mods, _| mods.menu_wanted = Some("view")),
@@ -522,8 +529,10 @@ fn check_release(cx: &mut Context<Shell>) {
                 "release check",
                 cx,
                 move || crate::workspace::newest_release(nightly),
-                |_, found, cx| {
+                |shell, found, cx| {
                     if let crate::reports::ReleaseSaid::Newer { version, page } = found {
+                        shell.release = Some((version.clone(), page.clone()));
+                        cx.notify();
                         let running = super::app(cx).settings_report().version;
                         notices::offer(
                             put(&say!(
