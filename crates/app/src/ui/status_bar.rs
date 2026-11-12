@@ -83,7 +83,7 @@ impl Shell {
                 .cursor_pointer()
                 .role(gpui::Role::Button)
                 .aria_label(put(&say!("Background work")))
-                .child(icon("refresh-cw", theme.sized(12.), c.moved))
+                .child(self.spinner.clone())
                 .child(label(&theme, theme.small(), c.ink, said))
                 .on_click(cx.listener(|shell, _, _, cx| {
                     shell.tray_open = !shell.tray_open;
@@ -280,6 +280,23 @@ impl Shell {
                 .children(rows),
         )
         .into_any_element()
+    }
+}
+
+/// `StatusBar.qml`'s `RotationAnimation`: a turn in 1.4 s while work is under way.
+pub(crate) struct Spinner;
+
+impl gpui::Render for Spinner {
+    fn render(&mut self, _: &mut gpui::Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use gpui::AnimationExt;
+        let theme = cx.global::<Theme>();
+        icon("refresh-cw", theme.sized(12.), theme.colours.moved).with_animation(
+            "turning",
+            gpui::Animation::new(std::time::Duration::from_millis(1400)).repeat(),
+            |icon, part| {
+                icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(part)))
+            },
+        )
     }
 }
 

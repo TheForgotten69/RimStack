@@ -39,6 +39,9 @@ pub struct Shell {
     pub(crate) saves: Option<Entity<super::saves::Saves>>,
     /// The Background work popup open over the status bar.
     pub(crate) tray_open: bool,
+    /// The turning arrows beside the work under way, a view of its own so that only it is drawn
+    /// again while it turns.
+    pub(crate) spinner: Entity<super::status_bar::Spinner>,
     /// A newer RimStack found: its version and its page.
     pub(crate) release: Option<(String, String)>,
     /// Made the first time Workshop is shown.
@@ -178,6 +181,7 @@ impl Shell {
             textures: None,
             saves: None,
             tray_open: false,
+            spinner: cx.new(|_| super::status_bar::Spinner),
             release: None,
             find: None,
             workshop: None,
