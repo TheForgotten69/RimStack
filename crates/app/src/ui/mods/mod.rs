@@ -23,6 +23,7 @@ mod rows;
 mod selection;
 mod sort_moves;
 mod tabs;
+mod unread;
 
 use super::text_field::{Edited, TextField};
 use super::theme::{self, Theme};
@@ -122,6 +123,8 @@ pub struct Mods {
     /// A Git checkout's last commits, for its Latest changes.
     chosen_commits: Option<(ModId, Rc<Vec<rimstack_core::sources::changes::Note>>)>,
     commits_read: Lane,
+    /// Why the game folder chosen was not taken.
+    folder_problem: String,
     unhide_problem: String,
     /// The shared textures of two mods, shown in place of the lists.
     comparing: Option<Entity<compare::CompareView>>,
@@ -253,6 +256,7 @@ impl Mods {
             chosen_files: None,
             chosen_commits: None,
             commits_read: Lane::default(),
+            folder_problem: String::new(),
             unhide_problem: String::new(),
             comparing: None,
             compared: None,
@@ -736,6 +740,8 @@ impl Render for Mods {
         let (_, _, details_width) =
             pane_widths(&theme, window.viewport_size().width, self.panes_wanted());
         let bulk = self.bulk_bar(&theme, cx);
+        let unread = self.unread(&theme, cx);
+        let is_unread = unread.is_some();
         self.open_wanted_menu(window, cx);
         div()
             .flex()
@@ -781,7 +787,8 @@ impl Render for Mods {
                         ),
                 )
             })
-            .when(self.comparing.is_none(), |d| {
+            .when_some(unread, |d, unread| d.child(unread))
+            .when(self.comparing.is_none() && !is_unread, |d| {
                 d.child(self.panes(&theme, window, cx))
             })
             .children(bulk)
