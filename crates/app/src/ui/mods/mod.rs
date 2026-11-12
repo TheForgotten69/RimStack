@@ -6,6 +6,7 @@ mod asked;
 mod bands;
 mod bench;
 mod chosen;
+mod columns;
 mod compare;
 mod details;
 mod edit;
@@ -120,6 +121,12 @@ pub struct Mods {
     compared: Option<Rc<crate::workspace::textures::Comparison>>,
     /// Two mods to compare once their files are read, as `--comparing` asks.
     compare_wanted: bool,
+    /// How the tab is shown, as `[Mods]` keeps it.
+    view: Rc<crate::workspace::ModsView>,
+    /// Where the View and the inactive order buttons were drawn, for `--open=`.
+    menu_buttons: columns::Placed,
+    /// A menu to open once its button is drawn, as `--open=view` or `--open=order` asks.
+    pub menu_wanted: Option<&'static str>,
 }
 
 impl Mods {
@@ -127,6 +134,10 @@ impl Mods {
         let theme = cx.global::<Theme>();
         let (inactive_width, details_width, size) =
             (theme.sized(290.), theme.sized(360.), theme.body());
+        let view = Rc::new(match demo {
+            true => crate::workspace::ModsView::default(),
+            false => super::app(cx).mods_view(),
+        });
         let order = if demo {
             LoadOrder::demo(2000, 300)
         } else {
@@ -145,6 +156,7 @@ impl Mods {
             let shown = list::Shown {
                 rows: Rc::default(),
                 orders: orders.clone(),
+                view: view.clone(),
                 chosen: Rc::default(),
                 movable: false,
             };
@@ -209,6 +221,9 @@ impl Mods {
             comparing: None,
             compared: None,
             compare_wanted: false,
+            view,
+            menu_buttons: Default::default(),
+            menu_wanted: None,
         };
         mods.show(cx);
         if !demo {
@@ -401,10 +416,19 @@ impl Mods {
     /// `anew`: the mods were read again, so every id held before means nothing.
     fn load(&mut self, anew: bool, cx: &mut Context<Self>) {
         let app = super::app(cx);
+        let (headings, inactive_by) = (
+            self.view.headings,
+            rimstack_core::mods::columns::from_kept(&self.view.inactive_order),
+        );
+        let active_by = self.order.order_of(Side::Active);
         self.loading.run(
             "load order",
             cx,
-            move |_| LoadOrder::read(&app, true, None),
+            move |_| {
+                let mut order = LoadOrder::read(&app, headings, inactive_by);
+                order.set_active_by(active_by);
+                order
+            },
             move |mods, mut order, cx| {
                 let text = mods.filter.read(cx).text().to_string();
                 order.set_filter(&text);
@@ -550,6 +574,7 @@ impl Mods {
             let shown = list::Shown {
                 rows: self.shown(side).rows.clone(),
                 orders: orders.clone(),
+                view: self.view.clone(),
                 chosen: Rc::new(chosen),
                 movable: in_order && !self.order.previewing() && !self.demo,
             };
@@ -663,6 +688,7 @@ impl Render for Mods {
         let (inactive_width, active_width, details_width) =
             self.widths(&theme, window.viewport_size().width);
         let bulk = self.bulk_bar(&theme, cx);
+        self.open_wanted_menu(window, cx);
         let panes = div().flex().flex_1().min_h_0().w_full();
         div()
             .flex()
@@ -734,3 +760,6 @@ mod edit_tests;
 
 #[cfg(all(test, target_os = "linux"))]
 mod details_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+mod view_tests;

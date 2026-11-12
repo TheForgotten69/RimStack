@@ -20,6 +20,8 @@ pub enum Entry {
     Line,
     /// A caption over the entries after it.
     Title(SharedString),
+    /// Words that wrap, quieter than an entry.
+    Note(SharedString),
 }
 
 pub struct Item {
@@ -88,6 +90,11 @@ impl From<Item> for Entry {
 pub struct Menu {
     entries: Vec<Entry>,
     at: Point<Pixels>,
+    /// The menu's corner placed at `at`.
+    corner: gpui::Anchor,
+    /// Drawn as a column of buttons, as Qt's popups of `Btn`s were, so many captions' letters
+    /// wide, or as wide as its widest button.
+    buttons: Option<Option<usize>>,
     /// The entry the arrow keys are on.
     chosen: Option<usize>,
     focus: FocusHandle,
@@ -103,6 +110,8 @@ pub fn install(cx: &mut App) -> Entity<Menu> {
     let menu = cx.new(|cx| Menu {
         entries: Vec::new(),
         at: Point::default(),
+        corner: gpui::Anchor::TopLeft,
+        buttons: None,
         chosen: None,
         focus: cx.focus_handle(),
         before: None,
@@ -121,8 +130,39 @@ pub fn open(below: Bounds<Pixels>, entries: Vec<Entry>, window: &mut Window, cx:
     );
 }
 
+/// Opens `entries` as a column of buttons under `below`, its right edge on the control's,
+/// `letters` captions' letters wide or as wide as its widest button.
+pub fn open_buttons_under_end(
+    below: Bounds<Pixels>,
+    letters: Option<usize>,
+    entries: Vec<Entry>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let at = point(below.right(), below.bottom() + theme::GAP_SMALL);
+    show(
+        at,
+        gpui::Anchor::TopRight,
+        Some(letters),
+        entries,
+        window,
+        cx,
+    );
+}
+
 /// Opens `entries` with their top left corner at `at`, kept in the window.
 pub fn open_at(at: Point<Pixels>, entries: Vec<Entry>, window: &mut Window, cx: &mut App) {
+    show(at, gpui::Anchor::TopLeft, None, entries, window, cx);
+}
+
+fn show(
+    at: Point<Pixels>,
+    corner: gpui::Anchor,
+    buttons: Option<Option<usize>>,
+    entries: Vec<Entry>,
+    window: &mut Window,
+    cx: &mut App,
+) {
     let Some(menu) = cx.try_global::<Shown>().map(|shown| shown.0.clone()) else {
         return;
     };
@@ -130,6 +170,8 @@ pub fn open_at(at: Point<Pixels>, entries: Vec<Entry>, window: &mut Window, cx: 
     menu.update(cx, |menu, cx| {
         menu.entries = entries;
         menu.at = at;
+        menu.corner = corner;
+        menu.buttons = buttons;
         menu.chosen = None;
         menu.before = before;
         window.focus(&menu.focus, cx);
@@ -191,6 +233,15 @@ impl Menu {
                     .child(div().h(px(1.)).bg(c.line))
                     .into_any_element();
             }
+            Entry::Title(title) if self.buttons.is_some() => {
+                return div()
+                    .pt(theme::GAP_TINY)
+                    .sized_text(theme, theme.small())
+                    .font_weight(theme.semibold)
+                    .text_color(c.ink2)
+                    .child(title.clone())
+                    .into_any_element();
+            }
             Entry::Title(title) => {
                 return div()
                     .flex()
@@ -206,9 +257,23 @@ impl Menu {
                     )
                     .into_any_element();
             }
+            Entry::Note(note) => {
+                return div()
+                    .w_full()
+                    .when(self.buttons.is_none(), |d| {
+                        d.px(theme::GAP_MEDIUM).py(theme::GAP_TINY)
+                    })
+                    .spaced_text(theme, theme.caption(), 1.25)
+                    .text_color(c.ink3)
+                    .child(note.clone())
+                    .into_any_element();
+            }
             Entry::Item(item) => item,
         };
         let reached = self.chosen == Some(at);
+        if self.buttons.is_some() {
+            return self.button(at, item, reached, theme, cx);
+        }
         let ink = if item.danger { c.err } else { c.ink };
         let words_x = theme::GAP * 2. + theme.icon();
         let note_room = measure(window, theme, "n", theme.small(), FontWeight::NORMAL) * 44.;
@@ -270,6 +335,51 @@ impl Menu {
     }
 }
 
+impl Menu {
+    /// `Btn` as Qt's popups held it: the width of the popup, its words centred.
+    fn button(
+        &self,
+        at: usize,
+        item: &Item,
+        reached: bool,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let c = &theme.colours;
+        div()
+            .id(("menu-button", at))
+            .role(Role::MenuItem)
+            .aria_label(item.text.clone())
+            .flex()
+            .items_center()
+            .justify_center()
+            .gap(theme::GAP_SMALL)
+            .w_full()
+            .h(theme.control())
+            .px(theme::GAP_LARGE)
+            .rounded(theme::CORNER)
+            .bg(if reached { c.ctl_hi } else { c.ctl })
+            .hover(|s| s.bg(c.ctl_hi))
+            .when(reached, |d| d.border_1().border_color(c.focus))
+            .cursor_pointer()
+            .when(item.off, |d| d.opacity(0.4))
+            .when_some(item.icon.filter(|name| !name.is_empty()), |d, name| {
+                d.child(icon(name, theme.icon(), c.ink))
+            })
+            .child(
+                div()
+                    .whitespace_nowrap()
+                    .sized_text(theme, theme.small())
+                    .text_color(c.ink)
+                    .child(item.text.clone()),
+            )
+            .when(!item.off, |d| {
+                d.on_click(cx.listener(move |menu, _, window, cx| menu.choose(at, window, cx)))
+            })
+            .into_any_element()
+    }
+}
+
 impl Focusable for Menu {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
@@ -286,12 +396,26 @@ impl Render for Menu {
         let entries: Vec<AnyElement> = (0..self.entries.len())
             .map(|at| self.entry(at, &theme, window, cx))
             .collect();
+        let letter = measure(
+            window,
+            &theme,
+            "abcdefghijklmnopqrstuvwxyz",
+            theme.caption(),
+            FontWeight::NORMAL,
+        ) / 26.;
         let list = div()
             .id("menu-list")
             .role(Role::Menu)
             .flex()
             .flex_col()
-            .p(theme::GAP_TINY)
+            .when_some(self.buttons, |d, letters| {
+                d.when_some(letters, |d, letters| {
+                    d.w(letter * letters as f32 + theme::GAP_MEDIUM * 2.)
+                })
+                .p(theme::GAP_MEDIUM)
+                .gap(theme::GAP_SMALL)
+            })
+            .when(self.buttons.is_none(), |d| d.p(theme::GAP_TINY))
             .rounded(theme::CORNER_LARGE)
             .bg(c.bar)
             .border_1()
@@ -329,6 +453,7 @@ impl Render for Menu {
             )
             .child(deferred(
                 anchored()
+                    .anchor(self.corner)
                     .position(self.at)
                     .snap_to_window_with_margin(theme::GAP_TINY)
                     .child(list),

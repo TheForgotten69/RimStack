@@ -214,6 +214,12 @@ impl Shell {
             Some("commands") => self.open_commands(window, cx),
             Some("lists") => self.open_popup(super::lists::Which::Lists, window, cx),
             Some("history") => self.open_popup(super::lists::Which::History, window, cx),
+            Some("view") => self
+                .mods
+                .update(cx, |mods, _| mods.menu_wanted = Some("view")),
+            Some("order") => self
+                .mods
+                .update(cx, |mods, _| mods.menu_wanted = Some("order")),
             _ => {}
         }
         if options.open.as_deref() == Some("ask") {

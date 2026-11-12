@@ -37,6 +37,7 @@ pub mod textures;
 pub mod upkeep;
 mod window;
 pub use key::KeyState;
+pub use prefs::ModsView;
 pub use settings::{judge_folder, newest_release, short_contrast};
 
 pub static STARTED: OnceLock<Instant> = OnceLock::new();

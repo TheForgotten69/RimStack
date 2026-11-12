@@ -14,7 +14,7 @@ impl Mods {
         theme: &Theme,
         width: gpui::Pixels,
         window: &Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> gpui::Div {
         let c = &theme.colours;
         let title = put(&say!("Inactive"));
@@ -39,12 +39,38 @@ impl Mods {
             .flex_none()
             .items_center()
             .gap(theme::GAP)
-            .child(
-                Btn::new("inactive-order", order)
+            .child({
+                let me = cx.entity().downgrade();
+                let button = Btn::new("inactive-order", order)
                     .icon("arrow-up-down")
-                    .menu(),
-            )
-            .child(Btn::new("hide-inactive", hide));
+                    .tip(put(&say!("Order the inactive mods")))
+                    .opens(move |below, window, cx| {
+                        let _ = me.update(cx, |mods, cx| mods.inactive_order_menu(below, window, cx));
+                    });
+                super::columns::placed(button, self.menu_buttons.order.clone())
+            })
+            .child(Btn::new("hide-inactive", hide).tip(put(&say!(
+                "Folds the list into a bar at the left edge; its button opens the list over the load order"
+            ))));
+        let only_new = self.fresh > 0 && self.filter_text(cx) == "is:new";
+        let activate = only_new.then(|| {
+            div()
+                .flex()
+                .px(theme::GAP_LARGE)
+                .pb(theme::GAP)
+                .child(
+                    Btn::new(
+                        "activate-fresh",
+                        put(&say!("Activate all {}", count(self.fresh))),
+                    )
+                    .primary()
+                    .enabled(!self.order.previewing())
+                    .tip(put(&say!(
+                        "Each goes where its rules put it in the load order. One Undo takes them all back."
+                    )))
+                    .on_click(cx.listener(|mods, _, _, cx| mods.activate_fresh(cx))),
+                )
+        });
         div()
             .flex()
             .flex_col()
@@ -73,11 +99,23 @@ impl Mods {
                             )
                             .child(label(theme, theme.body(), c.ink3, counted))
                             .when_some(fresh, |d, said| {
-                                d.child(Chip::new(said).tone(c.ok).pressable())
+                                d.child(
+                                    Chip::new(said)
+                                        .tone(c.ok)
+                                        .tip(put(&say!("Installed since the game was last started from RimStack. Click to show only these.")))
+                                        .on_click(
+                                            "fresh-chip",
+                                            cx.listener(|mods, _, _, cx| {
+                                                let only = mods.filter_text(cx) == "is:new";
+                                                mods.filter_by(if only { "" } else { "is:new" }, cx);
+                                            }),
+                                        ),
+                                )
                             }),
                     )
                     .child(buttons.when(stacked, |d| d.mb(theme::GAP))),
             )
+            .children(activate)
             .child(
                 div()
                     .flex_1()

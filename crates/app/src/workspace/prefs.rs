@@ -7,7 +7,90 @@ use rimstack_core::base::error::Error;
 use rimstack_core::kept::prefs::Prefs;
 use std::path::PathBuf;
 
+/// How the Mods tab is shown, under `[Mods]`, as Qt's `ModsPrefs` kept it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ModsView {
+    /// As `columns::chosen` reads it.
+    pub columns: String,
+    /// As `columns::widths` reads it.
+    pub column_sizes: String,
+    /// The load order under category headings; Qt kept 1, 0 or -1, and only 0 turns them off.
+    pub headings: bool,
+    /// As `columns::from_kept` reads it; "" by category.
+    pub inactive_order: String,
+    /// The inactive mods folded into a bar at the left edge.
+    pub inactive_hidden: bool,
+    /// The panes' widths in pixels as last dragged; 0 until then.
+    pub inactive: f32,
+    pub details: f32,
+}
+
+impl Default for ModsView {
+    fn default() -> Self {
+        Self {
+            columns: "author,version,load".into(),
+            column_sizes: String::new(),
+            headings: true,
+            inactive_order: String::new(),
+            inactive_hidden: false,
+            inactive: 0.,
+            details: 0.,
+        }
+    }
+}
+
+impl ModsView {
+    const GROUP: &str = "Mods";
+
+    pub fn read(prefs: &Prefs) -> Self {
+        let first = Self::default();
+        let text = |key: &str, or: String| prefs.get(Self::GROUP, key).unwrap_or(or);
+        let number = |key: &str| prefs.number(Self::GROUP, key).unwrap_or(0.) as f32;
+        Self {
+            columns: text("columns", first.columns),
+            column_sizes: text("columnSizes", first.column_sizes),
+            headings: prefs.number(Self::GROUP, "headings") != Some(0.),
+            inactive_order: text("inactiveOrder", first.inactive_order),
+            inactive_hidden: prefs.flag(Self::GROUP, "inactiveHidden").unwrap_or(false),
+            inactive: number("inactive"),
+            details: number("details"),
+        }
+    }
+
+    fn write(&self, prefs: &mut Prefs) {
+        let flag = |on: bool| if on { "true" } else { "false" };
+        let pairs = [
+            ("columns", self.columns.clone()),
+            ("columnSizes", self.column_sizes.clone()),
+            ("headings", if self.headings { "1" } else { "0" }.into()),
+            ("inactiveOrder", self.inactive_order.clone()),
+            ("inactiveHidden", flag(self.inactive_hidden).into()),
+            ("inactive", self.inactive.round().to_string()),
+            ("details", self.details.round().to_string()),
+        ];
+        for (key, value) in pairs {
+            if prefs.get(Self::GROUP, key).as_deref() != Some(value.as_str()) {
+                prefs.set(Self::GROUP, key, &value);
+            }
+        }
+    }
+}
+
 impl App {
+    pub fn mods_view(&self) -> ModsView {
+        ModsView::read(&self.prefs())
+    }
+
+    /// Keeps what differs from the file, in one write.
+    pub fn keep_mods_view(&self, view: &ModsView) -> Result<(), Error> {
+        let mut prefs = self.prefs();
+        if ModsView::read(&prefs) == *view {
+            return Ok(());
+        }
+        view.write(&mut prefs);
+        prefs.write(&self.prefs_file())
+    }
+
     fn prefs_file(&self) -> PathBuf {
         self.settings_dir.join("RimStack.conf")
     }
@@ -33,7 +116,36 @@ impl App {
 
 #[cfg(test)]
 mod tests {
+    use super::ModsView;
     use crate::workspace::tests::installed;
+
+    #[test]
+    fn the_mods_view_qt_kept_is_read_and_kept_again() {
+        let (_tmp, app) = installed();
+        assert_eq!(app.mods_view(), ModsView::default(), "nothing kept yet");
+        app.keep_pref("Mods", "headings", "-1").unwrap();
+        app.keep_pref("Mods", "inactiveHidden", "true").unwrap();
+        app.keep_pref("Mods", "inactive", "479.5").unwrap();
+        let read = app.mods_view();
+        assert!(
+            read.headings,
+            "-1 is headings when the order is close to category order"
+        );
+        assert!(read.inactive_hidden);
+        assert_eq!(read.inactive, 479.5);
+        let view = ModsView {
+            columns: "version,author".into(),
+            headings: false,
+            inactive_order: "name down".into(),
+            ..read
+        };
+        app.keep_mods_view(&view).unwrap();
+        let again = app.mods_view();
+        assert_eq!(again.columns, "version,author");
+        assert!(!again.headings);
+        assert_eq!(again.inactive_order, "name down");
+        assert_eq!(again.inactive, 480., "a width is kept in whole pixels");
+    }
 
     #[test]
     fn a_pref_kept_is_read_back_and_the_theme_is_told() {

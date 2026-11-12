@@ -2,7 +2,7 @@
 //! nothing else, with its bar always shown and its thumb held to scroll.
 
 use super::Mods;
-use super::active::columns;
+use super::columns::columns;
 use super::rows;
 use super::rows::Columns;
 use crate::ui::rows::{Scroll, Scrolling};
@@ -22,6 +22,8 @@ use std::rc::Rc;
 pub struct Shown {
     pub rows: Rc<Vec<RowView>>,
     pub orders: Rc<Orders>,
+    /// The columns chosen and their widths.
+    pub view: Rc<crate::workspace::ModsView>,
     /// The `mod_id`s chosen in this list.
     pub chosen: Rc<HashSet<i32>>,
     /// Whether its mods may be dragged: not while Sort is shown, nor in an order of a column.
@@ -32,6 +34,7 @@ pub struct Shown {
 #[derive(Default)]
 struct Made {
     width: Pixels,
+    view: Rc<crate::workspace::ModsView>,
     columns: Option<Rc<Columns>>,
 }
 
@@ -172,10 +175,15 @@ impl Render for ModList {
             move |range, width, window, cx| {
                 let theme = &drawn_theme;
                 let mut made = made.borrow_mut();
-                if made.width != width {
-                    let columns = (side == Side::Active)
-                        .then(|| Rc::new(columns(theme, &shown.orders, width, window)));
-                    *made = Made { width, columns };
+                if made.width != width || !Rc::ptr_eq(&made.view, &shown.view) {
+                    let columns = (side == Side::Active).then(|| {
+                        Rc::new(columns(theme, &shown.orders, &shown.view, width, window))
+                    });
+                    *made = Made {
+                        width,
+                        view: shown.view.clone(),
+                        columns,
+                    };
                 }
                 let name_room = match &made.columns {
                     Some(columns) => columns.name_room,

@@ -6,25 +6,13 @@ use super::rows::Columns;
 use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{Btn, Chip, TextSized, btn_width, icon, label, measure, notice};
 use crate::words::{count, put};
-use crate::workspace::load_order::{Orders, Side};
+use crate::workspace::load_order::Side;
 use gpui::{
-    Context, FontWeight, ParentElement, Pixels, Styled, Window, div, prelude::FluentBuilder, px,
+    Context, FontWeight, InteractiveElement, MouseButton, ParentElement, Pixels,
+    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 use rimstack_core::{say, say_n};
 use std::rc::Rc;
-
-/// The columns chosen in the View menu, before any is left out for room.
-const CHOSEN: [&str; 3] = ["author", "version", "load"];
-/// The order columns are left out in when the name would have too little room.
-const DROPPED_FIRST: [&str; 7] = [
-    "size",
-    "downloaded",
-    "activated",
-    "updated",
-    "load",
-    "author",
-    "version",
-];
 
 impl Mods {
     fn heading_label(&self, key: &str) -> String {
@@ -37,7 +25,7 @@ impl Mods {
 
     /// `Columns.widths` and `ModList.fitting` for a list this wide.
     fn columns(&self, theme: &Theme, width: Pixels, window: &Window) -> Columns {
-        columns(theme, &self.orders, width, window)
+        super::columns::columns(theme, &self.orders, &self.view, width, window)
     }
 
     pub(super) fn active_pane(
@@ -49,16 +37,41 @@ impl Mods {
     ) -> gpui::Div {
         let c = &theme.colours;
         let columns = Rc::new(self.columns(theme, width, window));
-        let heading = |text: String, on: bool| {
-            label(
-                theme,
-                theme.caption(),
-                if on { c.ink } else { c.ink3 },
-                text,
+        let me = cx.entity().downgrade();
+        let tip = put(&say!(
+            "Click to order the list by this column; click again to reverse it. Right-click to choose the columns. Drag it, or press Ctrl + Alt + Left or Right, to move it."
+        ));
+        let heading = |key: &'static str, text: String, on: bool| {
+            let (pressed, asked) = (me.clone(), me.clone());
+            let said = match key {
+                "" => put(&say!("The load order itself")),
+                _ => tip.clone(),
+            };
+            crate::ui::tip::tipped(
+                div()
+                    .id(gpui::SharedString::from(format!("heading-{key}")))
+                    .cursor_pointer()
+                    .child(
+                        label(
+                            theme,
+                            theme.caption(),
+                            if on { c.ink } else { c.ink3 },
+                            text,
+                        )
+                        .font_weight(theme.medium),
+                    )
+                    .on_click(move |_, _, cx| {
+                        let _ = pressed.update(cx, |mods, cx| mods.heading_pressed(key, cx));
+                    })
+                    .on_mouse_down(MouseButton::Right, move |event, window, cx| {
+                        let at = event.position;
+                        let _ = asked.update(cx, |mods, cx| mods.columns_menu(at, window, cx));
+                    }),
+                said.into(),
             )
-            .font_weight(theme.medium)
         };
         let name_on = self.orders.active_by.get("name").is_some_and(|e| e.on);
+        let view_menu = cx.entity().downgrade();
         let headings = div()
             .relative()
             .flex_none()
@@ -78,14 +91,13 @@ impl Mods {
                             .flex_none()
                             .justify_end()
                             .w(columns.number)
-                            .child(heading("#".into(), false)),
+                            .child(heading("", "#".into(), false)),
                     )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(heading(self.heading_label("name"), name_on)),
-                    )
+                    .child(div().flex_1().min_w_0().child(heading(
+                        "name",
+                        self.heading_label("name"),
+                        name_on,
+                    )))
                     .children(columns.fitting.iter().map(|(key, width)| {
                         let on = self.orders.active_by.get(key).is_some_and(|e| e.on);
                         div()
@@ -105,7 +117,7 @@ impl Mods {
                                     .w(px(1.))
                                     .bg(c.field_line),
                             )
-                            .child(heading(self.heading_label(key), on))
+                            .child(heading(key, self.heading_label(key), on))
                     }))
                     .child(
                         div()
@@ -113,7 +125,16 @@ impl Mods {
                             .flex_none()
                             .justify_end()
                             .w(columns.quick)
-                            .child(Btn::new("view", put(&say!("View"))).menu()),
+                            .child(super::columns::placed(
+                                Btn::new("view", put(&say!("View"))).opens(
+                                    move |below, window, cx| {
+                                        let _ = view_menu.update(cx, |mods, cx| {
+                                            mods.view_menu(below, window, cx)
+                                        });
+                                    },
+                                ),
+                                self.menu_buttons.view.clone(),
+                            )),
                     ),
             )
             .child(
@@ -472,95 +493,5 @@ impl Mods {
             keys: Some(put(&say!("Ctrl + F"))),
         }
         .render(theme, window, cx)
-    }
-}
-
-/// `Columns.widths` and `ModList.fitting` for a load order this wide.
-pub(super) fn columns(theme: &Theme, orders: &Orders, width: Pixels, window: &Window) -> Columns {
-    let heading = |key: &str| {
-        let text = format!("{} ▾", put(&column_name(key)));
-        measure(window, theme, &text, theme.caption(), theme.medium)
-    };
-    let widest = |key: &str, size: Pixels| {
-        let text = orders.widest.get(key).cloned().unwrap_or_default();
-        measure(window, theme, &text, size, FontWeight::NORMAL)
-    };
-    let column_width = |key: &str| match key {
-        "author" => heading(key).max(widest(key, theme.body())),
-        "version" => heading(key).max(widest(key, theme.body())),
-        "load" => heading(key).max(widest(key, theme.small())),
-        _ => heading(key),
-    };
-    let timed = orders.active_by.contains_key("load");
-    let chosen: Vec<&'static str> = CHOSEN
-        .into_iter()
-        .filter(|k| *k != "load" || timed)
-        .collect();
-    let wide = width >= theme.sized(620.);
-    let roomy = width >= theme.sized(440.);
-    let view = btn_width(window, theme, &put(&say!("View")), false, true);
-    let quick = view.max(theme.sized(if wide { 124. } else { 44. }));
-    let number = theme.sized(28.);
-    let room_beside = |shown: &[&str]| {
-        let taken = shown.iter().fold(px(0.), |all, key| {
-            all + column_width(key) + theme::GAP_LARGE
-        });
-        width
-            - bar_room(theme)
-            - quick
-            - number
-            - theme::GAP_WIDE * 2.
-            - theme::GAP_LARGE * 2.
-            - taken
-    };
-    let mut shown: Vec<&'static str> = if roomy { chosen } else { Vec::new() };
-    for dropped in DROPPED_FIRST {
-        if room_beside(&shown) >= theme.sized(180.) {
-            break;
-        }
-        shown.retain(|key| *key != dropped);
-    }
-    let tile = theme.appearance.comfortable && width - bar_room(theme) >= theme.sized(420.);
-    let fitting: Vec<(&'static str, Pixels)> = shown
-        .into_iter()
-        .map(|key| (key, column_width(key)))
-        .collect();
-    let beside = fitting
-        .iter()
-        .fold(px(0.), |all, (_, width)| all + *width + theme::GAP_LARGE);
-    let tile_room = if tile {
-        theme.sized(64.) + theme::GAP_SMALL
-    } else {
-        px(0.)
-    };
-    let name_room = width
-        - bar_room(theme)
-        - theme::GAP_WIDE * 2.
-        - number
-        - theme::GAP_LARGE * 2.
-        - beside
-        - quick
-        - theme.sized(13.)
-        - theme::GAP_SMALL * 2.
-        - tile_room;
-    Columns {
-        number,
-        name_room,
-        fitting,
-        quick,
-        wide,
-        tile,
-    }
-}
-
-fn column_name(key: &str) -> rimstack_core::base::sentence::Sentence {
-    match key {
-        "author" => say!("Author"),
-        "version" => say!("Version"),
-        "load" => say!("Load"),
-        "updated" => say!("Updated"),
-        "downloaded" => say!("Downloaded"),
-        "activated" => say!("Activated"),
-        _ => say!("Size"),
     }
 }
