@@ -158,10 +158,12 @@ impl Element for Rows {
         window: &mut Window,
         cx: &mut Cx,
     ) -> (LayoutId, ()) {
-        let mut style = Style::default();
-        style.size = Size {
-            width: relative(1.).into(),
-            height: relative(1.).into(),
+        let style = Style {
+            size: Size {
+                width: relative(1.).into(),
+                height: relative(1.).into(),
+            },
+            ..Style::default()
         };
         (window.request_layout(style, [], cx), ())
     }
