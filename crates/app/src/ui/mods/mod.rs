@@ -475,6 +475,7 @@ impl Mods {
                 .previewing()
                 .then(|| Rc::new(self.order.sort_moves())),
             chosen_id: self.selected_id(),
+            fresh: self.fresh,
             commits: self
                 .chosen_commits
                 .as_ref()

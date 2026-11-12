@@ -425,7 +425,17 @@ impl Downloads {
                             downloads.notes_state = Some(state(done, resume, false))
                         }
                         Some(Fetching::GaveUp { done }) => {
-                            downloads.notes_state = Some(state(done, 0, true))
+                            downloads.notes_state = Some(state(done, 0, true));
+                            crate::ui::notices::say(
+                                put(&say_n!(
+                                    count,
+                                    "Steam's site keeps refusing: asked about {} mod, got the change notes of {}",
+                                    "Steam's site keeps refusing: asked about {} mods, got the change notes of {}",
+                                    done
+                                )),
+                                crate::ui::notices::Tone::Err,
+                                cx,
+                            );
                         }
                         Some(Fetching::Fetched { id, notes }) => {
                             downloads.fetched.insert(id, notes);

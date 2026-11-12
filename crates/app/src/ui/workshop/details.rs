@@ -321,6 +321,8 @@ impl Workshop {
                         let (me, path) = (me.clone(), path.clone());
                         div()
                             .id(("screenshot", at))
+                            .role(gpui::Role::Image)
+                            .aria_label(put(&say!("Screenshot")))
                             .w(each)
                             .h(each * 9. / 16.)
                             .rounded(theme::CORNER)

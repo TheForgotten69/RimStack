@@ -117,7 +117,17 @@ impl DetailsView {
                     .child(Chip::new(put(&say!(
                         "{} inactive",
                         count(self.shown.inactive)
-                    )))),
+                    ))))
+                    .when(self.shown.fresh > 0, |d| {
+                        d.child(
+                            Chip::new(put(&say!("{} new", count(self.shown.fresh))))
+                                .tone(c.ok)
+                                .tip(put(&say!(
+                                    "Activate the mods installed since the game was last started from RimStack"
+                                )))
+                                .on_click("summary-fresh", self.on_mods(|mods, cx| mods.activate_fresh(cx))),
+                        )
+                    }),
             );
         scrolled
             .gap(theme::GAP_CARD)

@@ -44,6 +44,8 @@ pub struct DetailsShown {
     pub unhide_problem: String,
     /// What Sort's preview moves, while it is shown.
     pub sort_moves: Option<Rc<Vec<crate::workspace::load_order::SortGroup>>>,
+    /// The inactive mods installed since the game was last started from RimStack.
+    pub fresh: usize,
     /// A Git checkout's last commits, read off the window's thread.
     pub commits: Option<Rc<Vec<rimstack_core::sources::changes::Note>>>,
     /// The mod chosen alone, as `RowView::mod_id` gives it.

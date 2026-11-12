@@ -114,6 +114,11 @@ impl Logs {
                             div()
                                 .id(("log-line", at))
                                 .role(Role::ListItem)
+                                .aria_label(match (bad, warning) {
+                                    (true, _) => format!("{}: {}", put(&say!("Error")), text),
+                                    (_, true) => format!("{}: {}", put(&say!("Warning")), text),
+                                    _ => text.clone(),
+                                })
                                 .relative()
                                 .w(width)
                                 .h(draw_tops[at + 1] - draw_tops[at])

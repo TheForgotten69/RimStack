@@ -436,6 +436,7 @@ impl Mods {
                     },
                 )
                 .icon("ellipsis")
+                .tip(put(&say!("Problems, Undo, Redo")))
                 .opens({
                     let me = cx.entity().downgrade();
                     move |below, window, cx| {

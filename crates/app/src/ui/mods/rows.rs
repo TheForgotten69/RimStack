@@ -187,7 +187,7 @@ pub fn row(
     let colour = category_colour(theme, row.category);
     let big_header = row.is_header && !row.is_sub && !row.again;
     let body = if row.is_sub {
-        sub(theme, row)
+        sub(theme, row, side, at, mods.clone())
     } else if row.again {
         again(theme, row)
     } else if row.is_header {
@@ -416,7 +416,7 @@ fn heading(theme: &Theme, row: &RowView, colour: Hsla) -> AnyElement {
         .into_any_element()
 }
 
-fn sub(theme: &Theme, row: &RowView) -> AnyElement {
+fn sub(theme: &Theme, row: &RowView, side: Side, at: usize, mods: WeakEntity<Mods>) -> AnyElement {
     let c = &theme.colours;
     let counted = match row.group_size > row.count {
         true => put(&say!(
@@ -443,6 +443,30 @@ fn sub(theme: &Theme, row: &RowView) -> AnyElement {
             }),
         ))
         .child(label(theme, theme.small(), c.ink3, counted))
+        .child(div().flex_1())
+        .child(crate::ui::tip::tipped(
+            div()
+                .id(SharedString::from(format!("untag-{}", put(&row.name))))
+                .role(gpui::Role::Button)
+                .aria_label(put(&say!("Remove the tag {} from these mods", put(&row.name))))
+                .flex()
+                .items_center()
+                .justify_center()
+                .size(theme.sized(24.))
+                .mr(theme::GAP_CARD)
+                .rounded(theme::CORNER)
+                .bg(c.ctl)
+                .hover(|s| s.bg(c.ctl_hi))
+                .cursor_pointer()
+                .invisible()
+                .group_hover("mod-row", |s| s.visible())
+                .child(icon("x", theme.sized(12.), c.ink))
+                .on_click(move |_, _, cx| {
+                    cx.stop_propagation();
+                    let _ = mods.update(cx, |mods, cx| mods.remove_sub(side, at, cx));
+                }),
+            put(&say!("Takes this tag off these mods; they stay where they are")).into(),
+        ))
         .when(row.again, |d| {
             d.child(tipped_label(
                 format!("group-rest-{}", put(&row.name)),
@@ -564,10 +588,16 @@ fn cells(
             d.child(tile(theme, row, colour, picture))
         })
         .when(row.version_ignored, |d| {
-            d.child(icon(
-                "eye-off",
-                theme.sized(12.),
-                if chosen { c.on_selected } else { c.ink3 },
+            d.child(tipped_label(
+                format!("ignored-{}", row.number),
+                div().child(icon(
+                    "eye-off",
+                    theme.sized(12.),
+                    if chosen { c.on_selected } else { c.ink3 },
+                )),
+                put(&say!(
+                    "Made for another game version; the warning is ignored"
+                )),
             ))
         })
         .child(
@@ -600,10 +630,14 @@ fn cells(
             d.child(label(theme, theme.small(), quiet, put(&row.ordered_by)))
         })
         .when(columns.is_none() && row.source == 2, |d| {
-            d.child(icon(
-                "git-branch",
-                theme.sized(12.),
-                if chosen { c.on_selected } else { c.ink3 },
+            d.child(tipped_label(
+                format!("git-{}", put(&row.name)),
+                div().child(icon(
+                    "git-branch",
+                    theme.sized(12.),
+                    if chosen { c.on_selected } else { c.ink3 },
+                )),
+                put(&say!("A Git checkout")),
             ))
         });
     let Some(columns) = columns else {

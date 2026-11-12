@@ -306,7 +306,7 @@ impl Mods {
         notices::say(put(&said), notices::Tone::Ok, cx);
     }
 
-    fn remove_sub(&mut self, side: Side, row: usize, cx: &mut Context<Self>) {
+    pub(super) fn remove_sub(&mut self, side: Side, row: usize, cx: &mut Context<Self>) {
         let Some((tag, ids)) = self.order.group_on(side, row) else {
             return;
         };
