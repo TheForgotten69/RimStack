@@ -1,5 +1,7 @@
 //! The text a field holds, as `TextInput` kept it: one line, a selection, and the text an
-//! input method is still composing.
+//! input method is still composing; or several lines, as `TextArea` kept them.
+
+mod area;
 
 use super::theme::Theme;
 use gpui::{
@@ -26,11 +28,15 @@ actions!(
         Copy,
         Cut,
         Escape,
-        Enter
+        Enter,
+        Up,
+        Down
     ]
 );
 
 const CONTEXT: &str = "TextField";
+/// Added to `CONTEXT` in a field of several lines.
+const AREA: &str = "area";
 
 /// A key held with Command on macOS and Ctrl elsewhere, as GPUI names it.
 #[macro_export]
@@ -60,6 +66,8 @@ pub fn bind_keys(cx: &mut Cx) {
         KeyBinding::new(crate::command!("x"), Cut, Some(CONTEXT)),
         KeyBinding::new("escape", Escape, Some(CONTEXT)),
         KeyBinding::new("enter", Enter, Some(CONTEXT)),
+        KeyBinding::new("up", Up, Some(AREA)),
+        KeyBinding::new("down", Down, Some(AREA)),
     ]);
 }
 
@@ -79,6 +87,14 @@ pub struct TextField {
     size: Pixels,
     /// Shown as bullets, as `TextInput.Password`: a key, which is not copied either.
     masked: bool,
+    /// Whether it held the keys when last drawn.
+    focused: std::cell::Cell<bool>,
+    /// The rows a field of several lines shows at least; 0 for one line.
+    area: usize,
+    /// Esc leaves the text as it is, as in a field that holds what is kept rather than a filter.
+    kept_on_escape: bool,
+    wrapped: Option<(area::Wrapped, Bounds<Pixels>)>,
+    rows_drawn: std::cell::Cell<usize>,
 }
 
 /// What a masked field shows for each character.
@@ -104,7 +120,25 @@ impl TextField {
             shaped: None,
             size,
             masked: false,
+            focused: std::cell::Cell::new(false),
+            area: 0,
+            kept_on_escape: false,
+            wrapped: None,
+            rows_drawn: std::cell::Cell::new(1),
         }
+    }
+
+    /// A field of several lines, `rows` tall at least, where Enter starts a line.
+    pub fn several_lines(mut self, rows: usize) -> Self {
+        self.area = rows.max(1);
+        self.kept_on_escape = true;
+        self
+    }
+
+    /// Esc does not empty it.
+    pub fn kept_on_escape(mut self) -> Self {
+        self.kept_on_escape = true;
+        self
     }
 
     pub fn set_masked(&mut self, masked: bool) {
@@ -143,6 +177,19 @@ impl TextField {
         self.marked = None;
         cx.emit(Edited);
         cx.notify();
+    }
+
+    /// The text held, changed without telling: what a view shows of its own state.
+    pub fn set_text_quietly(&mut self, text: &str, cx: &mut Context<Self>) {
+        self.text = text.to_string();
+        self.selected = self.text.len()..self.text.len();
+        self.marked = None;
+        cx.notify();
+    }
+
+    /// Whether the keys were here when last drawn, for a listener that has no window.
+    pub fn is_focused_now(&self) -> bool {
+        self.focused.get()
     }
 
     pub fn is_focused(&self, window: &Window) -> bool {
@@ -222,11 +269,43 @@ impl TextField {
     }
 
     fn home(&mut self, _: &Home, _: &mut Window, cx: &mut Context<Self>) {
-        self.move_to(0, cx);
+        let at = match self.area {
+            0 => 0,
+            _ => self.text[..self.cursor()]
+                .rfind('\n')
+                .map_or(0, |at| at + 1),
+        };
+        self.move_to(at, cx);
     }
 
     fn end(&mut self, _: &End, _: &mut Window, cx: &mut Context<Self>) {
-        self.move_to(self.text.len(), cx);
+        let at = match self.area {
+            0 => self.text.len(),
+            _ => self.text[self.cursor()..]
+                .find('\n')
+                .map_or(self.text.len(), |at| self.cursor() + at),
+        };
+        self.move_to(at, cx);
+    }
+
+    /// The cursor a row up or down, where it stands across.
+    fn by_row(&mut self, rows: f32, cx: &mut Context<Self>) {
+        let Some((wrapped, _)) = &self.wrapped else {
+            return;
+        };
+        let line = cx.global::<Theme>().line(self.size);
+        let at = wrapped.position(self.cursor());
+        let to = wrapped.index_at(point(at.x, at.y + line * rows + line / 2.));
+        let to = if at.y + line * rows < px(0.) { 0 } else { to };
+        self.move_to(to, cx);
+    }
+
+    fn up(&mut self, _: &Up, _: &mut Window, cx: &mut Context<Self>) {
+        self.by_row(-1., cx);
+    }
+
+    fn down(&mut self, _: &Down, _: &mut Window, cx: &mut Context<Self>) {
+        self.by_row(1., cx);
     }
 
     fn backspace(&mut self, _: &Backspace, window: &mut Window, cx: &mut Context<Self>) {
@@ -245,7 +324,11 @@ impl TextField {
 
     fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-            self.replace_text_in_range(None, &text.replace('\n', " "), window, cx);
+            let text = match self.area {
+                0 => text.replace('\n', " "),
+                _ => text,
+            };
+            self.replace_text_in_range(None, &text, window, cx);
         }
     }
 
@@ -262,12 +345,18 @@ impl TextField {
         self.replace_text_in_range(None, "", window, cx);
     }
 
-    fn enter(&mut self, _: &Enter, _: &mut Window, cx: &mut Context<Self>) {
-        cx.emit(Entered);
+    fn enter(&mut self, _: &Enter, window: &mut Window, cx: &mut Context<Self>) {
+        match self.area {
+            0 => cx.emit(Entered),
+            _ => self.replace_text_in_range(None, "\n", window, cx),
+        }
     }
 
     fn escape(&mut self, _: &Escape, _: &mut Window, cx: &mut Context<Self>) {
-        self.set_text("", cx);
+        match self.kept_on_escape {
+            true => cx.propagate(),
+            false => self.set_text("", cx),
+        }
     }
 
     fn to_utf16(&self, offset: usize) -> usize {
@@ -295,13 +384,9 @@ impl TextField {
         self.offset_of_utf16(range.start)..self.offset_of_utf16(range.end)
     }
 
-    fn shape(&self, window: &Window, theme: &Theme) -> ShapedLine {
-        let shown = match self.masked {
-            true => self.text.chars().map(|_| BULLET).collect(),
-            false => self.text.clone(),
-        };
-        let run = TextRun {
-            len: shown.len(),
+    fn run(&self, theme: &Theme, len: usize) -> TextRun {
+        TextRun {
+            len,
             font: gpui::font(theme.family.clone()),
             color: theme.colours.ink,
             background_color: None,
@@ -311,7 +396,15 @@ impl TextField {
                 wavy: false,
             }),
             strikethrough: None,
+        }
+    }
+
+    fn shape(&self, window: &Window, theme: &Theme) -> ShapedLine {
+        let shown: String = match self.masked {
+            true => self.text.chars().map(|_| BULLET).collect(),
+            false => self.text.clone(),
         };
+        let run = self.run(theme, shown.len());
         window
             .text_system()
             .shape_line(SharedString::from(shown), self.size, &[run], None)
@@ -409,8 +502,16 @@ impl EntityInputHandler for TextField {
         _: &mut Window,
         _: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
-        let (shaped, _) = self.shaped.as_ref()?;
         let range = self.range_of_utf16(&range);
+        if let Some((wrapped, _)) = &self.wrapped {
+            let (from, to) = (wrapped.position(range.start), wrapped.position(range.end));
+            let line = bounds.size.height / self.rows_drawn.get().max(1) as f32;
+            return Some(Bounds::from_corners(
+                bounds.origin + from,
+                bounds.origin + point(to.x.max(from.x), to.y + line),
+            ));
+        }
+        let (shaped, _) = self.shaped.as_ref()?;
         Some(Bounds::from_corners(
             point(
                 bounds.left() + shaped.x_for_index(self.shown_at(range.start)),
@@ -429,6 +530,9 @@ impl EntityInputHandler for TextField {
         _: &mut Window,
         _: &mut Context<Self>,
     ) -> Option<usize> {
+        if let Some((wrapped, bounds)) = &self.wrapped {
+            return Some(self.to_utf16(wrapped.index_at(at - bounds.origin)));
+        }
         let (shaped, bounds) = self.shaped.as_ref()?;
         let index = shaped
             .index_for_x(at.x - bounds.left())
@@ -437,21 +541,10 @@ impl EntityInputHandler for TextField {
     }
 }
 
-impl Render for TextField {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = cx.global::<Theme>().clone();
-        let field = cx.entity();
-        let focus = self.focus.clone();
-        let shaped = self.shape(window, &theme);
-        let (selected, cursor, focused) = (
-            self.shown_at(self.selected.start)..self.shown_at(self.selected.end),
-            self.shown_at(self.cursor()),
-            focus.is_focused(window),
-        );
-        let (ink, accent) = (theme.colours.ink, theme.colours.accent);
-        let line = theme.line(self.size);
+impl TextField {
+    /// The field with what its keys do.
+    fn keyed(&self, cx: &mut Context<Self>) -> gpui::Div {
         div()
-            .key_context(CONTEXT)
             .track_focus(&self.focus)
             .on_action(cx.listener(Self::backspace))
             .on_action(cx.listener(Self::delete))
@@ -467,46 +560,117 @@ impl Render for TextField {
             .on_action(cx.listener(Self::cut))
             .on_action(cx.listener(Self::escape))
             .on_action(cx.listener(Self::enter))
-            .w_full()
-            .h(line)
-            .child(
-                canvas(
-                    |_, _, _| (),
-                    move |bounds, (), window, cx| {
-                        let top = bounds.top() + (bounds.size.height - line) / 2.;
-                        if !selected.is_empty() {
-                            let from = bounds.left() + shaped.x_for_index(selected.start);
-                            let to = bounds.left() + shaped.x_for_index(selected.end);
-                            window.paint_quad(fill(
-                                Bounds::from_corners(point(from, top), point(to, top + line)),
-                                accent,
-                            ));
-                        }
-                        let _ = shaped.paint(
-                            point(bounds.left(), top),
-                            line,
-                            gpui::TextAlign::Left,
-                            None,
-                            window,
-                            cx,
-                        );
-                        if focused && selected.is_empty() {
-                            let x = bounds.left() + shaped.x_for_index(cursor);
-                            window.paint_quad(fill(
-                                Bounds::new(point(x, top), size(px(1.), line)),
-                                ink,
-                            ));
-                        }
-                        let kept = field.clone();
-                        kept.update(cx, |field, _| field.shaped = Some((shaped, bounds)));
-                        window.handle_input(
-                            &focus,
-                            ElementInputHandler::new(bounds, field.clone()),
-                            cx,
-                        );
-                    },
-                )
-                .size_full(),
+            .on_action(cx.listener(Self::up))
+            .on_action(cx.listener(Self::down))
+    }
+
+    fn paint_area(&mut self, theme: &Theme, cx: &mut Context<Self>) -> gpui::Canvas<()> {
+        let (field, focus) = (cx.entity(), self.focus.clone());
+        let (text, text_size, line, run) = (
+            self.text.clone(),
+            self.size,
+            theme.line(self.size),
+            self.run(theme, self.text.len()),
+        );
+        let (selected, cursor, focused) =
+            (self.selected.clone(), self.cursor(), self.focused.get());
+        let (ink, accent) = (theme.colours.ink, theme.colours.accent);
+        let drawn = self.rows_drawn.get();
+        canvas(
+            |_, _, _| (),
+            move |bounds, (), window, cx| {
+                let wrapped =
+                    area::Wrapped::shape(window, &text, text_size, line, run, bounds.size.width);
+                let covered = match selected.is_empty() {
+                    true => Vec::new(),
+                    false => wrapped.cover(selected.start, selected.end, bounds.size.width),
+                };
+                for cover in covered {
+                    window.paint_quad(fill(
+                        Bounds::new(bounds.origin + cover.origin, cover.size),
+                        accent,
+                    ));
+                }
+                wrapped.paint(bounds.origin, window, cx);
+                if focused && selected.is_empty() {
+                    let at = bounds.origin + wrapped.position(cursor);
+                    window.paint_quad(fill(Bounds::new(at, size(px(1.), line)), ink));
+                }
+                let rows = wrapped.rows();
+                if rows != drawn {
+                    window.refresh();
+                }
+                field.update(cx, |field, _| {
+                    field.rows_drawn.set(rows);
+                    field.wrapped = Some((wrapped, bounds));
+                });
+                window.handle_input(&focus, ElementInputHandler::new(bounds, field.clone()), cx);
+            },
+        )
+    }
+}
+
+impl Render for TextField {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.global::<Theme>().clone();
+        if self.area > 0 {
+            self.focused.set(self.focus.is_focused(window));
+            let tall = theme.line(self.size) * self.area.max(self.rows_drawn.get()) as f32;
+            let painted = self.paint_area(&theme, cx);
+            return self
+                .keyed(cx)
+                .key_context(gpui::KeyContext::parse("TextField area").unwrap_or_default())
+                .w_full()
+                .h(tall)
+                .child(painted.size_full());
+        }
+        let field = cx.entity();
+        let focus = self.focus.clone();
+        let shaped = self.shape(window, &theme);
+        let (selected, cursor, focused) = (
+            self.shown_at(self.selected.start)..self.shown_at(self.selected.end),
+            self.shown_at(self.cursor()),
+            focus.is_focused(window),
+        );
+        self.focused.set(focused);
+        let (ink, accent) = (theme.colours.ink, theme.colours.accent);
+        let line = theme.line(self.size);
+        self.keyed(cx).key_context(CONTEXT).w_full().h(line).child(
+            canvas(
+                |_, _, _| (),
+                move |bounds, (), window, cx| {
+                    let top = bounds.top() + (bounds.size.height - line) / 2.;
+                    if !selected.is_empty() {
+                        let from = bounds.left() + shaped.x_for_index(selected.start);
+                        let to = bounds.left() + shaped.x_for_index(selected.end);
+                        window.paint_quad(fill(
+                            Bounds::from_corners(point(from, top), point(to, top + line)),
+                            accent,
+                        ));
+                    }
+                    let _ = shaped.paint(
+                        point(bounds.left(), top),
+                        line,
+                        gpui::TextAlign::Left,
+                        None,
+                        window,
+                        cx,
+                    );
+                    if focused && selected.is_empty() {
+                        let x = bounds.left() + shaped.x_for_index(cursor);
+                        window
+                            .paint_quad(fill(Bounds::new(point(x, top), size(px(1.), line)), ink));
+                    }
+                    let kept = field.clone();
+                    kept.update(cx, |field, _| field.shaped = Some((shaped, bounds)));
+                    window.handle_input(
+                        &focus,
+                        ElementInputHandler::new(bounds, field.clone()),
+                        cx,
+                    );
+                },
             )
+            .size_full(),
+        )
     }
 }

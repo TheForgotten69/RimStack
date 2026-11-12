@@ -64,6 +64,8 @@ pub struct Options {
     pub text_scale: Option<f32>,
     /// Four mods of the load order chosen, as `--several` asks.
     pub several: bool,
+    /// The first two active mods that share textures compared, as `--comparing` asks.
+    pub comparing: bool,
     /// The filter's text at the start, as `--filter=` gives it.
     pub filter: Option<String>,
     /// A row of the load order chosen, and the tab shown, as `--pick=` and `--tab=` give them.
@@ -103,6 +105,7 @@ impl Options {
                 "--theme" => options.theme = ThemeName::named(value),
                 "--text-scale" => options.text_scale = value.parse().ok(),
                 "--several" => options.several = true,
+                "--comparing" => options.comparing = true,
                 "--filter" => options.filter = Some(value.to_string()),
                 "--pick" => options.pick = value.parse().ok(),
                 "--tab" => options.tab = value.parse().unwrap_or(0),

@@ -384,7 +384,7 @@ impl Mods {
         );
     }
 
-    fn ask_bin(
+    pub(super) fn ask_bin(
         &mut self,
         name: &str,
         folder: &str,
@@ -421,7 +421,12 @@ impl Mods {
         );
     }
 
-    fn ask_unsubscribe(&mut self, mod_id: i32, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn ask_unsubscribe(
+        &mut self,
+        mod_id: i32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(id) = ModId::from_qml(mod_id) else {
             return;
         };

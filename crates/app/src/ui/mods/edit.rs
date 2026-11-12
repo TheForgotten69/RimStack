@@ -436,6 +436,7 @@ impl Mods {
             "enter" => self.activate_selected(side, cx),
             "a" if command => self.select_all(side, cx),
             "i" if command => self.invert_selection(side == Side::Active, cx),
+            "escape" if self.picking.is_some() => self.start_picking(None, cx),
             "escape" if !self.selection.is_empty() => self.select(None, true, cx),
             _ => return,
         }

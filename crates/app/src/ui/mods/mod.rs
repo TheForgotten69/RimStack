@@ -1,17 +1,22 @@
 //! `ModsScreen.qml`: the inactive mods, the load order and the details, side by side.
 
+mod about;
 mod active;
+mod asked;
 mod bands;
 mod bench;
 mod chosen;
+mod compare;
 mod details;
 mod edit;
 mod inactive;
 mod list;
 mod menus;
+mod notes;
 mod problems;
 mod rows;
 mod selection;
+mod tabs;
 
 use super::text_field::{Edited, TextField};
 use super::theme::{self, Theme};
@@ -20,7 +25,7 @@ use crate::jobs::Lane;
 use crate::workspace::load_order::{Details, LoadOrder, Orders, Overview, RowView, Side};
 use gpui::{
     AppContext, Context, Entity, Focusable, InteractiveElement, IntoElement, ParentElement, Pixels,
-    Render, Styled, Window, div, px,
+    Render, Styled, Window, div, prelude::FluentBuilder, px,
 };
 use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::list::Category;
@@ -100,6 +105,21 @@ pub struct Mods {
     problems_open: bool,
     /// Told by the window while the search for the broken mod runs.
     hunting: bool,
+    /// The other mod of a rule of your own being chosen.
+    picking: Option<notes::Picking>,
+    drafts: notes::Drafts,
+    /// "Saved" shows beside the notes for a while after they are kept.
+    notes_saved: bool,
+    chosen_read: Lane,
+    /// What the Files tab shows of the chosen mod, read off the window's thread.
+    chosen_files: Option<(ModId, Rc<chosen::FilesRead>)>,
+    unhide_problem: String,
+    /// The shared textures of two mods, shown in place of the lists.
+    comparing: Option<Entity<compare::CompareView>>,
+    /// What the comparison shows, as it last told.
+    compared: Option<Rc<crate::workspace::textures::Comparison>>,
+    /// Two mods to compare once their files are read, as `--comparing` asks.
+    compare_wanted: bool,
 }
 
 impl Mods {
@@ -133,13 +153,7 @@ impl Mods {
         });
         let [active_list, inactive_list] = lists;
         let me = cx.weak_entity();
-        let details_view = cx.new(|_| chosen::DetailsView {
-            mods: me,
-            shown: Default::default(),
-            tab: 0,
-            folded: Default::default(),
-            summary_open: false,
-        });
+        let details_view = cx.new(|cx| chosen::DetailsView::new(me, cx));
         cx.subscribe(
             &details_view,
             |mods, _, asked: &chosen::Asked, cx| match asked {
@@ -186,6 +200,15 @@ impl Mods {
             several: false,
             problems_open: false,
             hunting: false,
+            picking: None,
+            drafts: notes::Drafts::default(),
+            notes_saved: false,
+            chosen_read: Lane::default(),
+            chosen_files: None,
+            unhide_problem: String::new(),
+            comparing: None,
+            compared: None,
+            compare_wanted: false,
         };
         mods.show(cx);
         if !demo {
@@ -243,6 +266,9 @@ impl Mods {
         }
         if changes.contains(Changes::FILES_READ) {
             self.files_read = true;
+            if std::mem::take(&mut self.compare_wanted) {
+                self.compare_first(cx);
+            }
         }
         if changes.contains(Changes::TEXTURES) {
             self.read_files(cx);
@@ -349,6 +375,20 @@ impl Mods {
             selected_active: self.selected_active,
             panes: (self.inactive_width, self.details_width),
             problems_open: self.problems_open,
+            position: self
+                .selected_id()
+                .and_then(ModId::from_qml)
+                .and_then(|id| self.order.list(Side::Active).position_of(id))
+                .map_or(0, |at| at + 1),
+            picking: self.picking,
+            notes_saved: self.notes_saved,
+            files: self
+                .chosen_files
+                .as_ref()
+                .filter(|(of, _)| self.selected_id().and_then(ModId::from_qml) == Some(*of))
+                .map(|(_, read)| read.clone()),
+            unhide_problem: self.unhide_problem.clone(),
+            comparison: self.compared.clone(),
             hunting: self.hunting,
             previewing: self.order.previewing(),
             selected: self.selection.len(),
@@ -433,181 +473,6 @@ impl Mods {
         }
     }
 
-    /// What Play warns of: how many things are in the way, and whether a mod has errors.
-    pub fn in_the_way(&self, cx: &gpui::App) -> (usize, bool) {
-        if self.demo {
-            return (0, false);
-        }
-        let (errors, _) = self.order.errors_and_warnings();
-        let dirty = super::app(cx).session().is_dirty();
-        let ways =
-            usize::from(errors > 0) + usize::from(self.sort_pending > 0) + usize::from(dirty);
-        (ways, errors > 0)
-    }
-
-    /// The last start of the game: when, and how many errors its log held.
-    pub fn last_start(&self) -> Option<(u64, Option<usize>)> {
-        self.last_start
-            .as_ref()
-            .map(|said| (said.start.time, said.start.errors))
-    }
-
-    /// The mods the load order's rules ask for that are not installed.
-    pub fn to_get(&self) -> Vec<crate::workspace::load_order::ProblemSaid> {
-        self.overview
-            .as_ref()
-            .map(|o| o.to_get.clone())
-            .unwrap_or_default()
-    }
-
-    /// Chooses a mod wherever it is and brings its row into view.
-    pub fn show_mod(&mut self, mod_id: i32, cx: &mut Context<Self>) {
-        for side in [Side::Active, Side::Inactive] {
-            let at = self
-                .shown(side)
-                .rows
-                .iter()
-                .position(|row| row.mod_id == mod_id && !row.is_header);
-            if let Some(at) = at {
-                self.choose(side, mod_id, cx);
-                self.list(side).update(cx, |list, cx| list.reveal(at, cx));
-                return;
-            }
-        }
-    }
-
-    /// The mod chosen first, as `Mods.selectedId` gave it.
-    pub fn selected_id(&self) -> Option<i32> {
-        self.selection.first().copied()
-    }
-
-    pub fn game_version(&self) -> String {
-        self.overview
-            .as_ref()
-            .map(|o| o.game_version.clone())
-            .unwrap_or_default()
-    }
-
-    /// How many mods of a list the filter lets through.
-    pub fn matching(&self, side: Side) -> usize {
-        self.order.list(side).matching()
-    }
-
-    pub fn start_bench(&mut self, cx: &mut Context<Self>) {
-        self.active_list.update(cx, |list, cx| list.start_bench(cx));
-    }
-
-    pub fn overview(&self) -> Option<Rc<crate::workspace::load_order::Overview>> {
-        self.overview.clone()
-    }
-
-    /// Marks the mods as working on this game version, or takes the mark off.
-    pub fn trust(
-        &mut self,
-        ids: Vec<rimstack_core::mods::library::ModId>,
-        yes: bool,
-        cx: &mut Context<Self>,
-    ) {
-        let app = super::app(cx);
-        app.set_version_ok(&ids, yes);
-        self.order.recheck(&app);
-        self.show(cx);
-    }
-
-    /// The load order becomes `ids`, unsaved; the history keeps the list it was.
-    pub fn use_list(&mut self, ids: Vec<String>, cx: &mut Context<Self>) {
-        let app = super::app(cx);
-        let before = app.snapshot("@list", app.session().current());
-        let count = ids.len();
-        self.order.use_list(&app, ids);
-        self.changed(cx);
-        if !self.demo {
-            use rimstack_core::say_n;
-            let taken = say_n!(
-                count,
-                "Another list taken: {} mod",
-                "Another list taken: {} mods"
-            );
-            app.note_change(taken, before.as_deref());
-            let said = say_n!(count, "Using a list of {} mod", "Using a list of {} mods");
-            self.done_said(said, cx);
-        }
-    }
-
-    /// The load order as read, for the first run: its active and inactive mods, or why it was not.
-    pub fn read_as(&self) -> (usize, usize, String) {
-        (
-            self.count(Side::Active),
-            self.count(Side::Inactive),
-            crate::words::put(&self.order.problem),
-        )
-    }
-
-    /// Whether the active mods' files are still being read.
-    pub fn reading_files(&self) -> bool {
-        !self.files_read && self.count(Side::Active) > 0 && !self.demo
-    }
-
-    /// The changes not saved, in words; empty when the list is saved.
-    pub fn unsaved(&self, cx: &gpui::App) -> Option<String> {
-        if self.demo {
-            return None;
-        }
-        let app = super::app(cx);
-        let session = app.session();
-        (session.is_dirty() && self.order.is_installed())
-            .then(|| crate::words::put(&session.changes().said()))
-    }
-
-    /// The active mods as text, one a line, as `Copy the load order` gives them.
-    pub fn listing(&self, cx: &gpui::App) -> String {
-        use rimstack_core::mods::share::{Entry, listing};
-        let app = super::app(cx);
-        let loaded = app.library();
-        let Ok((library, _)) = &*loaded else {
-            return String::new();
-        };
-        let mods = self.order.list(Side::Active).mods().iter();
-        let entries: Vec<Entry> = mods
-            .filter_map(|m| library.get(m.installed?))
-            .map(Entry::of)
-            .collect();
-        let paths = app.paths();
-        let version = paths
-            .full_game_version
-            .as_deref()
-            .unwrap_or(&library.game_version);
-        listing(version, &entries)
-    }
-
-    /// Whether the search for the broken mod runs, as the window tells it.
-    pub fn set_hunting(&mut self, hunting: bool, cx: &mut Context<Self>) {
-        self.hunting = hunting;
-        self.sync_details(cx);
-    }
-
-    /// The load order becomes `ids`, unsaved, nothing kept nor said: a round of the search.
-    pub fn use_list_quietly(&mut self, ids: Vec<String>, cx: &mut Context<Self>) {
-        let app = super::app(cx);
-        self.order.use_list(&app, ids);
-        self.changed(cx);
-    }
-
-    /// How many active mods Downloads found behind their Workshop version.
-    pub fn set_behind(&mut self, behind: usize, cx: &mut Context<Self>) {
-        self.behind = behind;
-        self.sync_details(cx);
-        cx.notify();
-    }
-
-    pub fn filter_by(&mut self, text: &str, cx: &mut Context<Self>) {
-        self.filter.update(cx, |field, cx| field.set_text(text, cx));
-    }
-
-    pub fn filter_text(&self, cx: &gpui::App) -> String {
-        self.filter.read(cx).text().to_string()
-    }
-
     pub fn count(&self, side: Side) -> usize {
         self.order.list(side).mods().len()
     }
@@ -630,6 +495,10 @@ impl Mods {
     }
 
     pub fn choose(&mut self, side: Side, mod_id: i32, cx: &mut Context<Self>) {
+        let picks = self.picking.is_some() && side == Side::Active && mod_id >= 0;
+        if picks && Some(mod_id) != self.selected_id() {
+            return self.pick(mod_id, cx);
+        }
         self.select(Some(mod_id), side == Side::Active, cx);
     }
 
@@ -643,6 +512,7 @@ impl Mods {
         self.details = alone
             .filter(|_| self.order.is_installed())
             .map(|id| Rc::new(self.order.details(&app, id)));
+        self.read_chosen(cx);
         self.sync_details(cx);
     }
 
@@ -810,28 +680,48 @@ impl Render for Mods {
                     mods.save(None, cx);
                 }
             }))
-            .child(
-                panes
-                    .child(
-                        self.inactive_pane(&theme, inactive_width, window, cx)
-                            .w(inactive_width)
-                            .flex_none(),
-                    )
-                    .child(handle())
-                    .child(
-                        self.active_pane(&theme, active_width, window, cx)
-                            .flex_1()
-                            .min_w_0(),
-                    )
-                    .child(handle())
-                    .child(
-                        div()
-                            .w(details_width)
-                            .flex_none()
-                            .h_full()
-                            .child(self.details_view.clone()),
-                    ),
-            )
+            .when_some(self.comparing.clone(), |d, view| {
+                d.child(
+                    div()
+                        .flex()
+                        .flex_1()
+                        .min_h_0()
+                        .w_full()
+                        .child(div().flex_1().min_w_0().h_full().child(view))
+                        .child(handle())
+                        .child(
+                            div()
+                                .w(details_width)
+                                .flex_none()
+                                .h_full()
+                                .child(self.details_view.clone()),
+                        ),
+                )
+            })
+            .when(self.comparing.is_none(), |d| {
+                d.child(
+                    panes
+                        .child(
+                            self.inactive_pane(&theme, inactive_width, window, cx)
+                                .w(inactive_width)
+                                .flex_none(),
+                        )
+                        .child(handle())
+                        .child(
+                            self.active_pane(&theme, active_width, window, cx)
+                                .flex_1()
+                                .min_w_0(),
+                        )
+                        .child(handle())
+                        .child(
+                            div()
+                                .w(details_width)
+                                .flex_none()
+                                .h_full()
+                                .child(self.details_view.clone()),
+                        ),
+                )
+            })
             .children(bulk)
     }
 }
@@ -841,3 +731,6 @@ mod tests;
 
 #[cfg(all(test, target_os = "linux"))]
 mod edit_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+mod details_tests;

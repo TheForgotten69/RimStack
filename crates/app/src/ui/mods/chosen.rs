@@ -1,17 +1,14 @@
 //! `ModHeader.qml`, `Choice.qml` and the tabs under it: the mod chosen in a list.
 
-use crate::ui::card::Card;
+use crate::ui::card::Fold;
 use crate::ui::theme::{self, Theme};
-use crate::ui::widgets::{Btn, Chip, TextSized, elide_middle_in, icon, label, measure};
+use crate::ui::widgets::{Btn, Chip, TextSized, icon, label, measure};
 use crate::words::put;
 use crate::workspace::load_order::{Details, Overview};
 use gpui::{
-    AnyElement, Context, FontWeight, InteractiveElement, IntoElement, ObjectFit, ParentElement,
-    Pixels, StatefulInteractiveElement, Styled, StyledImage, TextOverflow, Window, div, img,
-    prelude::FluentBuilder, px,
+    Context, FontWeight, InteractiveElement, IntoElement, ObjectFit, ParentElement, Pixels,
+    StatefulInteractiveElement, Styled, StyledImage, Window, div, img, prelude::FluentBuilder, px,
 };
-use rimstack_core::base::sentence::Sentence;
-use rimstack_core::mods::details::Named;
 use rimstack_core::say;
 use std::rc::Rc;
 
@@ -39,6 +36,14 @@ pub struct DetailsShown {
     pub panes: (Pixels, Pixels),
     /// The problems panel shown in place of the rest.
     pub problems_open: bool,
+    pub picking: Option<super::notes::Picking>,
+    /// The chosen mod's place in the load order, from 1; 0 off it.
+    pub position: usize,
+    pub notes_saved: bool,
+    pub files: Option<Rc<FilesRead>>,
+    pub unhide_problem: String,
+    /// Two mods' shared textures being compared: the details tell what was kept.
+    pub comparison: Option<Rc<crate::workspace::textures::Comparison>>,
     /// The search for the broken mod runs: it is not offered again.
     pub hunting: bool,
     pub previewing: bool,
@@ -46,6 +51,13 @@ pub struct DetailsShown {
     pub selected: usize,
     pub selection: Option<Rc<crate::workspace::load_order::SelectionSummary>>,
 }
+
+/// What the Files tab shows: the textures, the files by folder, and the textures set aside.
+pub type FilesRead = (
+    crate::workspace::load_order::Textures,
+    crate::workspace::load_order::Files,
+    usize,
+);
 
 /// What the details ask of the Mods tab.
 pub enum Asked {
@@ -64,9 +76,87 @@ pub struct DetailsView {
     /// The names of the mods chosen all shown, not the first ones only.
     pub summary_open: bool,
     pub mods: gpui::WeakEntity<super::Mods>,
+    /// The About tab's fields: the tags, the group and the note of the mod shown.
+    pub(super) tags: gpui::Entity<crate::ui::text_field::TextField>,
+    pub(super) group: gpui::Entity<crate::ui::text_field::TextField>,
+    pub(super) note: gpui::Entity<crate::ui::text_field::TextField>,
+    /// The picture shown small, as a click on it asks.
+    pub(super) small_picture: bool,
 }
 
 impl DetailsView {
+    pub fn new(mods: gpui::WeakEntity<super::Mods>, cx: &mut Context<Self>) -> Self {
+        use crate::ui::text_field::{Edited, Entered, TextField};
+        use gpui::AppContext;
+        let size = cx.global::<Theme>().body();
+        let field = |cx: &mut Context<Self>| cx.new(|cx| TextField::new(size, cx).kept_on_escape());
+        let (tags, group) = (field(cx), field(cx));
+        let note = cx.new(|cx| TextField::new(size, cx).several_lines(2));
+        for noted in [&tags, &note] {
+            cx.subscribe(noted, |view, _, _: &Edited, cx| view.draft_note(cx))
+                .detach();
+            cx.subscribe(noted, |view, _, _: &Entered, cx| view.keep_drafts(cx))
+                .detach();
+        }
+        cx.subscribe(&group, |view, field, _: &Edited, cx| {
+            if field.read(cx).is_focused_now() {
+                let name = field.read(cx).text().to_string();
+                let _ = view.mods.update(cx, |mods, cx| mods.draft_group(name, cx));
+            }
+        })
+        .detach();
+        cx.subscribe(&group, |view, _, _: &Entered, cx| view.keep_drafts(cx))
+            .detach();
+        Self {
+            shown: Default::default(),
+            tab: 0,
+            folded: Default::default(),
+            summary_open: false,
+            mods,
+            tags,
+            group,
+            note,
+            small_picture: false,
+        }
+    }
+
+    /// The tags and the note typed, kept once typing stops.
+    fn draft_note(&mut self, cx: &mut Context<Self>) {
+        let typing = self.tags.read(cx).is_focused_now() || self.note.read(cx).is_focused_now();
+        if !typing {
+            return;
+        }
+        let (tags, note) = (
+            self.tags.read(cx).text().to_string(),
+            self.note.read(cx).text().to_string(),
+        );
+        let _ = self
+            .mods
+            .update(cx, |mods, cx| mods.draft_note(tags, note, cx));
+    }
+
+    fn keep_drafts(&mut self, cx: &mut Context<Self>) {
+        let _ = self.mods.update(cx, |mods, cx| mods.keep_drafts(cx));
+    }
+
+    /// The fields hold what the mod shown has, unless they are being typed in.
+    fn sync_fields(&mut self, cx: &mut Context<Self>) {
+        let Some(details) = self.shown.details.clone() else {
+            return;
+        };
+        for (field, text) in [
+            (&self.tags, &details.tags),
+            (&self.group, &details.sub),
+            (&self.note, &details.note),
+        ] {
+            let typing = field.read(cx).is_focused_now();
+            if !typing && field.read(cx).text() != text.as_str() {
+                let text = text.clone();
+                field.update(cx, |field, cx| field.set_text_quietly(&text, cx));
+            }
+        }
+    }
+
     /// Whether the card `key` is folded, and what folds or opens it.
     pub(super) fn fold(
         &self,
@@ -85,7 +175,13 @@ impl DetailsView {
     }
 
     pub fn show(&mut self, shown: DetailsShown, cx: &mut Context<Self>) {
+        let other = self.shown.details.as_ref().map(|d| d.path.clone())
+            != shown.details.as_ref().map(|d| d.path.clone());
+        if other {
+            self.small_picture = false;
+        }
         self.shown = shown;
+        self.sync_fields(cx);
         cx.notify();
     }
 }
@@ -121,27 +217,8 @@ fn words(
         .child(text.into())
 }
 
-type Fold = Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App)>;
-
-fn card(
-    theme: &Theme,
-    id: &'static str,
-    title: String,
-    tone: gpui::Hsla,
-    fold: Option<(bool, Fold)>,
-    body: Vec<AnyElement>,
-) -> AnyElement {
-    let card = Card::new(id, title).tone(tone).body(body);
-    // The cards that fold here hold a "Saved" mark beside their title.
-    let card = match fold {
-        Some((folded, fold)) => card.tall().folds(folded, fold),
-        None => card,
-    };
-    card.render(theme, None).into_any_element()
-}
-
 /// `Defined.qml`: a term of the details, underlined with dots when it has a meaning to show.
-fn defined(theme: &Theme, term: String) -> gpui::Div {
+pub(super) fn defined(theme: &Theme, term: String) -> gpui::Div {
     div()
         .flex()
         .flex_none()
@@ -154,58 +231,6 @@ fn defined(theme: &Theme, term: String) -> gpui::Div {
                 .border_color(theme.colours.ink3),
         )
         .child(icon("info", theme.sized(12.), theme.colours.ink3))
-}
-
-/// `FilterField.qml` as it stands holding `text`, or its placeholder.
-fn field_look(theme: &Theme, text: String, placeholder: String) -> gpui::Div {
-    let c = &theme.colours;
-    let (shown, colour) = if text.is_empty() {
-        (placeholder, c.ink3)
-    } else {
-        (text, c.ink)
-    };
-    div()
-        .flex()
-        .items_center()
-        .h(theme.field())
-        .px(theme::GAP_MEDIUM)
-        .rounded(theme::CORNER)
-        .bg(c.well)
-        .border_1()
-        .border_color(c.field_line)
-        .child(
-            div()
-                .min_w_0()
-                .overflow_hidden()
-                .whitespace_nowrap()
-                .text_ellipsis()
-                .sized_text(theme, theme.body())
-                .text_color(colour)
-                .child(shown),
-        )
-}
-
-fn names(theme: &Theme, title: String, named: &[Named]) -> Option<AnyElement> {
-    let c = &theme.colours;
-    (!named.is_empty()).then(|| {
-        let lines = named.iter().map(|one| {
-            let note = put(&one.note);
-            div()
-                .flex()
-                .gap(theme::GAP)
-                .child(label(
-                    theme,
-                    theme.body(),
-                    if one.trouble { c.warn } else { c.ink },
-                    one.name.clone(),
-                ))
-                .when(!note.is_empty(), |d| {
-                    d.child(label(theme, theme.small(), c.ink3, note))
-                })
-                .into_any_element()
-        });
-        card(theme, "names", title, c.ink2, None, lines.collect())
-    })
 }
 
 impl DetailsView {
@@ -354,6 +379,8 @@ impl DetailsView {
                             img(std::path::PathBuf::from(path))
                                 .w(inner)
                                 .h(tall)
+                                // The picture's own ratio would otherwise set the height.
+                                .aspect_ratio(inner / tall)
                                 .object_fit(ObjectFit::Contain),
                         ),
                 )
@@ -393,284 +420,66 @@ impl DetailsView {
                     .flex_wrap()
                     .pt(theme::GAP_LARGE)
                     .gap(theme::GAP_SMALL)
-                    .child(
-                        Btn::new("toggle", toggle)
-                            .icon(if active { "minus" } else { "plus" })
-                            .primary_if(!active),
-                    )
-                    .child(
-                        Btn::new("open-folder", if narrow { String::new() } else { open })
-                            .icon("folder-open"),
-                    )
-                    .when(details.workshop, |d| {
+                    .when(!self.shown.previewing, |d| {
                         d.child(
-                            Btn::new("workshop-page", if narrow { String::new() } else { page })
-                                .icon("external-link"),
+                            Btn::new("toggle", toggle)
+                                .icon(if active { "minus" } else { "plus" })
+                                .primary_if(!active)
+                                .on_click(self.on_mods(|mods, cx| mods.toggle_selected(cx))),
+                        )
+                    })
+                    .child({
+                        let path = details.path.clone();
+                        Btn::new(
+                            "open-folder",
+                            if narrow { String::new() } else { open.clone() },
+                        )
+                        .icon("folder-open")
+                        .tip(open)
+                        .on_click(move |_, _, cx| cx.open_with_system(std::path::Path::new(&path)))
+                    })
+                    .when(details.workshop, |d| {
+                        let folder = details.folder.clone();
+                        d.child(
+                            Btn::new(
+                                "workshop-page",
+                                if narrow { String::new() } else { page.clone() },
+                            )
+                            .icon("external-link")
+                            .tip(page)
+                            .on_click(move |_, _, cx| {
+                                cx.open_url(&crate::ui::workshop_page(&folder))
+                            }),
                         )
                     })
                     .when(!details.workshop && !details.repository.is_empty(), |d| {
+                        let repository = details.repository.clone();
                         d.child(
                             Btn::new("repository", put(&say!("Repository page")))
-                                .icon("git-branch"),
+                                .icon("git-branch")
+                                .tip(repository.clone())
+                                .on_click(move |_, _, cx| cx.open_url(&repository)),
                         )
                     }),
             )
             .child(div().h(theme::GAP_LARGE))
             .child(choice);
         let body = match tab {
-            0 => self.about(theme, details, inner, window, cx),
-            1 => self.placed(theme, details),
-            _ => self.files(theme, details),
-        };
-        div().flex().flex_col().w_full().child(header).child(
-            div()
+            0 => div()
                 .flex()
                 .flex_col()
                 .pt(theme::GAP_LARGE)
                 .gap(theme::GAP_CARD)
-                .children(body),
-        )
-    }
-
-    fn about(
-        &self,
-        theme: &Theme,
-        details: &Details,
-        inner: Pixels,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) -> Vec<AnyElement> {
-        let c = &theme.colours;
-        let mut shown = Vec::new();
-        if !details.problems.is_empty() {
-            let errors = details.problems.iter().any(|p| p.error) || details.unreadable.is_some();
-            let lines = details
-                .problems
-                .iter()
-                .map(|said| words(theme, theme.body(), c.ink, put(&said.words)).into_any_element())
-                .collect();
-            shown.push(card(
-                theme,
-                "about-problems",
-                put(&say!("Before you play")),
-                if errors { c.err } else { c.warn },
-                None,
-                lines,
-            ));
-        }
-        if !details.description.is_empty() {
-            let text =
-                words(theme, theme.body(), c.ink, details.description.clone()).into_any_element();
-            shown.push(card(
-                theme,
-                "about-description",
-                put(&say!("Description")),
-                c.ink2,
-                None,
-                vec![text],
-            ));
-        }
-        let labels = [
-            say!("Contains"),
-            say!("Code"),
-            say!("Load time"),
-            say!("Package id"),
-            say!("Folder"),
-            say!("Filed under"),
-            say!("Group"),
-        ];
-        let label_width = labels
-            .iter()
-            .map(|name| measure(window, theme, &put(name), theme.body(), FontWeight::NORMAL))
-            .fold(px(0.), Pixels::max)
-            + theme::GAP_SMALL
-            + theme.sized(12.)
-            + theme::GAP;
-        let facts = [
-            (say!("Contains"), put(&details.contains)),
-            (say!("Code"), put(&details.code)),
-            (say!("Load time"), details.load_time.clone()),
-            (say!("Package id"), details.package_id.clone()),
-        ];
-        let mut lines: Vec<AnyElement> = facts
-            .into_iter()
-            .filter(|(_, value)| !value.is_empty())
-            .map(|(name, value)| {
-                div()
-                    .flex()
-                    .gap(theme::GAP_TINY)
-                    .child(label(theme, theme.body(), c.ink2, put(&name)).w(label_width))
-                    .child(words(theme, theme.body(), c.ink, value).flex_1().min_w_0())
-                    .into_any_element()
-            })
-            .collect();
-        if !details.path.is_empty() {
-            let button = theme.icon() + theme.sized(14.);
-            let room = inner - label_width - theme::GAP - (button + theme::GAP_SMALL) * 2.;
-            let path = elide_middle_in(
-                window,
-                theme,
-                theme.mono.clone(),
-                &details.path,
-                theme.small(),
-                room,
-            );
-            lines.push(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(theme::GAP)
-                    .child(label(theme, theme.body(), c.ink2, put(&say!("Folder"))).w(label_width))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_1()
-                            .min_w_0()
-                            .items_center()
-                            .gap(theme::GAP_SMALL)
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .overflow_hidden()
-                                    .whitespace_nowrap()
-                                    .text_overflow(TextOverflow::TruncateMiddle("…".into()))
-                                    .font_family(theme.mono.clone())
-                                    .sized_text(theme, theme.small())
-                                    .text_color(c.ink)
-                                    .child(path),
-                            )
-                            .child(Btn::new("copy-path", "").icon("copy"))
-                            .child(Btn::new("open-path", "").icon("folder-open")),
-                    )
-                    .into_any_element(),
-            );
-        }
-        let category = details.category.unwrap_or_default();
-        let at = theme::CATEGORY_NAMES
-            .iter()
-            .position(|name| *name == category);
-        let filed = put(&Sentence::said(category, Vec::new()));
-        let filed = if details.category_chosen.is_empty() {
-            filed
-        } else {
-            put(&say!("{} (chosen)", filed))
+                .children(self.about(theme, details, inner, window, cx)),
+            1 => div()
+                .flex()
+                .flex_col()
+                .children(self.placed(theme, details, inner, cx)),
+            _ => div()
+                .flex()
+                .flex_col()
+                .children(self.files(theme, details, inner, window, cx)),
         };
-        lines.push(
-            div()
-                .flex()
-                .items_center()
-                .gap(theme::GAP)
-                .child(defined(theme, put(&say!("Filed under"))).w(label_width))
-                .child(icon(
-                    at.and_then(|at| theme::CATEGORY_ICONS.get(at))
-                        .copied()
-                        .unwrap_or("package"),
-                    theme.icon(),
-                    at.map_or(c.ink2, |at| theme.category_colour(at)),
-                ))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .whitespace_nowrap()
-                        .text_ellipsis()
-                        .sized_text(theme, theme.body())
-                        .text_color(c.ink)
-                        .child(filed),
-                )
-                .child(Btn::new("file-under", put(&say!("Change"))))
-                .into_any_element(),
-        );
-        lines.push(
-            div()
-                .flex()
-                .items_center()
-                .gap(theme::GAP)
-                .child(defined(theme, put(&say!("Group"))).w(label_width))
-                .child(
-                    field_look(
-                        theme,
-                        details.sub.clone(),
-                        put(&say!("A tag to group under")),
-                    )
-                    .flex_1(),
-                )
-                .into_any_element(),
-        );
-        let facts = self.fold("about-facts", false, cx);
-        shown.push(card(
-            theme,
-            "about-facts",
-            put(&say!("Facts")),
-            c.ink2,
-            Some(facts),
-            lines,
-        ));
-        let notes = vec![
-            field_look(
-                theme,
-                details.tags.clone(),
-                put(&say!("Tags, separated by commas")),
-            )
-            .into_any_element(),
-            field_look(theme, details.note.clone(), put(&say!("Note")))
-                .h(theme.sized(72.))
-                .items_start()
-                .pt(theme::GAP_SMALL)
-                .into_any_element(),
-        ];
-        let notes_fold = self.fold("about-notes", false, cx);
-        shown.push(card(
-            theme,
-            "about-notes",
-            put(&say!("Tags and note")),
-            c.ink2,
-            Some(notes_fold),
-            notes,
-        ));
-        shown
-    }
-
-    fn placed(&self, theme: &Theme, details: &Details) -> Vec<AnyElement> {
-        let mut shown = Vec::new();
-        if let Some(placement) = &details.placement {
-            shown.push(
-                words(theme, theme.body(), theme.colours.ink, put(placement)).into_any_element(),
-            );
-        }
-        shown.extend(names(theme, put(&say!("Requires")), &details.requires));
-        shown.extend(names(
-            theme,
-            put(&say!("Loads after")),
-            &details.loads_after,
-        ));
-        shown.extend(names(
-            theme,
-            put(&say!("Loads before")),
-            &details.loads_before,
-        ));
-        shown
-    }
-
-    fn files(&self, theme: &Theme, details: &Details) -> Vec<AnyElement> {
-        let c = &theme.colours;
-        let mut lines =
-            vec![words(theme, theme.body(), c.ink, details.path.clone()).into_any_element()];
-        lines.extend(
-            details
-                .load_folders
-                .iter()
-                .map(|folder| words(theme, theme.body(), c.ink2, put(folder)).into_any_element()),
-        );
-        vec![card(
-            theme,
-            "files-folders",
-            put(&say!("Folders the game loads from")),
-            c.ink2,
-            None,
-            lines,
-        )]
+        div().flex().flex_col().w_full().child(header).child(body)
     }
 }

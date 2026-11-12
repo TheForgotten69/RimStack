@@ -11,7 +11,7 @@ use gpui::{
 };
 use rimstack_core::base::sentence::Sentence;
 
-type Fold = Box<dyn Fn(&ClickEvent, &mut Window, &mut Cx)>;
+pub type Fold = Box<dyn Fn(&ClickEvent, &mut Window, &mut Cx)>;
 
 pub struct Card {
     id: ElementId,

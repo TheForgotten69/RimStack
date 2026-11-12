@@ -74,6 +74,9 @@ impl DetailsView {
                 return scrolled.child(panel);
             }
         }
+        if let Some(comparison) = self.shown.comparison.clone() {
+            return scrolled.child(self.compare_summary(theme, &comparison));
+        }
         if let Some(summary) = self.shown.selection.clone() {
             return scrolled.child(self.selection_pane(
                 theme,

@@ -100,4 +100,37 @@ impl Field<'_> {
                 )
             })
     }
+
+    /// `TextArea.qml`: the field of several lines, its placeholder at the top.
+    pub fn area(self, theme: &Theme, window: &Window, cx: &Cx) -> gpui::Stateful<gpui::Div> {
+        let c = &theme.colours;
+        let field = self.text.read(cx);
+        let (empty, focused) = (field.text().is_empty(), field.is_focused(window));
+        let focus = field.focus_handle(cx);
+        div()
+            .id(self.id)
+            .relative()
+            .py(theme::GAP_SMALL)
+            .pl(theme::GAP_SMALL + theme::GAP_TINY)
+            .pr(theme::GAP)
+            .rounded(theme::CORNER)
+            .bg(c.well)
+            .border_1()
+            .border_color(if focused { c.focus } else { c.field_line })
+            .when(focused, |d| d.children(halo(c.focus, theme::CORNER)))
+            .cursor_text()
+            .on_click(move |_, window, cx| window.focus(&focus, cx))
+            .when(empty, |d| {
+                d.child(
+                    div()
+                        .absolute()
+                        .top(theme::GAP_SMALL)
+                        .left(theme::GAP_SMALL + theme::GAP_TINY)
+                        .sized_text(theme, theme.body())
+                        .text_color(c.ink3)
+                        .child(self.placeholder),
+                )
+            })
+            .child(self.text.clone())
+    }
 }

@@ -11,7 +11,15 @@ use std::time::{Duration, Instant};
 
 /// The Mods tab on the made-up install, its lists read and the active mods' files too.
 fn opened() -> (tempfile::TempDir, HeadlessAppContext, Entity<Mods>) {
+    opened_with(|_| {})
+}
+
+/// As `opened`, with the made-up install's folder changed by `prepare` before it is read.
+pub(super) fn opened_with(
+    prepare: impl FnOnce(&std::path::Path),
+) -> (tempfile::TempDir, HeadlessAppContext, Entity<Mods>) {
     let (tmp, app) = made_up();
+    prepare(tmp.path());
     let text = gpui_platform::current_platform(true).text_system();
     let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(crate::ui::assets::Assets));
     let options = Options::default();

@@ -88,6 +88,9 @@ impl Shell {
         if options.several {
             mods.update(cx, |mods, cx| mods.choose_several(cx));
         }
+        if options.comparing {
+            mods.update(cx, |mods, cx| mods.compare_first(cx));
+        }
         cx.subscribe(&mods, |shell, _, ShowSection(section), cx| {
             shell.go(*section, cx)
         })

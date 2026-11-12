@@ -72,27 +72,27 @@ impl ProblemSaid {
 
 #[derive(Serialize)]
 pub struct Detected {
-    name: String,
-    why: Sentence,
-    code: bool,
+    pub name: String,
+    pub why: Sentence,
+    pub code: bool,
 }
 
 #[derive(Serialize)]
 pub struct Branch {
-    folder: String,
-    files: usize,
+    pub folder: String,
+    pub files: usize,
 }
 
 #[derive(Serialize, Default)]
 pub struct Files {
-    tree: Vec<Branch>,
-    assemblies: String,
+    pub tree: Vec<Branch>,
+    pub assemblies: String,
 }
 
 #[derive(Serialize)]
 pub struct Patched {
-    method: Sentence,
-    note: Sentence,
+    pub method: Sentence,
+    pub note: Sentence,
 }
 
 #[derive(Serialize, Default)]
@@ -156,8 +156,8 @@ pub struct Details {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalCopy {
-    mod_id: ModId,
-    path: String,
+    pub mod_id: ModId,
+    pub path: String,
 }
 
 /// An active row whose mod is not installed, in place of its details for its menu.
@@ -174,8 +174,8 @@ pub struct NotInstalled {
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Textures {
-    count: usize,
-    dds_made: usize,
+    pub count: usize,
+    pub dds_made: usize,
 }
 
 #[derive(Serialize)]
