@@ -67,6 +67,8 @@ pub struct Btn {
     primary: bool,
     large: bool,
     menu: bool,
+    enabled: bool,
+    tone: Option<Hsla>,
     height: Option<Pixels>,
     on_click: Option<Click>,
 }
@@ -80,6 +82,8 @@ impl Btn {
             primary: false,
             large: false,
             menu: false,
+            enabled: true,
+            tone: None,
             height: None,
             on_click: None,
         }
@@ -95,6 +99,11 @@ impl Btn {
         self
     }
 
+    pub fn primary_if(mut self, primary: bool) -> Self {
+        self.primary = primary;
+        self
+    }
+
     pub fn large(mut self) -> Self {
         self.large = true;
         self
@@ -102,6 +111,17 @@ impl Btn {
 
     pub fn menu(mut self) -> Self {
         self.menu = true;
+        self
+    }
+
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    /// Tinted: the tone as its ground and its ink.
+    pub fn tone(mut self, tone: Hsla) -> Self {
+        self.tone = Some(tone);
         self
     }
 
@@ -120,22 +140,29 @@ impl RenderOnce for Btn {
     fn render(self, _: &mut Window, cx: &mut Cx) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         let c = &theme.colours;
-        let ink = if self.primary { c.accent_ink } else { c.ink };
+        let toned = self.tone.filter(|_| !self.primary);
+        let ink = match (self.primary, toned) {
+            (true, _) => c.accent_ink,
+            (false, Some(tone)) => tone,
+            (false, None) => c.ink,
+        };
         let padding = match (self.large, self.text.is_empty() && !self.menu) {
             (true, _) => theme.sized(36.),
             (false, true) => theme.sized(14.),
             (false, false) => theme.sized(20.),
         };
-        let (ground, hovered) = match self.primary {
-            true => (c.accent, c.accent_hi),
-            false => (c.ctl, c.ctl_hi),
+        let (ground, hovered) = match (self.primary, toned) {
+            (true, _) => (c.accent, c.accent_hi),
+            (false, Some(tone)) => (with_alpha(tone, 0.18), with_alpha(tone, 0.3)),
+            (false, None) => (c.ctl, c.ctl_hi),
         };
+        let frame = if self.enabled { 1. } else { 0.4 };
         let size = if self.large {
             theme.body()
         } else {
             theme.small()
         };
-        let weight = match (self.large, self.primary) {
+        let weight = match (self.large, self.primary || toned.is_some()) {
             (true, _) => theme.semibold,
             (false, true) => theme.medium,
             (false, false) => FontWeight::NORMAL,
@@ -145,6 +172,7 @@ impl RenderOnce for Btn {
         } else {
             theme.control()
         });
+        let line = toned.unwrap_or(c.field_line);
         div()
             .id(self.id)
             .relative()
@@ -156,28 +184,56 @@ impl RenderOnce for Btn {
             .h(height)
             .px(padding / 2.)
             .rounded(theme::CORNER)
-            .bg(ground)
-            .hover(move |s| s.bg(hovered))
+            .bg(with_alpha(ground, frame))
+            .when(self.enabled, |d| d.hover(move |s| s.bg(hovered)))
             .when(theme.appearance.high_contrast, |d| {
-                d.border_1().border_color(c.field_line)
+                d.border_1().border_color(with_alpha(line, frame))
             })
-            .when(self.primary, |d| d.children(halo(c.accent, theme::CORNER)))
-            .when_some(self.icon, |d, name| d.child(icon(name, theme.icon(), ink)))
-            .when(!self.text.is_empty(), |d| {
-                d.child(
-                    div()
-                        .whitespace_nowrap()
-                        .sized_text(theme, size)
-                        .font_weight(weight)
-                        .text_color(ink)
-                        .child(self.text),
-                )
+            .when(self.primary && self.enabled, |d| {
+                d.children(halo(c.accent, theme::CORNER))
             })
-            .when(self.menu, |d| {
-                d.child(icon("chevron-down", theme.sized(12.), with_alpha(ink, 0.8)))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(theme::GAP_SMALL)
+                    .when(!self.enabled, |d| d.opacity(0.5))
+                    .when_some(self.icon, |d, name| d.child(icon(name, theme.icon(), ink)))
+                    .when(!self.text.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .whitespace_nowrap()
+                                .sized_text(theme, size)
+                                .font_weight(weight)
+                                .text_color(ink)
+                                .child(self.text),
+                        )
+                    })
+                    .when(self.menu, |d| {
+                        d.child(icon("chevron-down", theme.sized(12.), with_alpha(ink, 0.8)))
+                    }),
+            )
+            .when_some(self.on_click.filter(|_| self.enabled), |d, run| {
+                d.on_click(run)
             })
-            .when_some(self.on_click, |d, run| d.on_click(run))
     }
+}
+
+/// `Notice.qml`: a band in a tone, with a bar at its left.
+pub fn notice(tone: Hsla) -> gpui::Div {
+    div()
+        .relative()
+        .rounded(theme::GAP_HAIR)
+        .bg(with_alpha(tone, 0.06))
+        .child(
+            div()
+                .absolute()
+                .left_0()
+                .top_0()
+                .bottom_0()
+                .w(px(2.))
+                .bg(tone),
+        )
 }
 
 /// `Chip.qml`, not pressable.
@@ -187,6 +243,7 @@ pub struct Chip {
     tone: Option<Hsla>,
     icon: Option<&'static str>,
     on_accent: bool,
+    pressable: bool,
     max_width: Option<Pixels>,
 }
 
@@ -197,6 +254,7 @@ impl Chip {
             tone: None,
             icon: None,
             on_accent: false,
+            pressable: false,
             max_width: None,
         }
     }
@@ -209,6 +267,12 @@ impl Chip {
     /// On a chosen row: a dark ground and the chosen row's ink.
     pub fn on_accent(mut self, on: bool) -> Self {
         self.on_accent = on;
+        self
+    }
+
+    /// As tall as a button, for a chip that is pressed.
+    pub fn pressable(mut self) -> Self {
+        self.pressable = true;
         self
     }
 
@@ -237,14 +301,19 @@ impl RenderOnce for Chip {
         } else {
             with_alpha(tone, 0.16)
         };
+        let height = if self.pressable {
+            theme.control()
+        } else {
+            theme.tag()
+        };
         div()
             .flex()
             .flex_none()
             .items_center()
             .gap(theme::GAP_TINY)
-            .h(theme.tag())
+            .h(height)
             .px(theme::GAP_CARD / 2.)
-            .rounded(theme.tag() / 2.)
+            .rounded(height / 2.)
             .bg(ground)
             .when_some(self.max_width, |d, most| d.max_w(most))
             .when_some(self.icon, |d, name| {

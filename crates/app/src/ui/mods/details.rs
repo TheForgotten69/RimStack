@@ -5,7 +5,7 @@ use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{Chip, label};
 use crate::words::{count, put};
 use crate::workspace::load_order::Side;
-use gpui::{Context, FontWeight, IntoElement, ParentElement, Styled, div, prelude::FluentBuilder};
+use gpui::{Context, FontWeight, ParentElement, Styled, div, prelude::FluentBuilder};
 use rimstack_core::say;
 
 impl Mods {

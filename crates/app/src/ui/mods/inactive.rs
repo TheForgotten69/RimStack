@@ -5,9 +5,7 @@ use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{Btn, btn_width, label, measure};
 use crate::words::{count, put};
 use crate::workspace::load_order::Side;
-use gpui::{
-    Context, FontWeight, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder,
-};
+use gpui::{Context, FontWeight, ParentElement, Styled, Window, div, prelude::FluentBuilder};
 use rimstack_core::say;
 
 impl Mods {
@@ -23,8 +21,9 @@ impl Mods {
         let counted = count(self.count(Side::Inactive));
         let order = put(&self.orders.inactive_said);
         let hide = put(&say!("Hide"));
+        // Qt's RowLayout gives its empty filler a gap too.
         let named = measure(window, theme, &title, theme.heading(), FontWeight::BOLD)
-            + theme::GAP
+            + theme::GAP * 2.
             + measure(window, theme, &counted, theme.body(), FontWeight::NORMAL);
         let acts = btn_width(window, theme, &order, true, true)
             + theme::GAP

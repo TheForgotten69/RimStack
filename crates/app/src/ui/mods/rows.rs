@@ -274,7 +274,10 @@ fn tile(theme: &Theme, row: &RowView, colour: Hsla) -> AnyElement {
             false => d.child(
                 img(std::path::PathBuf::from(&row.picture))
                     .absolute()
-                    .inset(theme::GAP_LINE)
+                    .left(theme::GAP_LINE)
+                    .top(theme::GAP_LINE)
+                    .w(theme.sized(64.) - theme::GAP_LINE * 2.)
+                    .h(theme.sized(40.) - theme::GAP_LINE * 2.)
                     .rounded(theme::CORNER)
                     .object_fit(gpui::ObjectFit::Cover),
             ),

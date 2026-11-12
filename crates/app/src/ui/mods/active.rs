@@ -4,14 +4,13 @@ use super::Mods;
 use super::rows::Columns;
 use super::scrollbar::bar_room;
 use crate::ui::theme::{self, Theme};
-use crate::ui::widgets::{Btn, Sized, btn_width, icon, label, measure};
+use crate::ui::widgets::{Btn, Chip, Sized, btn_width, icon, label, measure, notice};
 use crate::words::{count, put};
 use crate::workspace::load_order::Side;
 use gpui::{
-    Context, FontWeight, IntoElement, ParentElement, Pixels, Styled, Window, div,
-    prelude::FluentBuilder, px,
+    Context, FontWeight, ParentElement, Pixels, Styled, Window, div, prelude::FluentBuilder, px,
 };
-use rimstack_core::say;
+use rimstack_core::{say, say_n};
 use std::rc::Rc;
 
 /// The columns chosen in the View menu, before any is left out for room.
@@ -203,26 +202,8 @@ impl Mods {
             .flex()
             .flex_col()
             .h_full()
-            .child(
-                div()
-                    .flex()
-                    .flex_none()
-                    .items_center()
-                    .gap(theme::GAP)
-                    .h(theme.header())
-                    .pl(theme::GAP_CARD)
-                    .pr(theme::GAP_LARGE)
-                    .child(
-                        label(theme, theme.heading(), c.ink, put(&say!("Active")))
-                            .font_weight(FontWeight::BOLD),
-                    )
-                    .child(label(
-                        theme,
-                        theme.body(),
-                        c.ink3,
-                        count(self.count(Side::Active)),
-                    )),
-            )
+            .child(self.head(theme, width, window, cx))
+            .children(self.notices(theme, width, window))
             .child(
                 div()
                     .flex_none()
@@ -232,6 +213,261 @@ impl Mods {
             )
             .child(headings)
             .child(self.list_area(theme, Side::Active, Some(columns), width, cx))
+    }
+
+    /// The pane's title row: the count, the problems, Undo and Redo, Sort and Save.
+    fn head(
+        &self,
+        theme: &Theme,
+        width: Pixels,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let c = &theme.colours;
+        let app = crate::ui::app(cx);
+        let (errors, warnings) = self.order.errors_and_warnings();
+        let problems = self
+            .order
+            .troubles()
+            .iter()
+            .filter(|t| !t.is_empty())
+            .count();
+        let previewing = self.order.previewing();
+        let (version_only, other_warnings) = self
+            .overview
+            .as_ref()
+            .map_or((0, 0), |o| (o.version_only, o.other_warnings));
+        let version_line = version_only >= 3 && !previewing && !self.demo;
+        let warnings_shown = if version_line {
+            other_warnings
+        } else {
+            warnings
+        };
+        let (dirty, can_undo, can_redo) = match self.demo {
+            true => (false, false, false),
+            false => {
+                let session = app.session();
+                (session.is_dirty(), session.can_undo(), session.can_redo())
+            }
+        };
+        let title = put(&say!("Active"));
+        let counted = count(self.count(Side::Active));
+        let sort = match (self.files_read, self.sort_pending) {
+            (false, _) => put(&say!("Reading files…")),
+            (true, 0) => put(&say!("Sort")),
+            (true, n) => put(&say_n!(n, "Sort · {} move", "Sort · {} moves")),
+        };
+        let save = put(&say!("Save"));
+        let full = |text: &str| {
+            measure(window, theme, text, theme.small(), theme.medium)
+                + theme.icon()
+                + theme::GAP_SMALL
+                + theme.sized(20.)
+        };
+        let head_wide = theme::GAP_CARD
+            + theme::GAP_LARGE
+            + measure(window, theme, &title, theme.heading(), FontWeight::BOLD)
+            + measure(window, theme, &counted, theme.body(), FontWeight::NORMAL)
+            + full(&sort)
+            + full(&save)
+            + theme::GAP * 4.;
+        let warned = match version_line {
+            true => put(&say_n!(
+                warnings_shown,
+                "{} more warning",
+                "{} more warnings"
+            )),
+            false => put(&say_n!(warnings_shown, "{} warning", "{} warnings")),
+        };
+        let only_warnings = errors == 0;
+        let problems_said = match only_warnings {
+            true => put(&say_n!(problems, "{} warning", "{} warnings")),
+            false => put(&say_n!(
+                problems,
+                "{} problem · {} with errors",
+                "{} problems · {} with errors",
+                count(errors)
+            )),
+        };
+        let problems_button = !(only_warnings && warnings_shown > 0 && warnings_shown == problems);
+        let chip_width = |text: &str| {
+            theme.sized(11.)
+                + theme::GAP_TINY
+                + measure(window, theme, text, theme.caption(), theme.medium)
+                + theme::GAP_CARD
+        };
+        let icon_button = theme.icon() + theme.sized(14.);
+        let extras = if warnings_shown > 0 {
+            chip_width(&warned) + theme::GAP
+        } else {
+            px(0.)
+        } + if problems > 0 {
+            let said = if problems_button {
+                btn_width(window, theme, &problems_said, true, false) + theme::GAP_LINE
+            } else {
+                px(0.)
+            };
+            said + icon_button * 2. + theme::GAP_LINE + theme::GAP
+        } else {
+            px(0.)
+        } + if self.demo {
+            px(0.)
+        } else {
+            icon_button * 2. + theme::GAP_LINE + theme::GAP
+        };
+        let tight = width < head_wide + extras;
+        let problem_tone = if errors > 0 { c.err } else { c.warn };
+        div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(theme::GAP)
+            .h(theme.header())
+            .pl(theme::GAP_CARD)
+            .pr(theme::GAP_LARGE)
+            .child(label(theme, theme.heading(), c.ink, title).font_weight(FontWeight::BOLD))
+            .child(label(theme, theme.body(), c.ink3, counted))
+            .when(warnings_shown > 0 && !tight, |d| {
+                d.child(
+                    Chip::new(warned)
+                        .tone(c.warn)
+                        .icon("triangle-alert")
+                        .pressable(),
+                )
+            })
+            .when(problems > 0 && !tight, |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .gap(theme::GAP_LINE)
+                        .when(problems_button, |d| {
+                            d.child(
+                                Btn::new("problems", problems_said)
+                                    .icon("triangle-alert")
+                                    .tone(problem_tone),
+                            )
+                        })
+                        .child(Btn::new("problem-up", "").icon("chevron-up"))
+                        .child(Btn::new("problem-down", "").icon("chevron-down")),
+                )
+            })
+            .child(div().flex_1())
+            .when(!self.demo && !tight, |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .gap(theme::GAP_LINE)
+                        .child(
+                            Btn::new("undo", "")
+                                .icon("undo-2")
+                                .enabled(can_undo && !previewing),
+                        )
+                        .child(
+                            Btn::new("redo", "")
+                                .icon("redo-2")
+                                .enabled(can_redo && !previewing),
+                        ),
+                )
+            })
+            .when(!self.demo, |d| {
+                d.child(
+                    Btn::new("sort", sort)
+                        .icon("arrow-up-down")
+                        .tone(c.moved)
+                        .enabled(!previewing && self.files_read),
+                )
+                .child(
+                    Btn::new("save", save)
+                        .icon("save")
+                        .enabled(dirty)
+                        .primary_if(dirty),
+                )
+            })
+            .when(tight && !self.demo, |d| {
+                let more = Btn::new(
+                    "more",
+                    if problems > 0 {
+                        count(problems)
+                    } else {
+                        String::new()
+                    },
+                )
+                .icon("ellipsis")
+                .menu();
+                d.child(if problems > 0 {
+                    more.tone(problem_tone)
+                } else {
+                    more
+                })
+            })
+    }
+
+    /// The bands under the title: what is not saved, and mods made for another game version.
+    fn notices(&self, theme: &Theme, width: Pixels, window: &Window) -> Vec<gpui::Div> {
+        let c = &theme.colours;
+        let mut shown = Vec::new();
+        if self.demo {
+            return shown;
+        }
+        let version_only = self.overview.as_ref().map_or(0, |o| o.version_only);
+        if version_only >= 3 && !self.order.previewing() {
+            let version = self.game_version();
+            let said = put(&say_n!(
+                version_only,
+                "{} mod does not list RimWorld {}",
+                "{} mods do not list RimWorld {}",
+                version.clone()
+            ));
+            let show = put(&say!("Show"));
+            let ignore = put(&say!("Ignore for {}", version));
+            let does = btn_width(window, theme, &show, false, false)
+                + theme::GAP
+                + btn_width(window, theme, &ignore, false, false);
+            let room = width - theme::GAP_LARGE * 3. - theme::GAP_TINY;
+            let stacked = theme.icon()
+                + measure(window, theme, &said, theme.body(), FontWeight::NORMAL)
+                + does
+                + theme::GAP * 2.
+                > room;
+            let buttons = div()
+                .flex()
+                .flex_none()
+                .justify_end()
+                .gap(theme::GAP)
+                .child(Btn::new("show-warnings", show))
+                .child(Btn::new("ignore-version", ignore));
+            shown.push(
+                div().flex_none().px(theme::GAP_LARGE).pb(theme::GAP).child(
+                    notice(c.warn).child(
+                        div()
+                            .flex()
+                            .when(stacked, |d| d.flex_col().gap(theme::GAP_SMALL))
+                            .when(!stacked, |d| d.items_center().gap(theme::GAP))
+                            .pl(theme::GAP_LARGE)
+                            .pr(theme::GAP_TINY)
+                            .py(theme::GAP_SMALL)
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .gap(theme::GAP)
+                                    .child(icon("triangle-alert", theme.icon(), c.warn).mt(px(2.)))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .sized_text(theme, theme.body())
+                                            .text_color(c.ink)
+                                            .child(said),
+                                    ),
+                            )
+                            .child(buttons),
+                    ),
+                ),
+            );
+        }
+        shown
     }
 
     /// `ModsFilter.qml` as it stands empty.

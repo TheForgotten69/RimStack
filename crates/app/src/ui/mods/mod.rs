@@ -7,6 +7,7 @@ mod rows;
 mod scrollbar;
 
 use super::theme::Theme;
+use crate::changes::Changes;
 use crate::jobs::Lane;
 use crate::workspace::load_order::{LoadOrder, Orders, Overview, RowView, Side};
 use gpui::{
@@ -44,6 +45,9 @@ pub struct Mods {
     selected_active: bool,
     demo: bool,
     loading: Lane,
+    counting: Lane,
+    files_read: bool,
+    sort_pending: usize,
     inactive_width: Pixels,
     details_width: Pixels,
 }
@@ -67,14 +71,103 @@ impl Mods {
             selected_active: true,
             demo,
             loading: Lane::default(),
+            counting: Lane::default(),
+            files_read: false,
+            sort_pending: 0,
             inactive_width,
             details_width,
         };
         mods.show(cx);
         if !demo {
+            mods.hear(cx);
             mods.load(cx);
         }
         mods
+    }
+
+    /// The `App`'s news, handed to the window's thread as it comes.
+    fn hear(&self, cx: &mut Context<Self>) {
+        let (tell, mut told) = futures::channel::mpsc::unbounded();
+        super::app(cx).listen(move |changes| {
+            let _ = tell.unbounded_send(changes);
+        });
+        cx.spawn(async move |mods, cx| {
+            use futures::StreamExt;
+            while let Some(changes) = told.next().await {
+                if mods.update(cx, |mods, cx| mods.heard(changes, cx)).is_err() {
+                    return;
+                }
+            }
+        })
+        .detach();
+    }
+
+    fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
+        let app = super::app(cx);
+        if changes.contains(Changes::LIBRARY | Changes::LANGUAGE) {
+            return self.load(cx);
+        }
+        let order = &mut self.order;
+        if changes.contains(Changes::NOTES) {
+            order.sync(&app);
+        }
+        if changes.contains(Changes::SETTINGS) {
+            order.follow_left_out(&app);
+        }
+        if changes.contains(Changes::PROBLEMS | Changes::COMMUNITY) {
+            order.recheck(&app);
+        }
+        if changes.contains(Changes::COMMUNITY | Changes::FILES_READ) {
+            order.refile(&app);
+        }
+        if changes.contains(Changes::UPDATES | Changes::LAUNCHES | Changes::FIND) {
+            order.settle(&app);
+        }
+        if changes.contains(Changes::FACTS) {
+            order.facts_read(&app);
+            if changes == Changes::FACTS && !order.needs_facts() {
+                return;
+            }
+        }
+        if changes.contains(Changes::FILES_READ) {
+            self.files_read = true;
+        }
+        if changes.contains(Changes::TEXTURES) {
+            self.read_files(cx);
+        }
+        self.show(cx);
+    }
+
+    fn read_files(&mut self, cx: &mut Context<Self>) {
+        let app = super::app(cx);
+        let Some(members) = self.order.files_to_read(&app) else {
+            self.files_read = self.order.is_installed();
+            return;
+        };
+        self.files_read = false;
+        crate::jobs::spawn("active files", move || app.read_active_files(members));
+    }
+
+    /// How many mods Sort would move, counted off the window's thread once the list is quiet.
+    fn count_sort_moves(&mut self, cx: &mut Context<Self>) {
+        const QUIET: std::time::Duration = std::time::Duration::from_millis(400);
+        let Some(count) = self.order.sort_count().filter(|_| self.files_read) else {
+            self.counting.cancel();
+            self.sort_pending = 0;
+            return;
+        };
+        let app = super::app(cx);
+        self.counting.run(
+            "sort count",
+            cx,
+            move |turn| turn.after(QUIET).then(|| count.moves(&app)),
+            |mods, moves, cx| {
+                if let Some(moves) = moves {
+                    mods.sort_pending = moves;
+                    cx.notify();
+                }
+            },
+        );
     }
 
     fn load(&mut self, cx: &mut Context<Self>) {
@@ -86,6 +179,7 @@ impl Mods {
             |mods, order, cx| {
                 mods.order = order;
                 mods.show(cx);
+                mods.read_files(cx);
                 if let Some(started) = crate::STARTED.get() {
                     rimstack_core::note!("mods_shown_ms={}", started.elapsed().as_millis());
                 }
@@ -107,6 +201,9 @@ impl Mods {
         }
         self.orders = self.order.orders();
         self.overview = (!self.demo).then(|| self.order.overview(&app));
+        if !self.demo {
+            self.count_sort_moves(cx);
+        }
         cx.notify();
     }
 
