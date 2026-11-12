@@ -1,0 +1,220 @@
+//! `Card.qml`: a titled part of a page, with a note beside its title, actions at its right (on a
+//! line of their own when the title row is too narrow), and an arrow when it folds.
+
+use super::theme::{self, Theme};
+use super::widgets::{TextSized, icon, label, measure};
+use crate::words::put;
+use gpui::{
+    AnyElement, App as Cx, ClickEvent, ElementId, Hsla, InteractiveElement, IntoElement,
+    ParentElement, Pixels, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder,
+    px,
+};
+use rimstack_core::base::sentence::Sentence;
+
+type Fold = Box<dyn Fn(&ClickEvent, &mut Window, &mut Cx)>;
+
+pub struct Card {
+    id: ElementId,
+    title: String,
+    tone: Option<Hsla>,
+    note: String,
+    folded: Option<bool>,
+    on_fold: Option<Fold>,
+    actions: Vec<AnyElement>,
+    actions_width: Pixels,
+    tall: bool,
+    spacing: Pixels,
+    body: Vec<AnyElement>,
+}
+
+/// Whether a title is one of the terms the window explains: those are underlined with dots.
+pub fn defined(title: &str) -> bool {
+    theme::TERMS
+        .iter()
+        .any(|term| put(&Sentence::said(term, Vec::new())) == title)
+}
+
+impl Card {
+    pub fn new(id: impl Into<ElementId>, title: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            title: title.into(),
+            tone: None,
+            note: String::new(),
+            folded: None,
+            on_fold: None,
+            actions: Vec::new(),
+            actions_width: Pixels::ZERO,
+            tall: false,
+            spacing: theme::GAP_SMALL,
+            body: Vec::new(),
+        }
+    }
+
+    pub fn tone(mut self, tone: Hsla) -> Self {
+        self.tone = Some(tone);
+        self
+    }
+
+    pub fn note(mut self, note: impl Into<String>) -> Self {
+        self.note = note.into();
+        self
+    }
+
+    /// A card that folds: its head, pressed, calls `fold`.
+    pub fn folds(
+        mut self,
+        folded: bool,
+        fold: impl Fn(&ClickEvent, &mut Window, &mut Cx) + 'static,
+    ) -> Self {
+        self.folded = Some(folded);
+        self.on_fold = Some(Box::new(fold));
+        self
+    }
+
+    /// What sits at the head's right, and how wide it is, to know whether it fits beside the title.
+    pub fn actions(mut self, actions: Vec<AnyElement>, width: Pixels) -> Self {
+        self.actions = actions;
+        self.actions_width = width;
+        self
+    }
+
+    /// As tall a head as one with actions: `Card.qml` counted an action not shown yet.
+    pub fn tall(mut self) -> Self {
+        self.tall = true;
+        self
+    }
+
+    pub fn spacing(mut self, spacing: Pixels) -> Self {
+        self.spacing = spacing;
+        self
+    }
+
+    pub fn body(mut self, body: Vec<AnyElement>) -> Self {
+        self.body = body;
+        self
+    }
+
+    pub fn child(mut self, child: impl IntoElement) -> Self {
+        self.body.push(child.into_any_element());
+        self
+    }
+
+    /// `fit`: the width it has and the window, for a card whose actions may need a line of their own.
+    pub fn render(
+        self,
+        theme: &Theme,
+        fit: Option<(Pixels, &Window)>,
+    ) -> gpui::Stateful<gpui::Div> {
+        let c = &theme.colours;
+        let tone = self.tone.unwrap_or(c.ink2);
+        let folded = self.folded == Some(true);
+        let has_actions = !self.actions.is_empty();
+        let fold_width = if self.folded.is_some() {
+            theme.icon()
+        } else {
+            Pixels::ZERO
+        };
+        let wrapped = has_actions
+            && fit.is_some_and(|(width, window)| {
+                let name = measure(window, theme, &self.title, theme.small(), theme.semibold);
+                let note = measure(
+                    window,
+                    theme,
+                    &self.note,
+                    theme.small(),
+                    gpui::FontWeight::NORMAL,
+                );
+                name + note.min(theme.sized(120.))
+                    + self.actions_width
+                    + fold_width
+                    + theme::GAP
+                    + theme::GAP_SMALL * 3.
+                    > width
+            });
+        let line = theme.sized(if (has_actions || self.tall) && !wrapped {
+            34.
+        } else {
+            28.
+        });
+        let actions = div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(theme::GAP_SMALL)
+            .children(self.actions);
+        let (beside, under) = match (has_actions, wrapped) {
+            (true, false) => (Some(actions), None),
+            (true, true) => (
+                None,
+                Some(
+                    div()
+                        .flex()
+                        .items_center()
+                        .h(theme.sized(34.))
+                        .child(actions),
+                ),
+            ),
+            (false, _) => (None, None),
+        };
+        let title = label(theme, theme.small(), tone, self.title.clone())
+            .font_weight(theme.semibold)
+            .when(defined(&self.title), |d| {
+                d.border_b_1().border_dashed().border_color(tone)
+            });
+        let note = div()
+            .flex_1()
+            .min_w_0()
+            .mr(theme::GAP_SMALL)
+            .overflow_hidden()
+            .whitespace_nowrap()
+            .text_ellipsis()
+            .sized_text(theme, theme.small())
+            .text_color(c.ink3)
+            .child(self.note);
+        let head = div()
+            .id(self.id)
+            .flex()
+            .flex_col()
+            .w_full()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .h(line)
+                    .gap(theme::GAP)
+                    .child(title)
+                    .child(note)
+                    .children(beside)
+                    .when_some(self.folded, |d, folded| {
+                        d.child(icon(
+                            if folded {
+                                "chevron-right"
+                            } else {
+                                "chevron-down"
+                            },
+                            theme.icon(),
+                            c.ink3,
+                        ))
+                    }),
+            )
+            .children(under)
+            .when_some(self.on_fold, |d, fold| d.cursor_pointer().on_click(fold));
+        div()
+            .id("card")
+            .flex()
+            .flex_col()
+            .w_full()
+            .child(head)
+            .when(!folded, |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(self.spacing)
+                        .pb(px(6.))
+                        .children(self.body),
+                )
+            })
+    }
+}

@@ -1,6 +1,7 @@
 //! The window: views that show what the `App` hands them and forward what is done.
 
 pub mod assets;
+pub mod card;
 pub mod mods;
 pub mod rows;
 pub mod shell;

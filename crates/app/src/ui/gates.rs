@@ -15,7 +15,10 @@ fn views(dir: &Path, into: &mut Vec<std::path::PathBuf>) {
         if path.is_dir() {
             views(&path, into);
         } else if name.ends_with(".rs")
-            && !matches!(name.as_str(), "theme.rs" | "tests.rs" | "gates.rs")
+            && !matches!(
+                name.as_str(),
+                "theme.rs" | "tests.rs" | "gates.rs" | "layout_checks.rs"
+            )
         {
             into.push(path);
         }

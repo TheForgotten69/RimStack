@@ -1,5 +1,6 @@
 //! `ModHeader.qml`, `Choice.qml` and the tabs under it: the mod chosen in a list.
 
+use crate::ui::card::Card;
 use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{Btn, Chip, TextSized, elide_middle_in, icon, label, measure};
 use crate::words::put;
@@ -40,9 +41,28 @@ pub struct DetailsShown {
 pub struct DetailsView {
     pub shown: DetailsShown,
     pub tab: usize,
+    /// The cards folded against how they start, by their key, as `Theme.folded` kept them.
+    pub folded: std::collections::HashSet<&'static str>,
 }
 
 impl DetailsView {
+    /// Whether the card `key` is folded, and what folds or opens it.
+    pub(super) fn fold(
+        &self,
+        key: &'static str,
+        starts_folded: bool,
+        cx: &mut Context<Self>,
+    ) -> (bool, Fold) {
+        let folded = self.folded.contains(key) != starts_folded;
+        let fold = cx.listener(move |view: &mut Self, _, _, cx| {
+            if !view.folded.remove(key) {
+                view.folded.insert(key);
+            }
+            cx.notify();
+        });
+        (folded, Box::new(fold))
+    }
+
     pub fn show(&mut self, shown: DetailsShown, cx: &mut Context<Self>) {
         self.shown = shown;
         cx.notify();
@@ -80,26 +100,23 @@ fn words(
         .child(text.into())
 }
 
+type Fold = Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App)>;
+
 fn card(
     theme: &Theme,
+    id: &'static str,
     title: String,
     tone: gpui::Hsla,
-    folds: Option<bool>,
+    fold: Option<(bool, Fold)>,
     body: Vec<AnyElement>,
 ) -> AnyElement {
+    let card = Card::new(id, title).tone(tone).body(body);
     // The cards that fold here hold a "Saved" mark beside their title.
-    let actions = folds.is_some();
-    super::details::Card {
-        title,
-        tone,
-        note: String::new(),
-        folds,
-        actions,
-        spacing: theme::GAP_SMALL,
-        body,
-    }
-    .render(theme)
-    .into_any_element()
+    let card = match fold {
+        Some((folded, fold)) => card.tall().folds(folded, fold),
+        None => card,
+    };
+    card.render(theme, None).into_any_element()
 }
 
 /// `Defined.qml`: a term of the details, underlined with dots when it has a meaning to show.
@@ -166,7 +183,7 @@ fn names(theme: &Theme, title: String, named: &[Named]) -> Option<AnyElement> {
                 })
                 .into_any_element()
         });
-        card(theme, title, c.ink2, None, lines.collect())
+        card(theme, "names", title, c.ink2, None, lines.collect())
     })
 }
 
@@ -380,7 +397,7 @@ impl DetailsView {
             .child(div().h(theme::GAP_LARGE))
             .child(choice);
         let body = match tab {
-            0 => self.about(theme, details, inner, window),
+            0 => self.about(theme, details, inner, window, cx),
             1 => self.placed(theme, details),
             _ => self.files(theme, details),
         };
@@ -400,6 +417,7 @@ impl DetailsView {
         details: &Details,
         inner: Pixels,
         window: &Window,
+        cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let c = &theme.colours;
         let mut shown = Vec::new();
@@ -412,6 +430,7 @@ impl DetailsView {
                 .collect();
             shown.push(card(
                 theme,
+                "about-problems",
                 put(&say!("Before you play")),
                 if errors { c.err } else { c.warn },
                 None,
@@ -423,6 +442,7 @@ impl DetailsView {
                 words(theme, theme.body(), c.ink, details.description.clone()).into_any_element();
             shown.push(card(
                 theme,
+                "about-description",
                 put(&say!("Description")),
                 c.ink2,
                 None,
@@ -558,7 +578,15 @@ impl DetailsView {
                 )
                 .into_any_element(),
         );
-        shown.push(card(theme, put(&say!("Facts")), c.ink2, Some(false), lines));
+        let facts = self.fold("about-facts", false, cx);
+        shown.push(card(
+            theme,
+            "about-facts",
+            put(&say!("Facts")),
+            c.ink2,
+            Some(facts),
+            lines,
+        ));
         let notes = vec![
             field_look(
                 theme,
@@ -572,11 +600,13 @@ impl DetailsView {
                 .pt(theme::GAP_SMALL)
                 .into_any_element(),
         ];
+        let notes_fold = self.fold("about-notes", false, cx);
         shown.push(card(
             theme,
+            "about-notes",
             put(&say!("Tags and note")),
             c.ink2,
-            Some(false),
+            Some(notes_fold),
             notes,
         ));
         shown
@@ -615,6 +645,7 @@ impl DetailsView {
         );
         vec![card(
             theme,
+            "files-folders",
             put(&say!("Folders the game loads from")),
             c.ink2,
             None,

@@ -1,94 +1,17 @@
 //! `DetailsPane.qml` and `ListSummary.qml`: the list as a whole when no mod is chosen.
 
 use super::chosen::DetailsView;
+use crate::ui::card::Card;
 use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{Btn, Chip, TextSized, icon, label};
 use crate::words::{count, put};
 use crate::workspace::load_order::ProblemSaid;
 use gpui::{
-    AnyElement, Context, FontWeight, HighlightStyle, Hsla, InteractiveElement, IntoElement,
-    ParentElement, StatefulInteractiveElement, Styled, StyledText, div, prelude::FluentBuilder, px,
+    AnyElement, Context, FontWeight, HighlightStyle, InteractiveElement, IntoElement,
+    ParentElement, StatefulInteractiveElement, Styled, StyledText, div, prelude::FluentBuilder,
 };
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::{say, say_n};
-
-/// `Card.qml`: a titled part of the details, with a note beside its title and an arrow when it folds.
-pub(super) struct Card {
-    pub title: String,
-    pub tone: Hsla,
-    pub note: String,
-    /// `Some(folded)` for a card that folds.
-    pub folds: Option<bool>,
-    /// A card with room for actions beside its title has a taller head.
-    pub actions: bool,
-    pub spacing: gpui::Pixels,
-    pub body: Vec<AnyElement>,
-}
-
-impl Card {
-    pub(super) fn render(self, theme: &Theme) -> gpui::Div {
-        let c = &theme.colours;
-        let folded = self.folds == Some(true);
-        div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .h(theme.sized(if self.actions { 34. } else { 28. }))
-                    .gap(theme::GAP)
-                    .child(
-                        label(theme, theme.small(), self.tone, self.title.clone())
-                            .font_weight(theme.semibold)
-                            .when(defined(&self.title), |d| {
-                                d.border_b_1().border_dashed().border_color(self.tone)
-                            }),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .mr(theme::GAP_SMALL)
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_ellipsis()
-                            .sized_text(theme, theme.small())
-                            .text_color(c.ink3)
-                            .child(self.note),
-                    )
-                    .when_some(self.folds, |d, folded| {
-                        d.child(icon(
-                            if folded {
-                                "chevron-right"
-                            } else {
-                                "chevron-down"
-                            },
-                            theme.icon(),
-                            c.ink3,
-                        ))
-                    }),
-            )
-            .when(!folded, |d| {
-                d.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(self.spacing)
-                        .pb(px(6.))
-                        .children(self.body),
-                )
-            })
-    }
-}
-
-/// Whether a title is one of the terms the window explains.
-fn defined(title: &str) -> bool {
-    theme::TERMS
-        .iter()
-        .any(|term| put(&Sentence::said(term, Vec::new())) == title)
-}
 
 /// `ListSummary.Line`: words, and a button beside them.
 fn line(
@@ -225,12 +148,12 @@ impl DetailsView {
             .child(head)
             .when(!self.shown.demo, |d| {
                 d.children(self.verdict(theme))
-                    .children(self.review(theme))
-                    .children(self.kept(theme))
+                    .children(self.review(theme, cx))
+                    .children(self.kept(theme, cx))
             })
     }
 
-    fn verdict(&self, theme: &Theme) -> Option<gpui::Div> {
+    fn verdict(&self, theme: &Theme) -> Option<gpui::Stateful<gpui::Div>> {
         let c = &theme.colours;
         let overview = self.shown.overview.as_ref()?;
         let warnings = self.shown.warnings;
@@ -327,21 +250,17 @@ impl DetailsView {
             String::new()
         };
         Some(
-            Card {
-                title,
-                tone,
-                note,
-                folds: None,
-                actions: false,
-                spacing: theme::GAP,
-                body,
-            }
-            .render(theme),
+            Card::new("verdict", title)
+                .tone(tone)
+                .note(note)
+                .spacing(theme::GAP)
+                .body(body)
+                .render(theme, None),
         )
     }
 
     /// `ListSummary`'s "To review": not problems, things to look at when there is time.
-    fn review(&self, theme: &Theme) -> Option<gpui::Div> {
+    fn review(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<gpui::Stateful<gpui::Div>> {
         let replacements = self.shown.summary.as_ref().map_or(0, |s| s.replacements);
         let show = || Some((put(&say!("Show")), false));
         let mut body = Vec::new();
@@ -369,33 +288,46 @@ impl DetailsView {
             ));
             body.push(line(theme, "review-replaced", said, show()));
         }
-        (!body.is_empty()).then(|| {
-            Card {
-                title: put(&say!("To review")),
-                tone: theme.colours.ink2,
-                note: String::new(),
-                folds: Some(false),
-                actions: false,
-                spacing: theme::GAP,
-                body,
-            }
-            .render(theme)
-        })
+        if body.is_empty() {
+            return None;
+        }
+        let (folded, fold) = self.fold("overview-review", false, cx);
+        let card = Card::new("overview-review", put(&say!("To review")))
+            .spacing(theme::GAP)
+            .body(body);
+        Some(card.folds(folded, fold).render(theme, None))
     }
 
-    fn kept(&self, theme: &Theme) -> Option<gpui::Div> {
+    fn kept(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<gpui::Stateful<gpui::Div>> {
         let summary = self.shown.summary.as_ref()?;
-        Some(
-            Card {
-                title: put(&say!("Kept")),
-                tone: theme.colours.ink2,
-                note: put(&summary.kept_note),
-                folds: Some(true),
-                actions: false,
-                spacing: theme::GAP_SMALL,
-                body: Vec::new(),
-            }
-            .render(theme),
-        )
+        let (folded, fold) = self.fold("overview-inventory", true, cx);
+        // Its note says what it holds while it is folded.
+        let note = if folded {
+            put(&summary.kept_note)
+        } else {
+            String::new()
+        };
+        let lines = summary.kept.iter().map(|kept| {
+            div()
+                .flex()
+                .gap(theme::GAP)
+                .child(label(
+                    theme,
+                    theme.body(),
+                    theme.colours.ink2,
+                    put(&kept.label),
+                ))
+                .child(label(
+                    theme,
+                    theme.body(),
+                    theme.colours.ink,
+                    put(&kept.value),
+                ))
+                .into_any_element()
+        });
+        let card = Card::new("overview-inventory", put(&say!("Kept")))
+            .note(note)
+            .body(lines.collect());
+        Some(card.folds(folded, fold).render(theme, None))
     }
 }

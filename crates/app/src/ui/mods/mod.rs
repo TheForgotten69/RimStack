@@ -106,6 +106,7 @@ impl Mods {
         let details_view = cx.new(|_| chosen::DetailsView {
             shown: Default::default(),
             tab: 0,
+            folded: Default::default(),
         });
         let mut mods = Self {
             focus: cx.focus_handle(),

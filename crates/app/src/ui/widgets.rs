@@ -215,7 +215,10 @@ impl RenderOnce for Btn {
                     }),
             )
             .when_some(self.on_click.filter(|_| self.enabled), |d, run| {
-                d.on_click(run)
+                d.on_click(move |event, window, cx| {
+                    cx.stop_propagation();
+                    run(event, window, cx);
+                })
             })
     }
 }
