@@ -11,6 +11,8 @@ use gpui::{
 };
 use std::rc::Rc;
 
+pub static ROWS_BUILT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 /// The room the bar takes at the list's right: its thumb, and the padding Qt gives it.
 pub fn bar_room(theme: &Theme) -> Pixels {
     theme::GAP_HAIR + theme.sized(9.) + theme::GAP_LINE + px(2.) + theme::GAP_HAIR
@@ -56,7 +58,9 @@ impl Mods {
             Some(columns) => columns.name_room,
             None => width - room - theme::GAP_WIDE * 2. - theme.sized(13.) - theme::GAP_SMALL * 2.,
         };
-        let rows_list = list(shown.list.clone(), move |at, window: &mut Window, _cx| {
+        let thumbs = self.thumbs.clone();
+        let rows_list = list(shown.list.clone(), move |at, window: &mut Window, cx| {
+            ROWS_BUILT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let height = match at {
                 0 => above,
                 at if at == last => below,
@@ -77,6 +81,8 @@ impl Mods {
                     columns.as_deref(),
                     chosen[at - 1],
                     mods.clone(),
+                    &thumbs,
+                    cx,
                 ))
                 .into_any_element()
         })

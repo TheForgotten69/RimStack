@@ -39,6 +39,8 @@ pub struct Options {
     /// A row of the load order chosen, and the tab shown, as `--pick=` and `--tab=` give them.
     pub pick: Option<usize>,
     pub tab: usize,
+    /// The scripted scroll of `--selftest`.
+    pub bench: bool,
 }
 
 impl Options {
@@ -47,7 +49,8 @@ impl Options {
         for arg in args {
             let (name, value) = arg.split_once('=').unwrap_or((&arg, ""));
             match name {
-                "--demo" | "--selftest" => options.demo = true,
+                "--demo" => options.demo = true,
+                "--selftest" => (options.demo, options.bench) = (true, true),
                 "--section" => options.section = value.parse().unwrap_or(0),
                 "--theme" => options.theme = ThemeName::named(value),
                 "--text-scale" => options.text_scale = value.parse().ok(),

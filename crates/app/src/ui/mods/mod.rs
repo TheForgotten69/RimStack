@@ -1,11 +1,13 @@
 //! `ModsScreen.qml`: the inactive mods, the load order and the details, side by side.
 
 mod active;
+mod bench;
 mod chosen;
 mod details;
 mod inactive;
 mod rows;
 mod scrollbar;
+mod thumbs;
 
 use super::text_field::{Edited, TextField};
 use super::theme::Theme;
@@ -39,12 +41,24 @@ impl Shown {
 
 gpui::actions!(mods, [FocusFilter]);
 
+/// glibc keeps what a thread freed in that thread's heap; after the scan's threads that was
+/// 100 MB (measured 2026-11-12). Capping the heaps instead made the scan wait on their locks.
+fn give_back_freed() {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    // SAFETY: only returns free pages to the system.
+    unsafe {
+        libc::malloc_trim(0);
+    }
+}
+
 pub struct Mods {
     order: LoadOrder,
     active: Shown,
     inactive: Shown,
     orders: Orders,
     filter: Entity<TextField>,
+    thumbs: thumbs::Shared,
+    bench: Option<bench::Bench>,
     focus: gpui::FocusHandle,
     overview: Option<Overview>,
     details: Option<Details>,
@@ -89,6 +103,8 @@ impl Mods {
         let mut mods = Self {
             focus: cx.focus_handle(),
             filter,
+            thumbs: thumbs::Shared::default(),
+            bench: None,
             orders: order.orders(),
             overview: None,
             details: None,
@@ -266,6 +282,7 @@ impl Mods {
                 mods.order = order;
                 mods.show(cx);
                 mods.describe(cx);
+                give_back_freed();
                 mods.read_files(cx);
                 if let Some((row, tab)) = mods.wanted.take() {
                     mods.pick_row(Side::Active, row, tab, cx);
@@ -476,6 +493,7 @@ impl Render for Mods {
                 .h_full()
                 .child(div().w(px(1.)).h_full().bg(theme.colours.edge))
         };
+        self.bench_frame(window, cx);
         let (inactive_width, active_width, details_width) =
             self.widths(&theme, window.viewport_size().width);
         div()

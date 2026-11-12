@@ -1,18 +1,20 @@
 //! `ModRow.qml`: a category heading, a group under a tag, or a mod.
 
-use super::Mods;
+use super::{Mods, thumbs};
 use crate::ui::theme::{self, CATEGORY_ICONS, Theme};
 use crate::ui::widgets::{
     Chip, TextSized, chip_width, elide_middle, halo, icon, label, with_alpha,
 };
 use crate::words::{count, put};
 use crate::workspace::load_order::{RowView, Side};
+use gpui::RenderImage;
 use gpui::{
     AnyElement, Hsla, InteractiveElement, IntoElement, ParentElement, Pixels, SharedString,
     StatefulInteractiveElement, Styled, StyledImage, TextOverflow, WeakEntity, Window, div, img,
     prelude::FluentBuilder, px,
 };
 use rimstack_core::say;
+use std::sync::Arc;
 
 /// What the load order shows beside a mod's name, as `ModList.qml` fits it to its width.
 pub struct Columns {
@@ -64,6 +66,8 @@ pub fn row(
     columns: Option<&Columns>,
     chosen: bool,
     mods: WeakEntity<Mods>,
+    thumbs: &thumbs::Shared,
+    cx: &mut gpui::App,
 ) -> AnyElement {
     let c = &theme.colours;
     let colour = category_colour(theme, row.category);
@@ -93,7 +97,17 @@ pub fn row(
             room -= theme.sized(12.) + theme::GAP_SMALL;
         }
         let name = elide_middle(window, theme, &put(&row.name), theme.body(), room);
-        cells(theme, row, name, columns, chosen, colour)
+        let picture = match columns.is_some_and(|c| c.tile) && !row.picture.is_empty() {
+            true => {
+                let scale = window.scale_factor();
+                let device =
+                    |logical: f32| f32::from(theme.sized(logical) - theme::GAP_LINE * 2.) * scale;
+                let size = (device(64.).round() as u32, device(40.).round() as u32);
+                thumbs::thumb(thumbs, &row.picture, size, mods.clone(), cx)
+            }
+            false => None,
+        };
+        cells(theme, row, name, columns, chosen, colour, picture)
     };
     let (is_header, is_sub, category, mod_id) =
         (row.is_header, row.is_sub, row.category, row.mod_id);
@@ -268,7 +282,12 @@ fn again(theme: &Theme, row: &RowView) -> AnyElement {
         .into_any_element()
 }
 
-fn tile(theme: &Theme, row: &RowView, colour: Hsla) -> AnyElement {
+fn tile(
+    theme: &Theme,
+    row: &RowView,
+    colour: Hsla,
+    picture: Option<Arc<RenderImage>>,
+) -> AnyElement {
     let first: String = put(&row.name)
         .chars()
         .next()
@@ -296,16 +315,16 @@ fn tile(theme: &Theme, row: &RowView, colour: Hsla) -> AnyElement {
                         .border_color(with_alpha(colour, 0.28)),
                 )
                 .child(label(theme, theme.title(), colour, first).font_weight(theme.semibold)),
-            false => d.child(
-                img(std::path::PathBuf::from(&row.picture))
+            false => d.children(picture.map(|picture| {
+                img(picture)
                     .absolute()
                     .left(theme::GAP_LINE)
                     .top(theme::GAP_LINE)
                     .w(theme.sized(64.) - theme::GAP_LINE * 2.)
                     .h(theme.sized(40.) - theme::GAP_LINE * 2.)
                     .rounded(theme::CORNER)
-                    .object_fit(gpui::ObjectFit::Cover),
-            ),
+                    .object_fit(gpui::ObjectFit::Cover)
+            })),
         })
         .into_any_element()
 }
@@ -317,6 +336,7 @@ fn cells(
     columns: Option<&Columns>,
     chosen: bool,
     colour: Hsla,
+    picture: Option<Arc<RenderImage>>,
 ) -> AnyElement {
     let c = &theme.colours;
     let quiet = if chosen { c.on_selected_dim } else { c.ink2 };
@@ -337,7 +357,7 @@ fn cells(
             if chosen { c.on_selected } else { colour },
         ))
         .when(columns.is_some_and(|c| c.tile), |d| {
-            d.child(tile(theme, row, colour))
+            d.child(tile(theme, row, colour, picture))
         })
         .when(row.version_ignored, |d| {
             d.child(icon(

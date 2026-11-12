@@ -31,6 +31,16 @@ impl Shell {
             let tab = options.tab;
             mods.update(cx, |mods, cx| mods.pick_row(Side::Active, row, tab, cx));
         }
+        if options.bench {
+            let mods = mods.clone();
+            cx.spawn_in(window, async move |_, cx| {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(300))
+                    .await;
+                let _ = cx.update(|_, cx| mods.update(cx, |mods, cx| mods.start_bench(cx)));
+            })
+            .detach();
+        }
         if options.several {
             mods.update(cx, |mods, cx| {
                 mods.choose_nth(Side::Active, 14, false, cx);

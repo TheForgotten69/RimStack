@@ -109,3 +109,27 @@ fn a_fold_keeps_the_list_where_it_was_scrolled(cx: &mut gpui::TestAppContext) {
     let kept = mods.read_with(cx, |mods, _| mods.active.list.logical_scroll_top());
     assert_eq!(kept.item_ix, 300);
 }
+
+#[gpui::test]
+fn the_wheel_scrolls_the_load_order(cx: &mut gpui::TestAppContext) {
+    use gpui::{MouseMoveEvent, ScrollDelta, ScrollEvent, point, px};
+    let _root = demo(cx);
+    let (mods, cx) = cx.add_window_view(|_, cx| Mods::new(true, cx));
+    cx.run_until_parked();
+    let over = point(px(600.), px(500.));
+    cx.simulate_event(MouseMoveEvent {
+        position: over,
+        ..MouseMoveEvent::default()
+    });
+    for _ in 0..40 {
+        let wheel = ScrollEvent {
+            position: over,
+            delta: ScrollDelta::Pixels(point(px(0.), px(-200.))),
+            ..ScrollEvent::default()
+        };
+        cx.simulate_event(wheel);
+        cx.run_until_parked();
+    }
+    let top = mods.read_with(cx, |mods, _| mods.active.list.logical_scroll_top().item_ix);
+    assert!(top > 100, "the load order shows row {top} at its top");
+}

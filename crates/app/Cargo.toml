@@ -22,6 +22,9 @@ rimstack-core = { path = "../core" }
 gpui = { package = "gpui-fast", version = "=0.1.14" }
 gpui_platform = { package = "gpui-fast-platform", version = "=0.1.14", features = ["wayland", "x11"] }
 futures = "0.3"
+# Previews decoded at the size they are shown, not whole; already built for gpui-fast.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+smallvec = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rayon = "1"
@@ -40,6 +43,8 @@ keyring-core = "1"
 # Secret Service over D-Bus, in Rust: `crypto-rust` keeps OpenSSL and libdbus out, and zbus runs
 # its own thread, no async runtime of ours (MIT/Apache-2.0).
 [target.'cfg(target_os = "linux")'.dependencies]
+# `malloc_trim`, to give back what the scan freed; already built for gpui-fast.
+libc = "0.2"
 zbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
