@@ -327,7 +327,7 @@ impl Mods {
                 copied
             },
             |mods, problem, cx| {
-                mods.save_problem = problem
+                mods.upkeep_problem = problem
                     .map(|p| crate::words::said_of(&p))
                     .unwrap_or_default();
                 cx.notify();
@@ -408,7 +408,7 @@ impl Mods {
                     let _ = me.update(cx, |mods, cx| {
                         let app = crate::ui::app(cx);
                         let binned = app.bin_mod(id);
-                        mods.save_problem = crate::words::why_not(&binned);
+                        mods.upkeep_problem = crate::words::why_not(&binned);
                         if binned.is_ok() {
                             crate::jobs::spawn("rescan", move || app.rescan());
                         }

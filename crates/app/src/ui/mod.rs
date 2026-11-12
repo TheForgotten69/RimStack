@@ -303,6 +303,8 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
         gpui::KeyBinding::new(crate::command!("f"), mods::FocusFilter, None),
         gpui::KeyBinding::new(crate::command!("z"), mods::Undo, None),
         gpui::KeyBinding::new(crate::command!("shift-z"), mods::Redo, None),
+        #[cfg(not(target_os = "macos"))]
+        gpui::KeyBinding::new("ctrl-y", mods::Redo, None),
         gpui::KeyBinding::new(crate::command!("s"), mods::Save, None),
     ]);
     cx.bind_keys([gpui::KeyBinding::new(

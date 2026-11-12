@@ -19,7 +19,13 @@ impl Mods {
         }
         let c = &theme.colours;
         let problem = put(&self.order.problem);
-        let no_folders = crate::ui::app(cx).settings_report().no_mod_folders;
+        let app = crate::ui::app(cx);
+        let no_folders = app.settings_report().no_mod_folders;
+        let chosen = app.settings().get("game").unwrap_or_default().to_string();
+        let standing = (!chosen.is_empty())
+            .then(|| crate::workspace::judge_folder("game", &chosen))
+            .filter(|verdict| !verdict.ok)
+            .map(|verdict| put(&verdict.said));
         let text = |colour, said: String| {
             div()
                 .w_full()
@@ -54,6 +60,10 @@ impl Mods {
                             .font_weight(theme.semibold),
                         )
                         .when(!no_folders, |d| d.child(text(c.ink2, problem.clone())))
+                        .when_some(
+                            standing.filter(|_| self.folder_problem.is_empty()),
+                            |d, said| d.child(text(c.err, said)),
+                        )
                         .when(!self.folder_problem.is_empty(), |d| {
                             d.child(text(c.err, self.folder_problem.clone()))
                         })

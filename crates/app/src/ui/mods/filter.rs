@@ -152,6 +152,24 @@ impl Mods {
         let found = (!empty).then(|| put(&self.order.filter_summary()));
         let keys = put(&say!("Ctrl + F"));
         let placeholder = put(&say!("Filter active and inactive mods"));
+        let keys_fit = room
+            > theme.icon()
+                + theme::GAP
+                + crate::ui::widgets::measure(
+                    window,
+                    theme,
+                    &placeholder,
+                    theme.body(),
+                    FontWeight::NORMAL,
+                )
+                + crate::ui::widgets::measure(
+                    window,
+                    theme,
+                    &keys,
+                    theme.caption(),
+                    FontWeight::NORMAL,
+                )
+                + theme::GAP * 4.;
         let chips = self.filter_terms.iter().enumerate().map(|(at, term)| {
             Chip::new(term.clone())
                 .tone(c.moved)
@@ -323,7 +341,7 @@ impl Mods {
             .when_some(found, |d, found| {
                 d.child(label(theme, theme.small(), c.ink2, found))
             })
-            .when(empty && !focused, |d| {
+            .when(empty && !focused && keys_fit, |d| {
                 d.child(label(theme, theme.caption(), c.ink3, keys))
             })
             .when(!empty, |d| {

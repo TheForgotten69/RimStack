@@ -54,11 +54,13 @@ impl Mods {
                 cx.notify();
             });
         }
-        let top = px(view.last_scroll);
-        self.list(Side::Active).update(cx, |list, cx| {
-            list.scroll().borrow_mut().set_top(top);
-            cx.notify();
-        });
+        if found.is_none() {
+            let top = px(view.last_scroll);
+            self.list(Side::Active).update(cx, |list, cx| {
+                list.scroll().borrow_mut().set_top(top);
+                cx.notify();
+            });
+        }
         self.left_off = LeftOff::Restored;
     }
 

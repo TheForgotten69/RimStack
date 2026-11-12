@@ -29,7 +29,7 @@ impl Mods {
 
     /// The bar under the panes while several mods are chosen.
     pub(super) fn bulk_bar(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if self.selection.len() < 2 || self.order.previewing() {
+        if self.selection.len() < 2 || self.order.previewing() || self.comparing.is_some() {
             return None;
         }
         let c = &theme.colours;

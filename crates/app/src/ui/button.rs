@@ -270,6 +270,8 @@ pub struct Chip {
     on_accent: bool,
     pressable: bool,
     max_width: Option<Pixels>,
+    /// Ringed in its tone, as a count chip whose term is in the filter.
+    held: bool,
 }
 
 impl Chip {
@@ -284,11 +286,18 @@ impl Chip {
             on_accent: false,
             pressable: false,
             max_width: None,
+            held: false,
         }
     }
 
     pub fn icon(mut self, name: &'static str) -> Self {
         self.icon = Some(name);
+        self
+    }
+
+    /// Ringed in its tone, while what it stands for is on.
+    pub fn held(mut self, held: bool) -> Self {
+        self.held = held;
         self
     }
 
@@ -378,6 +387,7 @@ impl RenderOnce for Chip {
             .px(theme::GAP_CARD / 2.)
             .rounded(height / 2.)
             .bg(ground)
+            .when(self.held, |d| d.border_2().border_color(tone))
             .when_some(self.max_width, |d, most| d.max_w(most))
             .when_some(self.icon, |d, name| {
                 d.child(icon(name, theme.sized(11.), ink))

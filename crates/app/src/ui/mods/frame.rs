@@ -51,11 +51,20 @@ impl Render for Mods {
                 };
                 window.focus(&field.focus_handle(cx), cx);
             }))
-            .capture_key_down(cx.listener(|mods, event: &gpui::KeyDownEvent, _, cx| {
-                if mods.drawer_open && event.keystroke.key == "escape" {
-                    mods.set_drawer(false, cx);
-                    cx.stop_propagation();
+            .on_key_down(cx.listener(|mods, event: &gpui::KeyDownEvent, _, cx| {
+                if event.keystroke.key != "escape" || mods.comparing.is_some() {
+                    return;
                 }
+                if mods.drawer_open {
+                    mods.set_drawer(false, cx);
+                } else if mods.picking.is_some() {
+                    mods.start_picking(None, cx);
+                } else if !mods.selection.is_empty() {
+                    mods.select(None, true, cx);
+                } else {
+                    return;
+                }
+                cx.stop_propagation();
             }))
             .on_action(cx.listener(|mods, _: &Undo, _, cx| mods.undo(cx)))
             .on_action(cx.listener(|mods, _: &Redo, _, cx| mods.redo(cx)))

@@ -452,9 +452,8 @@ impl TextField {
     }
 
     fn escape(&mut self, _: &Escape, _: &mut Window, cx: &mut Context<Self>) {
-        match self.kept_on_escape {
-            true => cx.propagate(),
-            false => self.set_text("", cx),
+        if !self.kept_on_escape {
+            self.set_text("", cx);
         }
     }
 

@@ -320,6 +320,17 @@ impl Mods {
                 px(0.)
             };
         let tight = width < head_wide + extras;
+        let problems_count = if problems > 0 {
+            count(problems)
+        } else {
+            String::new()
+        };
+        let more_wide = btn_width(window, theme, &problems_count, true, false);
+        let cramped = width < head_wide + more_wide + theme::GAP;
+        let shown_text = |said: &str| match cramped {
+            true => String::new(),
+            false => said.to_string(),
+        };
         let problem_tone = if errors > 0 { c.err } else { c.warn };
         div()
             .flex()
@@ -335,6 +346,7 @@ impl Mods {
                 d.child(
                     Chip::new(warned)
                         .tone(c.warn)
+                        .held(self.filter_terms.iter().any(|t| t == "is:warning"))
                         .icon("triangle-alert")
                         .tip(put(&say!("Mods with a warning: the game runs, but parts of these mods may not work. Click to show only these.")))
                         .on_click("warnings-chip", cx.listener(|m, _, _, cx| m.toggle_term("is:warning", cx))),
@@ -409,7 +421,8 @@ impl Mods {
             })
             .when(!self.demo, |d| {
                 d.child(super::hints::anchored_at(
-                    Btn::new("sort", sort)
+                    Btn::new("sort", shown_text(&sort))
+                        .spoken(sort.clone())
                         .icon("arrow-up-down")
                         .tone(c.moved)
                         .tip(put(&say!("Shows the order the rules ask for, to keep or discard. Nothing is written before Save.")))
@@ -419,7 +432,8 @@ impl Mods {
                     self.hint_anchors.sort.clone(),
                 ))
                 .child(super::hints::anchored_at(
-                    Btn::new("save", save)
+                    Btn::new("save", shown_text(&save))
+                        .spoken(save.clone())
                         .icon("save")
                         .tip(put(&say!("Writes the load order to ModsConfig.xml (Ctrl + S). The file as it was is copied beside it first.")))
                         .enabled(dirty)

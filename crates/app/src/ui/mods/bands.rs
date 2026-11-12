@@ -127,7 +127,14 @@ impl Mods {
                     .into_any_element(),
             );
         }
-        if !self.save_problem.is_empty() {
+        let problem = match self.save_problem.is_empty() {
+            true => self.upkeep_problem.clone(),
+            false => put(&say!(
+                "The list was not saved. {}",
+                self.save_problem.clone()
+            )),
+        };
+        if !problem.is_empty() {
             shown.push(
                 div()
                     .flex_none()
@@ -135,10 +142,7 @@ impl Mods {
                     .pb(theme::GAP)
                     .sized_text(theme, theme.body())
                     .text_color(c.err)
-                    .child(put(&say!(
-                        "The list was not saved. {}",
-                        self.save_problem.clone()
-                    )))
+                    .child(problem)
                     .into_any_element(),
             );
         }

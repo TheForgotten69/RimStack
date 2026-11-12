@@ -48,6 +48,7 @@ impl Mods {
                 let button = Btn::new("inactive-order", order)
                     .icon("arrow-up-down")
                     .tip(put(&say!("Order the inactive mods")))
+                    .spoken(put(&say!("Order the inactive mods")))
                     .opens(move |below, window, cx| {
                         let _ = me.update(cx, |mods, cx| mods.inactive_order_menu(below, window, cx));
                     });

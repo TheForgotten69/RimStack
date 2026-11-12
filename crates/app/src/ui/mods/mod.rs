@@ -99,6 +99,8 @@ pub struct Mods {
     details_width: Pixels,
     saving: bool,
     save_problem: String,
+    /// Why a mod was not binned or copied to the game's folder.
+    upkeep_problem: String,
     /// ModsConfig.xml was written outside RimStack since it was read: Save refused to overwrite it.
     file_changed: bool,
     /// The Sort note closed, by its words; and the one whose closing is on its way.
@@ -247,6 +249,7 @@ impl Mods {
             details_width,
             saving: false,
             save_problem: String::new(),
+            upkeep_problem: String::new(),
             file_changed: false,
             closed_note: String::new(),
             note_timer: String::new(),

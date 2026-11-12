@@ -231,6 +231,10 @@ impl Render for ModList {
             .id(("mod-list-pane", side as usize))
             .track_focus(&self.focus)
             .role(gpui::Role::List)
+            .aria_label(crate::words::put(&match side {
+                Side::Active => rimstack_core::say!("Load order"),
+                Side::Inactive => rimstack_core::say!("Inactive mods"),
+            }))
             .relative()
             .size_full()
             .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
