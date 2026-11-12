@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Two pictures of the window, Qt's on the left: side-by-side.py qt.png gpui.png out.png [x,y,w,h]
+"""Two pictures of the window, Qt's first (left, or above when wider than tall): side-by-side.py qt.png gpui.png out.png [x,y,w,h]
 
 The crop is in the window's own units (1440x860); the pictures are taken at 2x.
 """
@@ -11,7 +11,11 @@ qt, gpui = list(qt)
 if len(sys.argv) > 4:
     x, y, w, h = (int(v) * 2 for v in sys.argv[4].split(","))
     qt, gpui = (p.crop((x, y, x + w, y + h)) for p in (qt, gpui))
-both = Image.new("RGB", (qt.width + gpui.width + 8, max(qt.height, gpui.height)), (255, 0, 255))
+if qt.width > qt.height:
+    both = Image.new("RGB", (max(qt.width, gpui.width), qt.height + gpui.height + 8), (255, 0, 255))
+    both.paste(gpui, (0, qt.height + 8))
+else:
+    both = Image.new("RGB", (qt.width + gpui.width + 8, max(qt.height, gpui.height)), (255, 0, 255))
+    both.paste(gpui, (qt.width + 8, 0))
 both.paste(qt, (0, 0))
-both.paste(gpui, (qt.width + 8, 0))
 both.save(out)

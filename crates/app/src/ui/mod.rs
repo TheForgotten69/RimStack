@@ -1,7 +1,11 @@
 //! The window: views that show what the `App` hands them and forward what is done.
 
+pub mod assets;
 pub mod shell;
+pub mod status_bar;
 pub mod theme;
+pub mod top_bar;
+pub mod widgets;
 
 use crate::App;
 use gpui::{
@@ -47,6 +51,42 @@ impl Options {
 
 pub const WINDOW: (f32, f32) = (1440., 860.);
 
+/// The weights fontconfig has for a family, as CSS numbers.
+#[cfg(target_os = "linux")]
+fn weights_of(family: &str) -> Vec<f32> {
+    let mut asked = rimstack_core::base::program::command("fc-list");
+    asked.args([family, "weight"]);
+    let Ok(told) = rimstack_core::base::program::run(&mut asked, std::time::Duration::from_secs(2))
+    else {
+        return Vec::new();
+    };
+    // fontconfig's scale: 50 light, 80 regular, 100 medium, 180 semibold, 200 bold, 210 black.
+    const SCALE: [(f32, f32); 9] = [
+        (0., 100.),
+        (40., 200.),
+        (50., 300.),
+        (80., 400.),
+        (100., 500.),
+        (180., 600.),
+        (200., 700.),
+        (205., 800.),
+        (210., 900.),
+    ];
+    let mut found: Vec<f32> = String::from_utf8_lossy(&told.stdout)
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix(":weight=")?.parse::<f32>().ok())
+        .filter_map(|fc| SCALE.iter().find(|(at, _)| *at == fc).map(|(_, css)| *css))
+        .collect();
+    found.sort_by(f32::total_cmp);
+    found.dedup();
+    found
+}
+
+#[cfg(not(target_os = "linux"))]
+fn weights_of(_family: &str) -> Vec<f32> {
+    Vec::new()
+}
+
 /// The family Qt takes for its texts: the system's sans-serif.
 fn system_family() -> String {
     #[cfg(target_os = "linux")]
@@ -78,7 +118,9 @@ pub fn appearance(options: &Options) -> Appearance {
 
 /// Sets what every view reads: the `App` and the Theme.
 pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
-    let mut theme = Theme::new(appearance(options), system_family());
+    let family = system_family();
+    let weights = weights_of(&family);
+    let mut theme = Theme::new(appearance(options), family).with_weights(&weights);
     let text = cx.text_system();
     let id = text.resolve_font(&font(theme.family.clone()));
     let at = px(1000.);
@@ -89,25 +131,27 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
 }
 
 pub fn run(app: Arc<App>, options: Options) {
-    gpui_platform::application().run(move |cx: &mut Cx| {
-        install(app, &options, cx);
-        let bounds = Bounds::centered(None, size(px(WINDOW.0), px(WINDOW.1)), cx);
-        let opened = cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                titlebar: Some(TitlebarOptions {
-                    title: Some("RimStack".into()),
+    gpui_platform::application()
+        .with_assets(assets::Assets)
+        .run(move |cx: &mut Cx| {
+            install(app, &options, cx);
+            let bounds = Bounds::centered(None, size(px(WINDOW.0), px(WINDOW.1)), cx);
+            let opened = cx.open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    titlebar: Some(TitlebarOptions {
+                        title: Some("RimStack".into()),
+                        ..Default::default()
+                    }),
+                    app_id: Some("rimstack".into()),
                     ..Default::default()
-                }),
-                app_id: Some("rimstack".into()),
-                ..Default::default()
-            },
-            |window, cx| cx.new(|cx| shell::Shell::new(&options, window, cx)),
-        );
-        if let Err(problem) = opened {
-            rimstack_core::problem!("the window did not open: {problem}");
-            cx.quit();
-        }
-        cx.activate(true);
-    });
+                },
+                |window, cx| cx.new(|cx| shell::Shell::new(&options, window, cx)),
+            );
+            if let Err(problem) = opened {
+                rimstack_core::problem!("the window did not open: {problem}");
+                cx.quit();
+            }
+            cx.activate(true);
+        });
 }

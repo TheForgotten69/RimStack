@@ -23,7 +23,7 @@ fn main() {
     let text = gpui_platform::current_platform(true).text_system();
     let mut cx = HeadlessAppContext::with_platform(
         text,
-        Arc::new(()),
+        Arc::new(ui::assets::Assets),
         gpui_platform::current_headless_renderer,
     );
     cx.update(|cx| ui::install(app, &options, cx));

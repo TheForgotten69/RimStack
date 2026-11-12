@@ -294,6 +294,9 @@ pub struct Theme {
     /// The font's ascent and descent over its size: Qt gives a line their two roundings.
     pub ascent: f32,
     pub descent: f32,
+    /// What Qt's `Font.DemiBold` and `Font.Medium` give in this family: the nearest face it has.
+    pub semibold: gpui::FontWeight,
+    pub medium: gpui::FontWeight,
     pub scale: f32,
     pub grow: f32,
 }
@@ -336,10 +339,19 @@ impl Theme {
             family: family.into(),
             ascent: 1.069,
             descent: 0.293,
+            semibold: gpui::FontWeight::SEMIBOLD,
+            medium: gpui::FontWeight::MEDIUM,
             scale,
             grow: scale.max(1.0),
             appearance,
         }
+    }
+
+    /// Takes the weights the family has, as CSS numbers; with none known, every weight is kept.
+    pub fn with_weights(mut self, has: &[f32]) -> Self {
+        self.semibold = gpui::FontWeight(nearest(600., has));
+        self.medium = gpui::FontWeight(nearest(500., has));
+        self
     }
 
     fn text(&self, size: f32) -> Pixels {
@@ -411,6 +423,17 @@ impl Theme {
     }
 }
 
+/// As Qt picks a face: the closest weight, the lighter of two as close.
+fn nearest(wanted: f32, has: &[f32]) -> f32 {
+    has.iter()
+        .copied()
+        .min_by(|a, b| {
+            let (da, db) = ((a - wanted).abs(), (b - wanted).abs());
+            da.total_cmp(&db).then(a.total_cmp(b))
+        })
+        .unwrap_or(wanted)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -466,6 +489,14 @@ mod tests {
             (high.colours.ink2, high.colours.win),
             (hex("#26262a"), hex("#f5f5f7"))
         );
+    }
+
+    #[test]
+    fn a_missing_weight_falls_to_the_nearest_lighter_one_as_qt_does() {
+        let noto = at(1.).with_weights(&[300., 400., 500., 700., 900.]);
+        assert_eq!((noto.semibold.0, noto.medium.0), (500., 500.));
+        assert_eq!(at(1.).with_weights(&[400., 600., 700.]).semibold.0, 600.);
+        assert_eq!(at(1.).with_weights(&[]).semibold.0, 600.);
     }
 
     #[test]
