@@ -283,6 +283,10 @@ impl Settings {
         cx.notify();
     }
 
+    pub fn community_busy(&self) -> bool {
+        self.community_busy
+    }
+
     pub fn keep(&mut self, name: &str, value: &str, cx: &mut Context<Self>) {
         self.problem = super::app(cx)
             .keep_setting(name, value)

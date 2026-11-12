@@ -658,7 +658,8 @@ fn cells(
                 ("load", false) => c.ink3,
                 _ => quiet,
             };
-            div()
+            let cell = div()
+                .id(SharedString::from(format!("cell-{key}")))
                 .flex()
                 .flex_none()
                 .w(*width)
@@ -672,7 +673,12 @@ fn cells(
                         .sized_text(theme, if right { theme.small() } else { theme.body() })
                         .text_color(colour)
                         .child(value(key)),
-                )
+                );
+            let tip = match (*key, row.load_time.is_empty()) {
+                ("load", false) => put(&say!("{} at the game's last start", row.load_time.clone())),
+                _ => String::new(),
+            };
+            crate::ui::tip::tipped(cell, tip.into())
         }))
         .child(
             div()

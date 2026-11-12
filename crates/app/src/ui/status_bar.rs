@@ -18,6 +18,9 @@ impl Shell {
     /// The work under way across the window, as `Main.qml`'s `tasks`.
     fn tasks(&self, cx: &gpui::App) -> Vec<String> {
         let mut tasks = Vec::new();
+        if self.mods.read(cx).rescanning && !self.demo {
+            tasks.push(put(&say!("Reading the mod folders…")));
+        }
         if self.mods.read(cx).reading_files() {
             tasks.push(put(&say!("Reading the active mods' files…")));
         }
@@ -28,6 +31,13 @@ impl Shell {
         }
         if let Some(downloads) = &self.downloads {
             tasks.extend(downloads.read(cx).tasks_said());
+        }
+        if self
+            .settings
+            .as_ref()
+            .is_some_and(|s| s.read(cx).community_busy())
+        {
+            tasks.push(put(&say!("Downloading community data…")));
         }
         tasks
     }

@@ -125,6 +125,8 @@ pub struct Mods {
     commits_read: Lane,
     /// Why the game folder chosen was not taken.
     folder_problem: String,
+    /// The mod folders being read again.
+    pub rescanning: bool,
     unhide_problem: String,
     /// The shared textures of two mods, shown in place of the lists.
     comparing: Option<Entity<compare::CompareView>>,
@@ -257,6 +259,7 @@ impl Mods {
             chosen_commits: None,
             commits_read: Lane::default(),
             folder_problem: String::new(),
+            rescanning: false,
             unhide_problem: String::new(),
             comparing: None,
             compared: None,
@@ -485,6 +488,7 @@ impl Mods {
             rimstack_core::mods::columns::from_kept(&self.view.inactive_order),
         );
         let active_by = self.order.order_of(Side::Active);
+        self.rescanning = true;
         self.loading.run(
             "load order",
             cx,
@@ -494,6 +498,7 @@ impl Mods {
                 order
             },
             move |mods, mut order, cx| {
+                mods.rescanning = false;
                 let text = mods.filter_text(cx);
                 order.set_filter(&text);
                 if anew {

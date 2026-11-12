@@ -132,13 +132,15 @@ impl Settings {
             .w(named(theme))
             .pt(theme::GAP_TINY)
             .when(line.changed, |d| {
-                d.child(
+                d.child(crate::ui::tip::tipped(
                     div()
+                        .id("not-the-default")
                         .flex_none()
                         .size(gpui::px(6.))
                         .rounded(gpui::px(3.))
                         .bg(c.moved),
-                )
+                    crate::words::put(&rimstack_core::say!("Not the default")).into(),
+                ))
             })
             .child(
                 div()
