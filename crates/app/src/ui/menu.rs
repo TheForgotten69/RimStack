@@ -107,6 +107,7 @@ pub struct Menu {
     chosen: Option<usize>,
     focus: FocusHandle,
     before: Option<FocusHandle>,
+    turn: usize,
 }
 
 struct Shown(Entity<Menu>);
@@ -116,6 +117,7 @@ impl Global for Shown {}
 /// The menu the shell draws; made once, with the window.
 pub fn install(cx: &mut App) -> Entity<Menu> {
     let menu = cx.new(|cx| Menu {
+        turn: 0,
         entries: Vec::new(),
         at: Point::default(),
         corner: gpui::Anchor::TopLeft,
@@ -182,6 +184,7 @@ fn show(
         menu.buttons = buttons;
         menu.chosen = None;
         menu.before = before;
+        menu.turn = super::motion::opening();
         window.focus(&menu.focus, cx);
         cx.notify();
     });
@@ -469,7 +472,7 @@ impl Render for Menu {
                     .anchor(self.corner)
                     .position(self.at)
                     .snap_to_window_with_margin(theme::GAP_TINY)
-                    .child(list),
+                    .child(super::motion::pop_in(list, self.turn)),
             ))
     }
 }

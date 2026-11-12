@@ -39,6 +39,9 @@ pub struct Shell {
     pub(crate) saves: Option<Entity<super::saves::Saves>>,
     /// The Background work popup open over the status bar.
     pub(crate) tray_open: bool,
+    pub(crate) tray_turn: usize,
+    /// The turn of the section shown last, which fades it in; none for the first.
+    shown_turn: usize,
     /// The turning arrows beside the work under way, a view of its own so that only it is drawn
     /// again while it turns.
     pub(crate) spinner: Entity<super::status_bar::Spinner>,
@@ -60,6 +63,8 @@ pub struct Shell {
     pub(crate) first_run: Option<Entity<super::first_run::FirstRun>>,
     /// Ctrl + K, open over the window.
     pub(crate) commands: Option<Entity<super::commands::Commands>>,
+    /// Ctrl + K just closed, while it fades out.
+    pub(crate) closing_commands: Option<Entity<super::commands::Commands>>,
     /// The keys' sheet, open over the window.
     pub(crate) keys_open: bool,
     pub(crate) keys_focus: gpui::FocusHandle,
@@ -181,6 +186,8 @@ impl Shell {
             textures: None,
             saves: None,
             tray_open: false,
+            tray_turn: 0,
+            shown_turn: 0,
             spinner: cx.new(|_| super::status_bar::Spinner),
             release: None,
             find: None,
@@ -189,6 +196,7 @@ impl Shell {
             game,
             lists,
             commands: None,
+            closing_commands: None,
             first_run: None,
             keys_open: false,
             keys_focus: cx.focus_handle(),
@@ -211,6 +219,7 @@ impl Shell {
             keep_logs(cx);
         }
         shell.go(section, cx);
+        shell.shown_turn = 0;
         shell.tell_hunting(cx);
         let unset = !demo && !options.still && !super::app(cx).settings_report().setup_done;
         if options.first || unset {
@@ -337,6 +346,9 @@ impl Shell {
     }
 
     pub fn go(&mut self, section: usize, cx: &mut Context<Self>) {
+        if section != self.section {
+            self.shown_turn = super::motion::opening();
+        }
         self.section = section;
         if section == WORKSHOP {
             self.workshop(cx);
@@ -400,6 +412,8 @@ impl Shell {
 
 impl Render for Shell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(test)]
+        RENDERS.with(|renders| renders.set(renders.get() + 1));
         if !self.drawn {
             self.drawn = true;
             window.on_next_frame(|_, _| {
@@ -496,11 +510,12 @@ impl Render for Shell {
                 cx,
             ))
             .children(self.hunt_bar(cx))
-            .child(div().flex_1().min_h_0().children(self.shown()))
+            .child(self.shown_faded())
             .child(self.status_bar(cx))
             .children(self.before_play_popup(cx))
             .child(self.lists.clone())
             .children(self.keys_sheet(window, cx))
+            .children(self.closing_commands.clone())
             .children(self.commands.clone())
             .child(self.notices.clone())
             .child(self.menu.clone())
@@ -509,6 +524,14 @@ impl Render for Shell {
 }
 
 impl Shell {
+    fn shown_faded(&self) -> gpui::AnyElement {
+        let shown = div().flex_1().min_h_0().children(self.shown());
+        match self.shown_turn {
+            0 => shown.into_any_element(),
+            turn => super::motion::appear(shown, ("appear", turn)).into_any_element(),
+        }
+    }
+
     /// The view of the section shown, once it is made.
     fn shown(&self) -> Option<gpui::AnyView> {
         match self.section {
@@ -523,6 +546,12 @@ impl Shell {
             _ => None,
         }
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How often the shell was rendered, as a test of what motion draws again.
+    pub(crate) static RENDERS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]

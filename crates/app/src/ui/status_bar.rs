@@ -87,6 +87,7 @@ impl Shell {
                 .child(label(&theme, theme.small(), c.ink, said))
                 .on_click(cx.listener(|shell, _, _, cx| {
                     shell.tray_open = !shell.tray_open;
+                    shell.tray_turn = super::motion::opening();
                     cx.notify();
                 }))
                 .when(self.tray_open, |d| {
@@ -245,7 +246,7 @@ impl Shell {
                     )
                 })
         });
-        gpui::deferred(
+        gpui::deferred(super::motion::pop_in(
             div()
                 .id("tray-popup")
                 .absolute()
@@ -278,7 +279,8 @@ impl Shell {
                     ))
                 })
                 .children(rows),
-        )
+            self.tray_turn,
+        ))
         .into_any_element()
     }
 }
@@ -289,6 +291,8 @@ pub(crate) struct Spinner;
 impl gpui::Render for Spinner {
     fn render(&mut self, _: &mut gpui::Window, cx: &mut Context<Self>) -> impl IntoElement {
         use gpui::AnimationExt;
+        #[cfg(test)]
+        TURNS.with(|turns| turns.set(turns.get() + 1));
         let theme = cx.global::<Theme>();
         icon("refresh-cw", theme.sized(12.), theme.colours.moved).with_animation(
             "turning",
@@ -298,6 +302,11 @@ impl gpui::Render for Spinner {
             },
         )
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static TURNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// How a task under way is stopped.

@@ -7,7 +7,7 @@ use super::widgets::{
 };
 use crate::words::{count, put};
 use gpui::{
-    Context, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels,
+    AnimationExt, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels,
     StatefulInteractiveElement, Styled, Window, div, img, prelude::FluentBuilder, px,
 };
 use rimstack_core::say;
@@ -198,6 +198,33 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
         .max(((width - box_width) / 2.).min(right_x - box_width - theme::GAP_MEDIUM));
     let placed: std::rc::Rc<std::cell::Cell<gpui::Bounds<Pixels>>> = Default::default();
     let placed_box = placed.clone();
+    let thumb = (!folded).then(|| {
+        let left = (0..section).fold(px(2.), |all, at| all + tab_width(at) + theme::GAP_LINE);
+        div()
+            .absolute()
+            .top(px(2.))
+            .h(theme.strip())
+            .with_spring(
+                "thumb-x",
+                super::motion::towards(left, 0.5, super::motion::CALM),
+                |d, left| d.left(left),
+            )
+            .child(
+                div()
+                    .relative()
+                    .h_full()
+                    .rounded(theme::CORNER)
+                    .bg(c.ctl_hi)
+                    .border_1()
+                    .border_color(with_alpha(c.accent, 0.7))
+                    .children(halo(c.accent, theme::CORNER))
+                    .with_spring(
+                        "thumb-width",
+                        super::motion::towards(tab_width(section), 0.5, super::motion::CALM),
+                        |d, width| d.w(width),
+                    ),
+            )
+    });
     let tabs = shown.into_iter().map(|at| {
         let on = at == section;
         let ink = if on { c.ink } else { c.ink2 };
@@ -220,7 +247,7 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
             .h(theme.strip())
             .pl(inset)
             .rounded(theme::CORNER)
-            .when(on, |d| {
+            .when(on && folded, |d| {
                 d.bg(c.ctl_hi)
                     .border_1()
                     .border_color(with_alpha(c.accent, 0.7))
@@ -369,6 +396,7 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
                             }
                             cx.stop_propagation();
                         }))
+                        .children(thumb)
                         .children(tabs),
                     &keys[0],
                     theme::CORNER_LARGE,

@@ -352,7 +352,7 @@ impl DetailsView {
                 label(theme, theme.small(), theme.colours.ok, put(&say!("Saved")))
                     .with_animation(
                         "saved-fade",
-                        gpui::Animation::new(std::time::Duration::from_millis(140)),
+                        gpui::Animation::new(crate::ui::motion::QUICK),
                         |label, shown| label.opacity(shown),
                     )
                     .into_any_element(),

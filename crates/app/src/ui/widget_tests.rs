@@ -117,6 +117,35 @@ fn tab_reaches_each_control_and_enter_or_space_presses_it(cx: &mut TestAppContex
     assert!(!bench.read_with(cx, |b, _| b.on), "Shift+Tab goes back");
 }
 
+/// The frames a draw now asks for after it.
+fn frames_asked(cx: &mut VisualTestContext) -> usize {
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        window.draw(cx).clear(cx);
+        window.simulate_next_frame(cx)
+    })
+}
+
+#[gpui::test]
+fn a_value_from_elsewhere_shows_at_once_and_a_pick_slides_to_its_place(cx: &mut TestAppContext) {
+    let (_root, bench, cx) = bench(cx);
+    frames_asked(cx);
+    bench.update(cx, |b, cx| {
+        b.picked = 2;
+        b.on = true;
+        cx.notify();
+    });
+    assert_eq!(frames_asked(cx), 0, "nothing slides that was not pressed");
+    press(cx, "tab tab tab tab left");
+    assert_eq!(bench.read_with(cx, |b, _| b.picked), 1);
+    assert!(frames_asked(cx) > 0, "the pick slides");
+    let settled = (0..60).find(|_| {
+        cx.executor().advance_clock(Duration::from_millis(16));
+        frames_asked(cx) == 0
+    });
+    assert!(settled.is_some(), "the slide comes to rest");
+}
+
 #[gpui::test]
 fn a_menu_is_chosen_from_with_the_arrows_and_closes_on_escape(cx: &mut TestAppContext) {
     let (_root, bench, cx) = bench(cx);

@@ -48,6 +48,9 @@ pub struct Commands {
     field: Entity<TextField>,
     chosen: usize,
     scroll: super::rows::Scrolling,
+    turn: usize,
+    /// Closed, and drawn only while it fades out.
+    pub(crate) closing: bool,
 }
 
 impl Commands {
@@ -77,6 +80,8 @@ impl Commands {
             field,
             chosen: 0,
             scroll,
+            turn: super::motion::opening(),
+            closing: false,
         }
     }
 
@@ -101,13 +106,24 @@ impl Commands {
         shown
     }
 
-    fn close(&mut self, cx: &mut Context<Self>) {
+    fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.closing {
+            return;
+        }
+        if self.field.focus_handle(cx).contains_focused(window, cx) {
+            window.blur(cx);
+        }
+        self.closing = true;
+        cx.notify();
         let _ = self.shell.update(cx, |shell, cx| shell.close_commands(cx));
     }
 
     fn run_chosen(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.closing {
+            return;
+        }
         let chosen = self.shown(cx).into_iter().nth(self.chosen);
-        self.close(cx);
+        self.close(window, cx);
         if let Some(command) = chosen {
             let _ = self
                 .shell
@@ -224,11 +240,13 @@ impl Render for Commands {
             .bg(c.bar)
             .border_1()
             .border_color(c.line)
-            .occlude()
-            .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .capture_action(cx.listener(|commands, _: &Escape, _, cx| {
+            .when(!self.closing, |d| {
+                d.occlude()
+                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            })
+            .capture_action(cx.listener(|commands, _: &Escape, window, cx| {
                 cx.stop_propagation();
-                commands.close(cx);
+                commands.close(window, cx);
             }))
             .on_key_down(cx.listener(|commands, event: &KeyDownEvent, _, cx| {
                 let by = match event.keystroke.key.as_str() {
@@ -262,17 +280,21 @@ impl Render for Commands {
                         .pb(theme::GAP_SMALL),
                 )
             });
-        div()
-            .id("commands-scrim")
-            .absolute()
-            .inset_0()
-            .bg(c.scrim)
-            .occlude()
-            .on_mouse_down(
-                gpui::MouseButton::Left,
-                cx.listener(|commands, _, _, cx| commands.close(cx)),
+        let scrim = div().id("commands-scrim").absolute().inset_0().bg(c.scrim);
+        match self.closing {
+            true => super::motion::pop_out(scrim.child(popup), self.turn).into_any_element(),
+            false => super::motion::pop_in(
+                scrim
+                    .occlude()
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|commands, _, window, cx| commands.close(window, cx)),
+                    )
+                    .child(popup),
+                self.turn,
             )
-            .child(popup)
+            .into_any_element(),
+        }
     }
 }
 

@@ -2,14 +2,15 @@
 //! reached by Tab, moved by its keys, and tells a screen reader its state.
 
 use super::focus;
+use super::motion;
 use super::theme::{self, Theme};
 use super::widgets::{TextSized, measure, watched};
 use crate::words::put;
 use gpui::{
-    AnyElement, App, Bounds, ElementId, FontWeight, InteractiveElement, IntoElement, KeyDownEvent,
-    MouseButton, MouseDownEvent, MouseMoveEvent, ParentElement, Pixels, RenderOnce, Role,
-    SharedString, StatefulInteractiveElement, Styled, Toggled, Window, canvas, div,
-    prelude::FluentBuilder, px,
+    AnimationExt, AnimationPhase, AnyElement, App, Bounds, ElementId, FontWeight,
+    InteractiveElement, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
+    ParentElement, Pixels, RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled,
+    Toggled, Window, canvas, div, prelude::FluentBuilder, px,
 };
 use rimstack_core::say;
 use std::cell::Cell;
@@ -66,6 +67,11 @@ impl RenderOnce for Toggle {
         let c = &theme.colours;
         let (height, on) = (theme.segment(), self.on);
         let knob = height - px(6.);
+        let width = theme.sized(38.);
+        let (off_knob, on_knob) = (gpui::Rgba::from(c.ink2), gpui::Rgba::from(c.accent_ink));
+        let accent = c.accent;
+        let moving = motion::playback(&self.id);
+        let pressed = self.id.clone();
         let track = div()
             .id(self.id)
             .role(Role::CheckBox)
@@ -73,24 +79,55 @@ impl RenderOnce for Toggle {
             .aria_toggled(if on { Toggled::True } else { Toggled::False })
             .relative()
             .flex_none()
-            .w(theme.sized(38.))
+            .w(width)
             .h(height)
             .rounded(height / 2.)
-            .bg(if on { c.accent } else { c.ctl })
+            .bg(c.ctl)
             .when(!on, |d| d.border_1().border_color(c.field_line))
             .cursor_pointer()
             .child(
                 div()
                     .absolute()
+                    .inset_0()
+                    .rounded(height / 2.)
+                    .bg(accent)
+                    .with_spring(
+                        "filled",
+                        motion::towards(
+                            AnimationPhase(f32::from(u8::from(on))),
+                            0.01,
+                            motion::QUICK,
+                        )
+                        .playback(moving),
+                        |d, phase| d.opacity(phase.0.clamp(0., 1.)),
+                    ),
+            )
+            .child(
+                div()
+                    .absolute()
                     .top(px(3.) - if on { px(0.) } else { px(1.) })
-                    .when(on, |d| d.right(px(3.)))
-                    .when(!on, |d| d.left(px(2.)))
                     .size(knob)
                     .rounded(knob / 2.)
-                    .bg(if on { c.accent_ink } else { c.ink2 }),
+                    .with_spring(
+                        "knob",
+                        motion::towards(
+                            AnimationPhase(f32::from(u8::from(on))),
+                            0.01,
+                            motion::QUICK,
+                        )
+                        .playback(moving),
+                        move |d, phase| {
+                            let phase = phase.clamp(0. ..=1.);
+                            d.left(phase.interpolate(px(2.), width - knob - px(3.)))
+                                .bg(gpui::Hsla::from(phase.interpolate(off_knob, on_knob)))
+                        },
+                    ),
             )
             .when_some(self.flip, |d, flip| {
-                d.on_click(move |_, window, cx| flip(!on, window, cx))
+                d.on_click(move |_, window, cx| {
+                    motion::pressed(&pressed);
+                    flip(!on, window, cx)
+                })
             });
         let track = focus::reachable(track, &handle, height / 2., false, window, theme);
         let said = if on {
@@ -367,17 +404,46 @@ impl RenderOnce for Choice {
             _ => (None, false),
         };
         let current = self.current;
+        let widths: Vec<Pixels> = words
+            .iter()
+            .map(|word| match stretch {
+                None => *word + theme::GAP_LARGE * 2.,
+                Some(whole) if stacked => whole - px(4.),
+                Some(whole) => *word + (whole - px(4.) - all_words) / count,
+            })
+            .collect();
+        let moving = motion::playback(&self.id);
+        let choice_id = self.id.clone();
+        let thumb = (!stacked && current < widths.len()).then(|| {
+            let left = widths[..current].iter().fold(px(2.), |all, w| all + *w);
+            div()
+                .absolute()
+                .top(px(2.))
+                .h(theme.segment())
+                .with_spring(
+                    "thumb-x",
+                    motion::towards(left, 0.5, motion::QUICK).playback(moving),
+                    |d, left| d.left(left),
+                )
+                .child(
+                    div()
+                        .h_full()
+                        .rounded(theme::CORNER - px(1.))
+                        .bg(c.ctl_hi)
+                        .with_spring(
+                            "thumb-width",
+                            motion::towards(widths[current], 0.5, motion::QUICK).playback(moving),
+                            |d, width| d.w(width),
+                        ),
+                )
+        });
         let segments: Vec<AnyElement> = self
             .options
             .iter()
             .enumerate()
             .map(|(at, option)| {
                 let on = at == current;
-                let width = match stretch {
-                    None => words[at] + theme::GAP_LARGE * 2.,
-                    Some(whole) if stacked => whole - px(4.),
-                    Some(whole) => words[at] + (whole - px(4.) - all_words) / count,
-                };
+                let width = widths[at];
                 let ink = if on { c.ink } else { c.ink2 };
                 let weight = if on {
                     theme.semibold
@@ -409,10 +475,14 @@ impl RenderOnce for Choice {
                     .w(width)
                     .h(theme.segment())
                     .rounded(theme::CORNER - px(1.))
-                    .when(on, |d| d.bg(c.ctl_hi))
+                    .when(on && stacked, |d| d.bg(c.ctl_hi))
                     .child(text)
                     .when_some(self.picked.clone(), |d, picked| {
-                        d.on_click(move |_, window, cx| picked(at, window, cx))
+                        let pressed = choice_id.clone();
+                        d.on_click(move |_, window, cx| {
+                            motion::pressed(&pressed);
+                            picked(at, window, cx)
+                        })
                     })
                     .into_any_element()
             })
@@ -431,6 +501,7 @@ impl RenderOnce for Choice {
             .bg(c.seg)
             .border_width(theme.outline())
             .border_color(c.field_line)
+            .children(thumb)
             .children(segments)
             .when_some(self.picked, |d, picked| {
                 d.on_key_down(move |event: &KeyDownEvent, window, cx| {
@@ -439,6 +510,7 @@ impl RenderOnce for Choice {
                         "right" | "down" if current < last => current + 1,
                         _ => return,
                     };
+                    motion::pressed(&choice_id);
                     picked(next, window, cx);
                 })
             });

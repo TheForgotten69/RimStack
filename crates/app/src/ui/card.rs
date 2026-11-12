@@ -14,8 +14,8 @@ use rimstack_core::base::sentence::Sentence;
 
 pub type Fold = Box<dyn Fn(&ClickEvent, &mut Window, &mut Cx)>;
 
-/// `Card.qml`'s `Behavior on shown`: `Theme.quick`.
-const UNFOLDING: std::time::Duration = std::time::Duration::from_millis(140);
+/// `Card.qml`'s `Behavior on shown`.
+const UNFOLDING: std::time::Duration = super::motion::QUICK;
 
 thread_local! {
     /// The cards unfolded by a press, and when: only those fade their body in, not a card shown
@@ -299,7 +299,7 @@ impl Card {
                 match unfolded_just_now(&card_id) {
                     Some(when) => d.child(body.with_animation(
                         ("unfolding", turn_of(&card_id, when)),
-                        gpui::Animation::new(UNFOLDING).with_easing(|t| 1. - (1. - t).powi(3)),
+                        gpui::Animation::new(UNFOLDING).with_easing(super::motion::out_cubic),
                         |body, shown| body.opacity(shown),
                     )),
                     None => d.child(body),

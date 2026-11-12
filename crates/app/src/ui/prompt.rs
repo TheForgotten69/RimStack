@@ -53,6 +53,7 @@ pub struct Prompt {
     focus: FocusHandle,
     /// What had the keys before the question, given them back after.
     before: Option<FocusHandle>,
+    turn: usize,
 }
 
 struct Asking(Entity<Prompt>);
@@ -65,6 +66,7 @@ pub fn install(cx: &mut App) -> Entity<Prompt> {
         asked: None,
         focus: cx.focus_handle(),
         before: None,
+        turn: 0,
     });
     cx.set_global(Asking(prompt.clone()));
     prompt
@@ -79,6 +81,7 @@ pub fn ask(question: Question, window: &mut Window, cx: &mut App) {
         let field = question.field().cloned();
         prompt.asked = Some(question);
         prompt.before = before;
+        prompt.turn = super::motion::opening();
         match field {
             Some(field) => {
                 cx.subscribe_in(
@@ -230,7 +233,7 @@ impl Render for Prompt {
                     prompt.close(window, cx);
                 }),
             )
-            .child(sheet)
+            .child(super::motion::pop_in(sheet, self.turn))
     }
 }
 

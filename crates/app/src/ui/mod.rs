@@ -18,6 +18,7 @@ pub mod lists;
 pub mod logs;
 pub mod menu;
 pub mod mods;
+pub mod motion;
 pub mod notices;
 pub mod page;
 pub mod play;
@@ -234,7 +235,7 @@ fn kept_appearance(app: &App) -> Appearance {
 pub fn retheme(cx: &mut Cx) {
     let appearance = kept_appearance(&app(cx));
     let theme = cx.global::<Theme>().with_appearance(appearance);
-    cx.set_reduce_motion(theme.appearance.reduce_motion);
+    set_motion(&theme, cx);
     cx.set_global(theme);
     cx.refresh_windows();
 }
@@ -277,9 +278,18 @@ pub fn use_font(family: &str, cx: &mut Cx) {
     let old = cx.global::<Theme>().clone();
     let mut theme = in_family(old.clone(), (!family.is_empty()).then_some(family), cx);
     theme.mono = old.mono;
-    cx.set_reduce_motion(theme.appearance.reduce_motion);
+    set_motion(&theme, cx);
     cx.set_global(theme);
     cx.refresh_windows();
+}
+
+/// A picture is taken: nothing moves, so it shows each thing where it comes to rest.
+struct Still;
+
+impl gpui::Global for Still {}
+
+fn set_motion(theme: &Theme, cx: &mut Cx) {
+    cx.set_reduce_motion(theme.appearance.reduce_motion || cx.has_global::<Still>());
 }
 
 /// Sets what every view reads: the `App` and the Theme.
@@ -300,7 +310,10 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     if let Some(mono) = system_family_for("monospace") {
         theme.mono = mono.into();
     }
-    cx.set_reduce_motion(theme.appearance.reduce_motion);
+    if options.still {
+        cx.set_global(Still);
+    }
+    set_motion(&theme, cx);
     cx.set_global(theme);
     cx.set_global(Shared(app));
     text_field::bind_keys(cx);
@@ -403,5 +416,7 @@ mod gates;
 pub(crate) mod layout_checks;
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) mod made_up;
+#[cfg(test)]
+mod motion_tests;
 #[cfg(test)]
 mod widget_tests;

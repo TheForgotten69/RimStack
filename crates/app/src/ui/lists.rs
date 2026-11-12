@@ -40,6 +40,7 @@ pub struct Lists {
     name: Entity<TextField>,
     /// The popup open, and the button it opened from.
     open: Option<(Which, Bounds<Pixels>)>,
+    turn: usize,
     focus: FocusHandle,
     before: Option<FocusHandle>,
 }
@@ -61,6 +62,7 @@ impl Lists {
             clipboard_problem: String::new(),
             name,
             open: None,
+            turn: 0,
             focus: cx.focus_handle(),
             before: None,
         };
@@ -114,6 +116,7 @@ impl Lists {
         self.problem.clear();
         self.clipboard_problem.clear();
         self.open = Some((which, below));
+        self.turn = super::motion::opening();
         self.before = window.focused(cx);
         window.focus(&self.focus, cx);
         cx.notify();
@@ -645,6 +648,6 @@ impl Render for Lists {
                 gpui::MouseButton::Left,
                 cx.listener(|lists, _, window, cx| lists.close(window, cx)),
             )
-            .child(popup)
+            .child(super::motion::pop_in(popup, self.turn))
     }
 }

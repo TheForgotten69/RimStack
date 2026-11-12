@@ -31,8 +31,24 @@ impl Shell {
         cx.notify();
     }
 
+    /// Called by the `Commands` closed, once it holds itself as closing.
     pub(crate) fn close_commands(&mut self, cx: &mut Context<Self>) {
-        self.commands = None;
+        let Some(closed) = self.commands.take() else {
+            return;
+        };
+        if !cx.reduce_motion() {
+            self.closing_commands = Some(closed.clone());
+            cx.spawn(async move |shell, cx| {
+                cx.background_executor().timer(super::motion::QUICK).await;
+                let _ = shell.update(cx, |shell, cx| {
+                    if shell.closing_commands.as_ref() == Some(&closed) {
+                        shell.closing_commands = None;
+                        cx.notify();
+                    }
+                });
+            })
+            .detach();
+        }
         cx.notify();
     }
 
