@@ -44,6 +44,10 @@ impl Shell {
 
 impl Render for Shell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let (in_the_way, last_start) = {
+            let mods = self.mods.read(cx);
+            (mods.in_the_way(cx), mods.last_start())
+        };
         let theme = cx.global::<Theme>();
         let (win, ink, family, body) = (
             theme.colours.win,
@@ -59,13 +63,13 @@ impl Render for Shell {
             .text_color(ink)
             .font_family(family)
             .text_size(body)
-            .child(top_bar(self.section, self.demo, window, cx))
+            .child(top_bar(self.section, self.demo, in_the_way, window, cx))
             .child(
                 div()
                     .flex_1()
                     .min_h_0()
                     .when(self.section == 0, |d| d.child(self.mods.clone())),
             )
-            .child(status_bar(self.demo, cx))
+            .child(status_bar(self.demo, last_start, cx))
     }
 }

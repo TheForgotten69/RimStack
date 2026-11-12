@@ -40,6 +40,8 @@ pub struct Mods {
     inactive: Shown,
     orders: Orders,
     overview: Option<Overview>,
+    summary: Option<crate::reports::Summary>,
+    last_start: Option<crate::workspace::logs::LastStartSaid>,
     /// `RowView::mod_id`s, the first chosen first.
     selection: Vec<i32>,
     selected_active: bool,
@@ -64,6 +66,8 @@ impl Mods {
         let mut mods = Self {
             orders: order.orders(),
             overview: None,
+            summary: None,
+            last_start: None,
             order,
             active: Shown::new(),
             inactive: Shown::new(),
@@ -201,6 +205,12 @@ impl Mods {
         }
         self.orders = self.order.orders();
         self.overview = (!self.demo).then(|| self.order.overview(&app));
+        self.summary = (!self.demo).then(|| app.summary());
+        self.last_start = if self.demo {
+            None
+        } else {
+            app.last_start_said()
+        };
         if !self.demo {
             self.count_sort_moves(cx);
         }
@@ -212,6 +222,25 @@ impl Mods {
             Side::Active => &mut self.active,
             Side::Inactive => &mut self.inactive,
         }
+    }
+
+    /// What Play warns of: how many things are in the way, and whether a mod has errors.
+    pub fn in_the_way(&self, cx: &gpui::App) -> (usize, bool) {
+        if self.demo {
+            return (0, false);
+        }
+        let (errors, _) = self.order.errors_and_warnings();
+        let dirty = super::app(cx).session().is_dirty();
+        let ways =
+            usize::from(errors > 0) + usize::from(self.sort_pending > 0) + usize::from(dirty);
+        (ways, errors > 0)
+    }
+
+    /// The last start of the game: when, and how many errors its log held.
+    pub fn last_start(&self) -> Option<(u64, Option<usize>)> {
+        self.last_start
+            .as_ref()
+            .map(|said| (said.start.time, said.start.errors))
     }
 
     pub fn game_version(&self) -> String {

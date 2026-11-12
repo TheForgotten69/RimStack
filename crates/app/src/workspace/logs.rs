@@ -21,12 +21,12 @@ const LONGEST_KIND: usize = 90;
 #[derive(Serialize)]
 pub struct LastStartSaid {
     #[serde(flatten)]
-    start: LastStart,
-    line: Sentence,
+    pub start: LastStart,
+    pub line: Sentence,
 }
 
 /// Local time, as the window writes a moment.
-fn moment(seconds: u64) -> String {
+pub fn moment(seconds: u64) -> String {
     use chrono::TimeZone;
     let at = i64::try_from(seconds)
         .ok()

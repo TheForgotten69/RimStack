@@ -3,10 +3,10 @@
 use super::shell::Shell;
 use super::theme::{self, Theme};
 use super::widgets::{Btn, Sized, btn_width, btn_width_of, halo, icon, label, measure, with_alpha};
-use crate::words::put;
+use crate::words::{count, put};
 use gpui::{
-    Context, InteractiveElement, IntoElement, ParentElement, Pixels, StatefulInteractiveElement,
-    Styled, Window, div, img, prelude::FluentBuilder, px,
+    Context, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels,
+    StatefulInteractiveElement, Styled, Window, div, img, prelude::FluentBuilder, px,
 };
 use rimstack_core::say;
 
@@ -23,9 +23,11 @@ pub fn sections() -> [String; 8] {
     ]
 }
 
+/// `in_the_way`: what Play warns of, as `Mods::in_the_way` counts it.
 pub fn top_bar(
     section: usize,
     demo: bool,
+    in_the_way: (usize, bool),
     window: &Window,
     cx: &mut Context<Shell>,
 ) -> impl IntoElement {
@@ -232,6 +234,37 @@ pub fn top_bar(
                 .items_center()
                 .gap(theme::GAP_LARGE)
                 .child(search)
-                .child(Btn::new("play", play).icon("play").primary().large()),
+                .child(
+                    div()
+                        .relative()
+                        .child(Btn::new("play", play).icon("play").primary().large())
+                        .when(in_the_way.0 > 0, |d| {
+                            let said = count(in_the_way.0);
+                            let height = theme.sized(17.);
+                            let wide = height.max(
+                                measure(window, &theme, &said, theme.caption(), FontWeight::BOLD)
+                                    + theme.sized(8.),
+                            );
+                            d.child(
+                                div()
+                                    .absolute()
+                                    .top(-theme.sized(6.))
+                                    .right(-theme.sized(6.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .w(wide)
+                                    .h(height)
+                                    .rounded(height / 2.)
+                                    .bg(if in_the_way.1 { c.err } else { c.warn })
+                                    .border_2()
+                                    .border_color(c.bar)
+                                    .child(
+                                        label(&theme, theme.caption(), c.win, said)
+                                            .font_weight(FontWeight::BOLD),
+                                    ),
+                            )
+                        }),
+                ),
         )
 }

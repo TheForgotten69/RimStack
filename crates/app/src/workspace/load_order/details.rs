@@ -18,10 +18,10 @@ const FIRST_ERRORS: usize = 4;
 
 #[derive(Serialize, Clone)]
 pub struct FixSaid {
-    pub(super) action: &'static str,
-    pub(super) target: String,
-    pub(super) label: &'static str,
-    pub(super) page: Option<String>,
+    pub action: &'static str,
+    pub target: String,
+    pub label: &'static str,
+    pub page: Option<String>,
 }
 
 impl FixSaid {
@@ -39,18 +39,18 @@ impl FixSaid {
 #[serde(rename_all = "camelCase")]
 pub struct ProblemSaid {
     /// -1 for a mod that is not installed.
-    mod_id: i64,
+    pub mod_id: i64,
     #[serde(skip)]
-    trust: bool,
-    name: String,
-    error: bool,
-    group: &'static str,
-    words: Sentence,
-    short: Sentence,
-    fix: FixSaid,
+    pub trust: bool,
+    pub name: String,
+    pub error: bool,
+    pub group: &'static str,
+    pub words: Sentence,
+    pub short: Sentence,
+    pub fix: FixSaid,
     /// With `ignore`, what `App::ignore_problem` is given; empty when it cannot be ignored.
-    package_id: String,
-    ignore: String,
+    pub package_id: String,
+    pub ignore: String,
 }
 
 impl ProblemSaid {
