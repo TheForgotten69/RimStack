@@ -1,4 +1,4 @@
-//! The window's picture with no window shown: `just shot <out.png> [--theme=… --text-scale=…]`.
+//! The window's picture with no window shown: `just shot <out.png> [--theme=… --text-scale=… --size=1000x560]`.
 
 use gpui::{AppContext, HeadlessAppContext, size};
 use rimstack_app::{App, ui};
@@ -17,6 +17,12 @@ fn main() {
         .find_map(|a| a.strip_prefix("--shot-delay="))
         .and_then(|v| v.parse().ok())
         .unwrap_or(400);
+    let (width, height) = args
+        .iter()
+        .find_map(|a| a.strip_prefix("--size="))
+        .and_then(|v| v.split_once('x'))
+        .and_then(|(w, h)| Some((w.parse::<f32>().ok()?, h.parse::<f32>().ok()?)))
+        .map_or(ui::WINDOW, |(w, h)| (gpui::px(w), gpui::px(h)));
     let options = ui::Options::from_args(args.iter().cloned());
     let app = Arc::new(App::from_environment());
     rimstack_app::words::show_in(rimstack_app::words::Words::of(&app.speak()));
@@ -28,7 +34,7 @@ fn main() {
     );
     cx.update(|cx| ui::install(app, &options, cx));
     let window = cx
-        .open_window(size(ui::WINDOW.0, ui::WINDOW.1), |window, cx| {
+        .open_window(size(width, height), |window, cx| {
             cx.new(|cx| ui::shell::Shell::new(&options, window, cx))
         })
         .expect("a window opens with no display");

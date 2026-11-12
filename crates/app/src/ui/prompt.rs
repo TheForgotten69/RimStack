@@ -1,0 +1,196 @@
+//! `Prompt.qml` as `Notices.ask` raised it: a question over the window, its lines, Cancel and
+//! the answer that does it. Any view asks through [`ask`]; the shell draws it over everything.
+
+use super::theme::{self, Theme};
+use super::widgets::{Btn, TextSized};
+use crate::words::put;
+use gpui::{
+    AnyElement, App, AppContext, Context, Entity, FocusHandle, Focusable, Global,
+    InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Render,
+    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder,
+};
+use rimstack_core::say;
+
+pub enum Line {
+    Text(String),
+    /// A file or folder: in the system's monospace family, broken anywhere.
+    Path(String),
+}
+
+/// What the answer does.
+pub type Answer = Box<dyn FnOnce(&mut Window, &mut App)>;
+
+pub struct Question {
+    pub title: String,
+    pub lines: Vec<Line>,
+    pub label: String,
+    pub danger: bool,
+    pub run: Answer,
+}
+
+pub struct Prompt {
+    asked: Option<Question>,
+    focus: FocusHandle,
+    /// What had the keys before the question, given them back after.
+    before: Option<FocusHandle>,
+}
+
+struct Asking(Entity<Prompt>);
+
+impl Global for Asking {}
+
+/// The prompt the shell draws; made once, with the window.
+pub fn install(cx: &mut App) -> Entity<Prompt> {
+    let prompt = cx.new(|cx| Prompt {
+        asked: None,
+        focus: cx.focus_handle(),
+        before: None,
+    });
+    cx.set_global(Asking(prompt.clone()));
+    prompt
+}
+
+pub fn ask(question: Question, window: &mut Window, cx: &mut App) {
+    let Some(prompt) = cx.try_global::<Asking>().map(|asking| asking.0.clone()) else {
+        return;
+    };
+    let before = window.focused(cx);
+    prompt.update(cx, |prompt, cx| {
+        prompt.asked = Some(question);
+        prompt.before = before;
+        window.focus(&prompt.focus, cx);
+        cx.notify();
+    });
+}
+
+impl Prompt {
+    fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<Question> {
+        let asked = self.asked.take();
+        if let Some(before) = self.before.take() {
+            window.focus(&before, cx);
+        }
+        cx.notify();
+        asked
+    }
+
+    fn answer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(asked) = self.close(window, cx) {
+            (asked.run)(window, cx);
+        }
+    }
+}
+
+impl Focusable for Prompt {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus.clone()
+    }
+}
+
+impl Render for Prompt {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let Some(asked) = &self.asked else {
+            return div().id("prompt");
+        };
+        let theme = cx.global::<Theme>().clone();
+        let c = theme.colours;
+        let viewport = window.viewport_size();
+        let lines: Vec<AnyElement> = asked
+            .lines
+            .iter()
+            .map(|line| match line {
+                Line::Text(text) => div()
+                    .sized_text(&theme, theme.body())
+                    .text_color(c.ink2)
+                    .child(text.clone()),
+                Line::Path(path) => div()
+                    .sized_text(&theme, theme.small())
+                    .font_family(theme.mono.clone())
+                    .text_color(c.ink)
+                    .child(path.clone()),
+            })
+            .map(IntoElement::into_any_element)
+            .collect();
+        let answer = Btn::new("prompt-answer", asked.label.clone())
+            .primary_if(!asked.danger)
+            .when(asked.danger, Btn::danger)
+            .on_click(cx.listener(|prompt, _, window, cx| prompt.answer(window, cx)));
+        let cancel = Btn::new("prompt-cancel", put(&say!("Cancel"))).on_click(cx.listener(
+            |prompt, _, window, cx| {
+                prompt.close(window, cx);
+            },
+        ));
+        let sheet = div()
+            .id("prompt-sheet")
+            .flex()
+            .flex_col()
+            .gap(theme::GAP_LARGE)
+            .w(theme.sized(400.).min(viewport.width - theme::GAP_PAGE * 2.))
+            .max_h(viewport.height - theme::GAP_PAGE * 2.)
+            .p(theme::GAP_WIDE)
+            .rounded(theme::CORNER_LARGE)
+            .bg(c.bar)
+            .border_1()
+            .border_color(c.line)
+            .occlude()
+            .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(
+                div()
+                    .sized_text(&theme, theme.title())
+                    .font_weight(theme.semibold)
+                    .text_color(c.ink)
+                    .child(asked.title.clone()),
+            )
+            .child(
+                div()
+                    .id("prompt-lines")
+                    .flex()
+                    .flex_col()
+                    .gap(theme::GAP)
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .children(lines),
+            )
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap(theme::GAP)
+                    .child(cancel)
+                    .child(answer),
+            );
+        div()
+            .id("prompt")
+            .track_focus(&self.focus)
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            // Qt Basic's modal dimmer: the palette's shadow, black, at half.
+            .bg(super::widgets::with_alpha(gpui::black(), 0.5))
+            .occlude()
+            .on_key_down(cx.listener(|prompt, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.key == "escape" {
+                    prompt.close(window, cx);
+                }
+            }))
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|prompt, _, window, cx| {
+                    prompt.close(window, cx);
+                }),
+            )
+            .child(sheet)
+    }
+}
+
+/// The question shown, if any: its title, its lines, and whether its answer is a danger.
+#[cfg(test)]
+pub(crate) fn shown(cx: &App) -> Option<(String, Vec<String>, bool)> {
+    let prompt = cx.try_global::<Asking>()?.0.read(cx);
+    let asked = prompt.asked.as_ref()?;
+    let lines = asked.lines.iter().map(|line| match line {
+        Line::Text(text) | Line::Path(text) => text.clone(),
+    });
+    Some((asked.title.clone(), lines.collect(), asked.danger))
+}

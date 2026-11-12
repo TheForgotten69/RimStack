@@ -378,6 +378,12 @@ impl App {
         let m = library.get(id).filter(|m| m.source == Source::Workshop)?;
         Some(m.folder.clone())
     }
+
+    pub fn mod_path(&self, id: ModId) -> Option<String> {
+        let loaded = self.library();
+        let (library, _) = loaded.as_ref().as_ref().ok()?;
+        Some(library.get(id)?.path.to_string_lossy().into_owned())
+    }
 }
 
 #[cfg(test)]

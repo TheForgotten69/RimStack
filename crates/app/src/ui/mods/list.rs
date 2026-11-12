@@ -7,12 +7,10 @@ use super::rows::Columns;
 use super::{Mods, thumbs};
 use crate::ui::rows::{Scroll, Scrolling};
 use crate::ui::theme::{self, Theme};
-use crate::ui::widgets::with_alpha;
 use crate::workspace::load_order::{Orders, RowView, Side};
 use gpui::{
-    Context, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, ParentElement, Pixels, Render, Styled, WeakEntity, Window, canvas, div, fill,
-    point, px, size,
+    Context, InteractiveElement, IntoElement, ParentElement, Pixels, Render, Styled, WeakEntity,
+    Window, div, px,
 };
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -46,10 +44,7 @@ pub struct ModList {
     pub(super) bench: Option<super::bench::Bench>,
 }
 
-/// The room the bar takes at the list's right: its thumb, and the padding Qt gives it.
-pub fn bar_room(theme: &Theme) -> Pixels {
-    theme::GAP_HAIR + theme.sized(9.) + theme::GAP_LINE + px(2.) + theme::GAP_HAIR
-}
+pub use crate::ui::rows::bar_room;
 
 /// The room above the rows (the load order's) and the footer below them.
 fn spacer(theme: &Theme, side: Side) -> (Pixels, Pixels) {
@@ -110,97 +105,24 @@ impl ModList {
         &self.scroll
     }
 
+    /// Scrolls so that row `at` is in the middle of the list, as `positionViewAtIndex` centred it.
+    pub fn reveal(&mut self, at: usize, cx: &mut Context<Self>) {
+        let Some(&top) = self.tops.get(at) else {
+            return;
+        };
+        let mut scroll = self.scroll.borrow_mut();
+        let shown = scroll.shown();
+        scroll.set_top(top - shown / 2.);
+        drop(scroll);
+        cx.notify();
+    }
+
     /// The row at the list's top.
     pub fn top_row(&self) -> usize {
         let top = self.scroll.borrow().top();
         self.tops
             .partition_point(|row| *row <= top)
             .saturating_sub(1)
-    }
-
-    fn bar(&self, theme: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
-        let colour = with_alpha(theme.colours.ink3, 0.6);
-        let (width, shortest) = (theme.sized(9.), theme.sized(32.));
-        let thumb = move |scroll: &Scroll, track: Pixels| {
-            let length = (track * (scroll.shown() / scroll.total().max(px(1.)))).max(shortest);
-            let part = if scroll.most() > px(0.) {
-                scroll.top() / scroll.most()
-            } else {
-                0.
-            };
-            (length, (track - length) * part)
-        };
-        let (drawn, view) = (self.scroll.clone(), cx.entity_id());
-        canvas(
-            |_, _, _| (),
-            move |bounds, (), window, _| {
-                let scroll = drawn.borrow();
-                if scroll.total() <= scroll.shown() {
-                    return;
-                }
-                let track = bounds.size.height - theme::GAP_HAIR * 2.;
-                let (length, top) = thumb(&scroll, track);
-                let at = point(
-                    bounds.left() + theme::GAP_HAIR,
-                    bounds.top() + theme::GAP_HAIR + top,
-                );
-                window.paint_quad(
-                    fill(gpui::Bounds::new(at, size(width, length)), colour)
-                        .corner_radii(width / 2.),
-                );
-                drop(scroll);
-                let (held, moved) = (drawn.clone(), drawn.clone());
-                window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
-                    if !phase.bubble()
-                        || event.button != MouseButton::Left
-                        || !bounds.contains(&event.position)
-                    {
-                        return;
-                    }
-                    let mut scroll = held.borrow_mut();
-                    let (length, top) = thumb(&scroll, track);
-                    let within = event.position.y - bounds.top() - theme::GAP_HAIR;
-                    let grip = if within >= top && within <= top + length {
-                        within - top
-                    } else {
-                        length / 2.
-                    };
-                    scroll.held = Some(grip);
-                    let room = (track - length).max(px(1.));
-                    let most = scroll.most();
-                    scroll.set_top(most * ((within - grip) / room).clamp(0., 1.));
-                    drop(scroll);
-                    cx.notify(view);
-                    cx.stop_propagation();
-                    let _ = window;
-                });
-                window.on_mouse_event(move |event: &MouseMoveEvent, _, _, cx| {
-                    let mut scroll = moved.borrow_mut();
-                    let Some(grip) = scroll.held else {
-                        return;
-                    };
-                    if !event.dragging() {
-                        scroll.held = None;
-                        return;
-                    }
-                    let (length, _) = thumb(&scroll, track);
-                    let within = event.position.y - bounds.top() - theme::GAP_HAIR;
-                    let room = (track - length).max(px(1.));
-                    let most = scroll.most();
-                    scroll.set_top(most * ((within - grip) / room).clamp(0., 1.));
-                    cx.notify(view);
-                });
-                let released = drawn.clone();
-                window.on_mouse_event(move |_: &MouseUpEvent, _, _, _| {
-                    released.borrow_mut().held = None
-                });
-            },
-        )
-        .absolute()
-        .top_0()
-        .right_0()
-        .bottom_0()
-        .w(bar_room(&theme.clone()))
     }
 }
 
@@ -270,6 +192,10 @@ impl Render for ModList {
             .relative()
             .size_full()
             .child(list)
-            .child(self.bar(&theme, cx))
+            .child(crate::ui::rows::bar(
+                &theme,
+                self.scroll.clone(),
+                cx.entity_id(),
+            ))
     }
 }

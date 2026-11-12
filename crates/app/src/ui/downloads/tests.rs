@@ -1,0 +1,255 @@
+use super::{Downloads, ShowMod};
+use crate::App;
+use crate::ui::layout_checks::check_scene;
+use crate::ui::shell::Shell;
+use crate::ui::theme::Theme;
+use crate::ui::widgets::watch::{self, Seen};
+use crate::ui::{Options, install, prompt};
+use gpui::{AppContext, Entity, HeadlessAppContext, Pixels, Size, WindowHandle, point, px, size};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+impl Downloads {
+    fn loaded(&self) -> bool {
+        self.updates.checked.is_some() && !self.changed.items.is_empty() && self.list.count > 0
+    }
+}
+
+fn demo(cx: &mut gpui::TestAppContext) -> (tempfile::TempDir, Options) {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path();
+    let app = App::new(
+        path.join("home"),
+        &path.join("settings"),
+        &path.join("data"),
+        Default::default(),
+    );
+    let options = Options {
+        demo: true,
+        section: 1,
+        ..Options::default()
+    };
+    cx.update(|cx| install(Arc::new(app), &options, cx));
+    (root, options)
+}
+
+#[gpui::test]
+fn a_question_closes_on_escape_or_a_click_beside_it_and_does_nothing(
+    cx: &mut gpui::TestAppContext,
+) {
+    let (_root, options) = demo(cx);
+    let (shell, cx) = cx.add_window_view(|window, cx| Shell::new(&options, window, cx));
+    let downloads = shell.update(cx, |shell, cx| shell.downloads(cx));
+    let ask = |cx: &mut gpui::VisualTestContext| {
+        downloads.update_in(cx, |d, window, cx| {
+            d.ask_unsubscribe(7, "Old Roads".into(), window, cx)
+        });
+    };
+    ask(cx);
+    let (title, _, danger) = cx
+        .update(|_, cx| prompt::shown(cx))
+        .expect("the question is shown");
+    assert_eq!(title, "Unsubscribe from Old Roads");
+    assert!(
+        danger,
+        "unsubscribing deletes a folder: its answer is the danger one"
+    );
+    cx.simulate_keystrokes("escape");
+    assert!(cx.update(|_, cx| prompt::shown(cx)).is_none());
+    ask(cx);
+    cx.simulate_click(point(px(2.), px(2.)), gpui::Modifiers::none());
+    assert!(cx.update(|_, cx| prompt::shown(cx)).is_none());
+}
+
+#[gpui::test]
+fn the_page_under_a_question_keeps_its_place(cx: &mut gpui::TestAppContext) {
+    use gpui::{MouseMoveEvent, ScrollDelta, ScrollEvent};
+    let (_root, options) = demo(cx);
+    let (shell, cx) = cx.add_window_view(|window, cx| Shell::new(&options, window, cx));
+    let theme = cx.update(|_, cx| cx.global::<Theme>().clone());
+    cx.simulate_resize(size(theme.sized(700.), theme.sized(360.)));
+    cx.run_until_parked();
+    let downloads = shell.update(cx, |shell, cx| shell.downloads(cx));
+    let over = point(theme.sized(300.), theme.sized(250.));
+    let step = theme.sized(40.);
+    let wheel = |cx: &mut gpui::VisualTestContext| {
+        cx.simulate_event(MouseMoveEvent {
+            position: over,
+            ..MouseMoveEvent::default()
+        });
+        let delta = ScrollDelta::Pixels(point(px(0.), -step));
+        cx.simulate_event(ScrollEvent {
+            position: over,
+            delta,
+            ..ScrollEvent::default()
+        });
+        cx.run_until_parked();
+    };
+    let top = |cx: &mut gpui::VisualTestContext| {
+        downloads.read_with(cx, |d, _| d.paging.scroll.borrow().top())
+    };
+    downloads.update_in(cx, |d, window, cx| {
+        d.ask_unsubscribe(7, "Old Roads".into(), window, cx)
+    });
+    cx.run_until_parked();
+    wheel(cx);
+    assert_eq!(top(cx), px(0.), "the question takes the wheel");
+    cx.simulate_keystrokes("escape");
+    cx.run_until_parked();
+    wheel(cx);
+    assert!(top(cx) > px(0.), "without it the wheel scrolls the page");
+}
+
+#[gpui::test]
+fn the_download_list_asks_before_steamcmd_writes_the_mods_folder(cx: &mut gpui::TestAppContext) {
+    let (_root, options) = demo(cx);
+    let (shell, cx) = cx.add_window_view(|window, cx| Shell::new(&options, window, cx));
+    let downloads = shell.update(cx, |shell, cx| shell.downloads(cx));
+    downloads.update_in(cx, |d, window, cx| d.ask_download(window, cx));
+    let (title, lines, danger) = cx
+        .update(|_, cx| prompt::shown(cx))
+        .expect("the question is shown");
+    assert!(title.starts_with("Download"), "{title}");
+    assert_eq!(lines.len(), 3);
+    assert!(!danger);
+}
+
+#[gpui::test]
+fn showing_a_mod_from_downloads_goes_to_the_mods_tab(cx: &mut gpui::TestAppContext) {
+    let (_root, options) = demo(cx);
+    let (shell, cx) = cx.add_window_view(|window, cx| Shell::new(&options, window, cx));
+    assert_eq!(shell.read_with(cx, |shell, _| shell.section()), 1);
+    let downloads = shell.update(cx, |shell, cx| shell.downloads(cx));
+    downloads.update(cx, |_, cx| cx.emit(ShowMod(3)));
+    assert_eq!(shell.read_with(cx, |shell, _| shell.section()), 0);
+}
+
+/// A made-up install with what Downloads shows, from `tools/fixture-game.sh` and
+/// `tools/fixture-downloads.sh`, all in a scratch folder.
+#[cfg(target_os = "linux")]
+fn made_up() -> (tempfile::TempDir, App) {
+    use rimstack_core::base::program;
+    use rimstack_core::rimworld::paths::Overrides;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let tools = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools");
+    let fx = root.join("fx");
+    let run = |script: &str, args: &[&std::path::Path]| {
+        let mut command = program::command(tools.join(script));
+        command.args(args);
+        let done = program::run(&mut command, Duration::from_secs(60)).unwrap();
+        assert!(
+            done.status.success(),
+            "{script}: {}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    };
+    run("fixture-game.sh", &[&fx]);
+    run("fixture-downloads.sh", &[&fx, &root.join("data/RimStack")]);
+    let given = Overrides {
+        game: Some(fx.join("game")),
+        config: Some(fx.join("config")),
+        workshop: Some(fx.join("steam/workshop/content/294100")),
+    };
+    let app = App::new(
+        root.join("home"),
+        &root.join("settings"),
+        &root.join("data"),
+        given,
+    );
+    (tmp, app)
+}
+
+#[cfg(target_os = "linux")]
+fn opened(
+    text_scale: f32,
+    window: &dyn Fn(&Theme) -> Size<Pixels>,
+) -> (
+    tempfile::TempDir,
+    HeadlessAppContext,
+    WindowHandle<Shell>,
+    Entity<Downloads>,
+) {
+    let (tmp, app) = made_up();
+    let text = gpui_platform::current_platform(true).text_system();
+    let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(crate::ui::assets::Assets));
+    let options = Options {
+        section: 1,
+        text_scale: Some(text_scale),
+        ..Options::default()
+    };
+    cx.update(|cx| install(Arc::new(app), &options, cx));
+    let shape = cx.update(|cx| window(cx.global::<Theme>()));
+    let shell = cx
+        .open_window(shape, |window, cx| {
+            cx.new(|cx| Shell::new(&options, window, cx))
+        })
+        .unwrap();
+    let downloads = cx
+        .update(|cx| shell.update(cx, |shell, _, cx| shell.downloads(cx)))
+        .unwrap();
+    let started = Instant::now();
+    while !cx.update(|cx| downloads.read(cx).loaded()) {
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "Downloads did not read the made-up install"
+        );
+        cx.run_until_parked();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    cx.run_until_parked();
+    (tmp, cx, shell, downloads)
+}
+
+/// Downloads drawn again once it has read everything: the frames before showed less.
+#[cfg(target_os = "linux")]
+fn drawn(text_scale: f32, window: &dyn Fn(&Theme) -> Size<Pixels>) -> Vec<Seen> {
+    let (_tmp, mut cx, shell, downloads) = opened(text_scale, window);
+    watch::start();
+    cx.update(|cx| downloads.update(cx, |_, cx| cx.notify()));
+    cx.update_window(shell.into(), |_, window, cx| window.draw(cx).clear(cx))
+        .unwrap();
+    watch::take()
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn the_made_up_install_shows_its_updates_changes_and_list_and_the_tab_counts_them() {
+    let (_tmp, mut cx, shell, downloads) =
+        opened(1.0, &|_| size(crate::ui::WINDOW.0, crate::ui::WINDOW.1));
+    let (active, changed, listed) = cx.update(|cx| {
+        let d = downloads.read(cx);
+        (
+            d.updates.items.iter().filter(|row| row.active).count(),
+            d.changed.items.len(),
+            d.list.count,
+        )
+    });
+    assert_eq!((active, changed, listed), (2, 3, 3));
+    let behind = cx
+        .update(|cx| shell.read(cx).map(|shell| shell.behind()))
+        .unwrap();
+    assert_eq!(behind, 2, "the Downloads tab counts the active mods behind");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn downloads_fits_the_first_window_at_every_text_size() {
+    check_scene(
+        "Downloads, first window",
+        30,
+        &|_| size(crate::ui::WINDOW.0, crate::ui::WINDOW.1),
+        drawn,
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn downloads_fits_the_smallest_window_at_every_text_size() {
+    check_scene(
+        "Downloads, smallest window",
+        30,
+        &|theme| size(theme.sized(1000.), theme.sized(560.)),
+        drawn,
+    );
+}

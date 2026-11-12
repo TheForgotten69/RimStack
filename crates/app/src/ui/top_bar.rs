@@ -26,10 +26,14 @@ pub fn sections() -> [String; 8] {
 }
 
 /// `in_the_way`: what Play warns of, as `Mods::in_the_way` counts it.
+/// The section whose tab counts the active mods with a newer Workshop version.
+const DOWNLOADS: usize = 1;
+
 pub fn top_bar(
     section: usize,
     demo: bool,
     in_the_way: (usize, bool),
+    behind: usize,
     window: &Window,
     cx: &mut Context<Shell>,
 ) -> impl IntoElement {
@@ -46,10 +50,21 @@ pub fn top_bar(
             theme.medium
         }
     };
+    let badge = (behind > 0).then(|| {
+        let said = behind.to_string();
+        let wide = measure(window, &theme, &said, theme.caption(), theme.semibold);
+        (said, theme.tag().max(wide + theme::GAP_SMALL * 2.))
+    });
+    let badge_room = |at: usize| match (&badge, at == DOWNLOADS) {
+        (Some((_, wide)), true) => *wide + theme::GAP_SMALL,
+        _ => px(0.),
+    };
     let natural: Vec<Pixels> = names
         .iter()
         .enumerate()
-        .map(|(at, name)| measure(window, &theme, name, theme.body(), weight(at)) + inset * 2.)
+        .map(|(at, name)| {
+            measure(window, &theme, name, theme.body(), weight(at)) + inset * 2. + badge_room(at)
+        })
         .collect();
     let brand = put(&say!("RimStack"));
     let lists = put(&say!("Lists"));
@@ -130,6 +145,34 @@ pub fn top_bar(
                     .children(halo(c.accent, theme::CORNER))
             })
             .child(label(&theme, theme.body(), ink, names[at].clone()).font_weight(weight(at)))
+            .when_some(
+                badge.clone().filter(|_| at == DOWNLOADS),
+                |d, (said, wide)| {
+                    d.child(
+                        div()
+                            .absolute()
+                            .right(theme::GAP)
+                            .top_0()
+                            .bottom_0()
+                            .flex()
+                            .items_center()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .w(wide)
+                                    .h(theme.sized(16.))
+                                    .rounded(theme.sized(8.))
+                                    .bg(c.accent)
+                                    .child(
+                                        label(&theme, theme.caption(), c.accent_ink, said)
+                                            .font_weight(theme.semibold),
+                                    ),
+                            ),
+                    )
+                },
+            )
             .when(folded, |d| {
                 d.child(
                     div()

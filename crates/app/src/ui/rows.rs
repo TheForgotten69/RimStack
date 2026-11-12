@@ -1,10 +1,13 @@
 //! A list whose rows' heights are known before they are drawn: only the rows in view are made,
 //! each at its exact place, and the wheel glides as `Wheel.qml` made it glide.
 
+use super::theme::{self, Theme};
+use super::widgets::with_alpha;
 use gpui::{
     AnyElement, App as Cx, AvailableSpace, Bounds, ContentMask, Element, ElementId, EntityId,
-    GlobalElementId, Hitbox, HitboxBehavior, InspectorElementId, IntoElement, LayoutId, Pixels,
-    ScrollDelta, ScrollEvent, Size, Style, Window, point, px, relative, size,
+    GlobalElementId, Hitbox, HitboxBehavior, InspectorElementId, IntoElement, LayoutId,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, ScrollDelta, ScrollEvent,
+    Size, Style, Styled, Window, canvas, fill, point, px, relative, size,
 };
 use std::cell::RefCell;
 use std::ops::Range;
@@ -81,7 +84,7 @@ impl Scroll {
     }
 
     /// Moves the glide on to now; true while it has further to go.
-    fn advance(&mut self) -> bool {
+    pub(crate) fn advance(&mut self) -> bool {
         let Some(started) = self.started else {
             return false;
         };
@@ -94,7 +97,7 @@ impl Scroll {
         part < 1.
     }
 
-    fn fit(&mut self, total: Pixels, shown: Pixels) {
+    pub(crate) fn fit(&mut self, total: Pixels, shown: Pixels) {
         (self.total, self.shown) = (total, shown);
         self.top = self.top.clamp(px(0.), self.most());
         self.goal = self.goal.clamp(px(0.), self.most());
@@ -240,4 +243,94 @@ impl Element for Rows {
             }
         });
     }
+}
+
+/// The room the bar takes at a scrolled area's right: its thumb, and the padding Qt gives it.
+pub fn bar_room(theme: &Theme) -> Pixels {
+    theme::GAP_HAIR + theme.sized(9.) + theme::GAP_LINE + px(2.) + theme::GAP_HAIR
+}
+
+/// `Scroller.qml`: the bar at a scrolled area's right, its thumb held to scroll; `view` is drawn
+/// again as the thumb moves.
+pub fn bar(theme: &Theme, scroll: Scrolling, view: EntityId) -> impl IntoElement {
+    let colour = with_alpha(theme.colours.ink3, 0.6);
+    let (width, shortest) = (theme.sized(9.), theme.sized(32.));
+    let thumb = move |scroll: &Scroll, track: Pixels| {
+        let length = (track * (scroll.shown() / scroll.total().max(px(1.)))).max(shortest);
+        let part = if scroll.most() > px(0.) {
+            scroll.top() / scroll.most()
+        } else {
+            0.
+        };
+        (length, (track - length) * part)
+    };
+    let drawn = scroll;
+    canvas(
+        |_, _, _| (),
+        move |bounds, (), window, _| {
+            let scroll = drawn.borrow();
+            if scroll.total() <= scroll.shown() {
+                return;
+            }
+            let track = bounds.size.height - theme::GAP_HAIR * 2.;
+            let (length, top) = thumb(&scroll, track);
+            let at = point(
+                bounds.left() + theme::GAP_HAIR,
+                bounds.top() + theme::GAP_HAIR + top,
+            );
+            window.paint_quad(
+                fill(gpui::Bounds::new(at, size(width, length)), colour).corner_radii(width / 2.),
+            );
+            drop(scroll);
+            let (held, moved) = (drawn.clone(), drawn.clone());
+            window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
+                if !phase.bubble()
+                    || event.button != MouseButton::Left
+                    || !bounds.contains(&event.position)
+                {
+                    return;
+                }
+                let mut scroll = held.borrow_mut();
+                let (length, top) = thumb(&scroll, track);
+                let within = event.position.y - bounds.top() - theme::GAP_HAIR;
+                let grip = if within >= top && within <= top + length {
+                    within - top
+                } else {
+                    length / 2.
+                };
+                scroll.held = Some(grip);
+                let room = (track - length).max(px(1.));
+                let most = scroll.most();
+                scroll.set_top(most * ((within - grip) / room).clamp(0., 1.));
+                drop(scroll);
+                cx.notify(view);
+                cx.stop_propagation();
+                let _ = window;
+            });
+            window.on_mouse_event(move |event: &MouseMoveEvent, _, _, cx| {
+                let mut scroll = moved.borrow_mut();
+                let Some(grip) = scroll.held else {
+                    return;
+                };
+                if !event.dragging() {
+                    scroll.held = None;
+                    return;
+                }
+                let (length, _) = thumb(&scroll, track);
+                let within = event.position.y - bounds.top() - theme::GAP_HAIR;
+                let room = (track - length).max(px(1.));
+                let most = scroll.most();
+                scroll.set_top(most * ((within - grip) / room).clamp(0., 1.));
+                cx.notify(view);
+            });
+            let released = drawn.clone();
+            window
+                .on_mouse_event(move |_: &MouseUpEvent, _, _, _| released.borrow_mut().held = None);
+        },
+    )
+    .absolute()
+    .top_0()
+    .right_0()
+    .bottom_0()
+    .w(bar_room(theme))
 }

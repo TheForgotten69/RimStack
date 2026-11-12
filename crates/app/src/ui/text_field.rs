@@ -25,7 +25,8 @@ actions!(
         Paste,
         Copy,
         Cut,
-        Escape
+        Escape,
+        Enter
     ]
 );
 
@@ -58,11 +59,15 @@ pub fn bind_keys(cx: &mut Cx) {
         KeyBinding::new(crate::command!("c"), Copy, Some(CONTEXT)),
         KeyBinding::new(crate::command!("x"), Cut, Some(CONTEXT)),
         KeyBinding::new("escape", Escape, Some(CONTEXT)),
+        KeyBinding::new("enter", Enter, Some(CONTEXT)),
     ]);
 }
 
 /// Told after each change of the text.
 pub struct Edited;
+
+/// Told when Enter is pressed in the field.
+pub struct Entered;
 
 pub struct TextField {
     focus: FocusHandle,
@@ -75,6 +80,7 @@ pub struct TextField {
 }
 
 impl EventEmitter<Edited> for TextField {}
+impl EventEmitter<Entered> for TextField {}
 
 impl Focusable for TextField {
     fn focus_handle(&self, _: &Cx) -> FocusHandle {
@@ -222,6 +228,10 @@ impl TextField {
     fn cut(&mut self, _: &Cut, window: &mut Window, cx: &mut Context<Self>) {
         self.copy(&Copy, window, cx);
         self.replace_text_in_range(None, "", window, cx);
+    }
+
+    fn enter(&mut self, _: &Enter, _: &mut Window, cx: &mut Context<Self>) {
+        cx.emit(Entered);
     }
 
     fn escape(&mut self, _: &Escape, _: &mut Window, cx: &mut Context<Self>) {
@@ -423,6 +433,7 @@ impl Render for TextField {
             .on_action(cx.listener(Self::copy))
             .on_action(cx.listener(Self::cut))
             .on_action(cx.listener(Self::escape))
+            .on_action(cx.listener(Self::enter))
             .w_full()
             .h(line)
             .child(

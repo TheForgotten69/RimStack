@@ -62,9 +62,35 @@ shot out *args:
     #!/usr/bin/env bash
     set -euo pipefail
     cargo build --release -q -p rimstack-app --example shot
-    scratch="$(mktemp -d -p target)"
+    scratch="$(realpath "$(mktemp -d -p target)")"
     trap 'rm -rf "$scratch"' EXIT
     XDG_CONFIG_HOME="$scratch/settings" XDG_DATA_HOME="$scratch/data" target/release/examples/shot {{out}} {{args}}
+
+# The same on a made-up install, with its own HOME: `just shot-fx /tmp/dl.png gpui rim 1 --section=1`; `qt` takes the Qt build's,
+# `DOWNLOADS=1` adds what the Downloads screen shows (tools/fixture-downloads.sh)
+shot-fx out build="gpui" theme="rim" scale="1" *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ {{build}} = qt ] || cargo build --release -q -p rimstack-app --example shot
+    scratch="$(realpath "$(mktemp -d -p target)")"
+    trap 'rm -rf "$scratch"' EXIT
+    tools/fixture-game.sh "$scratch/fx" >/dev/null
+    mkdir -p "$scratch/s/RimStack" "$scratch/d"
+    printf '{ "setupDone": "yes" }' > "$scratch/s/RimStack/settings.json"
+    printf '[Appearance]\ntheme=%s\ntextScale=%s\nhintsSeen=true\n' {{theme}} {{scale}} > "$scratch/s/RimStack/RimStack.conf"
+    mkdir -p "$scratch/.config" && cp -r "$scratch/s/RimStack" "$scratch/.config/"
+    workshop="$scratch/fx/workshop"
+    if [ -n "${DOWNLOADS:-}" ]; then
+        tools/fixture-downloads.sh "$scratch/fx" "$scratch/d/RimStack"
+        workshop="$scratch/fx/steam/workshop/content/294100"
+    fi
+    cp -r "$scratch/fx/config" "$scratch/cfg"
+    export HOME="$scratch" RIMSTACK_GAME="$scratch/fx/game" RIMSTACK_WORKSHOP="$workshop" RIMSTACK_CONFIG="$scratch/cfg" \
+        XDG_DATA_HOME="$scratch/d" XDG_CONFIG_HOME="$scratch/s" RIMSTACK_FIXTURE=1
+    case {{build}} in
+        qt) QT_SCALE_FACTOR=2 QT_QPA_PLATFORM=offscreen timeout 60 target/qt-main-build/release/rimstack --shot={{out}} {{args}} >/dev/null 2>&1 ;;
+        *) timeout 60 target/release/examples/shot {{out}} --theme={{theme}} --text-scale={{scale}} {{args}} ;;
+    esac
 
 # The Qt build of `main`, into target/qt-main-build, to compare with: an export of main, not a worktree
 qt-build:
@@ -79,11 +105,12 @@ qt-build:
 qt-shot out theme="rim" scale="1" *args:
     #!/usr/bin/env bash
     set -euo pipefail
-    scratch="$(mktemp -d -p target)"
+    scratch="$(realpath "$(mktemp -d -p target)")"
     trap 'rm -rf "$scratch"' EXIT
     mkdir -p "$scratch/settings/RimStack" "$scratch/data"
     printf '{ "setupDone": "yes" }' > "$scratch/settings/RimStack/settings.json"
     printf '[Appearance]\ntheme=%s\ntextScale=%s\nhintsSeen=true\n' {{theme}} {{scale}} > "$scratch/settings/RimStack/RimStack.conf"
+    mkdir -p "$scratch/.config" && cp -r "$scratch/settings/RimStack" "$scratch/.config/"
     HOME="$scratch" XDG_DATA_HOME="$scratch/data" XDG_CONFIG_HOME="$scratch/settings" QT_SCALE_FACTOR=2 QT_QPA_PLATFORM=offscreen \
         timeout 60 target/qt-main-build/release/rimstack --shot={{out}} {{args}} >/dev/null 2>&1
 

@@ -32,10 +32,20 @@ pub struct DetailsShown {
     pub unsaved: String,
     pub conflicts: usize,
     pub changed_since: usize,
+    /// The active mods with a newer Workshop version.
+    pub behind: usize,
     pub selected_active: bool,
     /// The widths wanted for the inactive mods and the details, for `pane_widths`.
     pub panes: (Pixels, Pixels),
 }
+
+/// What the details ask of the Mods tab.
+pub enum Asked {
+    Section(usize),
+    Filter(&'static str),
+}
+
+impl gpui::EventEmitter<Asked> for DetailsView {}
 
 /// The details pane, a view of its own: choosing a mod or a tab draws nothing else.
 pub struct DetailsView {

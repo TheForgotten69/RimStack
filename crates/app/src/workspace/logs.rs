@@ -34,6 +34,24 @@ pub fn moment(seconds: u64) -> String {
     at.map_or(String::new(), |at| at.format("%Y-%m-%d %H:%M").to_string())
 }
 
+/// Local day, as the window writes one.
+pub fn day(seconds: u64) -> String {
+    local(seconds, "%Y-%m-%d")
+}
+
+/// Local hour and minute.
+pub fn clock(seconds: u64) -> String {
+    local(seconds, "%H:%M")
+}
+
+fn local(seconds: u64, shape: &str) -> String {
+    use chrono::TimeZone;
+    let at = i64::try_from(seconds)
+        .ok()
+        .and_then(|s| chrono::Local.timestamp_opt(s, 0).single());
+    at.map_or(String::new(), |at| at.format(shape).to_string())
+}
+
 pub struct LogsReport {
     pub previous: bool,
     pub has_other: bool,

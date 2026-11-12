@@ -26,7 +26,7 @@ pub struct ListRow {
     pub failed: Option<Sentence>,
 }
 
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ListAction {
     pub download: bool,
@@ -38,7 +38,7 @@ pub struct ListAction {
     pub stuck: Option<Sentence>,
 }
 
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ListShown {
     pub rows: Vec<ListRow>,

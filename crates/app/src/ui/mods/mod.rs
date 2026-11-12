@@ -40,6 +40,11 @@ fn give_back_freed() {
     }
 }
 
+/// Asked of the window: show this section.
+pub struct ShowSection(pub usize);
+
+impl gpui::EventEmitter<ShowSection> for Mods {}
+
 pub struct Mods {
     order: LoadOrder,
     active: Shown,
@@ -58,6 +63,8 @@ pub struct Mods {
     last_start: Option<Rc<crate::workspace::logs::LastStartSaid>>,
     /// Mods changed since the game last started, read off the window's thread.
     changed_since: usize,
+    /// The active mods with a newer Workshop version, as Downloads counts them.
+    behind: usize,
     since_reading: Lane,
     conflicts: usize,
     /// Inactive mods installed since the game was last started from RimStack.
@@ -108,6 +115,14 @@ impl Mods {
             tab: 0,
             folded: Default::default(),
         });
+        cx.subscribe(
+            &details_view,
+            |mods, _, asked: &chosen::Asked, cx| match asked {
+                chosen::Asked::Section(section) => cx.emit(ShowSection(*section)),
+                chosen::Asked::Filter(text) => mods.filter_by(text, cx),
+            },
+        )
+        .detach();
         let mut mods = Self {
             focus: cx.focus_handle(),
             filter,
@@ -121,6 +136,7 @@ impl Mods {
             summary: None,
             last_start: None,
             changed_since: 0,
+            behind: 0,
             since_reading: Lane::default(),
             conflicts: 0,
             fresh: 0,
@@ -295,6 +311,7 @@ impl Mods {
             unsaved,
             conflicts: self.conflicts,
             changed_since: self.changed_since,
+            behind: self.behind,
             selected_active: self.selected_active,
             panes: (self.inactive_width, self.details_width),
         };
@@ -393,6 +410,30 @@ impl Mods {
             .map(|said| (said.start.time, said.start.errors))
     }
 
+    /// The mods the load order's rules ask for that are not installed.
+    pub fn to_get(&self) -> Vec<crate::workspace::load_order::ProblemSaid> {
+        self.overview
+            .as_ref()
+            .map(|o| o.to_get.clone())
+            .unwrap_or_default()
+    }
+
+    /// Chooses a mod wherever it is and brings its row into view.
+    pub fn show_mod(&mut self, mod_id: i32, cx: &mut Context<Self>) {
+        for side in [Side::Active, Side::Inactive] {
+            let at = self
+                .shown(side)
+                .rows
+                .iter()
+                .position(|row| row.mod_id == mod_id && !row.is_header);
+            if let Some(at) = at {
+                self.choose(side, mod_id, cx);
+                self.list(side).update(cx, |list, cx| list.reveal(at, cx));
+                return;
+            }
+        }
+    }
+
     pub fn game_version(&self) -> String {
         self.overview
             .as_ref()
@@ -407,6 +448,13 @@ impl Mods {
 
     pub fn start_bench(&mut self, cx: &mut Context<Self>) {
         self.active_list.update(cx, |list, cx| list.start_bench(cx));
+    }
+
+    /// How many active mods Downloads found behind their Workshop version.
+    pub fn set_behind(&mut self, behind: usize, cx: &mut Context<Self>) {
+        self.behind = behind;
+        self.sync_details(cx);
+        cx.notify();
     }
 
     pub fn filter_by(&mut self, text: &str, cx: &mut Context<Self>) {

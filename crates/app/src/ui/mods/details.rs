@@ -3,14 +3,12 @@
 use super::chosen::DetailsView;
 use crate::ui::card::Card;
 use crate::ui::theme::{self, Theme};
-use crate::ui::widgets::{Btn, Chip, TextSized, icon, label};
+use crate::ui::widgets::{Btn, Chip, TextSized, label};
 use crate::words::{count, put};
-use crate::workspace::load_order::ProblemSaid;
 use gpui::{
-    AnyElement, Context, FontWeight, HighlightStyle, InteractiveElement, IntoElement,
-    ParentElement, StatefulInteractiveElement, Styled, StyledText, div, prelude::FluentBuilder,
+    AnyElement, Context, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    StatefulInteractiveElement, Styled, div, prelude::FluentBuilder,
 };
-use rimstack_core::base::sentence::Sentence;
 use rimstack_core::{say, say_n};
 
 /// `ListSummary.Line`: words, and a button beside them.
@@ -38,62 +36,6 @@ fn line(
         .into_any_element()
 }
 
-/// `ProblemLine.qml`: the mod in bold, what is wrong, and its fix.
-fn problem(theme: &Theme, at: usize, said: &ProblemSaid) -> AnyElement {
-    let c = &theme.colours;
-    let tone = if said.error { c.err } else { c.warn };
-    let text = format!("{} {}", said.name, put(&said.words));
-    let bold = HighlightStyle {
-        font_weight: Some(FontWeight::BOLD),
-        ..HighlightStyle::default()
-    };
-    let fix =
-        (!said.fix.action.is_empty()).then(|| put(&Sentence::said(said.fix.label, Vec::new())));
-    div()
-        .flex()
-        .gap(theme::GAP)
-        .child(
-            icon(
-                if said.error {
-                    "circle-alert"
-                } else {
-                    "triangle-alert"
-                },
-                theme.icon(),
-                tone,
-            )
-            .mt(theme::GAP_HAIR),
-        )
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .flex_1()
-                .min_w_0()
-                .gap(theme::GAP_TINY)
-                .child(
-                    // Qt's `lineHeight: 1.25` puts the added room under each line, not around it.
-                    div()
-                        .mt(-(theme.line(theme.body()) * 0.125))
-                        .mb(theme.line(theme.body()) * 0.125)
-                        .text_size(theme.body())
-                        .line_height(theme.line(theme.body()) * 1.25)
-                        .text_color(c.ink)
-                        .child(StyledText::new(text).with_highlights([(0..said.name.len(), bold)])),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .gap(theme::GAP_SMALL)
-                        .when_some(fix, |d, fix| d.child(Btn::new(("fix", at), fix)))
-                        .when(!said.ignore.is_empty(), |d| {
-                            d.child(Btn::new(("ignore", at), "").icon("eye-off"))
-                        }),
-                ),
-        )
-        .into_any_element()
-}
-
 impl DetailsView {
     pub(super) fn details_pane(
         &self,
@@ -103,8 +45,7 @@ impl DetailsView {
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<gpui::Div> {
         let c = &theme.colours;
-        // `Scrolled.qml` keeps its bar's width free at the right.
-        let bar = theme.sized(9.) + theme::GAP_HAIR * 2.;
+        let bar = crate::ui::page::room(theme);
         let scrolled = div()
             .id("details")
             .flex()
@@ -178,7 +119,7 @@ impl DetailsView {
             .first_errors
             .iter()
             .enumerate()
-            .map(|(at, said)| problem(theme, at, said))
+            .map(|(at, said)| crate::ui::problem::problem(theme, at, said, None))
             .collect();
         let troubled = self.shown.troubled;
         if troubled {
@@ -261,8 +202,26 @@ impl DetailsView {
 
     /// `ListSummary`'s "To review": not problems, things to look at when there is time.
     fn review(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<gpui::Stateful<gpui::Div>> {
+        use super::chosen::Asked;
         let replacements = self.shown.summary.as_ref().map_or(0, |s| s.replacements);
-        let show = || Some((put(&say!("Show")), false));
+        let line = |id: &'static str, said: String, asked: fn() -> Asked| {
+            let show = Btn::new(id, put(&say!("Show")))
+                .on_click(cx.listener(move |_, _, _, cx| cx.emit(asked())));
+            div()
+                .flex()
+                .items_center()
+                .gap(theme::GAP)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .sized_text(theme, theme.body())
+                        .text_color(theme.colours.ink)
+                        .child(said),
+                )
+                .child(show)
+                .into_any_element()
+        };
         let mut body = Vec::new();
         if self.shown.conflicts > 0 {
             let said = put(&say_n!(
@@ -270,7 +229,9 @@ impl DetailsView {
                 "{} mod shares textures with another",
                 "{} mods share textures with another"
             ));
-            body.push(line(theme, "review-conflicts", said, show()));
+            body.push(line("review-conflicts", said, || {
+                Asked::Filter("is:conflict")
+            }));
         }
         if self.shown.changed_since > 0 {
             let said = put(&say_n!(
@@ -278,7 +239,15 @@ impl DetailsView {
                 "{} mod changed since the game was last started",
                 "{} mods changed since the game was last started"
             ));
-            body.push(line(theme, "review-changed", said, show()));
+            body.push(line("review-changed", said, || Asked::Section(1)));
+        }
+        if self.shown.behind > 0 {
+            let said = put(&say_n!(
+                self.shown.behind,
+                "{} update available",
+                "{} updates available"
+            ));
+            body.push(line("review-updates", said, || Asked::Section(1)));
         }
         if replacements > 0 {
             let said = put(&say_n!(
@@ -286,7 +255,7 @@ impl DetailsView {
                 "{} mod has a replacement",
                 "{} mods have a replacement"
             ));
-            body.push(line(theme, "review-replaced", said, show()));
+            body.push(line("review-replaced", said, || Asked::Section(1)));
         }
         if body.is_empty() {
             return None;

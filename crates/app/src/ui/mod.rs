@@ -2,7 +2,12 @@
 
 pub mod assets;
 pub mod card;
+pub mod downloads;
+pub mod field;
 pub mod mods;
+pub mod page;
+pub mod problem;
+pub mod prompt;
 pub mod rows;
 pub mod shell;
 pub mod status_bar;
@@ -147,6 +152,7 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     if let Some(mono) = system_family_for("monospace") {
         theme.mono = mono.into();
     }
+
     let text = cx.text_system();
     let id = text.resolve_font(&font(theme.family.clone()));
     let at = theme::PROBE;
@@ -191,4 +197,4 @@ pub fn run(app: Arc<App>, options: Options) {
 #[cfg(test)]
 mod gates;
 #[cfg(test)]
-mod layout_checks;
+pub(crate) mod layout_checks;

@@ -18,9 +18,8 @@ pub fn copy_to_local(mod_root: &Path, workshop_id: &str, local_mods: &Path) -> R
     crate::base::walk::copy(mod_root, &to)
         .map_err(|e| Error::file(&to, e))
         .and_then(|()| note_workshop_id(&to, workshop_id))
-        .map_err(|problem| {
+        .inspect_err(|_| {
             let _ = std::fs::remove_dir_all(&to);
-            problem
         })?;
     Ok(to)
 }

@@ -2,18 +2,18 @@
 //! text runs past its box unless the box cuts it on purpose, and no two texts are drawn over
 //! each other. The pictures go through the platform's own fonts, as the app draws them.
 
-use super::widgets::watch;
+use super::widgets::watch::{self, Seen};
 use super::{Options, install, shell::Shell, theme::Theme};
 use crate::App;
 use gpui::{AppContext, HeadlessAppContext, Pixels, Size, size};
 use std::sync::Arc;
 
 /// Qt's checks went from 0.85 to 1.6.
-const TEXT_SIZES: [f32; 4] = [0.85, 1.0, 1.25, 1.6];
+pub(crate) const TEXT_SIZES: [f32; 4] = [0.85, 1.0, 1.25, 1.6];
 /// Less than this is rounding, not a fault.
 const SLACK: f32 = 1.0;
 
-fn drawn(text_scale: f32, window: impl Fn(&Theme) -> Size<Pixels>) -> Vec<watch::Seen> {
+fn drawn(text_scale: f32, window: &dyn Fn(&Theme) -> Size<Pixels>) -> Vec<Seen> {
     let root = tempfile::tempdir().unwrap();
     let path = root.path();
     let app = App::new(
@@ -43,10 +43,10 @@ fn drawn(text_scale: f32, window: impl Fn(&Theme) -> Size<Pixels>) -> Vec<watch:
     watch::take()
 }
 
-fn faults(seen: &[watch::Seen]) -> Vec<String> {
+pub(crate) fn faults(seen: &[Seen]) -> Vec<String> {
     let slack = gpui::px(SLACK);
     // Each frame drawn tells its texts again.
-    let mut once: Vec<&watch::Seen> = Vec::new();
+    let mut once: Vec<&Seen> = Vec::new();
     for one in seen {
         if !once
             .iter()
@@ -80,12 +80,23 @@ fn faults(seen: &[watch::Seen]) -> Vec<String> {
     found
 }
 
-fn check(name: &str, window: impl Fn(&Theme) -> Size<Pixels> + Copy) {
+fn check(name: &str, window: impl Fn(&Theme) -> Size<Pixels>) {
+    check_scene(name, 50, &window, drawn);
+}
+
+/// `scene` draws at a text size, in a window shaped by the Theme, and gives what it drew: at
+/// least `least` texts, none past its edge or over another.
+pub(crate) fn check_scene(
+    name: &str,
+    least: usize,
+    window: &dyn Fn(&Theme) -> Size<Pixels>,
+    scene: impl Fn(f32, &dyn Fn(&Theme) -> Size<Pixels>) -> Vec<Seen>,
+) {
     let mut all = Vec::new();
     for text_scale in TEXT_SIZES {
-        let seen = drawn(text_scale, window);
+        let seen = scene(text_scale, window);
         assert!(
-            seen.len() > 50,
+            seen.len() > least,
             "only {} texts drawn at {text_scale}",
             seen.len()
         );
@@ -113,7 +124,7 @@ fn the_mods_tab_fits_the_smallest_window_at_every_text_size() {
 #[test]
 fn the_check_finds_a_text_past_its_edge_and_two_over_each_other() {
     use gpui::{Bounds, point, px};
-    let seen = |text: &'static str, x: f32, width: f32, whole: f32| watch::Seen {
+    let seen = |text: &'static str, x: f32, width: f32, whole: f32| Seen {
         text: text.into(),
         bounds: Bounds::new(point(px(x), px(0.)), size(px(width), px(18.))),
         whole: px(whole),
@@ -126,7 +137,7 @@ fn the_check_finds_a_text_past_its_edge_and_two_over_each_other() {
     ]);
     assert_eq!(found.len(), 2, "{found:?}");
     assert!(found[0].contains("past its edge") && found[1].contains("over each other"));
-    let cut = watch::Seen {
+    let cut = Seen {
         may_cut: true,
         ..seen("Load order", 0., 40., 70.)
     };

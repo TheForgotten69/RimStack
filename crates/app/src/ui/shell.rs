@@ -1,7 +1,8 @@
 //! `Main.qml`: the top bar, the section shown, the status bar.
 
 use super::Options;
-use super::mods::Mods;
+use super::downloads::{BehindActive, Downloads, ShowMod};
+use super::mods::{Mods, ShowSection};
 use super::status_bar::status_bar;
 use super::theme::Theme;
 use super::top_bar::top_bar;
@@ -15,6 +16,12 @@ pub struct Shell {
     section: usize,
     demo: bool,
     mods: Entity<Mods>,
+    /// Made with the window, as Qt's `DownloadsData` was: it counts the updates the top bar and
+    /// the Mods tab show. What it reads of the `App` it reads off the window's thread.
+    downloads: Option<Entity<Downloads>>,
+    /// The active mods with a newer Workshop version, on the Downloads tab.
+    behind: usize,
+    prompt: Entity<super::prompt::Prompt>,
     drawn: bool,
 }
 
@@ -49,16 +56,53 @@ impl Shell {
                 }
             });
         }
-        Self {
-            section: options.section,
+        cx.subscribe(&mods, |shell, _, ShowSection(section), cx| {
+            shell.go(*section, cx)
+        })
+        .detach();
+        let section = options.section;
+        let mut shell = Self {
+            section: 0,
             demo,
             mods,
+            downloads: None,
+            behind: 0,
+            prompt: super::prompt::install(cx),
             drawn: false,
+        };
+        shell.downloads(cx);
+        shell.go(section, cx);
+        shell
+    }
+
+    pub(crate) fn downloads(&mut self, cx: &mut Context<Self>) -> Entity<Downloads> {
+        if let Some(downloads) = &self.downloads {
+            return downloads.clone();
         }
+        let (demo, mods) = (self.demo, self.mods.clone());
+        let downloads = cx.new(|cx| Downloads::new(demo, mods, cx));
+        cx.subscribe(&downloads, |shell, _, ShowMod(mod_id), cx| {
+            shell.go(0, cx);
+            let mod_id = *mod_id;
+            shell.mods.update(cx, |mods, cx| mods.show_mod(mod_id, cx));
+        })
+        .detach();
+        cx.subscribe(&downloads, |shell, _, BehindActive(count), cx| {
+            shell.behind = *count;
+            let count = *count;
+            shell.mods.update(cx, |mods, cx| mods.set_behind(count, cx));
+            cx.notify();
+        })
+        .detach();
+        self.downloads = Some(downloads.clone());
+        downloads
     }
 
     pub fn go(&mut self, section: usize, cx: &mut Context<Self>) {
         self.section = section;
+        if section == 1 {
+            self.downloads(cx);
+        }
         cx.notify();
     }
 }
@@ -85,6 +129,7 @@ impl Render for Shell {
             theme.body(),
         );
         div()
+            .relative()
             .flex()
             .flex_col()
             .size_full()
@@ -92,13 +137,36 @@ impl Render for Shell {
             .text_color(ink)
             .font_family(family)
             .text_size(body)
-            .child(top_bar(self.section, self.demo, in_the_way, window, cx))
+            .child(top_bar(
+                self.section,
+                self.demo,
+                in_the_way,
+                self.behind,
+                window,
+                cx,
+            ))
             .child(
                 div()
                     .flex_1()
                     .min_h_0()
-                    .when(self.section == 0, |d| d.child(self.mods.clone())),
+                    .when(self.section == 0, |d| d.child(self.mods.clone()))
+                    .when_some(
+                        self.downloads.clone().filter(|_| self.section == 1),
+                        |d, downloads| d.child(downloads),
+                    ),
             )
             .child(status_bar(self.demo, last_start, cx))
+            .child(self.prompt.clone())
+    }
+}
+
+#[cfg(test)]
+impl Shell {
+    pub(crate) fn section(&self) -> usize {
+        self.section
+    }
+
+    pub(crate) fn behind(&self) -> usize {
+        self.behind
     }
 }

@@ -24,7 +24,7 @@ fn digits_for(locale: &str) -> DecimalFormatter {
     let english = icu_locale_core::locale!("en");
     parsed
         .ok()
-        .and_then(|locale| DecimalFormatter::try_new((&locale).into(), options.clone()).ok())
+        .and_then(|locale| DecimalFormatter::try_new((&locale).into(), options).ok())
         .or_else(|| DecimalFormatter::try_new((&english).into(), options).ok())
         .expect("English digits are compiled in")
 }

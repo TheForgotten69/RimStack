@@ -11,6 +11,16 @@ pub trait TextSized: Styled + Sized {
         self.text_size(size).line_height(theme.line(size))
     }
 
+    /// A text whose lines are `factor` times as tall, as Qt's `lineHeight` makes them: Qt puts the
+    /// added room under each line, GPUI half above it, so the text is raised by that half.
+    fn spaced_text(self, theme: &Theme, size: Pixels, factor: f32) -> Self {
+        let half = theme.line(size) * (factor - 1.) / 2.;
+        self.text_size(size)
+            .line_height(theme.line(size) * factor)
+            .mt(-half)
+            .mb(half)
+    }
+
     fn border_width(mut self, width: Pixels) -> Self {
         let width: AbsoluteLength = width.into();
         let widths = &mut self.style().border_widths;
@@ -68,6 +78,7 @@ pub struct Btn {
     large: bool,
     menu: bool,
     enabled: bool,
+    danger: bool,
     tone: Option<Hsla>,
     height: Option<Pixels>,
     on_click: Option<Click>,
@@ -83,6 +94,7 @@ impl Btn {
             large: false,
             menu: false,
             enabled: true,
+            danger: false,
             tone: None,
             height: None,
             on_click: None,
@@ -119,6 +131,12 @@ impl Btn {
         self
     }
 
+    /// A button that removes something: its words in the error colour.
+    pub fn danger(mut self) -> Self {
+        self.danger = true;
+        self
+    }
+
     /// Tinted: the tone as its ground and its ink.
     pub fn tone(mut self, tone: Hsla) -> Self {
         self.tone = Some(tone);
@@ -137,13 +155,14 @@ impl Btn {
 }
 
 impl RenderOnce for Btn {
-    fn render(self, _: &mut Window, cx: &mut Cx) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut Cx) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         let c = &theme.colours;
         let toned = self.tone.filter(|_| !self.primary);
         let ink = match (self.primary, toned) {
             (true, _) => c.accent_ink,
             (false, Some(tone)) => tone,
+            (false, None) if self.danger && self.enabled => c.err,
             (false, None) => c.ink,
         };
         let padding = match (self.large, self.text.is_empty() && !self.menu) {
@@ -200,6 +219,7 @@ impl RenderOnce for Btn {
                     .when(!self.enabled, |d| d.opacity(0.5))
                     .when_some(self.icon, |d, name| d.child(icon(name, theme.icon(), ink)))
                     .when(!self.text.is_empty(), |d| {
+                        let shown = weighted(window, theme, self.text.clone(), size, weight);
                         d.child(watched(
                             div()
                                 .whitespace_nowrap()
@@ -207,6 +227,7 @@ impl RenderOnce for Btn {
                                 .font_weight(weight)
                                 .text_color(ink),
                             self.text,
+                            shown,
                             false,
                         ))
                     })
@@ -292,7 +313,7 @@ impl Chip {
 }
 
 impl RenderOnce for Chip {
-    fn render(self, _: &mut Window, cx: &mut Cx) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut Cx) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         let tone = self.tone.unwrap_or(theme.colours.ink2);
         let ink = if self.on_accent {
@@ -324,6 +345,13 @@ impl RenderOnce for Chip {
                 d.child(icon(name, theme.sized(11.), ink))
             })
             .when(!self.text.is_empty(), |d| {
+                let shown = weighted(
+                    window,
+                    theme,
+                    self.text.clone(),
+                    theme.caption(),
+                    theme.medium,
+                );
                 d.child(watched(
                     div()
                         .min_w_0()
@@ -334,6 +362,7 @@ impl RenderOnce for Chip {
                         .font_weight(theme.medium)
                         .text_color(ink),
                     self.text,
+                    shown,
                     true,
                 ))
             })
@@ -362,20 +391,76 @@ pub fn measure_in(
     if text.is_empty() {
         return Pixels::ZERO;
     }
-    let mut font = gpui::font(family);
-    font.weight = weight;
-    let run = gpui::TextRun {
-        len: text.len(),
-        font,
+    let run = |len: usize, weight: FontWeight| gpui::TextRun {
+        len,
+        font: gpui::Font {
+            weight,
+            ..gpui::font(family.clone())
+        },
         color: theme.colours.ink,
         background_color: None,
         underline: None,
         strikethrough: None,
     };
+    let mut runs = Vec::new();
+    let mut at = 0;
+    for upright in lacking(window, &family, text, size, weight) {
+        if upright.start > at {
+            runs.push(run(upright.start - at, weight));
+        }
+        runs.push(run(upright.len(), FontWeight::NORMAL));
+        at = upright.end;
+    }
+    if at < text.len() {
+        runs.push(run(text.len() - at, weight));
+    }
     window
         .text_system()
-        .shape_line(SharedString::from(text.to_string()), size, &[run], None)
+        .shape_line(SharedString::from(text.to_string()), size, &runs, None)
         .width
+}
+
+/// Where `text` has a symbol (U+2100 to U+2BFF: arrows, operators, shapes) the family lacks at
+/// `weight`. cosmic-text takes a fallback face only at the very weight asked, and the fonts
+/// holding symbols (DejaVu Sans) have no medium or semibold face, so such a symbol would come
+/// from an unrelated font; drawn at the normal weight it comes from the face fontconfig, and Qt,
+/// take. Scripts keep their weight: their fallbacks (Noto Sans CJK) have one.
+fn lacking(
+    window: &Window,
+    family: &SharedString,
+    text: &str,
+    size: Pixels,
+    weight: FontWeight,
+) -> Vec<std::ops::Range<usize>> {
+    let symbol = |ch: char| ('\u{2100}'..='\u{2bff}').contains(&ch);
+    if weight == FontWeight::NORMAL || !text.chars().any(symbol) {
+        return Vec::new();
+    }
+    let system = window.text_system();
+    let id = system.resolve_font(&gpui::Font {
+        weight,
+        ..gpui::font(family.clone())
+    });
+    text.char_indices()
+        .filter(|(_, ch)| symbol(*ch) && system.advance(id, size, *ch).is_err())
+        .map(|(at, ch)| at..at + ch.len_utf8())
+        .collect()
+}
+
+/// `text` at `weight`, but for what the family lacks at that weight: see [`lacking`].
+pub fn weighted(
+    window: &Window,
+    theme: &Theme,
+    text: SharedString,
+    size: Pixels,
+    weight: FontWeight,
+) -> gpui::StyledText {
+    let upright = lacking(window, &theme.family, &text, size, weight);
+    let normal = gpui::HighlightStyle {
+        font_weight: Some(FontWeight::NORMAL),
+        ..Default::default()
+    };
+    gpui::StyledText::new(text).with_highlights(upright.into_iter().map(|r| (r, normal)))
 }
 
 /// `Text.ElideMiddle`: as many characters kept at each end as fit, with "…" between.
@@ -483,12 +568,18 @@ pub fn label(
         .whitespace_nowrap()
         .sized_text(theme, size)
         .text_color(colour);
-    watched(text_div, text.into(), false)
+    let text: SharedString = text.into();
+    watched(text_div, text.clone(), text, false)
 }
 
 /// A text in its box; under the layout checks it also tells where it went and how wide it is
 /// whole, `may_cut` when its box cuts it on purpose.
-pub fn watched(text_box: gpui::Div, text: SharedString, may_cut: bool) -> gpui::Div {
+pub fn watched(
+    text_box: gpui::Div,
+    text: SharedString,
+    shown: impl IntoElement,
+    may_cut: bool,
+) -> gpui::Div {
     #[cfg(test)]
     {
         let said = text.clone();
@@ -498,12 +589,12 @@ pub fn watched(text_box: gpui::Div, text: SharedString, may_cut: bool) -> gpui::
         )
         .absolute()
         .inset_0();
-        text_box.relative().child(text).child(seen)
+        text_box.relative().child(shown).child(seen)
     }
     #[cfg(not(test))]
     {
-        let _ = may_cut;
-        text_box.child(text)
+        let _ = (text, may_cut);
+        text_box.child(shown)
     }
 }
 

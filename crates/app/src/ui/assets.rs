@@ -21,6 +21,7 @@ icons![
     "chevron-right",
     "chevron-up",
     "circle-alert",
+    "cloud",
     "clock",
     "copy",
     "corner-down-right",

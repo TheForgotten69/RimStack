@@ -4,12 +4,11 @@ use super::Mods;
 use super::list::bar_room;
 use super::rows::Columns;
 use crate::ui::theme::{self, Theme};
-use crate::ui::widgets::{Btn, Chip, TextSized, btn_width, halo, icon, label, measure, notice};
+use crate::ui::widgets::{Btn, Chip, TextSized, btn_width, icon, label, measure, notice};
 use crate::words::{count, put};
 use crate::workspace::load_order::{Orders, Side};
 use gpui::{
-    Context, Focusable, FontWeight, InteractiveElement, ParentElement, Pixels,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
+    Context, FontWeight, ParentElement, Pixels, Styled, Window, div, prelude::FluentBuilder, px,
 };
 use rimstack_core::{say, say_n};
 use std::rc::Rc;
@@ -249,6 +248,13 @@ impl Mods {
         } else {
             icon_button * 2. + theme::GAP_LINE + theme::GAP
         };
+        let updates = put(&say_n!(self.behind, "{} update", "{} updates"));
+        let extras = extras
+            + if self.behind > 0 {
+                btn_width(window, theme, &updates, false, false) + theme::GAP
+            } else {
+                px(0.)
+            };
         let tight = width < head_wide + extras;
         let problem_tone = if errors > 0 { c.err } else { c.warn };
         div()
@@ -286,6 +292,12 @@ impl Mods {
                 )
             })
             .child(div().flex_1())
+            .when(self.behind > 0 && !tight, |d| {
+                d.child(
+                    Btn::new("updates", updates)
+                        .on_click(cx.listener(|_, _, _, cx| cx.emit(super::ShowSection(1)))),
+                )
+            })
             .when(!self.demo && !tight, |d| {
                 d.child(
                     div()
@@ -411,86 +423,16 @@ impl Mods {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<gpui::Div> {
-        let c = &theme.colours;
-        let field = self.filter.read(cx);
-        let (empty, focused) = (field.text().is_empty(), field.is_focused(window));
-        let focus = field.focus_handle(cx);
-        let found = match empty {
-            true => String::new(),
-            false => put(&self.order.filter_summary()),
-        };
-        let lead = theme::GAP_SMALL + theme.icon() + theme::GAP;
-        div()
-            .id("filter")
-            .relative()
-            .flex()
-            .items_center()
-            .h(theme.field())
-            .pl(lead + theme::GAP_TINY)
-            .pr(theme::GAP)
-            .gap(theme::GAP)
-            .rounded(theme::CORNER)
-            .bg(c.well)
-            .border_1()
-            .border_color(if focused { c.focus } else { c.field_line })
-            .when(focused, |d| d.children(halo(c.focus, theme::CORNER)))
-            .cursor_text()
-            .on_click(move |_, window, cx| window.focus(&focus, cx))
-            .child(
-                div()
-                    .absolute()
-                    .left(theme::GAP)
-                    .top_0()
-                    .bottom_0()
-                    .flex()
-                    .items_center()
-                    .child(icon("funnel", theme.icon() - px(1.), c.ink3)),
-            )
-            .child(
-                div()
-                    .relative()
-                    .flex_1()
-                    .min_w_0()
-                    .when(empty, |d| {
-                        d.child(
-                            div()
-                                .absolute()
-                                .inset_0()
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .text_ellipsis()
-                                .sized_text(theme, theme.body())
-                                .text_color(c.ink3)
-                                .child(put(&say!("Filter active and inactive mods"))),
-                        )
-                    })
-                    .child(self.filter.clone()),
-            )
-            .when(!found.is_empty(), |d| {
-                d.child(label(theme, theme.small(), c.ink2, found))
-            })
-            .when(empty && !focused, |d| {
-                d.child(label(
-                    theme,
-                    theme.caption(),
-                    c.ink3,
-                    put(&say!("Ctrl + F")),
-                ))
-            })
-            .when(!empty, |d| {
-                let field = self.filter.clone();
-                d.child(
-                    div()
-                        .id("clear-filter")
-                        .cursor_pointer()
-                        .child(icon("x", theme.sized(12.), c.ink3))
-                        .on_click(move |_, window, cx| {
-                            field.update(cx, |field, cx| field.set_text("", cx));
-                            let focus = field.read(cx).focus_handle(cx);
-                            window.focus(&focus, cx);
-                        }),
-                )
-            })
+        let typed = !self.filter.read(cx).text().is_empty();
+        crate::ui::field::Field {
+            id: "filter",
+            text: &self.filter,
+            icon: "funnel",
+            placeholder: put(&say!("Filter active and inactive mods")),
+            found: typed.then(|| put(&self.order.filter_summary())),
+            keys: Some(put(&say!("Ctrl + F"))),
+        }
+        .render(theme, window, cx)
     }
 }
 

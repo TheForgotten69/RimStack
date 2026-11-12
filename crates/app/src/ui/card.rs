@@ -95,6 +95,17 @@ impl Card {
         self
     }
 
+    pub fn when(self, shown: bool, then: impl FnOnce(Self) -> Self) -> Self {
+        if shown { then(self) } else { self }
+    }
+
+    pub fn when_some<T>(self, given: Option<T>, then: impl FnOnce(Self, T) -> Self) -> Self {
+        match given {
+            Some(given) => then(self, given),
+            None => self,
+        }
+    }
+
     pub fn child(mut self, child: impl IntoElement) -> Self {
         self.body.push(child.into_any_element());
         self
@@ -185,17 +196,29 @@ impl Card {
                     .gap(theme::GAP)
                     .child(title)
                     .child(note)
-                    .children(beside)
-                    .when_some(self.folded, |d, folded| {
-                        d.child(icon(
-                            if folded {
-                                "chevron-right"
-                            } else {
-                                "chevron-down"
-                            },
-                            theme.icon(),
-                            c.ink3,
-                        ))
+                    .when(beside.is_some() || self.folded.is_some(), |d| {
+                        let fold = match self.folded {
+                            Some(folded) => icon(
+                                if folded {
+                                    "chevron-right"
+                                } else {
+                                    "chevron-down"
+                                },
+                                theme.icon(),
+                                c.ink3,
+                            )
+                            .into_any_element(),
+                            None => div().into_any_element(),
+                        };
+                        d.child(
+                            div()
+                                .flex()
+                                .flex_none()
+                                .items_center()
+                                .gap(theme::GAP_SMALL)
+                                .children(beside)
+                                .child(fold),
+                        )
                     }),
             )
             .children(under)
