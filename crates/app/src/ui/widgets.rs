@@ -200,14 +200,15 @@ impl RenderOnce for Btn {
                     .when(!self.enabled, |d| d.opacity(0.5))
                     .when_some(self.icon, |d, name| d.child(icon(name, theme.icon(), ink)))
                     .when(!self.text.is_empty(), |d| {
-                        d.child(
+                        d.child(watched(
                             div()
                                 .whitespace_nowrap()
                                 .sized_text(theme, size)
                                 .font_weight(weight)
-                                .text_color(ink)
-                                .child(self.text),
-                        )
+                                .text_color(ink),
+                            self.text,
+                            false,
+                        ))
                     })
                     .when(self.menu, |d| {
                         d.child(icon("chevron-down", theme.sized(12.), with_alpha(ink, 0.8)))
@@ -320,7 +321,7 @@ impl RenderOnce for Chip {
                 d.child(icon(name, theme.sized(11.), ink))
             })
             .when(!self.text.is_empty(), |d| {
-                d.child(
+                d.child(watched(
                     div()
                         .min_w_0()
                         .overflow_hidden()
@@ -328,9 +329,10 @@ impl RenderOnce for Chip {
                         .text_ellipsis()
                         .sized_text(theme, theme.caption())
                         .font_weight(theme.medium)
-                        .text_color(ink)
-                        .child(self.text),
-                )
+                        .text_color(ink),
+                    self.text,
+                    true,
+                ))
             })
     }
 }
@@ -473,10 +475,87 @@ pub fn label(
     colour: Hsla,
     text: impl Into<SharedString>,
 ) -> gpui::Div {
-    div()
+    let text_div = div()
         .flex_none()
         .whitespace_nowrap()
         .sized_text(theme, size)
-        .text_color(colour)
-        .child(text.into())
+        .text_color(colour);
+    watched(text_div, text.into(), false)
+}
+
+/// A text in its box; under the layout checks it also tells where it went and how wide it is
+/// whole, `may_cut` when its box cuts it on purpose.
+pub fn watched(text_box: gpui::Div, text: SharedString, may_cut: bool) -> gpui::Div {
+    #[cfg(test)]
+    {
+        let said = text.clone();
+        let seen = gpui::canvas(
+            move |bounds, window, _| watch::saw(&said, bounds, may_cut, window),
+            |_, _, _, _| {},
+        )
+        .absolute()
+        .inset_0();
+        text_box.relative().child(text).child(seen)
+    }
+    #[cfg(not(test))]
+    {
+        let _ = may_cut;
+        text_box.child(text)
+    }
+}
+
+/// What the layout checks gather: each text drawn, where, and how wide it is whole.
+#[cfg(test)]
+pub mod watch {
+    use gpui::{Bounds, Pixels, SharedString, Window};
+    use std::cell::RefCell;
+
+    pub struct Seen {
+        pub text: SharedString,
+        pub bounds: Bounds<Pixels>,
+        pub whole: Pixels,
+        pub may_cut: bool,
+    }
+
+    thread_local! {
+        static SEEN: RefCell<Option<Vec<Seen>>> = const { RefCell::new(None) };
+    }
+
+    pub fn start() {
+        SEEN.with_borrow_mut(|seen| *seen = Some(Vec::new()));
+    }
+
+    pub fn take() -> Vec<Seen> {
+        SEEN.with_borrow_mut(|seen| seen.take().unwrap_or_default())
+    }
+
+    /// Only the part shown counts: a row half under the list's edge is cut there.
+    pub(super) fn saw(
+        text: &SharedString,
+        bounds: Bounds<Pixels>,
+        may_cut: bool,
+        window: &mut Window,
+    ) {
+        if SEEN.with_borrow(|seen| seen.is_none()) || text.is_empty() {
+            return;
+        }
+        let shown = bounds.intersect(&window.content_mask().bounds);
+        if shown.size.width <= Pixels::ZERO || shown.size.height <= Pixels::ZERO {
+            return;
+        }
+        let style = window.text_style();
+        let size = style.font_size.to_pixels(window.rem_size());
+        let run = style.to_run(text.len());
+        let whole = window
+            .text_system()
+            .shape_line(text.clone(), size, &[run], None)
+            .width;
+        let found = Seen {
+            text: text.clone(),
+            bounds: shown,
+            whole,
+            may_cut,
+        };
+        SEEN.with_borrow_mut(|seen| seen.as_mut().map(|seen| seen.push(found)));
+    }
 }

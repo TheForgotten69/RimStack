@@ -189,3 +189,5 @@ pub fn run(app: Arc<App>, options: Options) {
 
 #[cfg(test)]
 mod gates;
+#[cfg(test)]
+mod layout_checks;
