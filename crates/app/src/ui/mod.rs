@@ -8,11 +8,16 @@ pub mod downloads;
 pub mod field;
 pub mod find;
 pub mod focus;
+pub mod game;
+pub mod hunt;
 pub mod logs;
 pub mod menu;
 pub mod mods;
 pub mod notices;
 pub mod page;
+pub mod play;
+#[cfg(all(test, target_os = "linux"))]
+mod play_tests;
 pub mod problem;
 pub mod prompt;
 pub mod rich;
@@ -74,6 +79,8 @@ pub struct Options {
     /// What the Workshop shows at the start, as `--browse=` names it: `list`, `details` or
     /// `filters`, for pictures.
     pub browse: Option<String>,
+    /// For a picture: the disk is not watched, so nothing changes while it is taken.
+    pub still: bool,
 }
 
 impl Options {

@@ -332,7 +332,10 @@ impl Downloads {
             let mut body: Vec<AnyElement> = needed
                 .iter()
                 .enumerate()
-                .map(|(at, said)| problem(theme, at, said, Some((width, window))))
+                .map(|(at, said)| {
+                    let act = crate::ui::mods::acting(self.mods.downgrade(), said);
+                    problem(theme, at, said, Some((width, window)), Some(act))
+                })
                 .collect();
             body.extend(
                 shown

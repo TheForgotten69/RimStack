@@ -1,7 +1,7 @@
 use super::theme::{self, Theme};
 use gpui::{
     AbsoluteLength, AnyElement, FontWeight, Hsla, IntoElement, ParentElement, Pixels, SharedString,
-    Styled, Window, div, px, svg,
+    Styled, Window, div, prelude::FluentBuilder, px, svg,
 };
 
 pub trait TextSized: Styled + Sized {
@@ -314,7 +314,9 @@ pub fn empty_state(
         .items_center()
         .gap(theme::GAP_SMALL)
         .w(width)
-        .child(icon(icon_name, theme.sized(28.), c.ink3))
+        .when(!icon_name.is_empty(), |d| {
+            d.child(icon(icon_name, theme.sized(28.), c.ink3))
+        })
         .child(
             div()
                 .w_full()
@@ -324,14 +326,16 @@ pub fn empty_state(
                 .text_color(c.ink)
                 .child(title),
         )
-        .child(
-            div()
-                .w_full()
-                .text_center()
-                .spaced_text(theme, theme.body(), 1.3)
-                .text_color(c.ink2)
-                .child(hint),
-        )
+        .when(!hint.is_empty(), |d| {
+            d.child(
+                div()
+                    .w_full()
+                    .text_center()
+                    .spaced_text(theme, theme.body(), 1.3)
+                    .text_color(c.ink2)
+                    .child(hint),
+            )
+        })
 }
 
 /// The width `Chip.qml` takes: its icon, its text and the room around them.

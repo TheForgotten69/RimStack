@@ -34,6 +34,7 @@ pub fn top_bar(
     demo: bool,
     in_the_way: (usize, bool),
     behind: usize,
+    running: bool,
     window: &Window,
     cx: &mut Context<Shell>,
 ) -> impl IntoElement {
@@ -68,7 +69,19 @@ pub fn top_bar(
         .collect();
     let brand = put(&say!("RimStack"));
     let lists = put(&say!("Lists"));
-    let play = put(&say!("Play"));
+    let play = match running {
+        true => put(&say!("Running")),
+        false => put(&say!("Play")),
+    };
+    let play_tip = match (running, in_the_way.0) {
+        (true, _) => put(&say!(
+            "RimWorld is running. It reads the list of mods only when it starts."
+        )),
+        (false, 0) => put(&say!(
+            "Starts RimWorld through Steam. The newest save is copied first."
+        )),
+        (false, _) => String::new(),
+    };
     let left_end = theme::GAP_LARGE
         + theme.sized(20.)
         + match tight {
@@ -282,7 +295,15 @@ pub fn top_bar(
                 .child(
                     div()
                         .relative()
-                        .child(Btn::new("play", play).icon("play").primary().large())
+                        .child(
+                            Btn::new("play", play)
+                                .icon("play")
+                                .primary()
+                                .large()
+                                .enabled(!running)
+                                .tip(play_tip)
+                                .on_click(cx.listener(|shell, _, _, cx| shell.press_play(cx))),
+                        )
                         .when(in_the_way.0 > 0, |d| {
                             let said = count(in_the_way.0);
                             let height = theme.sized(17.);

@@ -22,7 +22,7 @@ const SETTINGS: usize = 7;
 
 pub struct Shell {
     section: usize,
-    demo: bool,
+    pub(crate) demo: bool,
     pub(crate) mods: Entity<Mods>,
     /// Made with the window, as Qt's `DownloadsData` was: it counts the updates the top bar and
     /// the Mods tab show. What it reads of the `App` it reads off the window's thread.
@@ -43,6 +43,11 @@ pub struct Shell {
     /// Made the first time Textures is shown.
     pub(crate) textures: Option<Entity<super::textures::Textures>>,
     view: usize,
+    pub(crate) game: Entity<super::game::Game>,
+    /// The search for the broken mod, as `bisect.json` keeps it between starts.
+    pub(crate) hunt: crate::workspace::search::Hunt,
+    /// `beforePlay`: what stands in Play's way, open under it.
+    pub(crate) before_play: bool,
     prompt: Entity<super::prompt::Prompt>,
     menu: Entity<super::menu::Menu>,
     notices: Entity<super::notices::Notices>,
@@ -82,6 +87,7 @@ impl Shell {
         cx.subscribe(&mods, |shell, _, wanted: &super::mods::Wanted, cx| {
             use super::mods::Wanted;
             match wanted {
+                Wanted::FindBroken => shell.start_hunt(cx),
                 Wanted::Browse(text) => {
                     let (text, workshop) = (text.clone(), shell.workshop(cx));
                     workshop.update(cx, |workshop, cx| workshop.browse(text, cx));
@@ -93,12 +99,24 @@ impl Shell {
                         Wanted::Redownload(id) => downloads.redownload(*id, cx),
                         Wanted::Unsubscribe(id) => downloads.unsubscribe(*id, cx),
                         Wanted::UpdateFromGit(id) => downloads.update_from_git(*id, cx),
-                        Wanted::Browse(_) => {}
+                        Wanted::Browse(_) | Wanted::FindBroken => {}
                     });
                 }
             }
         })
         .detach();
+        let held_by = mods.downgrade();
+        let game = cx.new(|cx| {
+            super::game::Game::new(
+                demo,
+                options.still,
+                move |cx| held_by.upgrade().is_some_and(|mods| mods.read(cx).held()),
+                cx,
+            )
+        });
+        cx.subscribe(&game, |shell, _, told, cx| shell.heard_game(told, cx))
+            .detach();
+        cx.observe(&game, |_, _, cx| cx.notify()).detach();
         let section = options.section;
         let mut shell = Self {
             section: 0,
@@ -114,6 +132,12 @@ impl Shell {
             find: None,
             workshop: None,
             view: options.view,
+            game,
+            hunt: match demo {
+                true => Default::default(),
+                false => super::app(cx).hunt(),
+            },
+            before_play: false,
             prompt: super::prompt::install(cx),
             menu: super::menu::install(cx),
             notices: super::notices::install(cx),
@@ -124,6 +148,7 @@ impl Shell {
             keep_logs(cx);
         }
         shell.go(section, cx);
+        shell.tell_hunting(cx);
         if let Some(asked) = &options.browse {
             let workshop = shell.workshop(cx);
             workshop.update(cx, |workshop, cx| workshop.show_asked(asked, cx));
@@ -150,6 +175,11 @@ impl Shell {
                 |_, _| {},
                 cx,
             );
+        }
+        match options.open.as_deref() {
+            Some("play") => self.before_play = true,
+            Some("problems") => self.mods.update(cx, |mods, cx| mods.open_problems(cx)),
+            _ => {}
         }
         if options.open.as_deref() == Some("ask") {
             let question = Question {
@@ -252,6 +282,10 @@ impl Shell {
                 shell.mods.update(cx, |mods, cx| mods.show_mod(mod_id, cx));
             })
             .detach();
+            cx.subscribe(&logs, |shell, _, _: &super::logs::FindBroken, cx| {
+                shell.start_hunt(cx)
+            })
+            .detach();
             cx.subscribe(&logs, |shell, _, super::logs::UseList(ids), cx| {
                 let ids = ids.clone();
                 shell.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
@@ -319,11 +353,14 @@ impl Render for Shell {
                 self.demo,
                 in_the_way,
                 self.behind,
+                self.game.read(cx).running(),
                 window,
                 cx,
             ))
+            .children(self.hunt_bar(cx))
             .child(div().flex_1().min_h_0().children(self.shown()))
             .child(status_bar(self.demo, last_start, cx))
+            .children(self.before_play_popup(cx))
             .child(self.notices.clone())
             .child(self.menu.clone())
             .child(self.prompt.clone())

@@ -6,17 +6,29 @@ use super::widgets::{Btn, TextSized, btn_width, icon, measure};
 use crate::words::put;
 use crate::workspace::load_order::ProblemSaid;
 use gpui::{
-    AnyElement, FontWeight, HighlightStyle, IntoElement, ParentElement, Pixels, Styled, StyledText,
-    Window, div, prelude::FluentBuilder,
+    AnyElement, FontWeight, HighlightStyle, InteractiveElement, IntoElement, ParentElement, Pixels,
+    StatefulInteractiveElement, Styled, StyledText, Window, div, prelude::FluentBuilder,
 };
 use rimstack_core::base::sentence::Sentence;
 
-/// `room`: the line's width and the window, to know whether the fix fits beside the words.
+/// What a problem's line is pressed for: its fix, ignoring it, or its mod shown.
+#[derive(Clone, Copy)]
+pub enum Act {
+    Fix,
+    Ignore,
+    Show,
+}
+
+pub type Acting = std::rc::Rc<dyn Fn(Act, &mut Window, &mut gpui::App)>;
+
+/// `room`: the line's width and the window, to know whether the fix fits beside the words;
+/// `acting`: what its buttons and its words do.
 pub fn problem(
     theme: &Theme,
     at: usize,
     said: &ProblemSaid,
     room: Option<(Pixels, &Window)>,
+    acting: Option<Acting>,
 ) -> AnyElement {
     let c = &theme.colours;
     let tone = if said.error { c.err } else { c.warn };
@@ -38,7 +50,18 @@ pub fn problem(
         let twenty = measure(window, theme, "n", theme.body(), FontWeight::NORMAL) * 20.;
         width - actions - theme.icon() - theme::GAP * 2. < twenty
     });
+    let press = |act: Act| {
+        let acting = acting.clone();
+        move |_: &gpui::ClickEvent, window: &mut Window, cx: &mut gpui::App| {
+            if let Some(acting) = &acting {
+                acting(act, window, cx);
+            }
+        }
+    };
+    let shows = acting.is_some() && !said.name.is_empty() && said.mod_id >= 0;
     let words = div()
+        .id(("problem-words", at))
+        .when(shows, |d| d.cursor_pointer().on_click(press(Act::Show)))
         .spaced_text(theme, theme.body(), 1.25)
         .text_color(c.ink)
         .child(StyledText::new(text).with_highlights([(0..said.name.len(), bold)]));
@@ -46,9 +69,19 @@ pub fn problem(
         .flex()
         .flex_none()
         .gap(theme::GAP_SMALL)
-        .when_some(fix, |d, fix| d.child(Btn::new(("fix", at), fix)))
+        .when_some(fix, |d, fix| {
+            d.child(Btn::new(("fix", at), fix).on_click(press(Act::Fix)))
+        })
         .when(!said.ignore.is_empty(), |d| {
-            d.child(Btn::new(("ignore", at), "").icon("eye-off"))
+            d.child(
+                Btn::new(("ignore", at), "")
+                    .icon("eye-off")
+                    .spoken(put(&rimstack_core::say!("Ignore this problem")))
+                    .tip(put(&rimstack_core::say!(
+                        "No warning about this problem again; the mod's details can turn it back on"
+                    )))
+                    .on_click(press(Act::Ignore)),
+            )
         });
     let mark = icon(
         if said.error {

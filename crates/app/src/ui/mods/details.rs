@@ -11,12 +11,14 @@ use gpui::{
 };
 use rimstack_core::{say, say_n};
 
-/// `ListSummary.Line`: words, and a button beside them.
+type Pressed = Box<dyn Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App)>;
+
+/// `ListSummary.Line`: words, and a button beside them that does `pressed`.
 fn line(
     theme: &Theme,
     id: &'static str,
     text: String,
-    action: Option<(String, bool)>,
+    action: Option<(String, bool, Pressed)>,
 ) -> AnyElement {
     div()
         .flex()
@@ -30,13 +32,24 @@ fn line(
                 .text_color(theme.colours.ink)
                 .child(text),
         )
-        .when_some(action, |d, (said, primary)| {
-            d.child(Btn::new(id, said).primary_if(primary))
+        .when_some(action, |d, (said, primary, pressed)| {
+            d.child(Btn::new(id, said).primary_if(primary).on_click(pressed))
         })
         .into_any_element()
 }
 
 impl DetailsView {
+    /// A press that does `run` on the Mods tab.
+    pub(super) fn on_mods(
+        &self,
+        run: impl Fn(&mut super::Mods, &mut Context<super::Mods>) + 'static,
+    ) -> Pressed {
+        let mods = self.mods.clone();
+        Box::new(move |_, _, cx| {
+            let _ = mods.update(cx, |mods, cx| run(mods, cx));
+        })
+    }
+
     pub(super) fn details_pane(
         &self,
         theme: &Theme,
@@ -55,6 +68,12 @@ impl DetailsView {
             .p(theme::GAP_CARD)
             .pr(theme::GAP_CARD + bar)
             .overflow_y_scroll();
+        if self.shown.problems_open && !self.shown.previewing {
+            let inner = width - bar - theme::GAP_CARD * 2.;
+            if let Some(panel) = self.problems_pane(theme, inner, window) {
+                return scrolled.child(panel);
+            }
+        }
         if let Some(summary) = self.shown.selection.clone() {
             return scrolled.child(self.selection_pane(
                 theme,
@@ -128,7 +147,10 @@ impl DetailsView {
             .first_errors
             .iter()
             .enumerate()
-            .map(|(at, said)| crate::ui::problem::problem(theme, at, said, None))
+            .map(|(at, said)| {
+                let act = super::edit::acting(self.mods.clone(), said);
+                crate::ui::problem::problem(theme, at, said, None, Some(act))
+            })
             .collect();
         let troubled = self.shown.troubled;
         if troubled {
@@ -153,7 +175,11 @@ impl DetailsView {
                 theme,
                 "all-problems",
                 text,
-                Some((put(&say!("All problems")), false)),
+                Some((
+                    put(&say!("All problems")),
+                    false,
+                    self.on_mods(super::Mods::open_problems),
+                )),
             ));
         }
         if let Some(start) = &self.shown.last_start {
@@ -172,7 +198,10 @@ impl DetailsView {
                             .child(put(&start.line)),
                     )
                     .when(logged, |d| {
-                        d.child(Btn::new("open-log", put(&say!("Open log"))))
+                        d.child(
+                            Btn::new("open-log", put(&say!("Open log")))
+                                .on_click(self.on_mods(|_, cx| cx.emit(super::ShowSection(5)))),
+                        )
                     })
                     .into_any_element(),
             );
@@ -183,7 +212,11 @@ impl DetailsView {
                 theme,
                 "save-list",
                 said,
-                Some((put(&say!("Save")), true)),
+                Some((
+                    put(&say!("Save")),
+                    true,
+                    self.on_mods(|mods, cx| mods.save(None, cx)),
+                )),
             ));
         }
         if errors == 0 && !dirty && !troubled {

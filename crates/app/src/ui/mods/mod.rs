@@ -9,6 +9,7 @@ mod edit;
 mod inactive;
 mod list;
 mod menus;
+mod problems;
 mod rows;
 mod selection;
 
@@ -33,6 +34,7 @@ pub struct Shown {
 
 gpui::actions!(mods, [FocusFilter, Undo, Redo, Save]);
 
+pub use edit::acting;
 pub use menus::Wanted;
 
 /// glibc keeps what a thread freed in that thread's heap; after the scan's threads that was
@@ -95,6 +97,9 @@ pub struct Mods {
     problem_row: Option<usize>,
     /// Four mods to choose once the list is read, as `--several` asks.
     several: bool,
+    problems_open: bool,
+    /// Told by the window while the search for the broken mod runs.
+    hunting: bool,
 }
 
 impl Mods {
@@ -127,7 +132,9 @@ impl Mods {
             cx.new(|cx| list::ModList::new(side, shown, thumbs, mods, cx))
         });
         let [active_list, inactive_list] = lists;
+        let me = cx.weak_entity();
         let details_view = cx.new(|_| chosen::DetailsView {
+            mods: me,
             shown: Default::default(),
             tab: 0,
             folded: Default::default(),
@@ -177,6 +184,8 @@ impl Mods {
             note_timer: String::new(),
             problem_row: None,
             several: false,
+            problems_open: false,
+            hunting: false,
         };
         mods.show(cx);
         if !demo {
@@ -339,6 +348,9 @@ impl Mods {
             behind: self.behind,
             selected_active: self.selected_active,
             panes: (self.inactive_width, self.details_width),
+            problems_open: self.problems_open,
+            hunting: self.hunting,
+            previewing: self.order.previewing(),
             selected: self.selection.len(),
             selection: self.selection_summary(),
         };
@@ -502,11 +514,37 @@ impl Mods {
         self.show(cx);
     }
 
-    /// The load order becomes `ids`, unsaved.
+    /// The load order becomes `ids`, unsaved; the history keeps the list it was.
     pub fn use_list(&mut self, ids: Vec<String>, cx: &mut Context<Self>) {
         let app = super::app(cx);
+        let before = app.snapshot("@list", app.session().current());
+        let count = ids.len();
         self.order.use_list(&app, ids);
-        self.show(cx);
+        self.changed(cx);
+        if !self.demo {
+            use rimstack_core::say_n;
+            let taken = say_n!(
+                count,
+                "Another list taken: {} mod",
+                "Another list taken: {} mods"
+            );
+            app.note_change(taken, before.as_deref());
+            let said = say_n!(count, "Using a list of {} mod", "Using a list of {} mods");
+            self.done_said(said, cx);
+        }
+    }
+
+    /// Whether the search for the broken mod runs, as the window tells it.
+    pub fn set_hunting(&mut self, hunting: bool, cx: &mut Context<Self>) {
+        self.hunting = hunting;
+        self.sync_details(cx);
+    }
+
+    /// The load order becomes `ids`, unsaved, nothing kept nor said: a round of the search.
+    pub fn use_list_quietly(&mut self, ids: Vec<String>, cx: &mut Context<Self>) {
+        let app = super::app(cx);
+        self.order.use_list(&app, ids);
+        self.changed(cx);
     }
 
     /// How many active mods Downloads found behind their Workshop version.

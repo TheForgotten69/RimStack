@@ -23,7 +23,8 @@ fn main() {
         .and_then(|v| v.split_once('x'))
         .and_then(|(w, h)| Some((w.parse::<f32>().ok()?, h.parse::<f32>().ok()?)))
         .map_or(ui::WINDOW, |(w, h)| (gpui::px(w), gpui::px(h)));
-    let options = ui::Options::from_args(args.iter().cloned());
+    let mut options = ui::Options::from_args(args.iter().cloned());
+    options.still = !args.iter().any(|a| a == "--live");
     let app = Arc::new(App::from_environment());
     rimstack_app::words::show_in(rimstack_app::words::Words::of(&app.speak()));
     let text = gpui_platform::current_platform(true).text_system();

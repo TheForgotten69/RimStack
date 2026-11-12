@@ -26,7 +26,7 @@ impl Mods {
     }
 
     /// A toast that says what was done, with Undo.
-    fn done_said(&self, said: Sentence, cx: &mut Context<Self>) {
+    pub(super) fn done_said(&self, said: Sentence, cx: &mut Context<Self>) {
         if self.demo {
             return;
         }
@@ -498,5 +498,126 @@ impl Mods {
                 cx,
             );
         }
+    }
+}
+
+/// What the buttons and the words of a problem's line do, on the Mods tab `mods`.
+pub fn acting(
+    mods: gpui::WeakEntity<Mods>,
+    said: &crate::workspace::load_order::ProblemSaid,
+) -> crate::ui::problem::Acting {
+    use crate::ui::problem::Act;
+    let (mod_id, fix) = (said.mod_id as i32, said.fix.clone());
+    let (package_id, key) = (said.package_id.clone(), said.ignore.clone());
+    std::rc::Rc::new(move |act, _, cx| {
+        let (fix, package_id, key) = (fix.clone(), package_id.clone(), key.clone());
+        let _ = mods.update(cx, |mods, cx| match act {
+            Act::Fix => mods.apply_fix(mod_id, fix.action, &fix.target, fix.page.is_some(), cx),
+            Act::Ignore => mods.ignore_problem(package_id, key, cx),
+            Act::Show => {
+                cx.emit(super::ShowSection(0));
+                mods.show_mod(mod_id, cx)
+            }
+        });
+    })
+}
+
+impl Mods {
+    /// A problem no longer warned of, with Undo.
+    fn ignore_problem(&mut self, package_id: String, key: String, cx: &mut Context<Self>) {
+        self.set_ignored(&package_id, &key, true, cx);
+        let me = cx.entity().downgrade();
+        notices::offer(
+            put(&say!("The problem is ignored")),
+            put(&say!("Undo")),
+            move |_, cx| {
+                let _ = me.update(cx, |mods, cx| {
+                    mods.set_ignored(&package_id, &key, false, cx)
+                });
+            },
+            cx,
+        );
+    }
+
+    fn set_ignored(&mut self, package_id: &str, key: &str, yes: bool, cx: &mut Context<Self>) {
+        let app = super::super::app(cx);
+        app.ignore_problem(package_id, key, yes);
+        self.order.recheck(&app);
+        self.show(cx);
+    }
+
+    /// The sentences Play shows of what stands in its way, as `Main.qml`'s `inTheWay`.
+    pub fn in_the_way_said(&self, cx: &gpui::App) -> Vec<String> {
+        let (errors, sort_pending, dirty) = self.what_is_in_the_way(cx);
+        let errors_count = self.order.errors_and_warnings().0;
+        let mut said = Vec::new();
+        if errors {
+            said.push(put(&say_n!(
+                errors_count,
+                "{} mod has a problem that will cause errors in the game",
+                "{} mods have problems that will cause errors in the game"
+            )));
+        }
+        if sort_pending {
+            said.push(put(&say_n!(
+                self.sort_pending,
+                "Sorting would move {} mod",
+                "Sorting would move {} mods"
+            )));
+        }
+        if dirty {
+            said.push(put(&say!(
+                "The list has unsaved changes; the game would start with the saved one"
+            )));
+        }
+        said
+    }
+
+    /// Whether a mod has errors, Sort would move mods, and the list is not saved.
+    pub fn what_is_in_the_way(&self, cx: &gpui::App) -> (bool, bool, bool) {
+        if self.demo {
+            return (false, false, false);
+        }
+        let dirty = super::super::app(cx).session().is_dirty() && self.order.is_installed();
+        (
+            self.order.errors_and_warnings().0 > 0,
+            self.sort_pending > 0,
+            dirty,
+        )
+    }
+
+    /// Every needed mod that is installed activated, each where its rules put it.
+    pub(super) fn fix_all(&mut self, cx: &mut Context<Self>) {
+        if self.order.previewing() {
+            return;
+        }
+        let app = super::super::app(cx);
+        let needed = self.order.needed();
+        let ids = {
+            let loaded = app.library();
+            let Ok((library, _)) = &*loaded else {
+                return;
+            };
+            let key_of = |id: ModId| library.get(id)?.key();
+            self.order.list(Side::Inactive).with_keys(&needed, &key_of)
+        };
+        self.order.take_all(&app, Side::Inactive, &ids, None);
+        self.changed(cx);
+        self.done_said(say!("Activated the needed mods"), cx);
+    }
+
+    /// What is under way on the load order: a change seen on disk waits for it.
+    pub fn held(&self) -> bool {
+        self.order.previewing() || self.saving
+    }
+
+    pub fn open_problems(&mut self, cx: &mut Context<Self>) {
+        self.problems_open = true;
+        self.sync_details(cx);
+    }
+
+    pub(super) fn close_problems(&mut self, cx: &mut Context<Self>) {
+        self.problems_open = false;
+        self.sync_details(cx);
     }
 }

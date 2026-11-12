@@ -33,6 +33,8 @@ pub struct Btn {
     on_click: Option<Click>,
     /// Where the button was drawn, for a menu it opens.
     placed: Option<Rc<Cell<Bounds<Pixels>>>>,
+    /// As wide as what holds it, as `width: parent.width` made it.
+    fill: bool,
 }
 
 impl Btn {
@@ -52,6 +54,7 @@ impl Btn {
             spoken: None,
             on_click: None,
             placed: None,
+            fill: false,
         }
     }
 
@@ -111,6 +114,11 @@ impl Btn {
 
     pub fn height(mut self, height: Pixels) -> Self {
         self.height = Some(height);
+        self
+    }
+
+    pub fn fill(mut self) -> Self {
+        self.fill = true;
         self
     }
 
@@ -187,6 +195,7 @@ impl RenderOnce for Btn {
             .items_center()
             .justify_center()
             .gap(theme::GAP_SMALL)
+            .when(self.fill, |d| d.w_full())
             .h(height)
             .px(padding / 2.)
             .rounded(theme::CORNER)

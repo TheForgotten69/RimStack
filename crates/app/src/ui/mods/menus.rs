@@ -31,6 +31,8 @@ pub enum Wanted {
     UpdateFromGit(i32),
     /// The Workshop searched for this, as a fix that names a page asks.
     Browse(String),
+    /// The search for the mod that breaks the game started.
+    FindBroken,
 }
 
 impl gpui::EventEmitter<Wanted> for Mods {}

@@ -37,6 +37,11 @@ pub struct DetailsShown {
     pub selected_active: bool,
     /// The widths wanted for the inactive mods and the details, for `pane_widths`.
     pub panes: (Pixels, Pixels),
+    /// The problems panel shown in place of the rest.
+    pub problems_open: bool,
+    /// The search for the broken mod runs: it is not offered again.
+    pub hunting: bool,
+    pub previewing: bool,
     /// With several mods chosen, how many and what they are.
     pub selected: usize,
     pub selection: Option<Rc<crate::workspace::load_order::SelectionSummary>>,
@@ -58,6 +63,7 @@ pub struct DetailsView {
     pub folded: std::collections::HashSet<&'static str>,
     /// The names of the mods chosen all shown, not the first ones only.
     pub summary_open: bool,
+    pub mods: gpui::WeakEntity<super::Mods>,
 }
 
 impl DetailsView {

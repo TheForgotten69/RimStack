@@ -145,6 +145,12 @@ impl Logs {
         logs
     }
 
+    /// Whether the search for the broken mod runs: its button hides then.
+    pub fn set_hunting(&mut self, hunting: bool, cx: &mut Context<Self>) {
+        self.hunting = hunting;
+        cx.notify();
+    }
+
     fn hear(&self, cx: &mut Context<Self>) {
         let (tell, mut told) = futures::channel::mpsc::unbounded();
         super::app(cx).listen(move |changes| {

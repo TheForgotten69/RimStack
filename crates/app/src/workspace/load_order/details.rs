@@ -180,11 +180,11 @@ pub struct Textures {
 
 #[derive(Serialize)]
 pub struct ProblemGroup {
-    name: &'static str,
-    error: bool,
-    trusted: usize,
-    shared: bool,
-    lines: Vec<ProblemSaid>,
+    pub name: &'static str,
+    pub error: bool,
+    pub trusted: usize,
+    pub shared: bool,
+    pub lines: Vec<ProblemSaid>,
 }
 
 #[derive(Serialize, Default)]
