@@ -168,6 +168,9 @@ impl Shell {
                             .cursor_pointer()
                             .role(gpui::Role::Button)
                             .aria_label(started.clone())
+                            .tab_index(0)
+                            .capture_any_mouse_down(|_, window, _| window.prevent_default())
+                            .focus_visible(|s| s.underline())
                             .child(label(&theme, theme.small(), c.ink2, started))
                             .when_some(said, |d, (said, tone)| {
                                 d.child(label(&theme, theme.small(), tone, said))

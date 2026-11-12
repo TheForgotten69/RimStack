@@ -194,6 +194,7 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
     let box_x = (left_end + theme::GAP_MEDIUM)
         .max(((width - box_width) / 2.).min(right_x - box_width - theme::GAP_MEDIUM));
     let placed: std::rc::Rc<std::cell::Cell<gpui::Bounds<Pixels>>> = Default::default();
+    let placed_box = placed.clone();
     let tabs = shown.into_iter().map(|at| {
         let on = at == section;
         let ink = if on { c.ink } else { c.ink2 };
@@ -278,6 +279,9 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
         .id("top-search")
         .role(gpui::Role::Button)
         .aria_label(put(&say!("Search mods, commands and settings")))
+        .tab_index(0)
+        .capture_any_mouse_down(|_, window, _| window.prevent_default())
+        .focus_visible(|s| s.border_2().border_color(c.focus))
         .cursor_text()
         .on_click(cx.listener(|shell, _, window, cx| shell.open_commands(window, cx)))
         .flex()
@@ -347,6 +351,24 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
                         .id("sections")
                         .role(gpui::Role::TabList)
                         .aria_label(put(&say!("Sections")))
+                        .tab_index(0)
+                        .capture_any_mouse_down(|_, window, _| window.prevent_default())
+                        .focus_visible(|s| s.border_2().border_color(c.focus))
+                        .on_key_down(cx.listener(move |shell, event: &gpui::KeyDownEvent, window, cx| {
+                            let keys = &event.keystroke;
+                            if keys.modifiers.modified() {
+                                return;
+                            }
+                            match keys.key.as_str() {
+                                "left" => shell.go(section.saturating_sub(1), cx),
+                                "right" => shell.go((section + 1).min(sections().len() - 1), cx),
+                                "enter" | "space" if folded => {
+                                    pick_section(placed_box.get(), section, window, cx)
+                                }
+                                _ => return,
+                            }
+                            cx.stop_propagation();
+                        }))
                         .children(tabs),
                 ),
         )
