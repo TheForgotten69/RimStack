@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Wraps the interface's texts in Theme.say() and lists them.
+"""Lists the interface's texts: the `say!`, `said!` and `say_n!` of the Rust.
 
-Run after adding or changing a text in the QML or in Rust:  tools/words.py
-It rewrites the QML in place (already wrapped texts are left alone) and
-writes crates/app/assets/words.json, the list a translation starts from.
+Run after adding or changing a text:  tools/words.py
+It writes crates/app/assets/words.json, the list a translation starts from.
+While the screens move from QML to gpui-fast, a text already listed stays
+listed: the screens not moved yet still need theirs.
 """
 import glob, json, os, re
 
@@ -48,7 +49,8 @@ for path in sorted(glob.glob(os.path.join(root, "qml", "**", "*.qml"), recursive
             words.update(json.loads(f'"{t}"') for t in re.findall(literal, line) if re.search(r"[A-Za-z]{2}", t))
 
 # The lists in Theme.qml that are put in the chosen language where shown.
-theme = open(os.path.join(root, "qml", "Theme.qml"), encoding="utf-8").read()
+theme_qml = os.path.join(root, "qml", "Theme.qml")
+theme = open(theme_qml, encoding="utf-8").read() if os.path.exists(theme_qml) else ""
 for block in re.findall(r"(?:swatches|terms): [\[(]\{?(.*?)\n    \}?[\])]|(?:categoryNames|themeLabels): \[(.*?)\]", theme, re.S):
     words.update(json.loads(f'"{t}"') for part in block for t in re.findall(literal, part) if re.search(r"[A-Za-z]{2}", t) and not t.startswith("#"))
 words.update(json.loads(f'"{t}"') for t in re.findall(r"(?<![\w.])(?:say|fill)\(" + literal, theme))
@@ -85,6 +87,7 @@ if split:
 # system's settings: "fr", "pt-BR".
 words.add("@locale")
 out = os.path.join(root, "assets", "words.json")
+words.update(json.load(open(out, encoding="utf-8")) if os.path.exists(out) else {})
 json.dump({w: "" for w in sorted(words)}, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 # English is a language like the others: each text beside itself, unless
 # its file already words it differently.
