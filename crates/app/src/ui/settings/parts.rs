@@ -80,7 +80,7 @@ impl Settings {
             Line::new(0, "launch", put(&say!("Play starts the game")))
                 .tip(put(&say!("Directly runs the game's own program from its folder, for a copy not from Steam.")))
                 .changed(report.launch_directly, |s, _, cx| s.keep("launch", "steam", cx))
-                .held(Choice::new("launch-choice", options, usize::from(report.launch_directly)).title(put(&say!("Play starts the game"))).on_pick(act(cx, |s, at: usize, _, cx| {
+                .held(Choice::new("launch-choice", options, usize::from(report.launch_directly)).within(Self::choice_room(theme, window)).title(put(&say!("Play starts the game"))).on_pick(act(cx, |s, at: usize, _, cx| {
                     s.keep("launch", if at == 1 { "direct" } else { "steam" }, cx)
                 })))
                 .filled(),
@@ -154,6 +154,7 @@ impl Settings {
                         said(&report.update_every),
                         report.update_every_at,
                     )
+                    .within(Self::choice_room(theme, window))
                     .title(put(&say!("How often")))
                     .on_pick(act(cx, |s, at: usize, _, cx| s.keep_update_every(at, cx))),
                 )
@@ -210,6 +211,7 @@ impl Settings {
                 })
                 .held(
                     Choice::new("theme-choice", labels.clone(), current)
+                        .within(Self::choice_room(theme, window))
                         .title(put(&say!("Theme")))
                         .on_pick(act(cx, move |s, at: usize, _, cx| {
                             s.keep_look("theme", themes[at].name(), cx)
@@ -354,7 +356,7 @@ impl Settings {
                     s.keep_look("comfortable", "true", cx);
                     s.keep_look("largeRows", "false", cx);
                 })
-                .held(Choice::new("mod-rows-choice", said(&[say!("Compact"), say!("Roomy"), say!("With pictures")]), rows_at).title(put(&say!("Mod rows"))).on_pick(act(cx, |s, at: usize, _, cx| {
+                .held(Choice::new("mod-rows-choice", said(&[say!("Compact"), say!("Roomy"), say!("With pictures")]), rows_at).within(Self::choice_room(theme, window)).title(put(&say!("Mod rows"))).on_pick(act(cx, |s, at: usize, _, cx| {
                     s.keep_look("comfortable", if at == 2 { "true" } else { "false" }, cx);
                     s.keep_look("largeRows", if at == 1 { "true" } else { "false" }, cx);
                 })))
@@ -365,7 +367,7 @@ impl Settings {
             Line::new(1, "left-out", put(&say!("A list the filter leaves out")))
                 .tip(put(&say!("A list where the filter matches no mod. Dimmed: it shows all its mods faded, and mods can still be dropped on it.")))
                 .changed(!dim, |s, _, cx| s.keep("dimLeftOut", "on", cx))
-                .held(Choice::new("left-out-choice", said(&[say!("Dimmed"), say!("Hidden")]), usize::from(!dim)).title(put(&say!("A list the filter leaves out"))).on_pick(act(cx, |s, at: usize, _, cx| {
+                .held(Choice::new("left-out-choice", said(&[say!("Dimmed"), say!("Hidden")]), usize::from(!dim)).within(Self::choice_room(theme, window)).title(put(&say!("A list the filter leaves out"))).on_pick(act(cx, |s, at: usize, _, cx| {
                     s.keep("dimLeftOut", ["on", "off"][at], cx)
                 })))
                 .filled(),
@@ -386,6 +388,7 @@ impl Settings {
                         said(&[say!("Full"), say!("Reduced")]),
                         usize::from(look.reduce_motion),
                     )
+                    .within(Self::choice_room(theme, window))
                     .title(put(&say!("Motion")))
                     .on_pick(act(cx, |s, at: usize, _, cx| {
                         s.keep_look("reduceMotion", if at == 1 { "true" } else { "false" }, cx)
@@ -407,6 +410,7 @@ impl Settings {
                         said(&[say!("Normal"), say!("High")]),
                         usize::from(look.high_contrast),
                     )
+                    .within(Self::choice_room(theme, window))
                     .title(put(&say!("Contrast")))
                     .on_pick(act(cx, |s, at: usize, _, cx| {
                         s.keep_look("highContrast", if at == 1 { "true" } else { "false" }, cx)
@@ -439,6 +443,7 @@ impl Settings {
                         said(&[say!("Browser"), say!("Steam")]),
                         usize::from(in_steam),
                     )
+                    .within(Self::choice_room(theme, window))
                     .title(put(&say!("Workshop pages open in")))
                     .on_pick(act(cx, |s, at: usize, _, cx| {
                         s.keep_look(

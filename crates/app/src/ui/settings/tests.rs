@@ -87,9 +87,20 @@ fn a_theme_chosen_is_kept_in_rimstack_conf_and_shown_at_once(cx: &mut TestAppCon
 type Shape<'a> = &'a dyn Fn(&Theme) -> Size<Pixels>;
 
 fn drawn(part: usize) -> impl Fn(f32, Shape<'_>) -> Vec<Seen> {
+    drawn_with(part, "{}", "")
+}
+
+/// As `drawn`, with `settings.json` holding `kept` and the settings found by `finding` alone.
+fn drawn_with(
+    part: usize,
+    kept: &'static str,
+    finding: &'static str,
+) -> impl Fn(f32, Shape<'_>) -> Vec<Seen> {
     move |text_scale, window| {
         let root = tempfile::tempdir().unwrap();
         let path = root.path();
+        std::fs::create_dir_all(path.join("settings/RimStack")).unwrap();
+        std::fs::write(path.join("settings/RimStack/settings.json"), kept).unwrap();
         let app = App::new(
             path.join("home"),
             &path.join("settings"),
@@ -111,7 +122,14 @@ fn drawn(part: usize) -> impl Fn(f32, Shape<'_>) -> Vec<Seen> {
         watch::start();
         let opened = cx
             .open_window(shape, |window, cx| {
-                cx.new(|cx| Shell::new(&options, window, cx))
+                cx.new(|cx| {
+                    let shell = Shell::new(&options, window, cx);
+                    if let Some(settings) = shell.settings.as_ref().filter(|_| !finding.is_empty())
+                    {
+                        settings.update(cx, |s, _| s.finding = finding.into());
+                    }
+                    shell
+                })
             })
             .unwrap();
         cx.update_window(opened.into(), |_, window, cx| window.draw(cx).clear(cx))
@@ -135,6 +153,40 @@ fn every_part_of_settings_fits_at_every_text_size() {
             &|theme| size(theme.sized(1000.), theme.sized(560.)),
             drawn(part),
         );
+    }
+}
+
+#[test]
+fn a_choice_of_many_ends_before_the_way_back_to_its_default() {
+    let options = [
+        "Every minute",
+        "Every 5 minutes",
+        "Every 30 minutes",
+        "Every hour",
+    ];
+    let windows: [Shape<'_>; 2] = [
+        &|_| size(crate::ui::WINDOW.0, crate::ui::WINDOW.1),
+        &|theme| size(theme.sized(1000.), theme.sized(560.)),
+    ];
+    for window in windows {
+        for text_scale in crate::ui::layout_checks::TEXT_SIZES {
+            let seen = drawn_with(0, r#"{ "updateEvery": "1" }"#, "how often")(text_scale, window);
+            let page_right = seen
+                .iter()
+                .find(|s| s.text.starts_with("Reset this page"))
+                .map(|s| s.bounds.right())
+                .expect("the page's reset is drawn");
+            let reset = gpui::px(28. * text_scale);
+            for option in options {
+                let drawn = seen.iter().find(|s| s.text == option).expect(option);
+                assert!(
+                    drawn.bounds.right() <= page_right - reset,
+                    "{option} at {text_scale} ends at {:?}, the line's reset begins by {:?}",
+                    drawn.bounds.right(),
+                    page_right - reset
+                );
+            }
+        }
     }
 }
 

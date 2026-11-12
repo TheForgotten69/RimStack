@@ -23,7 +23,13 @@ const VERIFY: &str = "steam://validate/294100";
 const LOGS_KEPT: [usize; 5] = [0, 5, 10, 25, 50];
 
 impl Settings {
-    pub(super) fn sort_part(&self, theme: &Theme, cx: &mut Context<Self>, rows: &mut Vec<Row>) {
+    pub(super) fn sort_part(
+        &self,
+        theme: &Theme,
+        window: &Window,
+        cx: &mut Context<Self>,
+        rows: &mut Vec<Row>,
+    ) {
         let c = &theme.colours;
         let report = self.report.clone();
         rows.push(Row::Group(2, put(&say!("Sort follows"))));
@@ -48,7 +54,7 @@ impl Settings {
             Line::new(2, "file-hints", put(&say!("Patch and def hints")))
                 .tip(put(&say!("A mod whose patches or defs point at another mod's defs. The game applies patches after every mod's defs are loaded, so these are hints, not requirements.")))
                 .changed(!hints, |s, _, cx| s.keep("fileHints", "on", cx))
-                .held(Choice::new("file-hints-choice", said(&[say!("Shown only"), say!("Used by Sort")]), usize::from(hints)).title(put(&say!("Patch and def hints"))).on_pick(act(cx, |s, at: usize, _, cx| {
+                .held(Choice::new("file-hints-choice", said(&[say!("Shown only"), say!("Used by Sort")]), usize::from(hints)).within(Self::choice_room(theme, window)).title(put(&say!("Patch and def hints"))).on_pick(act(cx, |s, at: usize, _, cx| {
                     s.keep("fileHints", if at == 1 { "on" } else { "off" }, cx)
                 })))
                 .filled(),
@@ -150,7 +156,7 @@ impl Settings {
             Line::new(2, "version-warnings", put(&say!("Game version mismatch")))
                 .tip(put(&say!("A mod that does not list the installed game version. For this version: the warnings come back when the game is updated. A single mod can be ignored from its menu.")))
                 .changed(!report.version_warnings || aside, |s, _, cx| s.version_warnings(0, cx))
-                .held(Choice::new("version-choice", said(&[say!("Warn"), say!("Ignore for this version"), say!("Ignore")]), current).title(put(&say!("Game version mismatch"))).on_pick(act(cx, |s, at: usize, _, cx| {
+                .held(Choice::new("version-choice", said(&[say!("Warn"), say!("Ignore for this version"), say!("Ignore")]), current).within(Self::choice_room(theme, window)).title(put(&say!("Game version mismatch"))).on_pick(act(cx, |s, at: usize, _, cx| {
                     s.version_warnings(at as i32, cx)
                 })))
                 .filled(),
@@ -355,7 +361,7 @@ impl Settings {
             Line::new(4, "logs-kept", put(&say!("Logs kept")))
                 .tip(put(&say!("The game keeps the logs of its last two launches. RimStack copies each log after the game stops, so older launches can still be read in Logs; the oldest copies are deleted first.")))
                 .changed(report.logs_kept != 10, |s, _, cx| s.keep("logsKept", "10", cx))
-                .held(Choice::new("logs-kept-choice", options, kept).title(put(&say!("Logs kept"))).on_pick(act(cx, |s, at: usize, _, cx| s.keep("logsKept", &LOGS_KEPT[at].to_string(), cx))))
+                .held(Choice::new("logs-kept-choice", options, kept).within(Self::choice_room(theme, window)).title(put(&say!("Logs kept"))).on_pick(act(cx, |s, at: usize, _, cx| s.keep("logsKept", &LOGS_KEPT[at].to_string(), cx))))
                 .held(div().flex_1().min_w_0().child(label(theme, theme.small(), c.ink2, put(&say_n!(report.logs_kept_now, "{} kept now", "{} kept now"))))),
         ));
         let room = self.held_room(theme, window);
@@ -448,7 +454,7 @@ impl Settings {
             Line::new(4, "versions", put(&say!("Versions to look for")))
                 .tip(put(&say!("Stable: a numbered release. Nightly: the newest build of the main branch, which is made often and may break. Nightly compares against the commit this program was built from.")))
                 .changed(nightly, |s, _, cx| s.keep("updates", "stable", cx))
-                .held(Choice::new("versions-choice", said(&[say!("Stable"), say!("Nightly")]), usize::from(nightly)).title(put(&say!("Versions to look for"))).on_pick(act(cx, |s, at: usize, _, cx| {
+                .held(Choice::new("versions-choice", said(&[say!("Stable"), say!("Nightly")]), usize::from(nightly)).within(Self::choice_room(theme, window)).title(put(&say!("Versions to look for"))).on_pick(act(cx, |s, at: usize, _, cx| {
                     s.keep("updates", ["stable", "nightly"][at], cx);
                     s.check_release(cx);
                 })))

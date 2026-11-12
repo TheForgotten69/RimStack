@@ -283,7 +283,8 @@ impl RenderOnce for Slide {
     }
 }
 
-/// `Choice.qml`: one of a few, side by side; `stretch` to a width, stacked when it is too narrow.
+/// `Choice.qml`: one of a few, side by side; `stretch` to a width, stacked when it is too narrow;
+/// `within` a room, squeezed into it or stacked only when its words do not fit side by side.
 #[derive(IntoElement)]
 pub struct Choice {
     id: ElementId,
@@ -291,6 +292,7 @@ pub struct Choice {
     current: usize,
     title: SharedString,
     stretch: Option<Pixels>,
+    room: Option<Pixels>,
     picked: Option<Picked>,
 }
 
@@ -302,6 +304,7 @@ impl Choice {
             current,
             title: SharedString::default(),
             stretch: None,
+            room: None,
             picked: None,
         }
     }
@@ -313,6 +316,11 @@ impl Choice {
 
     pub fn stretch(mut self, width: Pixels) -> Self {
         self.stretch = Some(width);
+        self
+    }
+
+    pub fn within(mut self, room: Pixels) -> Self {
+        self.room = Some(room);
         self
     }
 
@@ -342,9 +350,22 @@ impl RenderOnce for Choice {
             .collect();
         let all_words = words.iter().fold(px(0.), |all, w| all + *w);
         let count = self.options.len().max(1) as f32;
-        let stacked = self
-            .stretch
-            .is_some_and(|width| (width - px(4.) - all_words) / count < px(6.));
+        let natural = all_words + px(4.) + theme::GAP_LARGE * 2. * count;
+        let squeezed = |width: Pixels| (width - px(4.) - all_words) / count < px(6.);
+        let (stretch, stacked) = match (self.stretch, self.room) {
+            (Some(width), _) => (Some(width), squeezed(width)),
+            (None, Some(room)) if natural > room => match squeezed(room) {
+                false => (Some(room), false),
+                true => {
+                    let widest = words.iter().fold(px(0.), |all, w| all.max(*w));
+                    (
+                        Some(room.min(widest + theme::GAP_MEDIUM * 2. + px(4.))),
+                        true,
+                    )
+                }
+            },
+            _ => (None, false),
+        };
         let current = self.current;
         let segments: Vec<AnyElement> = self
             .options
@@ -352,7 +373,7 @@ impl RenderOnce for Choice {
             .enumerate()
             .map(|(at, option)| {
                 let on = at == current;
-                let width = match self.stretch {
+                let width = match stretch {
                     None => words[at] + theme::GAP_LARGE * 2.,
                     Some(whole) if stacked => whole - px(4.),
                     Some(whole) => words[at] + (whole - px(4.) - all_words) / count,

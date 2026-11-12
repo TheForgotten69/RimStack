@@ -44,13 +44,22 @@ impl Settings {
         Self::page_width(theme, window) - named(theme) - theme::GAP
     }
 
+    /// The room a `Choice` has: the held room less the way back to the default, kept whether or
+    /// not the line is at its default so that a pick never moves the choice.
+    pub(super) fn choice_room(theme: &Theme, window: &Window) -> Pixels {
+        Self::page_width(theme, window)
+            - named(theme)
+            - theme::GAP * 2.
+            - crate::ui::widgets::btn_width(window, theme, "", true, false)
+    }
+
     /// Every row of every part, in order.
     pub(super) fn lines(&self, window: &Window, cx: &mut Context<Self>) -> Vec<Row> {
         let theme = cx.global::<Theme>().clone();
         let mut rows = Vec::new();
         self.game_part(&theme, window, cx, &mut rows);
         self.look_part(&theme, window, cx, &mut rows);
-        self.sort_part(&theme, cx, &mut rows);
+        self.sort_part(&theme, window, cx, &mut rows);
         self.key_part(&theme, window, cx, &mut rows);
         self.rimstack_part(&theme, window, cx, &mut rows);
         rows
