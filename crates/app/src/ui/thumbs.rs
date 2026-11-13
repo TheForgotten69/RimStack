@@ -8,12 +8,13 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
-/// Bytes of decoded pictures kept: about 1,300 tiles at 2x, more than a list shows at once.
+/// Bytes of decoded pictures kept at least: about 1,300 tiles at 2x. A longer list's pictures
+/// are all kept, with `ROOM_BYTES` more beside them for those scrolled to.
 const MOST_BYTES: usize = 48 << 20;
 /// Decodes running at once.
 const DECODING: usize = 4;
-/// Bytes the pictures decoded while idle may fill, leaving the rest for those scrolled to.
-const IDLE_BYTES: usize = MOST_BYTES / 4 * 3;
+/// Room past the list's own pictures, for those of another size or list.
+const ROOM_BYTES: usize = MOST_BYTES / 4;
 /// Pictures waiting to be decoded, the rows in view and three pages ahead of them; past it the
 /// oldest asked, scrolled by, are dropped.
 const WAITING: usize = 128;
@@ -21,11 +22,10 @@ const WAITING: usize = 128;
 type Size = (u32, u32);
 type Key = (Size, String);
 
-#[derive(Default)]
 pub struct Thumbs {
     /// Each with when it was last shown.
     shown: HashMap<Key, (Arc<RenderImage>, u64)>,
-    /// Least lately shown first, for dropping past `MOST_BYTES`.
+    /// Least lately shown first, for dropping past `most`.
     by_use: BTreeMap<u64, Key>,
     uses: u64,
     bytes: usize,
@@ -40,6 +40,26 @@ pub struct Thumbs {
     /// jump of the scroll bar finds them; and which rows they were taken from.
     idle: Vec<Key>,
     idle_of: Option<(usize, Size)>,
+    /// Bytes kept: `MOST_BYTES`, or the list's pictures and `ROOM_BYTES` when more.
+    most: usize,
+}
+
+impl Default for Thumbs {
+    fn default() -> Self {
+        Self {
+            shown: HashMap::new(),
+            by_use: BTreeMap::new(),
+            uses: 0,
+            bytes: 0,
+            unreadable: HashSet::new(),
+            waiting: Vec::new(),
+            asked: HashMap::new(),
+            decoding: 0,
+            idle: Vec::new(),
+            idle_of: None,
+            most: MOST_BYTES,
+        }
+    }
 }
 
 pub type Shared = Rc<RefCell<Thumbs>>;
@@ -54,12 +74,24 @@ impl Thumbs {
         self.idle_of = None;
     }
 
+    /// `pictures`, last first, the list's to decode while idle, with room kept for them all;
+    /// false when they are the ones already taken.
+    fn take_list(&mut self, id: usize, size: Size, pictures: impl Iterator<Item = Key>) -> bool {
+        if self.idle_of == Some((id, size)) {
+            return false;
+        }
+        self.idle_of = Some((id, size));
+        self.idle = pictures.collect();
+        self.most = MOST_BYTES.max(self.idle.len() * tile_bytes(size) + ROOM_BYTES);
+        true
+    }
+
     /// The next picture to decode: one asked, else one of the list's while there is room.
     fn next_to_decode(&mut self) -> Option<Key> {
         if let Some(key) = self.waiting.pop() {
             return Some(key);
         }
-        while self.bytes < IDLE_BYTES {
+        while self.bytes + ROOM_BYTES < self.most {
             let key = self.idle.pop()?;
             if !self.shown.contains_key(&key)
                 && !self.unreadable.contains(&key)
@@ -99,7 +131,7 @@ impl Thumbs {
             }
             None => self.bytes += bytes,
         }
-        while self.bytes > MOST_BYTES {
+        while self.bytes > self.most {
             let Some((_, old)) = self.by_use.pop_first() else {
                 break;
             };
@@ -199,16 +231,9 @@ pub fn while_idle<'a>(
     size: Size,
     cx: &mut Cx,
 ) {
-    {
-        let mut held = thumbs.borrow_mut();
-        if held.idle_of == Some((id, size)) {
-            return;
-        }
-        held.idle_of = Some((id, size));
-        held.idle = pictures
-            .rev()
-            .map(|path| (size, path.to_string()))
-            .collect();
+    let pictures = pictures.rev().map(|path| (size, path.to_string()));
+    if !thumbs.borrow_mut().take_list(id, size, pictures) {
+        return;
     }
     for _ in 0..DECODING {
         decode_next(thumbs, cx);
@@ -278,6 +303,22 @@ mod tests {
         assert_eq!(thumbs.shown.len(), fits);
         assert!(!thumbs.shown.contains_key(&(size, "0".to_string())));
         assert!(thumbs.shown.contains_key(&(size, (fits + 2).to_string())));
+    }
+
+    #[test]
+    fn every_picture_of_a_list_longer_than_the_least_kept_is_kept() {
+        let mut thumbs = Thumbs::default();
+        let size = (512, 512);
+        let count = MOST_BYTES / tile_bytes(size) * 2;
+        let keys = (0..count).rev().map(|at| (size, at.to_string()));
+        assert!(thumbs.take_list(1, size, keys));
+        while let Some(key) = thumbs.next_to_decode() {
+            thumbs.asked.remove(&key);
+            let made = picture(vec![0; tile_bytes(size)], size).unwrap();
+            thumbs.keep(key, Arc::new(made));
+        }
+        assert_eq!(thumbs.shown.len(), count);
+        assert!(thumbs.bytes + ROOM_BYTES <= thumbs.most);
     }
 
     #[test]
