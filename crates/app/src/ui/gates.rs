@@ -147,3 +147,84 @@ fn each_change_is_published_and_read_by_name() {
     assert!(unpublished.is_empty(), "never published: {unpublished:?}");
     assert!(unread.is_empty(), "read by no view: {unread:?}");
 }
+
+/// The changes a `const NAME: Changes = …;` of `text` names, by const, with the consts it builds
+/// on resolved.
+fn change_consts(text: &str) -> std::collections::HashMap<String, Vec<String>> {
+    let mut raw = std::collections::HashMap::new();
+    let mut rest = text;
+    while let Some(at) = rest.find("const ") {
+        let after = &rest[at + 6..];
+        let Some((name, body)) = after.split_once(": Changes =") else {
+            rest = after;
+            continue;
+        };
+        let body = &body[..body.find(';').unwrap_or(body.len())];
+        raw.insert(name.trim().to_string(), body.to_string());
+        rest = after;
+    }
+    let names: Vec<String> = raw.keys().cloned().collect();
+    let mut resolved = std::collections::HashMap::new();
+    for name in &names {
+        let mut bits = Vec::new();
+        let mut asked = vec![name.clone()];
+        while let Some(next) = asked.pop() {
+            let body = &raw[&next];
+            for word in body.split(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':')) {
+                match word.strip_prefix("Changes::") {
+                    Some(bit) => bits.push(bit.to_string()),
+                    None if raw.contains_key(word) && word != next => asked.push(word.to_string()),
+                    None => {}
+                }
+            }
+        }
+        resolved.insert(name.clone(), bits);
+    }
+    resolved
+}
+
+/// A view told only what it `READS` never tests for a change outside it: such a test is dead.
+#[test]
+fn each_change_a_view_tests_for_is_among_what_it_reads() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui");
+    let mut files = Vec::new();
+    sources(&root, &mut files);
+    let mut checked = 0;
+    for file in files {
+        let text = std::fs::read_to_string(&file).unwrap();
+        let consts = change_consts(&text);
+        let Some(reads) = consts.get("READS") else {
+            continue;
+        };
+        if reads.iter().any(|bit| bit == "ALL") {
+            continue;
+        }
+        checked += 1;
+        let mut outside = Vec::new();
+        let mut in_const = false;
+        for line in text.lines() {
+            if line.trim_start().starts_with("const ") && line.contains(": Changes =") {
+                in_const = true;
+            }
+            if !in_const && !line.contains("publish") {
+                for word in line.split(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':')) {
+                    if let Some(bit) = word.strip_prefix("Changes::")
+                        && !matches!(bit, "NONE" | "ALL")
+                        && !reads.iter().any(|read| read == bit)
+                    {
+                        outside.push(bit.to_string());
+                    }
+                }
+            }
+            if in_const && line.contains(';') {
+                in_const = false;
+            }
+        }
+        assert!(
+            outside.is_empty(),
+            "{} tests for {outside:?}, which it does not read",
+            file.display()
+        );
+    }
+    assert!(checked >= 8, "only {checked} views declare what they read");
+}
