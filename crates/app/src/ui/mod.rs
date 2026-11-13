@@ -6,6 +6,7 @@ pub mod card;
 pub mod command_list;
 pub mod commands;
 pub mod controls;
+pub mod counts;
 pub mod downloads;
 pub mod field;
 pub mod find;
@@ -359,6 +360,7 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     set_motion(&theme, cx);
     cx.set_global(theme);
     cx.set_global(Shared(app));
+    counts::install(cx);
     text_field::bind_keys(cx);
     focus::bind_keys(cx);
     keys::bind_keys(cx);

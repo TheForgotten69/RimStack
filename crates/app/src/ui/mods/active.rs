@@ -335,9 +335,13 @@ impl Mods {
         } else {
             icon_button * 2. + theme::GAP_LINE + theme::GAP
         };
-        let updates = put(&say_n!(self.behind, "{} update", "{} updates"));
+        let updates = put(&say_n!(
+            crate::ui::counts::read(cx).behind,
+            "{} update",
+            "{} updates"
+        ));
         let extras = extras
-            + if self.behind > 0 {
+            + if crate::ui::counts::read(cx).behind > 0 {
                 btn_width(window, theme, &updates, false, false) + theme::GAP
             } else {
                 px(0.)
@@ -410,11 +414,11 @@ impl Mods {
                 )
             })
             .child(div().flex_1())
-            .when(self.behind > 0 && !tight, |d| {
+            .when(crate::ui::counts::read(cx).behind > 0 && !tight, |d| {
                 d.child(
                     Btn::new("updates", updates)
                         .tip(put(&say_n!(
-                            self.behind,
+                            crate::ui::counts::read(cx).behind,
                             "{} active Workshop mod is older than its Workshop version",
                             "{} active Workshop mods are older than their Workshop version"
                         )))
@@ -646,10 +650,14 @@ impl Mods {
                 .into(),
             );
         }
-        if self.behind > 0 {
+        if crate::ui::counts::read(cx).behind > 0 {
             entries.push(
                 Entry::item(
-                    put(&say_n!(self.behind, "{} update", "{} updates")),
+                    put(&say_n!(
+                        crate::ui::counts::read(cx).behind,
+                        "{} update",
+                        "{} updates"
+                    )),
                     run(|_, cx| {
                         cx.emit(super::ShowSection(crate::ui::section::Section::Downloads))
                     }),

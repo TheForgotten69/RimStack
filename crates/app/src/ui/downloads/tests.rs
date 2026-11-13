@@ -204,7 +204,7 @@ fn the_made_up_install_shows_its_updates_changes_and_list_and_the_tab_counts_the
     });
     assert_eq!((active, changed, listed), (2, 3, 3));
     let behind = cx
-        .update(|cx| shell.read(cx).map(|shell| shell.behind()))
+        .update(|cx| shell.read(cx).map(|shell| shell.behind(cx)))
         .unwrap();
     assert_eq!(behind, 2, "the Downloads tab counts the active mods behind");
 }

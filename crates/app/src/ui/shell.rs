@@ -1,7 +1,7 @@
 //! The top bar, the section shown, the status bar.
 
 use super::Options;
-use super::downloads::{BehindActive, Downloads, ShowMod};
+use super::downloads::{Downloads, ShowMod};
 use super::mods::{Mods, ShowSection};
 use super::section::Section;
 use super::theme::Theme;
@@ -21,8 +21,6 @@ pub struct Shell {
     /// Made with the window, as Qt's `DownloadsData` was: it counts the updates the top bar and
     /// the Mods tab show. What it reads of the `App` it reads off the window's thread.
     pub(crate) downloads: Option<Entity<Downloads>>,
-    /// The active mods with a newer Workshop version, on the Downloads tab.
-    pub(crate) behind: usize,
     /// Made the first time Settings is shown; `part` is the one it opens on.
     pub(crate) settings: Option<Entity<super::settings::Settings>>,
     pub(crate) part: usize,
@@ -174,7 +172,6 @@ impl Shell {
             demo,
             mods,
             downloads: None,
-            behind: 0,
             settings: None,
             part: options.part,
             logs: None,
@@ -299,13 +296,6 @@ impl Shell {
             shell.go(Section::Mods, cx);
             let mod_id = *mod_id;
             shell.mods.update(cx, |mods, cx| mods.show_mod(mod_id, cx));
-        })
-        .detach();
-        cx.subscribe(&downloads, |shell, _, BehindActive(count), cx| {
-            shell.behind = *count;
-            let count = *count;
-            shell.mods.update(cx, |mods, cx| mods.set_behind(count, cx));
-            cx.notify();
         })
         .detach();
         self.mods
@@ -539,7 +529,7 @@ impl Render for Shell {
                     section: self.section,
                     demo: self.demo,
                     in_the_way,
-                    behind: self.behind,
+                    behind: super::counts::read(cx).behind,
                     running: self.game.read(cx).running(),
                     lists_view: self.lists.clone(),
                     keys: self.bar_keys.clone(),
@@ -597,8 +587,8 @@ impl Shell {
         self.section
     }
 
-    pub(crate) fn behind(&self) -> usize {
-        self.behind
+    pub(crate) fn behind(&self, cx: &gpui::App) -> usize {
+        super::counts::read(cx).behind
     }
 }
 

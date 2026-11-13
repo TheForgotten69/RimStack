@@ -171,13 +171,6 @@ impl Mods {
         self.changed(cx);
     }
 
-    /// How many active mods Downloads found behind their Workshop version.
-    pub fn set_behind(&mut self, behind: usize, cx: &mut Context<Self>) {
-        self.behind = behind;
-        self.sync_details(cx);
-        cx.notify();
-    }
-
     /// Whether the inactive mods are folded into the rail.
     pub fn inactive_hidden(&self) -> bool {
         self.view.inactive_hidden

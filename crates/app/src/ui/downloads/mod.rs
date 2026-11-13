@@ -31,9 +31,6 @@ const TICK: Duration = Duration::from_secs(60);
 /// Asked of the window: show this mod in the Mods tab.
 pub struct ShowMod(pub i32);
 
-/// How many active mods have a newer Workshop version, told when it changes.
-pub struct BehindActive(pub usize);
-
 /// A task waiting for the one before it: two would write the same SteamCMD folder.
 struct Waiting {
     doing: String,
@@ -99,7 +96,6 @@ pub struct Downloads {
 }
 
 impl EventEmitter<ShowMod> for Downloads {}
-impl EventEmitter<BehindActive> for Downloads {}
 
 impl Downloads {
     /// A Workshop mod's change notes, once fetched.
@@ -280,11 +276,8 @@ impl Downloads {
         let behind: HashSet<&String> = updates.items.iter().map(|row| &row.id).collect();
         self.asked_of_steam.retain(|id| behind.contains(id));
         let active = updates.items.iter().filter(|row| row.active).count();
-        let was = self.updates.items.iter().filter(|row| row.active).count();
         self.updates = updates;
-        if active != was {
-            cx.emit(BehindActive(active));
-        }
+        super::counts::change(cx, |counts| counts.behind = active);
         cx.notify();
     }
 
@@ -351,7 +344,9 @@ impl Downloads {
             cx,
             move |_| app.since_launch(),
             |downloads, changed, cx| {
+                let count = changed.items.len();
                 downloads.changed = changed;
+                super::counts::change(cx, |counts| counts.changed_since = count);
                 cx.notify();
             },
         );

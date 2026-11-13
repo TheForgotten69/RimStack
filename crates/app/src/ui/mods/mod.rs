@@ -83,11 +83,6 @@ pub struct Mods {
     wanted: Option<(usize, usize)>,
     summary: Option<Rc<crate::reports::Summary>>,
     last_start: Option<Rc<crate::workspace::logs::LastStartSaid>>,
-    /// Mods changed since the game last started, read off the window's thread.
-    changed_since: usize,
-    /// The active mods with a newer Workshop version, as Downloads counts them.
-    behind: usize,
-    since_reading: Lane,
     summary_reading: Lane,
     last_start_reading: Lane,
     conflicts: usize,
@@ -255,9 +250,6 @@ impl Mods {
             wanted: None,
             summary: None,
             last_start: None,
-            changed_since: 0,
-            behind: 0,
-            since_reading: Lane::default(),
             summary_reading: Lane::default(),
             last_start_reading: Lane::default(),
             conflicts: 0,
@@ -454,17 +446,6 @@ impl Mods {
                 },
             );
         }
-        if changes.contains(Changes::LIBRARY | Changes::UPDATES | Changes::LAUNCHES) {
-            self.since_reading.run(
-                "changed since launch",
-                cx,
-                move |_| app.since_launch().items.len(),
-                |mods, changed, cx| {
-                    mods.changed_since = changed;
-                    mods.sync_details(cx);
-                },
-            );
-        }
     }
 
     /// Hands the details pane what it shows.
@@ -494,8 +475,6 @@ impl Mods {
             dirty,
             unsaved,
             conflicts: self.conflicts,
-            changed_since: self.changed_since,
-            behind: self.behind,
             selected_active: self.selected_active,
             panes: self.panes_wanted(),
             problems_open: self.problems_open,

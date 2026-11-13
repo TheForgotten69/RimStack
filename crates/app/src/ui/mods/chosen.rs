@@ -28,9 +28,7 @@ pub struct DetailsShown {
     pub dirty: bool,
     pub unsaved: String,
     pub conflicts: usize,
-    pub changed_since: usize,
     /// The active mods with a newer Workshop version.
-    pub behind: usize,
     pub selected_active: bool,
     /// What `pane_widths` is given.
     pub panes: super::panes::Panes,

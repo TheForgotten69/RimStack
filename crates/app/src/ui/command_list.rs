@@ -353,7 +353,7 @@ impl Shell {
             filtered("is:conflict"),
         );
         push(
-            self.behind > 0,
+            super::counts::read(cx).behind > 0,
             say!("Mods with an update"),
             &filter,
             none.clone(),

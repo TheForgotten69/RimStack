@@ -300,9 +300,10 @@ impl DetailsView {
                 Asked::Filter("is:conflict")
             }));
         }
-        if self.shown.changed_since > 0 {
+        let counts = crate::ui::counts::read(cx);
+        if counts.changed_since > 0 {
             let said = put(&say_n!(
-                self.shown.changed_since,
+                counts.changed_since,
                 "{} mod changed since the game was last started",
                 "{} mods changed since the game was last started"
             ));
@@ -310,9 +311,9 @@ impl DetailsView {
                 Asked::Section(crate::ui::section::Section::Downloads)
             }));
         }
-        if self.shown.behind > 0 {
+        if counts.behind > 0 {
             let said = put(&say_n!(
-                self.shown.behind,
+                counts.behind,
                 "{} update available",
                 "{} updates available"
             ));
