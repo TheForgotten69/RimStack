@@ -28,11 +28,11 @@ impl CompareView {
         let c = &theme.colours;
         let found = self.pixels_of(&file);
         let room = self.boxes.borrow().get(id).copied();
-        let boxes = self.boxes.clone();
+        let (boxes, me) = (self.boxes.clone(), cx.entity_id());
         let measure = canvas(
-            move |bounds, window, _| {
+            move |bounds, _, cx| {
                 if boxes.borrow_mut().insert(id, bounds.size) != Some(bounds.size) {
-                    window.refresh();
+                    crate::ui::redraw_after(me, cx);
                 }
             },
             |_, _, _, _| {},

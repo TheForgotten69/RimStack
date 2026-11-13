@@ -3,7 +3,7 @@ use super::controls::{Choice, Toggle};
 use super::{Options, focus, install, menu, notices};
 use crate::App;
 use gpui::{
-    Context, Entity, InteractiveElement, IntoElement, ParentElement, Render, Styled,
+    AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render, Styled,
     TestAppContext, VisualTestContext, Window, div, prelude::FluentBuilder,
 };
 use std::sync::Arc;
@@ -231,4 +231,47 @@ fn a_toast_goes_by_itself_after_a_while(cx: &mut TestAppContext) {
     cx.executor().advance_clock(Duration::from_secs(6));
     cx.run_until_parked();
     assert_eq!(shown(cx), 0);
+}
+
+struct Asking {
+    drawn: usize,
+}
+
+impl Render for Asking {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.drawn += 1;
+        let me = cx.entity_id();
+        let first = self.drawn == 1;
+        div().size_full().child(
+            gpui::canvas(
+                move |_, _, cx| {
+                    if first {
+                        super::redraw_after(me, cx);
+                    }
+                },
+                |_, _, _, _| {},
+            )
+            .size_full(),
+        )
+    }
+}
+
+#[test]
+fn a_view_that_asks_while_it_is_drawn_is_drawn_again_after() {
+    let mut cx = gpui::HeadlessAppContext::with_asset_source(
+        super::made_up::text_system(),
+        Arc::new(super::assets::Assets),
+    );
+    let window = cx
+        .open_window(gpui::size(gpui::px(200.), gpui::px(100.)), |_, cx| {
+            cx.new(|_| Asking { drawn: 0 })
+        })
+        .unwrap();
+    for _ in 0..3 {
+        cx.run_until_parked();
+        cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+    }
+    let drawn = cx.update(|cx| window.read(cx).unwrap().drawn);
+    assert_eq!(drawn, 2);
 }

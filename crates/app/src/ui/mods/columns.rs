@@ -249,8 +249,11 @@ impl Mods {
             "view" => self.menu_buttons.view.get(),
             _ => self.menu_buttons.order.get(),
         };
-        if at.size.width <= px(0.) || self.count(Side::Active) == 0 {
-            window.refresh();
+        if self.count(Side::Active) == 0 {
+            return;
+        }
+        if at.size.width <= px(0.) {
+            crate::ui::redraw_after(cx.entity_id(), cx);
             return;
         }
         self.menu_wanted = None;

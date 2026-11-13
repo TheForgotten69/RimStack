@@ -123,7 +123,7 @@ impl Mods {
             return None;
         }
         let Some(below) = self.hint_anchors.of(step).get() else {
-            window.refresh();
+            crate::ui::redraw_after(cx.entity_id(), cx);
             return None;
         };
         let c = &theme.colours;

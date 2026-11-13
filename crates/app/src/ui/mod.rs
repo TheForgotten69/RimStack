@@ -234,6 +234,12 @@ pub fn hear<V: 'static>(
     .detach();
 }
 
+/// `view` drawn again once this frame is done: `window.refresh()` while a frame is drawn does
+/// nothing in gpui-fast.
+pub fn redraw_after(view: gpui::EntityId, cx: &mut Cx) {
+    cx.defer(move |cx| cx.notify(view));
+}
+
 /// `f` on the view, as a control's callback that is given a value.
 pub fn act<V: 'static, T: 'static>(
     cx: &gpui::Context<V>,

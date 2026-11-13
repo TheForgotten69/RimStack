@@ -590,7 +590,7 @@ impl TextField {
                 // gpui-fast keeps the field's render, and a refresh each frame would follow.
                 if rows != rows_drawn.get() {
                     rows_drawn.set(rows);
-                    window.refresh();
+                    crate::ui::redraw_after(field.entity_id(), cx);
                 }
                 *kept.borrow_mut() = Some((wrapped, bounds));
                 window.handle_input(&focus, ElementInputHandler::new(bounds, field.clone()), cx);
