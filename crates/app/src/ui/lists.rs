@@ -168,20 +168,31 @@ impl Lists {
         self.close(window, cx);
     }
 
-    fn keep(&mut self, name: &str, cx: &mut Context<Self>) -> bool {
-        let kept = super::app(cx).keep_list(name, None);
-        self.problem = crate::words::why_not(&kept);
-        if kept.is_ok() {
-            self.go_by(name.trim(), cx);
-        }
-        cx.notify();
-        kept.is_ok()
+    /// Kept off the window's thread; `typed`: the name field is emptied once it is.
+    fn keep(&mut self, name: &str, typed: bool, cx: &mut Context<Self>) {
+        let (app, name) = (super::app(cx), name.trim().to_string());
+        let asked = name.clone();
+        crate::jobs::run(
+            "list kept",
+            cx,
+            move || app.keep_list(&asked, None),
+            move |lists, kept, cx| {
+                lists.problem = crate::words::why_not(&kept);
+                if kept.is_ok() {
+                    lists.go_by(&name, cx);
+                    if typed {
+                        lists.name.update(cx, |field, cx| field.set_text("", cx));
+                    }
+                }
+                cx.notify();
+            },
+        );
     }
 
     fn keep_typed(&mut self, cx: &mut Context<Self>) {
         let name = self.name.read(cx).text().trim().to_string();
-        if !name.is_empty() && self.keep(&name, cx) {
-            self.name.update(cx, |field, cx| field.set_text("", cx));
+        if !name.is_empty() {
+            self.keep(&name, true, cx);
         }
     }
 
@@ -365,7 +376,7 @@ impl Lists {
                 name.clone()
             )))
             .on_click(cx.listener(move |lists, _, _, cx| {
-                lists.keep(&kept, cx);
+                lists.keep(&kept, false, cx);
             }));
             shown.push(
                 row(div())

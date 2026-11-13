@@ -26,28 +26,64 @@ impl Shell {
     }
 
     pub(crate) fn start_hunt(&mut self, cx: &mut Context<Self>) {
-        if self.demo || self.hunt.active {
+        if self.demo || self.hunt.active || self.hunt_busy {
             return;
         }
         self.before_play = false;
-        self.hunt = super::app(cx).start_hunt(true);
         self.go(crate::ui::section::Section::Mods, cx);
-        self.try_round(cx);
+        let app = super::app(cx);
+        self.hunt_busy = true;
+        crate::jobs::run(
+            "search started",
+            cx,
+            move || app.start_hunt(true),
+            |shell, hunt, cx| {
+                shell.hunt_busy = false;
+                shell.hunt = hunt;
+                shell.try_round(cx);
+            },
+        );
     }
 
     pub(crate) fn answer_hunt(&mut self, broken: bool, cx: &mut Context<Self>) {
-        self.hunt = super::app(cx).answer_hunt(broken);
-        self.try_round(cx);
+        if self.hunt_busy {
+            return;
+        }
+        let app = super::app(cx);
+        self.hunt_busy = true;
+        crate::jobs::run(
+            "search answered",
+            cx,
+            move || app.answer_hunt(broken),
+            |shell, hunt, cx| {
+                shell.hunt_busy = false;
+                shell.hunt = hunt;
+                shell.try_round(cx);
+            },
+        );
     }
 
     pub(crate) fn end_hunt(&mut self, without_found: bool, cx: &mut Context<Self>) {
-        let ids = super::app(cx).end_hunt(without_found);
-        self.hunt = Default::default();
-        self.tell_hunting(cx);
-        self.sections
-            .mods
-            .update(cx, |mods, cx| mods.use_list_quietly(ids, cx));
-        cx.notify();
+        if self.hunt_busy {
+            return;
+        }
+        let app = super::app(cx);
+        self.hunt_busy = true;
+        crate::jobs::run(
+            "search ended",
+            cx,
+            move || app.end_hunt(without_found),
+            |shell, ids, cx| {
+                shell.hunt_busy = false;
+                shell.hunt = Default::default();
+                shell.tell_hunting(cx);
+                shell
+                    .sections
+                    .mods
+                    .update(cx, |mods, cx| mods.use_list_quietly(ids, cx));
+                cx.notify();
+            },
+        );
     }
 
     /// The screens that offer the search hear whether it runs.

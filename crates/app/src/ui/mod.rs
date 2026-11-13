@@ -343,23 +343,6 @@ fn chosen_font(app: &App) -> Option<String> {
         .filter(|f| !f.is_empty())
 }
 
-/// `theme` in `family`, the system's when none: its weights, and its ascent and descent read.
-fn in_family(theme: Theme, family: Option<&str>, cx: &Cx) -> Theme {
-    let family = family.map_or_else(system_family, str::to_string);
-    thread_local! {
-        static WEIGHTS: std::cell::RefCell<std::collections::HashMap<String, Vec<f32>>> =
-            Default::default();
-    }
-    let weights = WEIGHTS.with(|known| {
-        known
-            .borrow_mut()
-            .entry(family.clone())
-            .or_insert_with(|| weights_of(&family))
-            .clone()
-    });
-    weighted(theme, family, &weights, cx)
-}
-
 /// `theme` in `family` with its `weights`, and its ascent and descent read.
 fn weighted(theme: Theme, family: String, weights: &[f32], cx: &Cx) -> Theme {
     let mut theme = Theme::new(theme.appearance.clone(), family).with_weights(weights);
@@ -371,14 +354,25 @@ fn weighted(theme: Theme, family: String, weights: &[f32], cx: &Cx) -> Theme {
     theme
 }
 
-/// Every text in `family` from now on; the system's font when it is empty.
+/// Every text in `family` from now on; the system's font when it is empty. fontconfig is asked
+/// off the window's thread, and the windows drawn again once it answers.
 pub fn use_font(family: &str, cx: &mut Cx) {
-    let old = cx.global::<Theme>().clone();
-    let mut theme = in_family(old.clone(), (!family.is_empty()).then_some(family), cx);
-    theme.mono = old.mono;
-    set_motion(&theme, cx);
-    cx.set_global(theme);
-    cx.refresh_windows();
+    let chosen = (!family.is_empty()).then(|| family.to_string());
+    let probing = crate::jobs::off_thread("fonts", move || Fonts::probe(chosen));
+    cx.spawn(async move |cx| {
+        let Ok(fonts) = probing.await else {
+            return;
+        };
+        cx.update(|cx| {
+            let old = cx.global::<Theme>().clone();
+            let mut theme = weighted(old.clone(), fonts.family, &fonts.weights, cx);
+            theme.mono = old.mono;
+            set_motion(&theme, cx);
+            cx.set_global(theme);
+            cx.refresh_windows();
+        });
+    })
+    .detach();
 }
 
 /// A picture is taken: nothing moves, so it shows each thing where it comes to rest.
@@ -392,7 +386,7 @@ fn set_motion(theme: &Theme, cx: &mut Cx) {
 
 /// Sets what every view reads: the `App` and the Theme.
 pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
-    let fonts = Fonts::probe(chosen_font(&app));
+    let fonts = crate::jobs::waiting_here(|| Fonts::probe(chosen_font(&app)));
     install_with(app, options, fonts, cx);
 }
 

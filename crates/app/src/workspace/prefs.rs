@@ -4,6 +4,7 @@
 use super::App;
 use crate::changes::Changes;
 use rimstack_core::base::error::Error;
+use rimstack_core::base::locks::Held;
 use rimstack_core::kept::prefs::Prefs;
 use std::path::PathBuf;
 
@@ -115,6 +116,9 @@ impl App {
 
     /// Read again only once the file's time changes: the top bar asks at every draw.
     pub fn prefs(&self) -> Prefs {
+        if let Some(kept) = &self.prefs_kept.held().1 {
+            return kept.clone();
+        }
         let file = self.prefs_file();
         let read = self
             .prefs
@@ -122,10 +126,33 @@ impl App {
         (*read).clone()
     }
 
+    /// Kept at once; the file is written off this thread, and a failure to write it reported.
     fn write_prefs(&self, prefs: Prefs) -> Result<(), Error> {
-        let file = self.prefs_file();
-        prefs.write(&file)?;
-        self.prefs.put(super::written(file), prefs);
+        let turn = {
+            let mut kept = self.prefs_kept.held();
+            kept.0 += 1;
+            kept.1 = Some(prefs.clone());
+            kept.0
+        };
+        let (file, read, kept) = (
+            self.prefs_file(),
+            self.prefs.clone(),
+            self.prefs_kept.clone(),
+        );
+        self.prefs_writes.ask(
+            "RimStack.conf written",
+            (turn, prefs),
+            move |(turn, prefs)| {
+                if let Err(problem) = prefs.write(&file) {
+                    rimstack_core::problem!("{problem}");
+                }
+                read.put(super::written(file.clone()), prefs);
+                let mut kept = kept.held();
+                if kept.0 == turn {
+                    kept.1 = None;
+                }
+            },
+        );
         Ok(())
     }
 

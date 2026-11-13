@@ -94,6 +94,7 @@ fn main() -> std::process::ExitCode {
     if !std::env::args().any(|a| a.starts_with("--shot")) {
         put_among_applications();
     }
-    ui::run(app, ui::Options::from_args(std::env::args()));
+    ui::run(app.clone(), ui::Options::from_args(std::env::args()));
+    app.settle_writes();
     std::process::ExitCode::SUCCESS
 }

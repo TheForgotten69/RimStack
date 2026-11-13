@@ -1,5 +1,5 @@
 use crate::App;
-use rimstack_core::base::locks::Shared;
+use rimstack_core::base::locks::{Held, Shared};
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::kept::settings::Switch;
 use rimstack_core::kept::{activated, launches};
@@ -562,7 +562,11 @@ impl App {
         let emptied = launched
             .last()
             .is_some_and(|last| super::game::emptied_by_game(library, &saved, last));
-        let kept = activated::read(&file);
+        let kept = self
+            .activated_kept
+            .held()
+            .clone()
+            .or_else(|| activated::read(&file));
         if emptied {
             return kept.unwrap_or_default();
         }
@@ -571,8 +575,14 @@ impl App {
             |kept| (kept, false),
         );
         changed |= activated::follow(&mut since, &saved, at);
-        if changed && let Err(problem) = activated::write(&file, &since) {
-            rimstack_core::problem!("when mods were activated was not kept: {problem}");
+        if changed {
+            *self.activated_kept.held() = Some(since.clone());
+            self.activated_writes
+                .ask("activated.json written", since.clone(), move |since| {
+                    if let Err(problem) = activated::write(&file, &since) {
+                        rimstack_core::problem!("when mods were activated was not kept: {problem}");
+                    }
+                });
         }
         since
     }

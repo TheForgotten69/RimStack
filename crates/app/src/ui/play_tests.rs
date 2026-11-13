@@ -48,6 +48,7 @@ fn the_search_for_the_broken_mod_halves_the_list_and_gives_it_back() {
     shell
         .update(&mut cx, |shell, _, cx| shell.start_hunt(cx))
         .unwrap();
+    cx.run_until_parked();
     let (hunting, asking) = cx.update(|cx| {
         let shell = shell.read(cx).unwrap();
         (shell.hunt.active, shell.hunt.asking)
@@ -57,10 +58,12 @@ fn the_search_for_the_broken_mod_halves_the_list_and_gives_it_back() {
     shell
         .update(&mut cx, |shell, _, cx| shell.answer_hunt(true, cx))
         .unwrap();
+    cx.run_until_parked();
     assert!(cx.update(|cx| shell.read(cx).unwrap().hunt.active));
     shell
         .update(&mut cx, |shell, _, cx| shell.end_hunt(false, cx))
         .unwrap();
+    cx.run_until_parked();
     assert!(!cx.update(|cx| shell.read(cx).unwrap().hunt.active));
     assert_eq!(
         active(&mut cx, shell),

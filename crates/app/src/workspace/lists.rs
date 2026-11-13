@@ -298,11 +298,13 @@ mod tests {
         assert!(app.list_named("Mine").is_none());
 
         let snapshot = app.snapshot("@saving", &["a.b".to_string()]).unwrap();
+        app.settle_writes();
         app.note_change(
             rimstack_core::say!("Saved the load order: {}", "x"),
             Some(&snapshot),
         );
         app.note(Sentence::from_kept("[\"Set aside\"]"), String::new());
+        app.settle_writes();
         let history = app.history();
         assert_eq!(history[0].said.to_string(), "Set aside");
         assert_eq!(history[1].said.to_string(), "Saved the load order: x");

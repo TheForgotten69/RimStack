@@ -545,21 +545,19 @@ impl App {
         };
         let mut yours = self.user_rules().writing();
         let added = yours.import(&pairs);
-        let written = yours.write(&self.user_rules_file());
+        let kept = yours.clone();
         drop(yours);
-        match written {
-            Err(problem) => problem.sentence().clone(),
-            Ok(()) if pairs.is_empty() => say!("RimSort has no rules of your own."),
-            Ok(()) => {
-                self.publish(Changes::RULES | Changes::PROBLEMS);
-                say_n!(
-                    pairs.len(),
-                    "RimSort's {} rule: {} new, now yours here.",
-                    "RimSort's {} rules: {} new, now yours here.",
-                    added
-                )
-            }
+        self.write_user_rules(kept);
+        if pairs.is_empty() {
+            return say!("RimSort has no rules of your own.");
         }
+        self.publish(Changes::RULES | Changes::PROBLEMS);
+        say_n!(
+            pairs.len(),
+            "RimSort's {} rule: {} new, now yours here.",
+            "RimSort's {} rules: {} new, now yours here.",
+            added
+        )
     }
 
     pub fn set_mod_settings_aside(&self) -> Sentence {

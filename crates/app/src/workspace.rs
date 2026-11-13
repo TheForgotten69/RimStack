@@ -74,6 +74,24 @@ fn written(file: PathBuf) -> Written {
     (file, at)
 }
 
+type Write = Box<dyn FnOnce() + Send>;
+
+/// `value`, already kept in memory, written to `file` off this thread: once for however many
+/// are asked while one is written, the newest, and a failure reported.
+fn write_behind<T: Send + 'static>(
+    writes: &crate::jobs::Single<T>,
+    file: PathBuf,
+    value: T,
+    write: fn(&T, &Path) -> Result<(), rimstack_core::base::error::Error>,
+) {
+    let name = format!("{} written", file.display());
+    writes.ask(&name, value, move |value| {
+        if let Err(problem) = write(&value, &file) {
+            rimstack_core::problem!("{problem}");
+        }
+    });
+}
+
 pub struct App {
     home: PathBuf,
     settings_dir: PathBuf,
@@ -84,7 +102,17 @@ pub struct App {
     system_languages: Vec<String>,
     detected_language: Derived<u64, String>,
     settings: RwLock<Settings>,
-    prefs: Derived<Written, rimstack_core::kept::prefs::Prefs>,
+    prefs: Arc<Derived<Written, rimstack_core::kept::prefs::Prefs>>,
+    /// The prefs kept and not yet written, with the turn of their keeping: read in place of the
+    /// file until written.
+    prefs_kept: Arc<Mutex<(u64, Option<rimstack_core::kept::prefs::Prefs>)>>,
+    prefs_writes: crate::jobs::Single<(u64, rimstack_core::kept::prefs::Prefs)>,
+    settings_writes: crate::jobs::Single<Settings>,
+    notes_writes: crate::jobs::Single<Notes>,
+    rules_writes: crate::jobs::Single<UserRules>,
+    activated_writes: crate::jobs::Single<rimstack_core::kept::activated::Since>,
+    /// What `activated.json` was last made to hold, read in its place while it is written.
+    activated_kept: Mutex<Option<rimstack_core::kept::activated::Since>>,
     install: Reread<install::Install>,
     session: OnceLock<Mutex<Session>>,
     notes: OnceLock<RwLock<Notes>>,
@@ -124,7 +152,12 @@ pub struct App {
     find: find::Find,
     rescans: crate::jobs::Single<()>,
     log_keeping: crate::jobs::Single<()>,
-    bus: crate::changes::Bus,
+    /// Snapshots named and not yet written.
+    snapshots_named: Arc<Mutex<HashSet<String>>>,
+    /// The history's writes, snapshots and journal, to be done in the order asked.
+    records_waiting: Arc<Mutex<std::collections::VecDeque<Write>>>,
+    records_writes: crate::jobs::Single<()>,
+    bus: Arc<crate::changes::Bus>,
 }
 
 impl App {
@@ -160,7 +193,14 @@ impl App {
         let web: Arc<dyn Transport> = Arc::new(Web::default());
         Self {
             settings: RwLock::new(Settings::read(&settings_dir.join("settings.json"))),
-            prefs: Derived::default(),
+            prefs: Arc::default(),
+            prefs_kept: Arc::default(),
+            prefs_writes: crate::jobs::Single::default(),
+            settings_writes: crate::jobs::Single::default(),
+            notes_writes: crate::jobs::Single::default(),
+            rules_writes: crate::jobs::Single::default(),
+            activated_writes: crate::jobs::Single::default(),
+            activated_kept: Mutex::default(),
             home,
             settings_dir,
             data_dir: data_root.join("RimStack"),
@@ -203,7 +243,10 @@ impl App {
             find: find::Find::default(),
             rescans: crate::jobs::Single::default(),
             log_keeping: crate::jobs::Single::default(),
-            bus: crate::changes::Bus::default(),
+            snapshots_named: Arc::default(),
+            records_waiting: Arc::default(),
+            records_writes: crate::jobs::Single::default(),
+            bus: Arc::default(),
         }
     }
 
@@ -277,14 +320,50 @@ impl App {
         self.settings.reading()
     }
 
+    /// Kept at once; the file is written off this thread, and a failure to write it reported.
     pub fn set_setting(
         &self,
         name: &str,
         value: &str,
     ) -> Result<(), rimstack_core::base::error::Error> {
-        let mut settings = self.settings.writing();
-        settings.set(name, value)?;
-        settings.write(&self.settings_file())
+        let kept = {
+            let mut settings = self.settings.writing();
+            settings.set(name, value)?;
+            settings.clone()
+        };
+        write_behind(
+            &self.settings_writes,
+            self.settings_file(),
+            kept,
+            Settings::write,
+        );
+        Ok(())
+    }
+
+    /// Once every file kept from memory is written: before the program ends.
+    pub fn settle_writes(&self) {
+        while !(self.settings_writes.idle()
+            && self.prefs_writes.idle()
+            && self.notes_writes.idle()
+            && self.rules_writes.idle()
+            && self.activated_writes.idle()
+            && self.records_writes.idle())
+        {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    pub(crate) fn write_notes(&self, notes: Notes) {
+        write_behind(&self.notes_writes, self.notes_file(), notes, Notes::write);
+    }
+
+    pub(crate) fn write_user_rules(&self, rules: UserRules) {
+        write_behind(
+            &self.rules_writes,
+            self.user_rules_file(),
+            rules,
+            UserRules::write,
+        );
     }
 
     /// Ids: "rules", "worksOn", "replacements", "names"; on unless `databasesOff` lists them.
@@ -665,6 +744,7 @@ pub(crate) mod tests {
         assert!(app.database_on("rules"));
         app.set_setting("databasesOff", "rules,names").unwrap();
         assert!(!app.database_on("rules") && app.database_on("worksOn"));
+        app.settle_writes();
         let kept = Settings::read(&app.settings_file());
         assert_eq!(kept.get("databasesOff"), Some("rules,names"));
     }

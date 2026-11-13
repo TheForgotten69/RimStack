@@ -145,15 +145,24 @@ impl Saves {
         if name.is_empty() {
             return;
         }
-        match super::app(cx).keep_list(&name, Some(ids)) {
-            Ok(()) => {
-                self.list_problem.clear();
-                self.list_name
-                    .update(cx, |field, cx| field.set_text("", cx));
-            }
-            Err(problem) => self.list_problem = crate::words::put(problem.sentence()),
-        }
-        cx.notify();
+        let app = super::app(cx);
+        crate::jobs::run(
+            "list kept",
+            cx,
+            move || app.keep_list(&name, Some(ids)),
+            |saves, kept, cx| {
+                match kept {
+                    Ok(()) => {
+                        saves.list_problem.clear();
+                        saves
+                            .list_name
+                            .update(cx, |field, cx| field.set_text("", cx));
+                    }
+                    Err(problem) => saves.list_problem = crate::words::put(problem.sentence()),
+                }
+                cx.notify();
+            },
+        );
     }
 }
 

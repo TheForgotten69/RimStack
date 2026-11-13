@@ -67,6 +67,7 @@ fn a_search_shows_the_settings_it_names_from_every_part(cx: &mut TestAppContext)
 fn a_theme_chosen_is_kept_in_rimstack_conf_and_shown_at_once(cx: &mut TestAppContext) {
     let (root, settings, cx) = settings(cx, 1);
     settings.update(cx, |s, cx| s.keep_look("theme", "light", cx));
+    cx.run_until_parked();
     let kept =
         std::fs::read_to_string(root.path().join("settings/RimStack/RimStack.conf")).unwrap();
     assert!(kept.contains("[Appearance]\ntheme=light"), "{kept}");

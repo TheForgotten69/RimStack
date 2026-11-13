@@ -34,6 +34,8 @@ pub struct Shell {
     pub(crate) game: Entity<super::game::Game>,
     /// The search for the broken mod, as `bisect.json` keeps it between starts.
     pub(crate) hunt: crate::workspace::search::Hunt,
+    /// A step of the search is being kept off the window's thread.
+    pub(crate) hunt_busy: bool,
     /// The saved lists and the history, over the window when open.
     pub(crate) lists: Entity<super::lists::Lists>,
     /// The first start's setup, in place of everything until Start.
@@ -99,6 +101,7 @@ impl Shell {
                 true => Default::default(),
                 false => super::app(cx).hunt(),
             },
+            hunt_busy: false,
             before_play: false,
             note: cx.new(|_| super::status_note::StatusNote { demo }),
             prompt: super::prompt::install(cx),
@@ -125,6 +128,7 @@ impl Shell {
             window.on_window_should_close(cx, move |window, cx| {
                 super::keep_window(window, cx);
                 let _ = left.update(cx, |mods, cx| mods.keep_left_scroll(cx));
+                super::app(cx).settle_writes();
                 true
             });
             check_release(cx);

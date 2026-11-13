@@ -14,7 +14,9 @@ pub(crate) fn made_up() -> (tempfile::TempDir, crate::App) {
     let run = |script: &str, args: &[&std::path::Path]| {
         let mut command = program::command(tools.join(script));
         command.args(args);
-        let done = program::run(&mut command, Duration::from_secs(60)).unwrap();
+        let done = crate::jobs::waiting_here(|| {
+            program::run(&mut command, Duration::from_secs(60)).unwrap()
+        });
         assert!(
             done.status.success(),
             "{script}: {}",

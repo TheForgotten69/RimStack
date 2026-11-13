@@ -78,6 +78,7 @@ fn the_made_up_saves_are_read_and_a_save_list_is_kept_by_its_name() {
             s.keep_list(cx);
         })
     });
+    cx.run_until_parked();
     let problem = cx.update(|cx| saves.read(cx).list_problem.clone());
     assert!(problem.is_empty(), "{problem}");
     let kept = std::fs::read_dir(tmp.path().join("data/RimStack/lists"))

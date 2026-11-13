@@ -3,7 +3,9 @@ use std::fs::Permissions;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+/// Synced to the disk before it returns: a slow wait.
 pub fn write(path: &Path, contents: impl AsRef<[u8]>) -> Result<(), Error> {
+    crate::base::waits::slow(&format!("{} written", path.display()));
     let failed = |e: std::io::Error| Error::file(path, e);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(failed)?;

@@ -50,11 +50,23 @@ fn waited(what: &str) {
     }
 }
 
+/// `work` on this thread, though it may wait long: what must be done before the window shows
+/// anything, or a test's own setup.
+pub fn waiting_here<R>(work: impl FnOnce() -> R) -> R {
+    struct Counted;
+    impl Drop for Counted {
+        fn drop(&mut self) {
+            IN_JOB.set(IN_JOB.get() - 1);
+        }
+    }
+    IN_JOB.set(IN_JOB.get() + 1);
+    let _counted = Counted;
+    work()
+}
+
 #[cfg(test)]
 fn as_job(work: impl FnOnce()) {
-    IN_JOB.set(IN_JOB.get() + 1);
-    work();
-    IN_JOB.set(IN_JOB.get() - 1);
+    waiting_here(work);
 }
 
 /// Threads running jobs at most; a job asked beyond it waits for one of them, and the asker
@@ -315,6 +327,12 @@ impl<T> Default for Single<T> {
 }
 
 impl<T: Send + 'static> Single<T> {
+    /// Whether nothing runs nor waits to.
+    pub fn idle(&self) -> bool {
+        let state = self.state.held();
+        !state.0 && state.1.is_none()
+    }
+
     pub fn ask(&self, name: &str, given: T, work: impl Fn(T) + Send + 'static) {
         let mut state = self.state.held();
         state.1 = Some(given);

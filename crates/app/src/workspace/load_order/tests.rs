@@ -156,7 +156,10 @@ fn workshop_mods_go_by_the_time_and_size_steam_records() {
 fn a_mod_is_dated_when_its_activation_is_saved_and_forgotten_when_it_leaves() {
     let (_tmp, app) = installed();
     let mut order = LoadOrder::read(&app, true, None);
-    let kept = || rimstack_core::kept::activated::read(&app.activated_file()).unwrap();
+    let kept = || {
+        app.settle_writes();
+        rimstack_core::kept::activated::read(&app.activated_file()).unwrap()
+    };
     assert_eq!(kept().keys().collect::<Vec<_>>(), ["ludeon.rimworld"]);
     order.take(&app, Side::Inactive, 0, None);
     assert!(!kept().contains_key("ann.roads"), "not before it is saved");
