@@ -266,4 +266,61 @@ mod tests {
         assert_eq!(thumbs.waiting.last(), Some(&key("ahead")));
         assert_eq!(thumbs.asked[&key("ahead")], Some(view));
     }
+
+    /// How long the pictures a page and a half ahead take to decode, page after page through
+    /// both lists, at 2x and with as many decodes at once as the window runs.
+    #[test]
+    #[ignore = "reads this machine's own install; RIMSTACK_TIME_HOME names a scratch folder"]
+    fn times_decoding_the_pages_ahead_on_this_machines_install() {
+        use crate::workspace::load_order::{LoadOrder, Side};
+        let Ok(scratch) = std::env::var("RIMSTACK_TIME_HOME") else {
+            return;
+        };
+        let scratch = PathBuf::from(scratch);
+        let home = PathBuf::from(std::env::var("HOME").unwrap());
+        let app = crate::App::new(
+            home,
+            &scratch.join("settings"),
+            &scratch.join("data"),
+            Default::default(),
+        );
+        let order = LoadOrder::read(&app, true, None);
+        const AHEAD: usize = 25 * 3 / 2;
+        let size = (124, 76);
+        for side in [Side::Active, Side::Inactive] {
+            let rows = order.rows(&app, side);
+            let pictures: Vec<PathBuf> = rows
+                .iter()
+                .filter(|row| !row.is_header && !row.picture.is_empty())
+                .map(|row| PathBuf::from(&row.picture))
+                .collect();
+            let mut took: Vec<std::time::Duration> = pictures
+                .chunks(AHEAD)
+                .map(|ahead| {
+                    let started = std::time::Instant::now();
+                    std::thread::scope(|scope| {
+                        for share in ahead.chunks(ahead.len().div_ceil(DECODING)) {
+                            scope.spawn(move || {
+                                for path in share {
+                                    let _ = rimstack_core::base::thumbnail::crop(path, size);
+                                }
+                            });
+                        }
+                    });
+                    started.elapsed()
+                })
+                .collect();
+            took.sort();
+            let at = |q: f32| took[((took.len() - 1) as f32 * q) as usize];
+            eprintln!(
+                "{side:?}: {} rows, {} pictures, {} pages ahead: median {:?}, p90 {:?}, worst {:?}",
+                rows.len(),
+                pictures.len(),
+                took.len(),
+                at(0.5),
+                at(0.9),
+                at(1.0)
+            );
+        }
+    }
 }
