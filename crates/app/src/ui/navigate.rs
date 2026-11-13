@@ -9,19 +9,15 @@ use rimstack_core::mods::library::ModId;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Go {
     Section(Section),
-    /// The mod chosen in the load order, on the Mods tab.
     ShowMod(ModId),
     /// The load order becomes these mods, unsaved, shown on the Mods tab.
     UseList(Vec<String>),
     /// The load order becomes these mods, unsaved, with the window left where it is.
     TakeList(Vec<String>),
-    /// The first-run hints shown again on the Mods tab.
     StartHints,
     /// The mark that a mod works on this game version taken off.
     Distrust(ModId),
-    /// The Mods tab filtered to what Search found.
     SearchedInMods,
-    /// The search for the mod that breaks the game started.
     FindBroken,
     /// The Workshop searched for this, as a fix that names a page asks.
     Browse(String),
@@ -39,7 +35,6 @@ pub enum Go {
     DownloadListed,
     SubscribeListed,
     InstallSteamcmd,
-    /// A Workshop mod's change notes fetched.
     FetchNotes(ModId),
 }
 

@@ -14,8 +14,6 @@ type Act = fn(&mut Mods, &mut Context<Mods>);
 
 type Shape<'a> = &'a dyn Fn(&Theme) -> Size<Pixels>;
 
-/// The window on the made-up install once its mods and their files are read, with `options`
-/// given and `act` done, drawn until what places itself after a frame has its place.
 fn drawn(
     text_scale: f32,
     window: &dyn Fn(&Theme) -> Size<Pixels>,

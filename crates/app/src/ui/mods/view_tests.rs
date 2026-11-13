@@ -704,7 +704,6 @@ fn a_control_pointed_at_and_an_edit_draw_the_bars_again() {
     );
 }
 
-/// The made-up install with a preview for every mod.
 fn with_previews() -> (
     tempfile::TempDir,
     gpui::HeadlessAppContext,

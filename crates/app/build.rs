@@ -21,7 +21,6 @@ fn commit_of_build() {
 
 fn main() {
     commit_of_build();
-    // The program's own icon, which Windows shows for its shortcuts and on the taskbar.
     embed_resource::compile("assets/rimstack.rc", embed_resource::NONE)
         .manifest_required()
         .expect("the icon is compiled into the Windows program");

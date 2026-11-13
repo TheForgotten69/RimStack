@@ -1,6 +1,3 @@
-//! Where and what is searched, the file types offered as
-//! they are typed, and the mods with matches to keep one of.
-
 use super::Find;
 use super::layout::Layout;
 use crate::ui::field::Field;
@@ -21,7 +18,6 @@ use std::rc::Rc;
 
 type Picked = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// A check box, or a round one of a group, with its words and a count.
 #[derive(IntoElement)]
 struct Pick {
     id: ElementId,

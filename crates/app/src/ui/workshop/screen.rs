@@ -1,6 +1,3 @@
-//! What the Workshop screen lays out: the search row, the related banner, the filters, the results
-//! as result cards in a grid, and the details or the download list beside them.
-
 use super::details::fill_text;
 use super::{Workshop, related_said};
 use crate::ui::button::{Btn, Chip};
@@ -21,7 +18,6 @@ use rimstack_core::say;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-/// Where the view's parts go at the window's width.
 #[derive(Clone, Copy)]
 pub(super) struct Layout {
     pub wide: bool,
@@ -31,7 +27,6 @@ pub(super) struct Layout {
     pub docked: bool,
     pub covered: bool,
     pub card_least: Pixels,
-    /// The results' column, with the panel docked beside it or not.
     pub results_width: Pixels,
 }
 

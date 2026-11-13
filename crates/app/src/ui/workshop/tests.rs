@@ -10,7 +10,6 @@ use gpui::{AppContext, Entity, HeadlessAppContext, Pixels, Size, WindowHandle, s
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// The window a scene is drawn in, shaped by the Theme.
 type Shape<'a> = &'a dyn Fn(&Theme) -> Size<Pixels>;
 
 type Opened = (
@@ -20,7 +19,6 @@ type Opened = (
     Entity<Workshop>,
 );
 
-/// The Workshop on the made-up install and its made-up database, the first results in.
 fn opened(text_scale: f32, window: Shape<'_>, browse: Option<&str>) -> Opened {
     let (tmp, app) = made_up();
     let app = app.browsing_fixture(true);

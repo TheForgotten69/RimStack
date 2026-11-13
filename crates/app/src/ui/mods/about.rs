@@ -1,6 +1,3 @@
-//! What stands before playing a mod, its description, the textures it shares,
-//! what replaces it, its facts, and its tags and note.
-
 use super::chosen::{DetailsView, defined};
 use super::edit::acting;
 use crate::ui::button::{Btn, Chip};
@@ -342,7 +339,6 @@ impl DetailsView {
         )
     }
 
-    /// `SavedMark`: "Saved", fading in as the notes are saved and out as they change again.
     fn saved_mark(&self, theme: &Theme) -> Vec<AnyElement> {
         let saved = self.shown.notes_saved;
         vec![

@@ -1,6 +1,3 @@
-//! The pieces the first start's steps are built from: a titled block, a thing found, a box to
-//! tick, a choice to pick, and the load order as it will look.
-
 use crate::reports::SettingsReport;
 
 use crate::ui::theme::{self, Theme};
@@ -135,7 +132,6 @@ impl FirstRun {
         .into_any_element()
     }
 
-    /// `Tick`: a box to tick, its words and, dimmer, what they mean.
     pub(super) fn tick(
         theme: &Theme,
         id: SharedString,
@@ -191,7 +187,6 @@ impl FirstRun {
             .into_any_element()
     }
 
-    /// `Pick`: a name and the controls that choose it.
     pub(super) fn pick(
         theme: &Theme,
         window: &Window,
@@ -230,7 +225,6 @@ impl FirstRun {
             .into_any_element()
     }
 
-    /// The game and its expansions as the load order will show them, the second one chosen.
     pub(super) fn glance(&self, theme: &Theme, report: &SettingsReport) -> Option<AnyElement> {
         if report.official.is_empty() {
             return None;

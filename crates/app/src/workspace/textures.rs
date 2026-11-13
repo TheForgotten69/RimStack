@@ -165,7 +165,6 @@ pub struct Comparison {
 }
 
 impl Comparison {
-    /// Ignores case.
     pub fn named(&self, filter: &str) -> Vec<&Shared> {
         let filter = filter.trim().to_lowercase();
         self.textures

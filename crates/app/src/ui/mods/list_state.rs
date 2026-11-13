@@ -17,7 +17,6 @@ pub struct ListState {
     pub(super) standing: Standing,
     pub(super) overview: Option<Rc<Overview>>,
     pub(super) sort_pending: usize,
-    /// The mod folders being read again.
     pub(crate) rescanning: bool,
     pub(super) files_read: bool,
     pub(super) saving: bool,
@@ -48,12 +47,10 @@ impl ListState {
         self.order.list(side).mods().len()
     }
 
-    /// How many mods of a list the filter lets through.
     pub fn matching(&self, side: Side) -> usize {
         self.order.list(side).matching()
     }
 
-    /// The mod chosen first, as `Mods.selectedId` gave it.
     pub fn selected_id(&self) -> Option<ModId> {
         self.selection.first().copied()
     }
@@ -99,13 +96,11 @@ impl ListState {
         self.overview.clone()
     }
 
-    /// The active mods installed, in their order.
     pub fn active_installed(&self) -> Vec<ModId> {
         let mods = self.order.list(Side::Active).mods().iter();
         mods.filter_map(|m| m.installed).collect()
     }
 
-    /// Whether the active mods' files are still being read.
     pub fn reading_files(&self) -> bool {
         !self.files_read && self.count(Side::Active) > 0 && !self.demo
     }
@@ -119,7 +114,6 @@ impl ListState {
         )
     }
 
-    /// How many mods have errors, and how many warnings.
     pub fn problems(&self) -> (usize, usize) {
         match self.demo {
             true => (0, 0),

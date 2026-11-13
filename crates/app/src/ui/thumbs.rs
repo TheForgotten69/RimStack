@@ -12,7 +12,6 @@ use std::sync::Arc;
 /// are all kept, with `ROOM_BYTES` more beside them for those scrolled to, up to
 /// `CEILING_BYTES`.
 const MOST_BYTES: usize = 48 << 20;
-/// Decodes running at once.
 const DECODING: usize = 4;
 /// Room past the list's own pictures, for those of another size or list.
 const ROOM_BYTES: usize = MOST_BYTES / 4;
@@ -39,7 +38,6 @@ pub struct Thumbs {
     /// Pictures let go, still in the window's atlas until `flush`, and the views to draw again
     /// without them.
     gone: Vec<(Arc<RenderImage>, Viewers)>,
-    /// Least lately shown first, for dropping past `most`.
     by_use: BTreeMap<u64, Key>,
     uses: u64,
     bytes: usize,
@@ -105,7 +103,6 @@ impl Thumbs {
         true
     }
 
-    /// The next picture to decode: one asked, else one of the list's while there is room.
     fn next_to_decode(&mut self) -> Option<Key> {
         if let Some(key) = self.waiting.pop() {
             return Some(key);
@@ -166,7 +163,6 @@ impl Thumbs {
         }
     }
 
-    /// `key` asked for a row in view, which `shown_by` draws: ahead of the rest.
     fn ask_shown(&mut self, key: Key, shown_by: EntityId) {
         if let Some(shows) = self.asked.get_mut(&key) {
             *shows = Some(shown_by);
@@ -202,7 +198,6 @@ impl Thumbs {
 
 #[cfg(all(test, target_os = "linux"))]
 impl Thumbs {
-    /// Pictures asked for rows in view and not decoded yet.
     pub(crate) fn awaited_in_view(&self) -> usize {
         self.asked.values().filter(|shows| shows.is_some()).count()
     }

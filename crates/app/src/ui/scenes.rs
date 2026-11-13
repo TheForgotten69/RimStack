@@ -1,6 +1,3 @@
-//! What the command line asks to be seen at the start, for pictures and the scroll bench: each
-//! is done once what it needs is read, through the views' own methods.
-
 use super::Options;
 use super::mods::{ListState, Menu, Mods, Progress};
 use super::shell::Shell;
@@ -75,7 +72,6 @@ pub fn stage(shell: &mut Shell, options: &Options, window: &mut Window, cx: &mut
     open(shell, options.open.as_deref(), window, cx);
 }
 
-/// `act` on the mods once `ready`, now if they are.
 fn once(
     mods: &Entity<Mods>,
     ready: impl Fn(&ListState) -> bool + 'static,
@@ -133,7 +129,6 @@ fn open(shell: &mut Shell, open: Option<&str>, window: &mut Window, cx: &mut Con
     }
 }
 
-/// The menu once the list is read and its button drawn.
 fn open_menu(mods: &Entity<Mods>, menu: Menu, cx: &mut Context<Shell>) {
     let listed = |list: &ListState| list.count(Side::Active) > 0;
     once(

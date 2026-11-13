@@ -95,7 +95,6 @@ pub fn shield() -> gpui::Div {
         .on_any_mouse_down(|_, _, cx| cx.stop_propagation())
 }
 
-/// Whether what closes fades out: not with Reduce motion.
 pub fn fades_out(cx: &gpui::App) -> bool {
     !cx.reduce_motion()
 }
@@ -158,7 +157,6 @@ pub fn over(ground: gpui::Hsla, wanted: gpui::Hsla) -> gpui::Hsla {
     }
 }
 
-/// The drawer: slid in from its own width to the left, in `CALM`.
 pub fn slid_in<E: Styled + IntoElement + 'static>(
     element: E,
     width: gpui::Pixels,
@@ -205,7 +203,6 @@ pub fn colour_change(
     })
 }
 
-/// The colour that was, laid over the one that is and fading away.
 pub fn colour_fading(was: gpui::Div, turn: usize) -> impl IntoElement {
     was.with_animation(("colour-fading", turn), Animation::new(QUICK), |d, t| {
         d.opacity(1. - t)

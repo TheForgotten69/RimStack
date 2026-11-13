@@ -13,7 +13,6 @@ use gpui::{
 use rimstack_core::{say, say_n};
 
 impl Shell {
-    /// The round's list on the Mods tab, while the search asks.
     fn try_round(&mut self, cx: &mut Context<Self>) {
         self.tell_hunting(cx);
         if self.hunt.asking {
@@ -86,7 +85,6 @@ impl Shell {
         );
     }
 
-    /// The screens that offer the search hear whether it runs.
     pub(crate) fn tell_hunting(&mut self, cx: &mut Context<Self>) {
         let active = self.hunt.active;
         self.sections
@@ -109,7 +107,6 @@ impl Shell {
         });
     }
 
-    /// The bar under the top bar while the search runs.
     pub(crate) fn hunt_bar(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let hunt = &self.hunt;
         if !hunt.active {

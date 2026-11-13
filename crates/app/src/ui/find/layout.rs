@@ -1,11 +1,8 @@
-//! Where the find screen puts the options, the matches and the preview at the window's width.
-
 use super::Find;
 use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::measure_in;
 use gpui::{FontWeight, Pixels, Window, px};
 
-/// Where the screen's parts go at the window's width.
 #[derive(Clone, Copy)]
 pub(super) struct Layout {
     /// Five digits of the monospace family at the small size: a line number's column.
@@ -19,7 +16,6 @@ pub(super) struct Layout {
     pub side_width: Pixels,
     pub preview_shown: bool,
     pub results_shown: bool,
-    /// The matches' column.
     pub middle: Pixels,
 }
 

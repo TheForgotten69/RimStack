@@ -1,11 +1,7 @@
-//! Where the Mods tab was left, as `Mods.restoreLeftOff` brought it back: the mod chosen, its
-//! details' tab, the filter, and how far the load order was scrolled.
-
 use super::Mods;
 use crate::workspace::load_order::Side;
 use gpui::{Context, px};
 
-/// Whether the place left is brought back and kept.
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub enum LeftOff {
     /// Brought back once the mods are first read.

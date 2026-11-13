@@ -1,6 +1,3 @@
-//! The game's folders, the appearance, how Sort decides, the Steam key and
-//! RimStack itself, one part at a time or every setting a search finds.
-
 mod line;
 mod parts;
 mod parts_more;
@@ -22,11 +19,9 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
-/// How long the typing rests before a folder is checked, or a typed setting kept.
 const FOLDER_PAUSE: Duration = Duration::from_millis(400);
 const SETTING_PAUSE: Duration = Duration::from_millis(600);
 
-/// The folders typed by hand, by their setting's name.
 const FOLDERS: [&str; 3] = ["game", "config", "workshop"];
 
 struct Fields {
@@ -37,7 +32,6 @@ struct Fields {
     fonts: Entity<TextField>,
 }
 
-/// What a button said after it was pressed, beside it.
 #[derive(Default)]
 struct Said {
     language: String,
@@ -81,7 +75,6 @@ pub struct Settings {
     fonts: Rc<Vec<SharedString>>,
     typing: HashMap<&'static str, Lane>,
     reading: Lane,
-    /// What the App told that is not read yet.
     unread: Changes,
     paging: Paging,
     font_scroll: super::rows::Scrolling,
@@ -266,13 +259,11 @@ impl Settings {
         ))
     }
 
-    /// The part shown, as a command asks.
     pub fn show_part(&mut self, part: usize, cx: &mut Context<Self>) {
         self.part = part;
         cx.notify();
     }
 
-    /// A part chosen from the list: the search is let go and the page starts at its top.
     pub(super) fn pick_part(&mut self, part: usize, cx: &mut Context<Self>) {
         if part >= self.parts().len() {
             return;
@@ -308,7 +299,6 @@ impl Settings {
         self.typing.entry(name).or_default()
     }
 
-    /// A folder typed in its box: kept once the typing rests and it is the game's folder.
     fn check_folder(&mut self, name: &'static str, typed: String, cx: &mut Context<Self>) {
         let typed = typed.trim().to_string();
         if super::app(cx).settings().get(name).unwrap_or_default() == typed {
@@ -337,7 +327,6 @@ impl Settings {
         );
     }
 
-    /// A setting typed in its box, kept once the typing rests.
     fn keep_later(&mut self, name: &'static str, typed: String, cx: &mut Context<Self>) {
         let typed = typed.trim().to_string();
         if super::app(cx).settings().get(name).unwrap_or_default() == typed {
@@ -499,7 +488,6 @@ impl Settings {
         }
     }
 
-    /// Whether a line shows: it is in the part shown, or a search finds it.
     fn shows(&self, line: &line::Line) -> bool {
         let finding = self.finding.trim();
         if finding.is_empty() {

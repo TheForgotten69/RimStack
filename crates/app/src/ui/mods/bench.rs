@@ -18,7 +18,6 @@ pub struct Bench {
     cpu: Duration,
 }
 
-/// The time this process has run on the processors, user and system.
 fn cpu_time() -> Duration {
     let stat = std::fs::read_to_string("/proc/self/stat").unwrap_or_default();
     let fields: Vec<&str> = stat

@@ -72,7 +72,6 @@ fn draw(cx: &mut HeadlessAppContext, window: WindowHandle<Around>) {
         .unwrap();
 }
 
-/// Times the view around and the leaf were drawn.
 fn drawn(cx: &mut HeadlessAppContext, window: WindowHandle<Around>) -> (usize, usize) {
     cx.update(|cx| {
         let around = window.read(cx).unwrap();

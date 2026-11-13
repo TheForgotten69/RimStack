@@ -1,5 +1,3 @@
-//! The Mods tab as a whole: its keys, its panes or what stands in for them, and its bars.
-
 use super::{FocusFilter, Mods, Redo, Save, Undo, pane_widths};
 use crate::ui::theme::{self, Theme};
 use gpui::{

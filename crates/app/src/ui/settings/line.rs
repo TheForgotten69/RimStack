@@ -1,6 +1,3 @@
-//! The pieces the settings screen lays each setting out with: `Line` (its name, what sets it,
-//! the way back to the default, the words under it), `Folder`, `GroupTitle` and `PathText`.
-
 use super::Settings;
 use crate::ui::field::Field;
 use crate::ui::theme::{self, Theme};
@@ -15,7 +12,6 @@ use std::rc::Rc;
 
 pub(super) type Reset = Rc<dyn Fn(&mut Settings, &mut Window, &mut Context<Settings>)>;
 
-/// One setting.
 pub(super) struct Line {
     pub part: usize,
     pub id: &'static str,
@@ -44,7 +40,6 @@ impl Line {
         self
     }
 
-    /// Not at its default: marked, and `reset` brings it back.
     pub fn changed(
         mut self,
         changed: bool,
@@ -60,7 +55,6 @@ impl Line {
         self
     }
 
-    /// What follows the controls: the room left in the row.
     pub fn filled(self) -> Self {
         self.held(div().flex_1())
     }
@@ -76,7 +70,6 @@ pub(super) enum Row {
     Under(usize, AnyElement),
 }
 
-/// The width of the names at the left of the lines.
 pub(super) fn named(theme: &Theme) -> Pixels {
     theme.sized(190.)
 }
@@ -95,7 +88,6 @@ pub(super) fn note(theme: &Theme, text: String) -> AnyElement {
         .into_any_element()
 }
 
-/// Words in the room of a line's controls, under them, as the error or the note.
 pub(super) fn under(theme: &Theme, colour: gpui::Hsla, size: Pixels, text: String) -> AnyElement {
     div()
         .pl(named(theme) + theme::GAP)
@@ -105,7 +97,6 @@ pub(super) fn under(theme: &Theme, colour: gpui::Hsla, size: Pixels, text: Strin
         .into_any_element()
 }
 
-/// A text that takes the room left beside the controls and wraps.
 pub(super) fn words(
     theme: &Theme,
     colour: gpui::Hsla,
@@ -195,7 +186,6 @@ impl Settings {
             .into_any_element()
     }
 
-    /// `Folder`: the folder in use or typed by hand, the way to open it, and what was found.
     pub(super) fn folder(
         &self,
         at: usize,
@@ -285,7 +275,6 @@ impl Settings {
     }
 }
 
-/// `PathText`: a path on one line, cut in its middle, with the ways to copy and open it.
 pub(super) fn path(
     id: &'static str,
     path: String,

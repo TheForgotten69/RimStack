@@ -80,7 +80,6 @@ impl FirstRun {
         );
     }
 
-    /// What the Mods tab read, for the first step.
     pub fn set_mods(
         &mut self,
         active: usize,

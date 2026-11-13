@@ -10,9 +10,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 thread_local! {
-    /// How many `Pictures` drew each file: one is let go only once none shows it.
     static SHOWN_BY: RefCell<HashMap<PathBuf, usize>> = RefCell::default();
-    /// The files of `Pictures` gone, let go with the next ones let go.
     static LEFT: RefCell<Vec<PathBuf>> = RefCell::default();
 }
 
@@ -54,7 +52,6 @@ impl Pictures {
 }
 
 impl Pictures {
-    /// The pictures of the one thing this ever shows, let go once it goes.
     pub fn kept(&self) -> Shown {
         Shown {
             held: self.held.clone(),

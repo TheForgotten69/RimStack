@@ -1,6 +1,3 @@
-//! What Sort's preview moves and why,
-//! and the mods that took longest at the game's last start.
-
 use super::chosen::DetailsView;
 use crate::ui::card::Card;
 use crate::ui::theme::{self, Theme};

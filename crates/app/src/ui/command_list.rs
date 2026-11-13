@@ -1,6 +1,3 @@
-//! What Ctrl + K offers: the settings, the sections, the load order's
-//! commands, the chosen mod's, filters and folders; and the mods the text names.
-
 use super::commands::{Command, Commands, Run};
 use super::lists::Which;
 use super::shell::Shell;
@@ -52,7 +49,6 @@ impl Shell {
         cx.notify();
     }
 
-    /// The mods `text` names, to show one.
     pub(crate) fn found_mods(&self, text: &str, cx: &gpui::App) -> Vec<Command> {
         let found = self
             .sections

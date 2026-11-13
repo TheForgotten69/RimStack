@@ -1,5 +1,3 @@
-//! The row's headings: a category, a group under a tag, a category met again.
-
 use super::super::Mods;
 use super::category_icon;
 use crate::ui::theme::{self, Theme};
@@ -22,7 +20,6 @@ fn arrow(theme: &Theme, collapsed: bool, colour: Hsla) -> gpui::Div {
     .w(theme.sized(10.))
 }
 
-/// `text` with `tip` shown while pointed at.
 pub(super) fn tipped_label(id: String, text: gpui::Div, tip: String) -> AnyElement {
     crate::ui::tip::tipped(div().id(SharedString::from(id)).child(text), tip.into())
         .into_any_element()

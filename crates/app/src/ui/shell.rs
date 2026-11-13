@@ -15,14 +15,11 @@ use gpui::{
 const READS: Changes = Changes::LOGS;
 
 pub struct Shell {
-    /// The keys' handles of the sections and of the search box.
     bar_keys: [gpui::FocusHandle; 2],
     pub(crate) demo: bool,
     pub(crate) sections: super::sections::Sections,
-    /// The Background work popup open over the status bar.
     pub(crate) tray_open: bool,
     pub(crate) tray_turn: usize,
-    /// The Background work popup closed, while it fades out.
     pub(crate) tray_fading: bool,
     /// The turn of the section shown last, which fades it in; none for the first.
     shown_turn: usize,
@@ -36,18 +33,12 @@ pub struct Shell {
     pub(crate) hunt: crate::workspace::search::Hunt,
     /// A step of the search is being kept off the window's thread.
     pub(crate) hunt_busy: bool,
-    /// The saved lists and the history, over the window when open.
     pub(crate) lists: Entity<super::lists::Lists>,
-    /// The first start's setup, in place of everything until Start.
     pub(crate) first_run: Option<Entity<super::first_run::FirstRun>>,
-    /// Ctrl + K, open over the window.
     pub(crate) commands: Option<Entity<super::commands::Commands>>,
-    /// Ctrl + K just closed, while it fades out.
     pub(crate) closing_commands: Option<Entity<super::commands::Commands>>,
-    /// The keys' sheet, open over the window.
     pub(crate) keys_open: bool,
     pub(crate) keys_focus: gpui::FocusHandle,
-    /// `beforePlay`: what stands in Play's way, open under it.
     pub(crate) before_play: bool,
     /// The status bar's note, drawn again alone as the hint changes.
     pub(crate) note: Entity<super::status_note::StatusNote>,
@@ -167,7 +158,6 @@ impl Shell {
         self.sections.get(cx)
     }
 
-    /// Where a view asked the window to go.
     fn follow(&mut self, to: &Go, window: &mut Window, cx: &mut Context<Self>) {
         match to {
             Go::Problem(act, said) => {
@@ -398,7 +388,6 @@ impl Shell {
 
 #[cfg(test)]
 thread_local! {
-    /// How often the shell was rendered, as a test of what motion draws again.
     pub(crate) static RENDERS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -409,7 +398,6 @@ impl Shell {
     }
 }
 
-/// The game's logs copied among the kept ones at the start and each time they change.
 fn keep_logs(cx: &mut Context<Shell>) {
     super::app(cx).keep_logs_soon();
     super::hear(cx, READS, |_: &mut Shell, _, cx| {
@@ -417,7 +405,6 @@ fn keep_logs(cx: &mut Context<Shell>) {
     });
 }
 
-/// A newer RimStack told once the window has settled, when Settings asks for the check.
 fn check_release(cx: &mut Context<Shell>) {
     use super::notices;
     use crate::words::put;
@@ -486,7 +473,6 @@ impl Shell {
         cx.notify();
     }
 
-    /// Start: the setup is done, the community data fetched and RimSort's rules read when asked.
     fn end_first_run(&mut self, with_data: bool, with_rimsort: bool, cx: &mut Context<Self>) {
         use super::notices;
         use crate::words::put;

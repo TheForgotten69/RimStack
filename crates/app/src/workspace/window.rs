@@ -13,7 +13,6 @@ impl App {
         (place(kept, WIDTH, HEIGHT, screens), maximized)
     }
 
-    /// A window closed while maximized keeps the area it had before.
     pub fn keep_window(&self, area: Area, maximized: bool) -> Result<(), Error> {
         if maximized {
             return self.set_setting("windowMaximized", "yes");

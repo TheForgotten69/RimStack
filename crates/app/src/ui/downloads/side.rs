@@ -1,6 +1,3 @@
-//! What a look-up found, the download list, and SteamCMD; beside the page when
-//! the window is wide enough, at its top otherwise.
-
 use super::Downloads;
 use super::screen::text_fill;
 use crate::ui::card::Card;
@@ -15,7 +12,6 @@ use rimstack_core::sources::downloads::Asked;
 use rimstack_core::{say, say_n};
 
 impl Downloads {
-    /// The work under way, as the status bar lists it.
     pub(crate) fn tasks_said(&self) -> Vec<String> {
         let mut said = Vec::new();
         if self.updates_busy {

@@ -19,7 +19,6 @@ pub struct Around {
     /// The kept list the load order came from, empty when none: read at the start, then told
     /// by `Lists` as it keeps it.
     pub list_name: String,
-    /// The Mods tab's work under way, worded.
     pub mods_work: Vec<String>,
     pub downloads_work: Vec<String>,
     pub community_busy: bool,
@@ -61,7 +60,6 @@ pub fn change(cx: &mut Cx, change: impl FnOnce(&mut Around)) {
     });
 }
 
-/// What the Mods tab shows the window, read again after it changed.
 pub fn from_list(list: &Entity<ListState>, cx: &mut Cx) {
     let list = list.read(cx);
     let (errors, sort_pending, dirty, unsaved) = list.standing();

@@ -1,6 +1,3 @@
-//! The chosen save beside the saves: its picture, facts, differences from the load order and
-//! the backups.
-
 use crate::ui::button::Btn;
 use crate::ui::field::Field;
 use crate::ui::page::{page, room};

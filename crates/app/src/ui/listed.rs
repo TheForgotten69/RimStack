@@ -16,7 +16,6 @@ pub struct Listed {
     /// By Workshop id.
     pub notes: Rc<ChangeNotes>,
     pub notes_busy: bool,
-    /// What the button that fetches change notes says now.
     pub notes_label: String,
 }
 

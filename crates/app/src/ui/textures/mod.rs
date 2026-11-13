@@ -1,6 +1,3 @@
-//! How many textures have a DDS beside them, per mod; converting, removing
-//! and skipping; and the DDS files of every mod the game would refuse.
-
 mod screen;
 
 use super::rows::Scrolling;
@@ -107,7 +104,6 @@ impl Textures {
         cx.notify();
     }
 
-    /// Converts the mods `ids`, or removes what RimStack made in them, telling how far it got.
     fn work(&mut self, ids: Vec<ModId>, remove: bool, cx: &mut Context<Self>) {
         if self.busy || ids.is_empty() || self.demo {
             return;
@@ -148,7 +144,6 @@ impl Textures {
         cx.notify();
     }
 
-    /// What the status bar says of the count or the conversion under way.
     pub(crate) fn task_said(&self) -> Option<String> {
         use rimstack_core::say;
         self.busy.then(|| match self.progress.is_empty() {

@@ -1,6 +1,3 @@
-//! The text of the mods' files searched, the matches by mod and file, where and
-//! what is searched beside them, and the file of the match chosen.
-
 mod layout;
 mod preview;
 mod screen;
@@ -26,9 +23,7 @@ use std::time::{Duration, Instant};
 
 gpui::actions!(find, [FocusSearch]);
 
-/// The pause after typing the file types before the search runs again.
 const TYPES_PAUSE: Duration = Duration::from_millis(400);
-/// How often the mods with matches are shown again while a search runs.
 const MODS_EVERY: Duration = Duration::from_millis(200);
 
 enum Heard {
@@ -36,7 +31,6 @@ enum Heard {
     Done(Summary),
 }
 
-/// The file the preview shows, and what the search inside it found.
 #[derive(Default)]
 struct Viewing {
     file: PathBuf,
@@ -76,7 +70,6 @@ pub struct Find {
     found: Rc<FoundMods>,
     extensions: Vec<(String, usize)>,
     offer_at: usize,
-    /// The file types offered are put away until the field is typed in again.
     offers_shut: bool,
     viewing: Viewing,
     preview: Option<Rc<PreviewShown>>,
@@ -273,7 +266,6 @@ impl Find {
         type_offers(&self.extensions, self.types.read(cx).text())
     }
 
-    /// The file types completed with the offer `at`, or the one highlighted.
     fn complete_type(&mut self, cx: &mut Context<Self>) {
         self.complete_with(self.offer_at, cx);
     }
@@ -484,7 +476,6 @@ impl Find {
         super::app(cx).find_stop();
     }
 
-    /// The rows become `rows`; the current one stays chosen while it is among them.
     fn renew(&mut self, rows: Vec<RowRef>) {
         let current = self.current.and_then(|at| self.rows.get(at).copied());
         self.current = current.and_then(|row| rows.iter().position(|&other| other == row));
@@ -521,7 +512,6 @@ impl Find {
         cx.notify();
     }
 
-    /// The row `by` file or line rows from the current one chosen, as the arrows move.
     fn step(&mut self, by: i32, cx: &mut Context<Self>) {
         let moved = super::app(cx).find_results(|r| r.step(&self.rows, self.current, by));
         if let Some(row) = moved {

@@ -1,5 +1,3 @@
-//! The window: views that show what the `App` hands them and forward what is done.
-
 pub mod around;
 pub mod assets;
 pub mod button;
@@ -67,7 +65,6 @@ pub fn app(cx: &Cx) -> Arc<App> {
     cx.global::<Shared>().0.clone()
 }
 
-/// What the command line asks of the window.
 #[derive(Clone, Debug, Default)]
 pub struct Options {
     pub demo: bool,
@@ -86,7 +83,6 @@ pub struct Options {
     pub hints: Option<u8>,
     /// Typed into the Mods filter, which has the keys, as `--typing=` asks.
     pub typing: Option<String>,
-    /// The filter's text at the start, as `--filter=` gives it.
     pub filter: Option<String>,
     /// A row of the load order chosen, and the tab shown, as `--pick=` and `--tab=` give them.
     pub pick: Option<usize>,
@@ -266,7 +262,6 @@ pub fn cached<V: gpui::Render>(view: gpui::Entity<V>) -> impl gpui::IntoElement 
     view.cached(gpui::StyleRefinement::default().size_full())
 }
 
-/// `f` on the view, as a control's callback that is given a value.
 pub fn act<V: 'static, T: 'static>(
     cx: &gpui::Context<V>,
     f: impl Fn(&mut V, T, &mut gpui::Window, &mut gpui::Context<V>) + 'static,
@@ -287,7 +282,6 @@ fn kept_appearance(app: &App) -> Appearance {
     })
 }
 
-/// Draws every window again in the appearance kept now.
 pub fn retheme(cx: &mut Cx) {
     let appearance = kept_appearance(&app(cx));
     let theme = cx.global::<Theme>().with_appearance(appearance);
@@ -296,7 +290,6 @@ pub fn retheme(cx: &mut Cx) {
     cx.refresh_windows();
 }
 
-/// Keeps a preference of `[Appearance]` and shows the window in it.
 pub fn keep_appearance(key: &str, value: &str, cx: &mut Cx) {
     match app(cx).keep_pref("Appearance", key, value) {
         Ok(()) => retheme(cx),
@@ -304,7 +297,6 @@ pub fn keep_appearance(key: &str, value: &str, cx: &mut Cx) {
     }
 }
 
-/// The kept appearance, but for what the command line asks for a picture.
 pub fn appearance(app: &App, options: &Options) -> Appearance {
     let mut appearance = kept_appearance(app);
     if let Some(theme) = options.theme {
@@ -344,7 +336,6 @@ fn chosen_font(app: &App) -> Option<String> {
         .filter(|f| !f.is_empty())
 }
 
-/// `theme` in `family` with its `weights`, and its ascent and descent read.
 fn weighted(theme: Theme, family: String, weights: &[f32], cx: &Cx) -> Theme {
     let mut theme = Theme::new(theme.appearance.clone(), family).with_weights(weights);
     let text = cx.text_system();
@@ -385,13 +376,11 @@ fn set_motion(theme: &Theme, cx: &mut Cx) {
     cx.set_reduce_motion(theme.appearance.reduce_motion || cx.has_global::<Still>());
 }
 
-/// Sets what every view reads: the `App` and the Theme.
 pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     let fonts = crate::jobs::waiting_here(|| Fonts::probe(chosen_font(&app)));
     install_with(app, options, fonts, cx);
 }
 
-/// As `install`, with the fonts already asked for.
 fn install_with(app: Arc<App>, options: &Options, fonts: Fonts, cx: &mut Cx) {
     #[cfg(test)]
     crate::jobs::run_on(cx.background_executor().clone());
@@ -471,7 +460,6 @@ fn window_start(app: &App, cx: &Cx) -> WindowBounds {
     }
 }
 
-/// The window's place kept as it closes, for its next start.
 pub(crate) fn keep_window(window: &gpui::Window, cx: &Cx) {
     use rimstack_core::base::window::Area;
     let (bounds, maximized) = match window.window_bounds() {

@@ -1,6 +1,3 @@
-//! The download list and what can be done with it, as `listed` holds it: Downloads shows one in
-//! its side pane, the Workshop another in a pane of its own.
-
 use super::screen::text_fill;
 use crate::ui::listed::Listed;
 use crate::ui::navigate::{Go, go};
@@ -15,8 +12,6 @@ use gpui::{
 use rimstack_core::say;
 
 pub struct DownloadList {
-    /// In a pane of its own, as the Workshop shows it: the rows fill the pane and SteamCMD's
-    /// install is offered with it.
     pane: bool,
     paging: Paging,
 }
@@ -30,8 +25,6 @@ impl DownloadList {
         }
     }
 
-    /// The list, and what can be done with it. In a `pane` of its own, as the
-    /// Workshop shows it, the rows fill the pane and SteamCMD's install is offered with it.
     fn items(&self, theme: &Theme, listed: &Listed, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let pane = self.pane;
         let offers_install = pane;

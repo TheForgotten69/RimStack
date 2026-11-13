@@ -1,6 +1,3 @@
-//! The textures two mods share, each pair side by
-//! side, as a slider, or as their difference; the one the game uses chosen by hand.
-
 mod list;
 mod picture;
 mod summary;
@@ -27,7 +24,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-/// The slider's handle, dragged.
 struct Cutting;
 
 /// Told to the Mods tab, once the view's own update is over.
@@ -58,7 +54,6 @@ fn kilobytes(n: u64) -> String {
     }
 }
 
-/// "1st", "2nd", "3rd", "4th", as the load order counts.
 fn ordinal(n: usize) -> String {
     let (last, last_two) = (n % 10, n % 100);
     match (n, last, last_two) {
@@ -593,7 +588,6 @@ impl Mods {
         cx.notify();
     }
 
-    /// The first active mod that shares textures with another, compared with it.
     pub fn compare_first(&mut self, cx: &mut Context<Self>) {
         if !self.list.read(cx).files_read {
             return;

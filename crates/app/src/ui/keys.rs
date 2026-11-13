@@ -1,5 +1,3 @@
-//! The keys sheet and the key caps, and the keys the window answers wherever the keys are.
-
 use super::button::Btn;
 use super::shell::Shell;
 use super::theme::{self, Theme};
@@ -55,7 +53,6 @@ actions!(window, [FrameTimes]);
 #[cfg(feature = "inspector")]
 actions!(window, [Inspector]);
 
-/// gpui-fast's developer tools on the window, when built in.
 pub fn developer_tools(shown: gpui::Div) -> gpui::Div {
     #[cfg(feature = "profiler")]
     let shown =
@@ -65,7 +62,6 @@ pub fn developer_tools(shown: gpui::Div) -> gpui::Div {
     shown
 }
 
-/// Each group's title, then its keys and what they do, as the sheet lists them.
 fn groups() -> Vec<(Sentence, Vec<(Sentence, Sentence)>)> {
     vec![
         (
@@ -127,7 +123,6 @@ fn groups() -> Vec<(Sentence, Vec<(Sentence, Sentence)>)> {
     ]
 }
 
-/// The key cap's width for its text.
 fn cap_width(window: &Window, theme: &Theme, text: &str) -> Pixels {
     let size = theme.sized(20.);
     size.max(measure(window, theme, text, theme.caption(), theme.medium) + theme::GAP_MEDIUM)

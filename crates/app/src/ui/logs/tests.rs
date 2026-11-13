@@ -9,10 +9,8 @@ use gpui::{AppContext, Entity, HeadlessAppContext, Pixels, Size, WindowHandle, s
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// The window a scene is drawn in, shaped by the Theme.
 type Shape<'a> = &'a dyn Fn(&Theme) -> Size<Pixels>;
 
-/// Logs on the made-up install, its log read.
 fn opened(
     view: usize,
     text_scale: f32,

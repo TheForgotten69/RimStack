@@ -1,6 +1,3 @@
-//! The frame: the three panes and the dividers dragged between them, the rail the
-//! inactive mods fold into, and the drawer it opens over the load order.
-
 use super::Mods;
 use super::rows::{Ghost, Held};
 use crate::ui::button::Btn;
@@ -20,8 +17,6 @@ use std::time::Duration;
 /// The quiet after a divider stops before its width is kept.
 pub(super) const SETTLED: Duration = Duration::from_millis(400);
 
-/// The widths wanted for the inactive mods and the details, and whether the inactive mods are
-/// folded into the rail.
 #[derive(Clone, Copy, Default, PartialEq)]
 pub struct Panes {
     pub inactive: Pixels,
@@ -29,7 +24,6 @@ pub struct Panes {
     pub hidden: bool,
 }
 
-/// A divider dragged: the one after the inactive mods, or the one before the details.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Grip {
     Inactive,
@@ -151,7 +145,6 @@ impl Mods {
         cx.notify();
     }
 
-    /// A divider holding the keys moved by Left or Right.
     pub(super) fn nudge_grip(
         &mut self,
         grip: Grip,
@@ -377,7 +370,6 @@ impl Mods {
             .into_any_element()
     }
 
-    /// The panes side by side with their dividers, or the rail and its drawer.
     pub(super) fn panes(
         &mut self,
         theme: &Theme,

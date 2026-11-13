@@ -161,7 +161,6 @@ pub struct LocalCopy {
     pub path: String,
 }
 
-/// An active row whose mod is not installed, in place of its details for its menu.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NotInstalled {

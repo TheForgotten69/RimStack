@@ -13,7 +13,6 @@ use super::textures::Textures;
 use super::workshop::Workshop;
 use gpui::{AnyView, App as Cx, AppContext, Context, Entity};
 
-/// What the command line opens the sections on.
 pub struct Start {
     pub demo: bool,
     /// The part Settings opens on.
@@ -22,7 +21,6 @@ pub struct Start {
     pub view: usize,
 }
 
-/// A view shown as one of the window's sections.
 pub trait SectionView: gpui::Render + Shown + Sized {
     const AT: Section;
     fn made(start: &Start, cx: &mut Context<Self>) -> Self;
@@ -70,7 +68,6 @@ impl Sections {
         Some(made.view.clone())
     }
 
-    /// The section's view, made if it was not.
     pub fn get<V: SectionView>(&mut self, cx: &mut Cx) -> Entity<V> {
         if let Some(view) = self.made::<V>() {
             return view;
@@ -83,7 +80,6 @@ impl Sections {
         view
     }
 
-    /// The section's view, if it was made.
     pub fn made<V: SectionView>(&self) -> Option<Entity<V>> {
         let made = self.made[V::AT.index()].as_ref()?;
         made.view.clone().downcast::<V>().ok()
@@ -96,7 +92,6 @@ impl Sections {
         });
     }
 
-    /// `section` shown, made if it was not, and the one shown before told it is hidden.
     pub fn show(&mut self, section: Section, cx: &mut Cx) {
         if section != self.shown {
             self.tell_shown(self.shown, false, cx);

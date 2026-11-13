@@ -1,5 +1,3 @@
-//! The downloads page: the paste row, the update status, the cards.
-
 use super::Downloads;
 use crate::ui::card::Card;
 use crate::ui::field::Field;
@@ -16,11 +14,9 @@ use gpui::{
 };
 use rimstack_core::{say, say_n};
 
-/// The inactive mods' updates shown before "more".
 const FIRST_INACTIVE: usize = 3;
 
 impl Downloads {
-    /// The side pane's width: room for its two buttons side by side.
     fn pane_width(theme: &Theme, window: &Window) -> Pixels {
         let words = put(&say!("Download with SteamCMD…")) + &put(&say!("Subscribe in Steam"));
         measure(window, theme, &words, theme.small(), FontWeight::NORMAL)
@@ -590,7 +586,6 @@ impl Downloads {
     }
 }
 
-/// A text that takes the room left in its row and is cut at its end.
 pub(super) fn text_fill(
     theme: &Theme,
     size: Pixels,
@@ -608,7 +603,6 @@ pub(super) fn text_fill(
         .child(text)
 }
 
-/// The thin bar a quarter of whose length slides across while Steam is asked.
 fn busy_bar(theme: &Theme) -> impl IntoElement {
     let (ground, slider) = (theme.colours.chip, theme.colours.accent);
     let reduce = theme.appearance.reduce_motion;

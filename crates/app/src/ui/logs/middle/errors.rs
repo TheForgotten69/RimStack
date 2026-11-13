@@ -1,5 +1,3 @@
-//! The errors list of the log's middle: its rows, their heights and the empty states.
-
 use super::step;
 use crate::ui::button::Chip;
 
@@ -18,7 +16,6 @@ use rimstack_core::{say, say_n};
 use std::rc::Rc;
 
 impl Logs {
-    /// The errors' rows: as tall as their words and the room around them, `gapHair` apart.
     fn error_tops(&self, theme: &Theme) -> Rc<[Pixels]> {
         let Some(report) = &self.report else {
             return Rc::from(vec![theme::GAP_TINY]);

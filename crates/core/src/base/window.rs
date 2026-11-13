@@ -1,5 +1,3 @@
-//! Where the window opens: where it was closed, moved back onto a screen that is there now.
-
 use serde::Serialize;
 
 /// In logical pixels. A window's position is that of its inside: the title bar is above it.

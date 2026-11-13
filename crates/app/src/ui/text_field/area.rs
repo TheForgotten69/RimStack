@@ -83,7 +83,6 @@ impl Wrapped {
             .map_or(0, |(start, line)| start + line.len())
     }
 
-    /// The rectangles that cover `from..to`, one for each row it crosses.
     pub fn cover(&self, from: usize, to: usize, width: Pixels) -> Vec<Bounds<Pixels>> {
         let (start, end) = (self.position(from), self.position(to));
         let rows = ((end.y - start.y) / self.line).round() as usize;

@@ -26,7 +26,6 @@ fn chosen(cx: &mut HeadlessAppContext, mods: &Entity<Mods>, nth: usize) -> ModId
     })
 }
 
-/// Two textures that two active fixture mods both hold.
 pub(super) fn shared_textures(root: &std::path::Path) {
     for (n, shade) in [("035", 60u8), ("038", 200u8)] {
         let folder = root.join(format!("fx/game/Mods/fixture-{n}/Textures/Things"));

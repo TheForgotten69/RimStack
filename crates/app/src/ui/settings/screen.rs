@@ -1,6 +1,3 @@
-//! How the settings screen is laid out: the parts at the left with a search over every setting,
-//! the page in the middle at most `sized(860)` wide, and the font picker under its button.
-
 use super::Settings;
 use super::line::{Row, group, named, note};
 use crate::ui::field::Field;
@@ -32,14 +29,12 @@ impl Settings {
         theme.sized(210.)
     }
 
-    /// The page's width, at most `sized(860)` with the room at its sides.
     fn page_width(theme: &Theme, window: &Window) -> Pixels {
         let gutter = theme::GAP_PAGE + theme::GAP_SMALL;
         let room = window.viewport_size().width - Self::nav_width(theme);
         theme.sized(860.).min(room - gutter * 2.)
     }
 
-    /// The room a line's controls have: the page less the names, for a line at its default.
     pub(super) fn held_room(&self, theme: &Theme, window: &Window) -> Pixels {
         Self::page_width(theme, window) - named(theme) - theme::GAP
     }
@@ -53,7 +48,6 @@ impl Settings {
             - crate::ui::widgets::btn_width(window, theme, "", true, false)
     }
 
-    /// Every row of every part, in order.
     pub(super) fn lines(&self, window: &Window, cx: &mut Context<Self>) -> Vec<Row> {
         let theme = cx.global::<Theme>().clone();
         let mut rows = Vec::new();
@@ -142,7 +136,6 @@ impl Settings {
             .into_any_element()
     }
 
-    /// `Font`: the button, and under it the families to choose from, each drawn in itself.
     pub(super) fn font_picker(
         &self,
         shown: String,

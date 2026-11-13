@@ -45,7 +45,6 @@ fn continues(line: &str) -> bool {
         || bare_frame()
 }
 
-/// Kinds differ only in numbers.
 fn kind(head: &str) -> String {
     head.chars().filter(|c| !c.is_ascii_digit()).collect()
 }

@@ -1,6 +1,3 @@
-//! Play, and the `beforePlay` popup: what stands in the
-//! way, and what can be done about it before the game starts.
-
 use super::button::Btn;
 use super::game::Told;
 use super::notices;
@@ -15,7 +12,6 @@ use gpui::{
 use rimstack_core::{say, say_n};
 
 impl Shell {
-    /// Play: the game starts, unless something is in the way; then the popup says what.
     pub(crate) fn press_play(&mut self, cx: &mut Context<Self>) {
         if self.game.read(cx).running() {
             return;
@@ -35,7 +31,6 @@ impl Shell {
         cx.notify();
     }
 
-    /// What the game and its files told: a toast, with what can be done about it.
     pub(crate) fn heard_game(&mut self, told: &Told, cx: &mut Context<Self>) {
         match told {
             Told::ResetByGame(ids) => {
@@ -83,7 +78,6 @@ impl Shell {
         }
     }
 
-    /// The popup under Play while it is open.
     pub(crate) fn before_play_popup(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if !self.before_play {
             return None;

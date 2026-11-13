@@ -1,6 +1,3 @@
-//! A made-up install for the tests that need a game: `tools/fixture-game.sh` and
-//! `tools/fixture-downloads.sh`, all in a scratch folder.
-
 #[cfg(target_os = "linux")]
 pub(crate) fn made_up() -> (tempfile::TempDir, crate::App) {
     use crate::App;

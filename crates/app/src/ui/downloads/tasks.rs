@@ -97,8 +97,6 @@ impl Downloads {
         self.ask_steam(SteamAsk::Download, ids, cx);
     }
 
-    /// What a check found, asked for by itself: Steam for the Workshop mods, Git for the checkouts
-    /// that are behind, unless the game runs.
     pub(super) fn apply(&mut self, cx: &mut Context<Self>) {
         let ids: Vec<String> = self
             .updates
@@ -143,7 +141,6 @@ impl Downloads {
         );
     }
 
-    /// `run` on this view, as the answer to a question.
     fn answer(
         &self,
         run: impl FnOnce(&mut Self, &mut Context<Self>) + 'static,
@@ -355,13 +352,11 @@ impl Downloads {
         );
     }
 
-    /// The change notes of the Workshop mods changed since the game last started.
     pub fn fetch_since_notes(&mut self, cx: &mut Context<Self>) {
         let asked = notes_asked(&self.changed);
         self.fetch_notes(asked, cx);
     }
 
-    /// One mod's change notes, as its details' Latest changes card asks.
     pub fn fetch_notes_of(
         &mut self,
         id: rimstack_core::mods::library::ModId,

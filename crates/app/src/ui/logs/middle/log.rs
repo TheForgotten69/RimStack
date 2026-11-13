@@ -1,5 +1,3 @@
-//! The log's lines in the log's middle: their wrapped heights and their rows.
-
 use super::step;
 
 use crate::ui::logs::Logs;
@@ -18,7 +16,6 @@ use rimstack_core::say;
 use std::rc::Rc;
 
 impl Logs {
-    /// The log's rows: one line each, or as many as a line wraps to in the monospace family.
     pub(in crate::ui::logs) fn log_tops(&mut self, theme: &Theme, window: &Window) -> Rc<[Pixels]> {
         let width = Self::middle_width(theme, window);
         if let Some((at, tops)) = &self.log_tops

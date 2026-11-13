@@ -1,6 +1,3 @@
-//! The filter of the Mods tab, with its chips: its terms as
-//! chips inside it, and the terms offered while one is typed.
-
 use super::Mods;
 use crate::ui::button::Chip;
 use crate::ui::text_field::{self, Edited, TextField};
@@ -70,7 +67,6 @@ impl Filter {
         cx.notify();
     }
 
-    /// The whole filter: the terms, then what is typed.
     pub fn text(&self, cx: &gpui::App) -> String {
         let typed = self.field.read(cx).text().trim().to_string();
         let mut words = self.terms.clone();
@@ -92,7 +88,6 @@ impl Filter {
             .update(cx, |field, cx| field.set_text(&typed.join(" "), cx));
     }
 
-    /// A field typed in: each finished term becomes a chip, and the other field follows.
     fn edited(&mut self, field: &Entity<TextField>, cx: &mut Context<Self>) {
         let text = field.read(cx).text().to_string();
         let words: Vec<&str> = text.split(' ').collect();
@@ -133,7 +128,6 @@ impl Filter {
         self.edited(&field, cx);
     }
 
-    /// An offer taken: a kind of term (`tag:`) goes on being typed, a whole term becomes a chip.
     fn take_offer(&mut self, term: String, field: Entity<TextField>, cx: &mut Context<Self>) {
         let text = field.read(cx).text().to_string();
         let mut words: Vec<&str> = text.split(' ').collect();
@@ -159,7 +153,6 @@ impl Filter {
 }
 
 impl Mods {
-    /// The whole filter: the terms, then what is typed.
     pub fn filter_text(&self, cx: &gpui::App) -> String {
         self.filtering.read(cx).text(cx)
     }

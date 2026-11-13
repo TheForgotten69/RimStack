@@ -1,5 +1,3 @@
-//! The last three parts of the settings screen: how Sort decides, the Steam key, and RimStack.
-
 use super::Settings;
 use super::line::{Line, Row, group, path, under, words};
 use super::parts::{act, said};
@@ -15,11 +13,9 @@ use crate::workspace::logs::day;
 use gpui::{Context, IntoElement, ParentElement, Styled, Window, div};
 use rimstack_core::{say, say_n};
 
-/// What Qt's `Theme.issues` opened.
 const ISSUES: &str = "https://github.com/TheForgotten69/RimStack/issues";
 const KEY_PAGE: &str = "https://steamcommunity.com/dev/apikey";
 const VERIFY: &str = "steam://validate/294100";
-/// `Logs kept`'s choices.
 const LOGS_KEPT: [usize; 5] = [0, 5, 10, 25, 50];
 
 impl Settings {

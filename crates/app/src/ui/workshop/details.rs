@@ -1,6 +1,3 @@
-//! The chosen item's picture, words, requirements and figures, and the
-//! files fetched for them: its preview, its screenshots, the pictures of its description.
-
 use super::{SCREENSHOTS, Workshop};
 use crate::ui::button::{Btn, Chip};
 use crate::ui::rich::{self, Link};
@@ -153,7 +150,6 @@ impl Workshop {
         label(theme, theme.small(), theme.colours.ink2, text).font_weight(theme.semibold)
     }
 
-    /// The pane's content: what is known of `shown`, `width` wide.
     fn about(
         &self,
         shown: &Shown,
@@ -491,7 +487,6 @@ impl Workshop {
         parts
     }
 
-    /// The pane `width` wide with its heading and its close button.
     pub(super) fn details_pane(
         &self,
         theme: &Theme,
@@ -548,7 +543,6 @@ impl Workshop {
     }
 }
 
-/// A line of text that takes the room left in its row and is cut at its end.
 pub(super) fn fill_text(
     theme: &Theme,
     size: Pixels,

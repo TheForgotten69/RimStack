@@ -103,7 +103,6 @@ impl Saves {
         }
     }
 
-    /// Read again now, as the command list asks.
     pub fn reread(&mut self, cx: &mut Context<Self>) {
         self.stale = true;
         self.read(cx);
@@ -130,7 +129,6 @@ impl Saves {
         cx.notify();
     }
 
-    /// The chosen save's list kept under the name typed.
     fn keep_list(&mut self, cx: &mut Context<Self>) {
         let name = self.list_name.read(cx).text().trim().to_string();
         let shown = crate::workspace::saves::shown(&self.report, &self.folder, &self.filter_text);

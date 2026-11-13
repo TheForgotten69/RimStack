@@ -1,6 +1,3 @@
-//! Words about a control, shown when the pointer has
-//! rested on it.
-
 use super::theme::{self, Theme};
 use super::widgets::TextSized;
 use gpui::{
@@ -9,7 +6,6 @@ use gpui::{
 };
 use std::time::Duration;
 
-/// The timer before a tip shows.
 const DELAY: Duration = Duration::from_millis(600);
 
 struct Tip(SharedString);

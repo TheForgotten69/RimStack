@@ -25,7 +25,6 @@ pub struct Error {
     cause: Option<Cause>,
 }
 
-/// The cause is not compared.
 impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {
         self.kind == other.kind && self.said == other.said

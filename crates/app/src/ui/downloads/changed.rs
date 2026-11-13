@@ -1,5 +1,3 @@
-//! The mods changed since the game last started, by day, with their notes.
-
 use super::Downloads;
 use super::screen::text_fill;
 use crate::ui::card::Card;
@@ -16,7 +14,6 @@ use gpui::{
 use rimstack_core::mods::library::ModId;
 use rimstack_core::{say, say_n};
 
-/// The changed mods shown before "more".
 const FIRST: usize = 5;
 
 impl Downloads {
@@ -284,8 +281,6 @@ impl Downloads {
         Some(card.render(theme, Some((width, window))).into_any_element())
     }
 
-    /// The changed list's keys: the arrows go from row to row,
-    /// Enter shows the mod, N opens its change notes.
     fn changed_key(
         &mut self,
         shown: &[(ModId, Option<String>)],
@@ -321,7 +316,6 @@ impl Downloads {
         cx.stop_propagation();
     }
 
-    /// What the notes button says while Steam is asked, or waited for.
     pub fn ask_steam_label(&self) -> String {
         let Some(state) = self.notes_state.as_ref().filter(|_| self.notes_busy) else {
             return match self.notes_busy {

@@ -1,6 +1,3 @@
-//! What the details of a mod change, as the `ModsData` commands and drafts did: its tags, note
-//! and group, its category, rules of your own, and what is read for its Files tab.
-
 use super::Mods;
 use crate::ui::menu::{self, Entry};
 use crate::words::put;
@@ -11,9 +8,7 @@ use rimstack_core::mods::library::ModId;
 use rimstack_core::say;
 use std::time::Duration;
 
-/// The quiet after typing before a draft is kept.
 const PAUSE: Duration = Duration::from_millis(600);
-/// How long "Saved" shows.
 const SHOWN: Duration = Duration::from_millis(1800);
 
 /// The other mod of a rule of your own being chosen: the chosen one loads after it, or before.
@@ -40,7 +35,6 @@ impl Mods {
         cx.notify();
     }
 
-    /// The rule of your own between the chosen mod and `other`, as the picking asked.
     pub(super) fn pick(&mut self, other: ModId, cx: &mut Context<Self>) {
         let Some(chosen) = self.selected_id(cx) else {
             return;
@@ -59,7 +53,6 @@ impl Mods {
         self.show(cx);
     }
 
-    /// A rule of your own that the chosen mod loads after `other`, and the move it asks.
     pub(super) fn win_over(&mut self, other: ModId, cx: &mut Context<Self>) {
         let Some(id) = self.list.read(cx).selected_id() else {
             return;
@@ -74,7 +67,6 @@ impl Mods {
         self.changed(cx);
     }
 
-    /// The shared textures of the chosen mod and `other` side by side.
     pub(super) fn compare_with(&mut self, other: ModId, cx: &mut Context<Self>) {
         let list = self.list.read(cx);
         let Some(id) = list.selected_id() else {
@@ -116,7 +108,6 @@ impl Mods {
             .after(PAUSE, cx, |mods, cx| mods.keep_drafts(cx));
     }
 
-    /// Keeps what is waiting; says "Saved" only when something really changed.
     pub(super) fn keep_drafts(&mut self, cx: &mut Context<Self>) {
         self.chosen_reads.drafts.pause.cancel();
         let (note, group) = (
@@ -143,7 +134,6 @@ impl Mods {
         });
     }
 
-    /// The categories to file the chosen mod under, or Automatic.
     pub(super) fn category_choices(
         &mut self,
         at: Point<Pixels>,
@@ -232,7 +222,6 @@ impl Mods {
         );
     }
 
-    /// A Git checkout's last commits, for the Latest changes card.
     fn read_commits(&mut self, id: ModId, cx: &mut Context<Self>) {
         let git = self.details.as_ref().is_some_and(|d| !d.workshop && d.git);
         if !git
@@ -257,7 +246,6 @@ impl Mods {
         );
     }
 
-    /// The chosen mod's textures set aside brought back.
     pub(super) fn unhide_chosen(&mut self, cx: &mut Context<Self>) {
         let Some(id) = self.selected_id(cx) else {
             return;

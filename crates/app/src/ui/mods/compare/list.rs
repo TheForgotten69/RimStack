@@ -1,5 +1,3 @@
-//! The textures the two mods share, one row each, and each side's picture of the chosen one.
-
 use super::*;
 
 impl CompareView {

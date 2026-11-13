@@ -1,6 +1,3 @@
-//! What is done to several mods chosen at once, and
-//! what the details show of them.
-
 use super::Mods;
 use super::chosen::DetailsView;
 use super::menus::Naming;
@@ -148,7 +145,6 @@ impl Mods {
         )
     }
 
-    /// What the details show of the mods chosen, when there are several.
     pub(super) fn selection_summary(
         &self,
         cx: &gpui::App,
@@ -164,7 +160,6 @@ impl Mods {
 }
 
 impl DetailsView {
-    /// The summary, `width` wide.
     pub(super) fn selection_pane(
         &self,
         theme: &Theme,

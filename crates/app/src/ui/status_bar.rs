@@ -1,6 +1,3 @@
-//! What is not saved, the last start of the game, the work under way, the keys
-//! and the history.
-
 use super::button::Btn;
 use super::lists::Which;
 use super::shell::Shell;
@@ -127,7 +124,6 @@ impl Shell {
             .into_any_element()
     }
 
-    /// `trayMenu`: each task under way, with Cancel where it can stop.
     fn tray_popup(
         &self,
         theme: &Theme,
@@ -213,7 +209,6 @@ impl Shell {
     }
 }
 
-/// A turn in 1.4 s while work is under way.
 pub(crate) struct Spinner;
 
 impl gpui::Render for Spinner {
@@ -237,5 +232,4 @@ thread_local! {
     pub(crate) static TURNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// How a task under way is stopped.
 type Stop = std::rc::Rc<dyn Fn()>;

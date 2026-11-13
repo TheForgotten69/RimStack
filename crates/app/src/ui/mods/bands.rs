@@ -1,6 +1,3 @@
-//! The bands under the load order's title: what is not saved, why a save failed, the
-//! list changed on disk, and what Sort would do.
-
 use super::Mods;
 use crate::ui::button::Btn;
 use crate::ui::theme::{self, Theme};
@@ -14,7 +11,6 @@ use rimstack_core::base::sentence::Sentence;
 use rimstack_core::say;
 use std::time::Duration;
 
-/// How long the note of a Sort already applied stays.
 const NOTE_STAYS: Duration = Duration::from_secs(8);
 
 impl Mods {
@@ -39,7 +35,6 @@ impl Mods {
         Some((put(first), more))
     }
 
-    /// The note of a Sort applied closes by itself after a while.
     fn close_note_later(&mut self, note: String, cx: &mut Context<Self>) {
         if self.status.note_timer == note {
             return;

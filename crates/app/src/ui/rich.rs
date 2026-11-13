@@ -29,7 +29,6 @@ impl Picked {
         (self.from.min(self.to), self.from.max(self.to))
     }
 
-    /// The part of block `at` selected.
     fn within(&self, at: usize, len: usize) -> Option<Range<usize>> {
         let (start, end) = self.ordered();
         if start == end || at < start.0 || at > end.0 {
@@ -70,12 +69,10 @@ impl Selection {
         }
     }
 
-    /// What is selected now.
     pub fn said(&self) -> String {
         self.picked.borrow().said()
     }
 
-    /// `blocks` taking the keys while they are pressed in, so Ctrl + C copies what is selected.
     pub fn holding(&self, blocks: gpui::Div) -> gpui::Stateful<gpui::Div> {
         let (copied, released) = (self.picked.clone(), self.picked.clone());
         blocks
@@ -126,7 +123,6 @@ fn styled(theme: &Theme, run: &Run) -> HighlightStyle {
     }
 }
 
-/// A block's words, styled, its links pressed, and the part selected marked.
 fn words(
     id: ElementId,
     theme: &Theme,
@@ -200,7 +196,6 @@ fn words(
         .into_any_element()
 }
 
-/// The blocks, one element each, in the body size; their words selectable with `selection`.
 pub fn blocks(
     id: &'static str,
     theme: &Theme,

@@ -1,5 +1,3 @@
-//! A category heading, a group under a tag, or a mod.
-
 mod cells;
 mod headings;
 
@@ -18,7 +16,6 @@ use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::list::Category;
 use rimstack_core::say;
 
-/// What the load order shows beside a mod's name.
 pub struct Columns {
     pub number: Pixels,
     /// The room a mod's name has before it is cut in the middle.
@@ -110,14 +107,11 @@ impl gpui::Render for HeldGhost {
     }
 }
 
-/// What a row takes from its list and the screen beyond itself.
 pub struct Around<'a> {
-    /// Whether its mods may be dragged.
     pub movable: bool,
     pub chosen_ids: &'a [ModId],
     /// The mods sharing textures with the one chosen: whether each loses them to it.
     pub marks: &'a Marks,
-    /// Whether one mod alone is chosen, in either list.
     pub single: bool,
     /// Whether a row's own buttons show: not while Sort is shown nor while a mod is picked.
     pub buttons: bool,

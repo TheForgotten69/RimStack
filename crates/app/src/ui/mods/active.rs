@@ -1,5 +1,3 @@
-//! The load order, its filter and its column headings.
-
 use super::list::bar_room;
 use super::rows::Columns;
 use super::{Mods, Standing};
@@ -23,7 +21,6 @@ impl Mods {
             .unwrap_or_default()
     }
 
-    /// `Columns.widths` and `ModList.fitting` for a list this wide.
     fn columns(&self, theme: &Theme, width: Pixels, window: &Window) -> Columns {
         super::columns::columns(theme, &self.orders, &self.view, width, window)
     }
@@ -229,7 +226,6 @@ impl Mods {
             )
     }
 
-    /// The pane's title row: the count, the problems, Undo and Redo, Sort and Save.
     fn head(
         &self,
         theme: &Theme,
@@ -495,7 +491,6 @@ impl Mods {
             })
     }
 
-    /// The bands under the title: what is not saved, and mods made for another game version.
     fn notices(
         &self,
         theme: &Theme,

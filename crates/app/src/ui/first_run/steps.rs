@@ -1,5 +1,3 @@
-//! What each of the first start's steps shows.
-
 use crate::ui::button::Btn;
 use crate::ui::controls::Choice;
 use crate::ui::theme::{Theme, ThemeName};

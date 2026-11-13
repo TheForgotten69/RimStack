@@ -1,6 +1,3 @@
-//! The picture and the slider of the comparison: a texture in its box, zoomed and panned
-//! with the other side, and the two cut where the handle is dragged.
-
 use super::{CompareView, Cutting};
 use crate::ui::button::Btn;
 use crate::ui::theme::{self, Theme};
@@ -16,7 +13,6 @@ use rimstack_core::say;
 use std::path::PathBuf;
 
 impl CompareView {
-    /// `Picture`: a file in its box over a checkered ground, zoomed and panned with the other side.
     pub(super) fn picture(
         &self,
         theme: &Theme,
@@ -151,7 +147,6 @@ impl CompareView {
             })
     }
 
-    /// Both sides scrolled as the pointer drags: the picture follows the pointer.
     fn pan_to(&mut self, event: &MouseMoveEvent, id: &'static str, cx: &mut Context<Self>) {
         let Some((from, pan)) = self.dragged.filter(|_| event.dragging()) else {
             return;

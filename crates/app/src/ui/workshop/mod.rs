@@ -1,6 +1,3 @@
-//! The Workshop's mods searched in the community database, or through Steam
-//! with a key; filters beside them, and the chosen one's details or the download list.
-
 mod details;
 mod screen;
 mod side;
@@ -25,10 +22,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 
-/// Screenshots fetched for the details, at most.
 const SCREENSHOTS: usize = 8;
 
-/// What the results are: a search, or the mods related to one.
 #[derive(Clone)]
 enum View {
     Search(Asked),
@@ -37,7 +32,6 @@ enum View {
 
 type Found = Result<(Results, String), Error>;
 
-/// The chosen item and the files fetched for it.
 #[derive(Default)]
 struct Opened {
     shown: Option<Rc<Shown>>,
@@ -59,7 +53,6 @@ const READS: Changes = Changes::COMMUNITY
 pub struct Workshop {
     unseen: crate::ui::section::Unseen,
     demo: bool,
-    /// The download list, in a pane of its own.
     list_view: Entity<super::downloads::list::DownloadList>,
     field: Entity<TextField>,
     total: usize,
@@ -86,9 +79,7 @@ pub struct Workshop {
     settled: HashSet<String>,
     selected: String,
     opened: Opened,
-    /// In a narrow window, the filters shown in place of the results.
     filters: bool,
-    /// The download list shown beside the results, with no item chosen.
     list: bool,
     enlarged: Option<PathBuf>,
     /// The opened item's pictures, let go once another is opened; the one enlarged, once closed.
@@ -109,7 +100,6 @@ pub struct Workshop {
     side_paging: super::page::Paging,
     details_paging: super::page::Paging,
     focus: FocusHandle,
-    /// Each part of the description shown, its words selectable.
     description_picks: std::cell::RefCell<Vec<super::rich::Selection>>,
 }
 

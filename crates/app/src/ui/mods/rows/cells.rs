@@ -1,5 +1,3 @@
-//! The row's cells: a mod's name and what is said beside it, and the load order's columns.
-
 use super::headings::tipped_label;
 use super::{Around, Columns, category_icon};
 use crate::ui::theme::{self, CATEGORY_NAMES, Theme};
@@ -25,7 +23,6 @@ pub(super) enum Tags {
     Folded(String),
 }
 
-/// A mod's name fitted to its row, and what is said beside it.
 pub(super) struct Fitted {
     pub name: String,
     /// Whether the name was cut, so it is told whole while pointed at.
@@ -36,7 +33,6 @@ pub(super) struct Fitted {
     pub half: Pixels,
 }
 
-/// What a mod's row shows besides itself.
 pub(super) struct Shown<'a> {
     pub columns: Option<&'a Columns>,
     pub chosen: bool,
@@ -117,7 +113,6 @@ pub(super) fn fit(
     }
 }
 
-/// A category's name, as the menus and the details say it.
 fn category_name(category: Category) -> String {
     CATEGORY_NAMES
         .get(category as usize)
@@ -413,7 +408,6 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
         .into_any_element()
 }
 
-/// `ModRow`'s chip: how far Sort moves it, its share of a texture clash, or its problem.
 fn quick_chip(
     theme: &Theme,
     row: &RowView,

@@ -26,7 +26,6 @@ impl Section {
         Self::Settings,
     ];
 
-    /// The tab at `at`, the last for a place past it.
     pub fn at(at: usize) -> Self {
         Self::ALL[at.min(Self::ALL.len() - 1)]
     }
@@ -53,7 +52,6 @@ pub struct Unseen {
 }
 
 impl Unseen {
-    /// `changes` while shown; nothing while hidden.
     pub fn pass(&mut self, changes: Changes) -> Option<Changes> {
         match self.hidden {
             true => {
@@ -64,7 +62,6 @@ impl Unseen {
         }
     }
 
-    /// What was missed, once `shown` makes the section seen again.
     pub fn shown(&mut self, shown: bool) -> Option<Changes> {
         self.hidden = !shown;
         let missed = std::mem::take(&mut self.missed);
@@ -78,7 +75,6 @@ impl Unseen {
     }
 }
 
-/// A section told when it is shown or hidden.
 pub trait Shown {
     fn set_shown(&mut self, shown: bool, cx: &mut gpui::Context<Self>)
     where

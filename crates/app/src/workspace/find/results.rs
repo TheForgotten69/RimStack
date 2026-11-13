@@ -158,7 +158,6 @@ pub struct FoundMods {
     pub rows: Vec<FoundMod>,
 }
 
-/// What a row shows: a mod, a file of it, or a line of that file.
 pub enum Shown<'a> {
     Mod {
         name: Cow<'a, Sentence>,

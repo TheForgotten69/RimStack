@@ -1,6 +1,3 @@
-//! The categories, versions and expansions
-//! to keep or leave out, and the two switches under them.
-
 use super::Workshop;
 use crate::ui::controls::Toggle;
 use crate::ui::focus;
@@ -18,7 +15,6 @@ use std::rc::Rc;
 
 type Pressed = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// A square that keeps or leaves out, in `tone` while on.
 #[derive(IntoElement)]
 struct Tick {
     id: ElementId,

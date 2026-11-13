@@ -21,13 +21,10 @@ pub type Run = Rc<dyn Fn(&mut Shell, &mut Window, &mut Context<Shell>)>;
 pub struct Command {
     pub name: String,
     pub group: String,
-    /// The keys that run it too, shown in place of its group.
     pub keys: String,
     pub run: Run,
 }
 
-/// The commands that hold every word typed, in their name or their group; the settings only once
-/// something is typed.
 pub fn matching<'a>(commands: &'a [Command], typed: &str, settings: &str) -> Vec<&'a Command> {
     let typed = typed.to_lowercase();
     let words: Vec<&str> = typed.split(' ').filter(|w| !w.is_empty()).collect();
@@ -43,7 +40,6 @@ pub fn matching<'a>(commands: &'a [Command], typed: &str, settings: &str) -> Vec
 pub struct Commands {
     shell: WeakEntity<Shell>,
     commands: Vec<Command>,
-    /// The mods the text names, found as it is typed.
     found: Vec<Command>,
     field: Entity<TextField>,
     chosen: usize,

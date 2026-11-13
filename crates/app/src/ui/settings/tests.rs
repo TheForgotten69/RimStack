@@ -88,15 +88,12 @@ fn a_theme_chosen_is_kept_in_rimstack_conf_and_shown_at_once(cx: &mut TestAppCon
     );
 }
 
-/// Settings opened on `part` in a demo window, drawn with the checks on.
-/// The window a scene is drawn in, shaped by the Theme.
 type Shape<'a> = &'a dyn Fn(&Theme) -> Size<Pixels>;
 
 fn drawn(part: usize) -> impl Fn(f32, Shape<'_>) -> Vec<Seen> {
     drawn_with(part, "{}", "")
 }
 
-/// As `drawn`, with `settings.json` holding `kept` and the settings found by `finding` alone.
 fn drawn_with(
     part: usize,
     kept: &'static str,

@@ -1,6 +1,3 @@
-//! The game's last logs and the launches RimStack recorded; a log's errors,
-//! the mods they point at, or its lines; and what an error says, beside them.
-
 mod left;
 mod middle;
 mod side;
@@ -15,7 +12,6 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-/// The three views of a log.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum View {
     Errors,
@@ -68,7 +64,6 @@ pub struct Logs {
     log_tops: Option<(gpui::Pixels, Rc<[gpui::Pixels]>)>,
 }
 
-/// What the arrow keys move in, as `RowKeys` did.
 struct Lists {
     launches: FocusHandle,
     errors: FocusHandle,
@@ -142,13 +137,11 @@ impl Logs {
         logs
     }
 
-    /// The view shown, as a command asks.
     pub fn show_view(&mut self, view: usize, cx: &mut Context<Self>) {
         self.view = [View::Errors, View::Mods, View::Log][view.min(2)];
         cx.notify();
     }
 
-    /// Whether the search for the broken mod runs: its button hides then.
     pub fn set_hunting(&mut self, hunting: bool, cx: &mut Context<Self>) {
         self.hunting = hunting;
         cx.notify();
@@ -221,7 +214,6 @@ impl Logs {
         cx.notify();
     }
 
-    /// The lines the filter keeps.
     fn list(&mut self) {
         let Some(report) = &self.report else {
             self.lines = Rc::default();
@@ -261,7 +253,6 @@ impl Logs {
         cx.notify();
     }
 
-    /// The log's line `number` marked, in the Log view, with the filter emptied.
     fn show_line(&mut self, number: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.filter.update(cx, |field, cx| field.set_text("", cx));
         self.filter_text.clear();
@@ -281,7 +272,6 @@ impl Logs {
         cx.notify();
     }
 
-    /// The Errors view, narrowed to the mod `name`, or to the errors that point at none.
     fn open_culprit(&mut self, name: &str, cx: &mut Context<Self>) {
         let text = if name.is_empty() {
             rimstack_core::rimworld::logs::NO_MOD

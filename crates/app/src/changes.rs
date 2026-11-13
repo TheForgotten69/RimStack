@@ -47,7 +47,6 @@ impl Changes {
         self.0 & any_of.0 != 0
     }
 
-    /// Whether every change here is among `set`.
     pub fn within(self, set: Self) -> bool {
         self.0 & !set.0 == 0
     }

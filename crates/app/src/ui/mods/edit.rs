@@ -1,6 +1,3 @@
-//! The load order changed from the Mods tab:
-//! activating and moving mods, Undo and Redo, Save, Sort, and choosing several mods.
-
 use super::Mods;
 use crate::changes::Changes;
 use crate::ui::notices;
@@ -16,7 +13,6 @@ use rimstack_core::{say, say_n};
 pub type AfterSave = Box<dyn FnOnce(&mut Mods, &mut Context<Mods>)>;
 
 impl Mods {
-    /// The lists shown again and the other screens told, after the load order changed.
     pub(super) fn changed(&mut self, cx: &mut Context<Self>) {
         self.follow_selection(cx);
         self.show(cx);
@@ -25,7 +21,6 @@ impl Mods {
         }
     }
 
-    /// A toast that says what was done, with Undo.
     pub(super) fn done_said(&self, said: Sentence, cx: &mut Context<Self>) {
         if self.demo {
             return;
@@ -108,14 +103,12 @@ impl Mods {
         self.done_said(said, cx);
     }
 
-    /// The mods chosen moved to the other list, and nothing chosen then.
     pub fn move_selected(&mut self, cx: &mut Context<Self>) {
         let (from, ids) = (Side::of(self.list.read(cx).selected_active), self.ids(cx));
         self.take_ids(from, &ids, None, cx);
         self.select(None, true, cx);
     }
 
-    /// The mod chosen moved across, and the one beside it chosen, as Enter does.
     pub(super) fn activate_selected(&mut self, side: Side, cx: &mut Context<Self>) {
         let Some(first) = self.selected_id(cx) else {
             return;
@@ -132,7 +125,6 @@ impl Mods {
         }
     }
 
-    /// The mod chosen moved across or back, as the row's button and a double click do.
     pub(super) fn toggle_mod(&mut self, side: Side, mod_id: ModId, cx: &mut Context<Self>) {
         let state = self.list.read(cx);
         let position = state.order.list(side).position_of(mod_id);
@@ -169,7 +161,6 @@ impl Mods {
         }
     }
 
-    /// The mod chosen moved `by` places, as Alt + an arrow does.
     fn nudge(&mut self, side: Side, by: isize, cx: &mut Context<Self>) {
         let Some(first) = self.selected_id(cx) else {
             return;
@@ -315,7 +306,6 @@ impl Mods {
         self.keep_selection(mod_id.into_iter().collect(), in_active, cx);
     }
 
-    /// `mod_id` added to the mods chosen in its list, or taken out of them, as Ctrl + click does.
     pub(super) fn select_also(&mut self, mod_id: ModId, in_active: bool, cx: &mut Context<Self>) {
         let first = self
             .selected_id(cx)
@@ -334,7 +324,6 @@ impl Mods {
         self.keep_selection(ids, in_active, cx);
     }
 
-    /// Every mod from the first chosen to `mod_id`, as Shift + click does.
     pub(super) fn select_through(&mut self, to: ModId, in_active: bool, cx: &mut Context<Self>) {
         let first = self
             .selected_id(cx)
@@ -357,7 +346,6 @@ impl Mods {
         self.keep_selection(inverted.ids, in_active, cx);
     }
 
-    /// Every mod the list shows.
     pub(super) fn select_all(&mut self, side: Side, cx: &mut Context<Self>) {
         let ids = self
             .shown(side)
@@ -390,7 +378,6 @@ impl Mods {
         cx.notify();
     }
 
-    /// The selection follows its first mod into the list it went to.
     fn follow_selection(&mut self, cx: &mut Context<Self>) {
         let state = self.list.read(cx);
         let Some(first) = state.selected_id() else {
@@ -405,7 +392,6 @@ impl Mods {
         self.edit_list(cx, |list, _| list.selected_active = active);
     }
 
-    /// The chosen mod's row brought into view, in the middle when `centre`.
     pub(super) fn reveal_selected(&mut self, side: Side, centre: bool, cx: &mut Context<Self>) {
         let Some(id) = self.selected_id(cx) else {
             return;
@@ -492,7 +478,6 @@ impl Mods {
         Some(rimstack_core::mods::checks::place_among(&marked, index).0).filter(|place| *place > 0)
     }
 
-    /// The next mod with a problem chosen and shown, or the one before.
     pub(super) fn show_problem(&mut self, forward: bool, cx: &mut Context<Self>) {
         use rimstack_core::mods::list::Row;
         let state = self.list.read(cx);
@@ -550,7 +535,6 @@ impl Mods {
     }
 }
 
-/// What the buttons and the words of a problem's line do, on the Mods tab `mods`.
 pub fn acting(
     mods: gpui::WeakEntity<Mods>,
     said: &crate::workspace::load_order::ProblemSaid,
@@ -572,7 +556,6 @@ pub fn acting_from_afar(
 }
 
 impl Mods {
-    /// What a problem's line was pressed for.
     pub(crate) fn act_on(
         &mut self,
         act: crate::ui::problem::Act,
@@ -600,7 +583,6 @@ impl Mods {
 }
 
 impl Mods {
-    /// A problem no longer warned of, with Undo.
     fn ignore_problem(&mut self, package_id: String, key: String, cx: &mut Context<Self>) {
         self.set_ignored(&package_id, &key, true, cx);
         let me = cx.entity().downgrade();
@@ -623,7 +605,6 @@ impl Mods {
         self.show(cx);
     }
 
-    /// Every needed mod that is installed activated, each where its rules put it.
     pub(super) fn fix_all(&mut self, cx: &mut Context<Self>) {
         if self.list.read(cx).previewing() {
             return;
@@ -657,7 +638,6 @@ impl Mods {
         self.reads.conflicts
     }
 
-    /// The mod chosen moved to the other list.
     pub fn toggle_selected(&mut self, cx: &mut Context<Self>) {
         let state = self.list.read(cx);
         if let Some(id) = state.selected_id() {

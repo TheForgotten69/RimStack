@@ -1,6 +1,3 @@
-//! A switch, a slider and a row of segments. Each is
-//! reached by Tab, moved by its keys, and tells a screen reader its state.
-
 use super::focus;
 use super::motion;
 use super::theme::{self, Theme};
@@ -20,7 +17,6 @@ type Flip = Box<dyn Fn(bool, &mut Window, &mut App)>;
 type Moved = Rc<dyn Fn(f32, &mut Window, &mut App)>;
 type Picked = Rc<dyn Fn(usize, &mut Window, &mut App)>;
 
-/// A switch, and "On" or "Off" beside it unless `silent`.
 #[derive(IntoElement)]
 pub struct Toggle {
     id: ElementId,
@@ -156,7 +152,6 @@ impl RenderOnce for Toggle {
     }
 }
 
-/// A value between two ends, in steps, set by a click, a drag or the arrow keys.
 #[derive(IntoElement)]
 pub struct Slide {
     id: ElementId,
@@ -185,7 +180,6 @@ impl Slide {
         }
     }
 
-    /// What a screen reader names it, and what it reads of its value.
     pub fn said(
         mut self,
         title: impl Into<SharedString>,
@@ -366,7 +360,6 @@ impl Choice {
         self
     }
 
-    /// Its width when not stretched: its words, the room around each, and its frame.
     pub fn width(window: &Window, theme: &Theme, options: &[SharedString]) -> Pixels {
         options.iter().fold(px(4.), |all, option| {
             all + measure(window, theme, option, theme.small(), theme.semibold)

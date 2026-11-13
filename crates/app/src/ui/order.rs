@@ -11,9 +11,7 @@ use std::rc::Rc;
 #[derive(Default, Clone, PartialEq)]
 pub struct Order {
     pub overview: Option<Rc<Overview>>,
-    /// The mod chosen first.
     pub selected: Option<ModId>,
-    /// The active mods installed, in their order.
     pub active: Rc<Vec<ModId>>,
 }
 

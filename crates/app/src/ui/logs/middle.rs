@@ -1,6 +1,3 @@
-//! The middle of the logs screen: the log's heading and its controls, what changed since the
-//! last clean launch, the filter, and the errors, the mods they point at, or the log's lines.
-
 mod errors;
 mod head;
 mod log;
@@ -20,7 +17,6 @@ use rimstack_core::{say, say_n};
 use std::rc::Rc;
 
 impl Logs {
-    /// The middle's width: the window less the launches, the side and their edges.
     pub(super) fn middle_width(theme: &Theme, window: &Window) -> Pixels {
         window.viewport_size().width
             - Self::pane_width(theme, window)

@@ -1,5 +1,3 @@
-//! The first two parts of the settings screen: the game and its folders, and the appearance.
-
 use super::Settings;
 use super::line::{Line, Row, path, words};
 use crate::ui::button::{Btn, Chip};
@@ -11,7 +9,6 @@ use crate::words::{count, put};
 use gpui::{App, Context, ParentElement, SharedString, Styled, Window, div};
 use rimstack_core::{say, say_n};
 
-/// `f` on the settings, as a control's callback.
 pub(super) fn act<T: 'static>(
     cx: &Context<Settings>,
     f: impl Fn(&mut Settings, T, &mut Window, &mut Context<Settings>) + 'static,
@@ -22,7 +19,6 @@ pub(super) fn act<T: 'static>(
     }
 }
 
-/// `options`, each put in words.
 pub(super) fn said(options: &[rimstack_core::base::sentence::Sentence]) -> Vec<SharedString> {
     options.iter().map(|o| put(o).into()).collect()
 }

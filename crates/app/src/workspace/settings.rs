@@ -356,7 +356,6 @@ impl App {
         self.language_table(&self.language_in_use())
     }
 
-    /// Leaves an existing file as it is.
     pub fn start_language(&self, name: &str) -> Result<PathBuf, Error> {
         let name = name.trim();
         if name.is_empty() || name.contains(['/', '\\']) {
@@ -392,7 +391,6 @@ impl App {
         owntheme::colours_for(&file, theme, &flat_for)
     }
 
-    /// Adds to an existing file rather than overwriting it.
     pub fn start_own_theme(&self, theme: &str, colours: &Value) -> Result<PathBuf, Error> {
         let file = self.theme_file();
         let now = std::fs::read_to_string(&file)

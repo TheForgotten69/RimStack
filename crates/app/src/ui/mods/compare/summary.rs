@@ -1,5 +1,3 @@
-//! What the details show while two mods' textures are compared.
-
 use super::super::Mods;
 use super::super::chosen::DetailsView;
 use crate::ui::button::Btn;
@@ -12,7 +10,6 @@ use gpui::{AnyElement, Context, InteractiveElement, IntoElement, ParentElement, 
 use rimstack_core::{say, say_n};
 
 impl DetailsView {
-    /// What was kept so far, and keeping all from one side.
     pub(in crate::ui::mods) fn compare_summary(
         &self,
         theme: &Theme,

@@ -1,6 +1,3 @@
-//! The three first-run notes on the Mods tab, under the problems button, Sort and
-//! Save, one after the other.
-
 use super::Mods;
 use crate::ui::button::Btn;
 use crate::ui::theme::{self, Theme};
@@ -37,7 +34,6 @@ impl Anchors {
         self.drawn.set([false; 3]);
     }
 
-    /// A button drawn in this render, as `anchored_at` tells.
     fn mark(&self, at: &Rc<Cell<Option<Bounds<Pixels>>>>) {
         let mut drawn = self.drawn.get();
         for (nth, one) in [&self.problems, &self.sort, &self.save]
@@ -52,7 +48,6 @@ impl Anchors {
     }
 }
 
-/// `control` with where it is drawn kept for its hint.
 pub(super) fn anchored_at(
     control: impl IntoElement,
     anchors: &Anchors,
@@ -67,7 +62,6 @@ pub(super) fn anchored_at(
 }
 
 impl Mods {
-    /// The hints from the first, unless they were seen.
     pub fn start_hints(&mut self, cx: &mut Context<Self>) {
         let seen = crate::ui::app(cx)
             .prefs()
@@ -79,7 +73,6 @@ impl Mods {
         }
     }
 
-    /// One hint shown, as `--hints=` asks.
     pub fn show_hint(&mut self, step: u8, cx: &mut Context<Self>) {
         self.hints.step = step.min(3);
         cx.notify();

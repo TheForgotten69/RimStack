@@ -1,6 +1,3 @@
-//! How the textures screen is laid out: the summary and its actions, the mods with textures in
-//! columns, and the chosen mod or the refused DDS files beside them.
-
 use super::{Textures, megabytes};
 use crate::ui::button::{Btn, Chip};
 use crate::ui::controls::Choice;
@@ -18,7 +15,6 @@ use rimstack_core::base::sentence::Sentence;
 use rimstack_core::{say, say_n};
 use std::rc::Rc;
 
-/// The widths of the number columns, from their headings and the widest they hold.
 struct Columns {
     name: Pixels,
     count: Pixels,

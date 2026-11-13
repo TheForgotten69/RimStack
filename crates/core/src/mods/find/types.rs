@@ -23,7 +23,6 @@ fn is_extension(token: &str) -> bool {
 }
 
 impl FileTypes {
-    /// Split by comma, semicolon, bar or space; `.` (or `*`) alone is every text file.
     pub fn parse(text: &str) -> Result<FileTypes, Error> {
         let mut types: Vec<String> = Vec::new();
         for token in text

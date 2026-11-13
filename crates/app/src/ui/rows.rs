@@ -14,10 +14,8 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-/// How long a wheel notch takes to land.
 const GLIDE: Duration = Duration::from_millis(200);
 
-/// Where a list is scrolled, and where a wheel notch is taking it.
 #[derive(Default)]
 pub struct Scroll {
     top: Pixels,
@@ -29,7 +27,6 @@ pub struct Scroll {
     shown: Pixels,
     /// While the bar's thumb is held: how far below the thumb's top it was taken.
     pub held: Option<Pixels>,
-    /// Whether the pointer is over the bar, which then shows its thumb stronger.
     hovered: bool,
     reduce_motion: bool,
     /// A row to bring into view once the list knows its height: its top and bottom, and
@@ -67,7 +64,6 @@ impl Scroll {
         self.reduce_motion = reduce;
     }
 
-    /// A wheel's notches glide by `notch` each; a touchpad's pixels move the list as they come.
     pub fn wheel(&mut self, delta: ScrollDelta, line: Pixels) {
         match delta {
             ScrollDelta::Pixels(moved) => self.set_top(self.top - moved.y),
@@ -88,7 +84,6 @@ impl Scroll {
         }
     }
 
-    /// Moves the glide on to now; true while it has further to go.
     pub(crate) fn advance(&mut self) -> bool {
         let Some(started) = self.started else {
             return false;

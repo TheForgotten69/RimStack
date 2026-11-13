@@ -18,7 +18,6 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
-/// The jobs asked for on this thread from now on run on `executor`, as a test drives it.
 #[cfg(test)]
 pub fn run_on(executor: gpui::BackgroundExecutor) {
     TESTED.with(|tested| *tested.borrow_mut() = Some(executor));
@@ -26,7 +25,6 @@ pub fn run_on(executor: gpui::BackgroundExecutor) {
 
 thread_local! {
     static WINDOW: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    /// Jobs running on this thread now, as a test's executor runs them on the window's.
     static IN_JOB: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static NOTED: std::cell::RefCell<std::collections::HashSet<String>> = Default::default();
 }
@@ -314,7 +312,6 @@ impl Lane {
 /// Work of which one runs at a time: asked again while it runs, it runs once more after with
 /// the newest of what was asked, however often that was.
 pub struct Single<T> {
-    /// Whether a run is under way, and what the next is to be given.
     state: Arc<Mutex<(bool, Option<T>)>>,
 }
 
@@ -327,7 +324,6 @@ impl<T> Default for Single<T> {
 }
 
 impl<T: Send + 'static> Single<T> {
-    /// Whether nothing runs nor waits to.
     pub fn idle(&self) -> bool {
         let state = self.state.held();
         !state.0 && state.1.is_none()

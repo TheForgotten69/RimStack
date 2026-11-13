@@ -46,7 +46,6 @@ pub fn with_alpha(colour: Hsla, alpha: f32) -> Hsla {
     }
 }
 
-/// Rings of the tone, fading outwards, around something to press.
 pub fn halo(tone: Hsla, corner: Pixels) -> impl Iterator<Item = AnyElement> {
     const RINGS: usize = 4;
     const STEP: f32 = 1.5;
@@ -80,7 +79,6 @@ pub fn breakable(text: &str) -> String {
     out
 }
 
-/// A band in a tone, with a bar at its left.
 pub fn notice(tone: Hsla) -> gpui::Div {
     div()
         .relative()
@@ -175,7 +173,6 @@ fn lacking(
         .collect()
 }
 
-/// `text` at `weight`, but for what the family lacks at that weight: see [`lacking`].
 pub fn weighted(
     window: &Window,
     theme: &Theme,
@@ -299,7 +296,6 @@ pub fn caps(theme: &Theme, text: &str) -> gpui::Div {
     )
 }
 
-/// An icon, a title and a hint under it, `width` wide and centred.
 pub fn empty_state(
     theme: &Theme,
     width: Pixels,
@@ -338,7 +334,6 @@ pub fn empty_state(
         })
 }
 
-/// The width a chip takes: its icon, its text and the room around them.
 pub fn chip_width(window: &Window, theme: &Theme, text: &str, icon: bool) -> Pixels {
     let shown = if icon {
         theme.sized(11.) + theme::GAP_TINY
@@ -348,7 +343,6 @@ pub fn chip_width(window: &Window, theme: &Theme, text: &str, icon: bool) -> Pix
     shown + measure(window, theme, text, theme.caption(), theme.medium) + theme::GAP_CARD
 }
 
-/// The width a button takes: its icon, its text, its menu arrow and the room around them.
 pub fn btn_width(window: &Window, theme: &Theme, text: &str, icon: bool, menu: bool) -> Pixels {
     btn_width_of(window, theme, text, icon, menu, false)
 }
@@ -381,7 +375,6 @@ pub fn btn_width_of(
     shown.into_iter().fold(gaps + room, |all, part| all + part)
 }
 
-/// A text in the Theme's terms: `label(theme, theme.body(), theme.colours.ink, "…")`.
 pub fn label(
     theme: &Theme,
     size: Pixels,
@@ -423,7 +416,6 @@ pub fn watched(
     }
 }
 
-/// What the layout checks gather: each text drawn, where, and how wide it is whole.
 #[cfg(test)]
 pub mod watch {
     use gpui::{Bounds, Pixels, SharedString, Window};

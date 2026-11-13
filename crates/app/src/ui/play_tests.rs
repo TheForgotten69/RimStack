@@ -6,7 +6,6 @@ use gpui::{AppContext, HeadlessAppContext, WindowHandle, size};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// The window on the made-up install, its load order read.
 fn opened() -> (tempfile::TempDir, HeadlessAppContext, WindowHandle<Shell>) {
     let (tmp, app) = made_up();
     let text = crate::ui::made_up::text_system();
@@ -118,7 +117,6 @@ fn ctrl_k_finds_a_command_by_its_words_and_runs_it() {
     assert!(closed && previewing, "Sort was run");
 }
 
-/// The window on the made-up install with its first run shown on `step`.
 fn first_run(
     text_scale: f32,
     window: &dyn Fn(&super::theme::Theme) -> gpui::Size<gpui::Pixels>,

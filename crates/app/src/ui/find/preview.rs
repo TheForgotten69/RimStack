@@ -1,6 +1,3 @@
-//! The file of the match chosen around it, what opens and copies it, and a
-//! search inside it.
-
 use super::Find;
 use super::layout::Layout;
 use crate::ui::button::Btn;
@@ -19,7 +16,6 @@ use rimstack_core::say;
 use std::rc::Rc;
 
 impl Find {
-    /// Each line's top and, last, the whole height: one line each, or as many as a line wraps to.
     fn preview_tops(&self, theme: &Theme, layout: Layout, window: &Window) -> Rc<[Pixels]> {
         let Some(shown) = &self.preview else {
             return Rc::from(vec![px(0.)]);
@@ -55,7 +51,6 @@ impl Find {
         theme::GAP + layout.digits + theme::GAP
     }
 
-    /// The line the preview is about brought to the middle of the pane.
     pub(super) fn centre_preview(&mut self, cx: &mut Context<Self>) {
         let Some(shown) = self.preview.clone() else {
             return;

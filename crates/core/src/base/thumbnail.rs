@@ -1,5 +1,3 @@
-//! A picture made small: decoded and cut to the size it is shown at.
-
 use std::path::Path;
 
 /// The picture at `path` cut to fill `width` by `height` from its middle, as BGRA.

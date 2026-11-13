@@ -9,7 +9,6 @@ use rimstack_core::mods::library::ModId;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// The Mods tab on the made-up install, its lists read and the active mods' files too.
 fn opened() -> (tempfile::TempDir, HeadlessAppContext, Entity<Mods>) {
     opened_with(|_| {})
 }

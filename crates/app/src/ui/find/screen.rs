@@ -1,6 +1,3 @@
-//! What the find screen lays out: the heading, the search row, and the matches between the
-//! options and the preview.
-
 use super::Find;
 use super::layout::Layout;
 use crate::ui::button::{Btn, Chip};
@@ -360,7 +357,6 @@ impl Find {
     }
 }
 
-/// In the middle of what holds it.
 fn empty_state(theme: &Theme, width: Pixels, title: String, hint: String) -> AnyElement {
     div()
         .absolute()
@@ -374,7 +370,6 @@ fn empty_state(theme: &Theme, width: Pixels, title: String, hint: String) -> Any
         .into_any_element()
 }
 
-/// A row of the matches.
 struct Row {
     at: usize,
     current: bool,
@@ -618,7 +613,6 @@ impl Row {
     }
 }
 
-/// A line's text with its tabs as four spaces, and the matches in it marked.
 fn marked(
     parts: &[(std::borrow::Cow<'_, str>, bool)],
     theme: &Theme,

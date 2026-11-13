@@ -16,11 +16,8 @@ type Run = Rc<dyn Fn(&mut Window, &mut App)>;
 
 pub enum Entry {
     Item(Item),
-    /// A divider.
     Line,
-    /// A caption over the entries after it.
     Title(SharedString),
-    /// Words that wrap, quieter than an entry.
     Note(SharedString),
 }
 
@@ -60,7 +57,6 @@ impl Item {
         self
     }
 
-    /// Words under the entry, smaller.
     pub fn note(mut self, note: impl Into<SharedString>) -> Self {
         self.note = Some(note.into());
         self
@@ -71,7 +67,6 @@ impl Item {
         self
     }
 
-    /// A dot of this colour where the icon goes.
     pub fn colour(mut self, colour: Hsla) -> Self {
         self.colour = Some(colour);
         self
@@ -98,12 +93,10 @@ impl From<Item> for Entry {
 pub struct Menu {
     entries: Vec<Entry>,
     at: Point<Pixels>,
-    /// The menu's corner placed at `at`.
     corner: gpui::Anchor,
     /// Drawn as a column of buttons, as Qt's popups of `Btn`s were, so many captions' letters
     /// wide, or as wide as its widest button.
     buttons: Option<Option<usize>>,
-    /// The entry the arrow keys are on.
     chosen: Option<usize>,
     focus: FocusHandle,
     before: Option<FocusHandle>,
@@ -133,7 +126,6 @@ pub fn install(cx: &mut App) -> Entity<Menu> {
     menu
 }
 
-/// Opens `entries` under `below`, the control that asked, at its left.
 pub fn open(below: Bounds<Pixels>, entries: Vec<Entry>, window: &mut Window, cx: &mut App) {
     open_at(
         point(below.left(), below.bottom() + theme::GAP_TINY),
@@ -232,7 +224,6 @@ impl Menu {
         run(window, cx);
     }
 
-    /// The next entry that can be chosen, `by` one way or the other, going round.
     fn step(&mut self, by: isize) {
         let count = self.entries.len() as isize;
         let mut next = self

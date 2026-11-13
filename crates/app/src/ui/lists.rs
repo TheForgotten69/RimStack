@@ -1,6 +1,3 @@
-//! The load orders kept under a name, the ones from before
-//! a change, the list on the clipboard or at Rentry.co; and what RimStack changed, to take back.
-
 use super::button::Btn;
 use super::field::Field;
 use super::menu::{self, Entry};
@@ -95,7 +92,6 @@ impl Lists {
         );
     }
 
-    /// Opens a popup from the button at `below`, or closes it when it was open.
     pub fn toggle(
         &mut self,
         which: Which,
@@ -116,7 +112,6 @@ impl Lists {
         cx.notify();
     }
 
-    /// Whether a popup is drawn, open or fading out.
     #[cfg(all(test, target_os = "linux"))]
     pub(crate) fn drawn(&self) -> bool {
         self.open.is_some() || self.fading.is_some()

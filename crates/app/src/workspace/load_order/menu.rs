@@ -92,7 +92,6 @@ fn empty(icon: &&str) -> bool {
     icon.is_empty()
 }
 
-/// An item to choose, a caption (`title`) or a divider (`line`).
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Entry {

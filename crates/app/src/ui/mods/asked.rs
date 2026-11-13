@@ -1,12 +1,9 @@
-//! What the window and the other sections ask of the Mods tab, and tell it.
-
 use super::Mods;
 use crate::workspace::load_order::Side;
 use gpui::Context;
 use rimstack_core::mods::library::ModId;
 
 impl Mods {
-    /// Chooses a mod wherever it is and brings its row into view.
     pub fn show_mod(&mut self, mod_id: ModId, cx: &mut Context<Self>) {
         for side in [Side::Active, Side::Inactive] {
             let at = self
@@ -29,7 +26,6 @@ impl Mods {
         self.active_list.update(cx, |list, cx| list.start_bench(cx));
     }
 
-    /// Marks the mods as working on this game version, or takes the mark off.
     pub fn trust(
         &mut self,
         ids: Vec<rimstack_core::mods::library::ModId>,
@@ -62,7 +58,6 @@ impl Mods {
         }
     }
 
-    /// Whether the search for the broken mod runs, as the window tells it.
     pub fn set_hunting(&mut self, hunting: bool, cx: &mut Context<Self>) {
         self.hunting = hunting;
         self.sync_details(cx);
@@ -75,7 +70,6 @@ impl Mods {
         self.changed(cx);
     }
 
-    /// Whether the inactive mods are folded into the rail.
     pub fn inactive_hidden(&self) -> bool {
         self.view.inactive_hidden
     }
@@ -90,7 +84,6 @@ impl Mods {
         self.view.inactive_order.is_empty()
     }
 
-    /// The inactive mods by name, or by category again, as the command list offers.
     pub fn toggle_inactive_order(&mut self, cx: &mut Context<Self>) {
         let then = if self.inactive_by_category() {
             "name"

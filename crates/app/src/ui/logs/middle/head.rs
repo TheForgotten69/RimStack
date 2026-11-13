@@ -1,6 +1,3 @@
-//! The top of the log's middle: the heading and its controls, what changed since the last clean
-//! launch, and the filter.
-
 use crate::ui::button::Btn;
 use crate::ui::controls::{Choice, Toggle};
 use crate::ui::field::Field;

@@ -10,10 +10,8 @@ use gpui::{AppContext, Entity, HeadlessAppContext, Pixels, Size, WindowHandle, s
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// The window a scene is drawn in, shaped by the Theme.
 type Shape<'a> = &'a dyn Fn(&Theme) -> Size<Pixels>;
 
-/// Textures on the made-up install, its textures counted.
 fn opened(
     text_scale: f32,
     window: Shape<'_>,

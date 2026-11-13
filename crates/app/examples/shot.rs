@@ -39,7 +39,6 @@ fn main() {
             cx.new(|cx| ui::shell::Shell::new(&options, window, cx))
         })
         .expect("a window opens with no display");
-    // Work off the window's thread finishes on its own clock: let it, then draw what it gave.
     let started = Instant::now();
     while started.elapsed() < Duration::from_millis(wait) {
         cx.run_until_parked();

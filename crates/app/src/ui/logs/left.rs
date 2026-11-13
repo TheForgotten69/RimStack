@@ -1,6 +1,3 @@
-//! The launches at the left of the logs screen, each an `Entry`, and a launch record: a
-//! recorded launch whose log the game no longer keeps.
-
 use super::Logs;
 use crate::ui::button::{Btn, Chip};
 use crate::ui::theme::{self, Theme};
@@ -13,7 +10,6 @@ use gpui::{
 };
 use rimstack_core::{say, say_n};
 
-/// One launch in the list.
 struct Entry {
     id: (&'static str, usize),
     title: String,
@@ -313,7 +309,6 @@ impl Logs {
             .into_any_element()
     }
 
-    /// The launch at `at`, its load order and the way to use it again.
     pub(super) fn launch_record(
         &self,
         at: usize,

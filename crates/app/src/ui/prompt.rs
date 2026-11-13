@@ -1,6 +1,3 @@
-//! A question over the window, its lines, Cancel and
-//! the answer that does it. Any view asks through [`ask`]; the shell draws it over everything.
-
 use super::theme::{self, Theme};
 use super::widgets::{Btn, TextSized};
 use crate::words::put;
@@ -13,9 +10,7 @@ use rimstack_core::say;
 
 pub enum Line {
     Text(String),
-    /// A file or folder: in the system's monospace family, broken anywhere.
     Path(String),
-    /// A name to type: the answer waits for it, and Enter in it answers.
     Field {
         text: Entity<super::text_field::TextField>,
         placeholder: String,
@@ -30,14 +25,12 @@ impl Question {
         })
     }
 
-    /// Whether every field holds something.
     fn filled(&self, cx: &App) -> bool {
         self.field()
             .is_none_or(|field| !field.read(cx).text().trim().is_empty())
     }
 }
 
-/// What the answer does.
 pub type Answer = Box<dyn FnOnce(&mut Window, &mut App)>;
 
 pub struct Question {
@@ -51,7 +44,6 @@ pub struct Question {
 pub struct Prompt {
     asked: Option<Question>,
     focus: FocusHandle,
-    /// What had the keys before the question, given them back after.
     before: Option<FocusHandle>,
     turn: usize,
     /// Answered or cancelled, drawn only while it fades out; its answer is gone.
@@ -62,7 +54,6 @@ struct Asking(Entity<Prompt>);
 
 impl Global for Asking {}
 
-/// The prompt the shell draws; made once, with the window.
 pub fn install(cx: &mut App) -> Entity<Prompt> {
     let prompt = cx.new(|cx| Prompt {
         asked: None,
@@ -106,7 +97,6 @@ pub fn ask(question: Question, window: &mut Window, cx: &mut App) {
 }
 
 impl Prompt {
-    /// Closes the question and gives its answer, to run or to drop.
     fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<Answer> {
         let run = self.asked.take().map(|mut asked| {
             let run = std::mem::replace(&mut asked.run, Box::new(|_, _| {}));
@@ -264,7 +254,6 @@ impl Render for Prompt {
     }
 }
 
-/// Whether a question is drawn, asked or fading out.
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) fn drawn(cx: &App) -> bool {
     cx.try_global::<Asking>().is_some_and(|asking| {
@@ -273,7 +262,6 @@ pub(crate) fn drawn(cx: &App) -> bool {
     })
 }
 
-/// The question shown, if any: its title, its lines, and whether its answer is a danger.
 #[cfg(test)]
 pub(crate) fn shown(cx: &App) -> Option<(String, Vec<String>, bool)> {
     let prompt = cx.try_global::<Asking>()?.0.read(cx);

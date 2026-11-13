@@ -753,7 +753,6 @@ impl LoadOrder {
         Carried::of(&kept, active)
     }
 
-    /// The mods `side` shows that are not selected there.
     pub fn inverted(&self, side: Side, selected_on: Side, selected: &[ModId]) -> Carried {
         let selected = if selected_on == side { selected } else { &[] };
         Carried::of(

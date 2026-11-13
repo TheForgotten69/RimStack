@@ -1,6 +1,3 @@
-//! The mod in bold, what is wrong, and its fix, on the line's right when there
-//! is room for twenty characters beside it, under it otherwise.
-
 use super::theme::{self, Theme};
 use super::widgets::{Btn, TextSized, btn_width, icon, measure};
 use crate::words::put;
@@ -11,7 +8,6 @@ use gpui::{
 };
 use rimstack_core::base::sentence::Sentence;
 
-/// What a problem's line is pressed for: its fix, ignoring it, or its mod shown.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Act {
     Fix,

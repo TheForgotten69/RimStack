@@ -12,7 +12,6 @@ use std::time::UNIX_EPOCH;
 pub struct Header {
     /// As the game writes it: `1.6.4871 rev600`.
     pub game_version: Option<String>,
-    /// As written.
     pub mod_ids: Vec<String>,
     /// One per id; old saves may have fewer.
     pub mod_names: Vec<String>,
@@ -250,7 +249,6 @@ impl Compared {
 #[serde(rename_all = "camelCase")]
 pub struct Row {
     pub file: String,
-    /// From the RimSaves file name.
     pub folder: String,
     pub name: String,
     pub facts: Vec<(&'static str, String)>,

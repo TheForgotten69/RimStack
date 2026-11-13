@@ -1,5 +1,3 @@
-//! The list as a whole when no mod is chosen.
-
 use super::chosen::DetailsView;
 use crate::ui::card::Card;
 use crate::ui::theme::{self, Theme};
@@ -39,7 +37,6 @@ fn line(
 }
 
 impl DetailsView {
-    /// A press that does `run` on the Mods tab.
     pub(super) fn on_mods(
         &self,
         run: impl Fn(&mut super::Mods, &mut Context<super::Mods>) + 'static,

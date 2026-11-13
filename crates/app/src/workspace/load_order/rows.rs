@@ -17,7 +17,6 @@ pub enum RowKey {
     Sub(Category, String, usize),
     /// By its folder, the same over a rescan, which gives every mod a new `ModId`.
     Installed(std::path::PathBuf, usize),
-    /// By its package id.
     Missing(String, usize),
 }
 
@@ -34,9 +33,7 @@ pub enum Origin {
     #[default]
     Workshop,
     Local,
-    /// A Git checkout.
     Git,
-    /// The game's own.
     Game,
 }
 
@@ -89,7 +86,6 @@ pub struct RowView {
     pub accessible_name: Sentence,
     /// In seconds; 0 when not measured.
     pub load_seconds: f64,
-    /// The version, then where the mod comes from.
     pub version_line: Sentence,
 }
 

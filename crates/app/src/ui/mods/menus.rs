@@ -1,6 +1,3 @@
-//! The menus of a row's right click: a mod's, a tag group's, a category's;
-//! each entry the load order gives runs here, or is asked of the window.
-
 use super::Mods;
 use crate::ui::menu::{self, Entry as Shown};
 use crate::ui::notices;
@@ -16,7 +13,6 @@ use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::list::Category;
 use rimstack_core::{say, say_n};
 
-/// What a name typed is for.
 #[derive(Clone, Copy)]
 pub enum Naming {
     NewSub,
@@ -35,7 +31,6 @@ impl Mods {
         }
     }
 
-    /// The menu of the mod at `index` of a list, the mod chosen first when it was not.
     pub(super) fn row_menu(
         &mut self,
         side: Side,
@@ -78,7 +73,6 @@ impl Mods {
         self.open_entries(entries, at, window, cx);
     }
 
-    /// A category's colour, among the swatches, or its own again.
     pub(super) fn category_menu(
         &mut self,
         category: Category,
@@ -442,7 +436,6 @@ impl Mods {
     }
 }
 
-/// A question the load order wrote, its answer `then`.
 fn ask_with(
     ask: &crate::workspace::load_order::Ask,
     danger: bool,

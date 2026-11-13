@@ -20,24 +20,19 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
-/// What a list shows, handed over by the Mods screen.
 #[derive(Clone, PartialEq)]
 pub struct Shown {
     pub rows: Rc<Vec<RowView>>,
     pub orders: Rc<Orders>,
-    /// The columns chosen and their widths.
     pub view: Rc<crate::workspace::ModsView>,
     pub marks: Rc<rows::Marks>,
-    /// The `mod_id`s chosen in this list.
     pub chosen: Rc<HashSet<ModId>>,
     /// Whether its mods may be dragged: not while Sort is shown, nor in an order of a column.
     pub movable: bool,
     /// Whether the filter leaves it out and it is dimmed rather than hidden.
     pub dimmed: bool,
-    /// Whether one mod alone is chosen, in either list.
     pub single: bool,
     pub previewing: bool,
-    /// Whether a mod is being picked for a rule.
     pub picking: bool,
     /// Its mods, headings and filter aside: where a drop past its last row lands.
     pub count: usize,
@@ -81,7 +76,6 @@ pub struct ModList {
 const SLIDE: std::time::Duration = std::time::Duration::from_millis(140);
 const SLIDES_FOR: std::time::Duration = std::time::Duration::from_millis(400);
 
-/// How often and how far a drag held at the list's edge scrolls it.
 const PULL_EVERY: std::time::Duration = std::time::Duration::from_millis(16);
 
 pub use crate::ui::rows::bar_room;
@@ -169,7 +163,6 @@ impl ModList {
         &self.scroll
     }
 
-    /// Scrolls so that row `at` is in the middle of the list, as `positionViewAtIndex` centred it.
     pub fn reveal(&mut self, at: usize, cx: &mut Context<Self>) {
         if let (Some(&top), Some(&bottom)) = (self.tops.get(at), self.tops.get(at + 1)) {
             self.scroll.borrow_mut().centre(top, bottom);
@@ -231,7 +224,6 @@ impl ModList {
         self.pointed_row(self.pointer)
     }
 
-    /// Where row `at` is drawn in the window, from its top: as a test points at it.
     #[cfg(test)]
     pub fn drawn_at(&self, at: usize) -> Pixels {
         self.drawn_top.get() + self.tops[at] - self.scroll.borrow().top()
@@ -248,7 +240,6 @@ impl ModList {
         })
     }
 
-    /// The pointer moved over the list, or off it: drawn again when it is on another row.
     fn point(&mut self, pointer: Option<Pixels>, cx: &mut Context<Self>) {
         let (was, now) = (self.pointed_row(self.pointer), self.pointed_row(pointer));
         self.pointer = pointer;
@@ -309,7 +300,6 @@ impl ModList {
         true
     }
 
-    /// The row at the list's top.
     pub fn top_row(&self) -> usize {
         let top = self.scroll.borrow().top();
         self.tops

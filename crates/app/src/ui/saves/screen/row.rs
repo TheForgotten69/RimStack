@@ -1,5 +1,3 @@
-//! A save's row in the list: its picture, its facts and its chips.
-
 use crate::ui::button::Chip;
 
 use crate::ui::saves::Saves;

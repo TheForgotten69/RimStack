@@ -1,5 +1,3 @@
-//! The app's name, the sections, Search and Play.
-
 use super::section::Section;
 use super::shell::Shell;
 use super::theme::{self, Theme};
@@ -26,7 +24,6 @@ pub fn sections() -> [String; 8] {
     ]
 }
 
-/// What each section holds, as its tab's tip says.
 fn about_section(at: usize) -> String {
     put(&match at {
         0 => say!("The load order and every installed mod"),
@@ -40,7 +37,6 @@ fn about_section(at: usize) -> String {
     })
 }
 
-/// The sections as a menu, from the one tab shown while they are folded.
 fn pick_section(
     below: gpui::Bounds<Pixels>,
     section: usize,

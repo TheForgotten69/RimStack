@@ -1,5 +1,3 @@
-//! The mod chosen in a list, its header and the tabs under it.
-
 use crate::ui::card::Fold;
 use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{Btn, Chip, TextSized, icon, label, measure};
@@ -26,9 +24,7 @@ pub struct DetailsShown {
     pub dirty: bool,
     pub unsaved: String,
     pub conflicts: usize,
-    /// The active mods with a newer Workshop version.
     pub selected_active: bool,
-    /// What `pane_widths` is given.
     pub panes: super::panes::Panes,
     /// The problems panel shown in place of the rest.
     pub problems_open: bool,
@@ -82,7 +78,6 @@ pub struct DetailsView {
     /// the list), and the turn of its last change, which fades the pane in.
     view_shown: Option<u8>,
     view_turn: usize,
-    /// The description's words selected.
     pub(super) description: crate::ui::rich::Selection,
     pub shown: DetailsShown,
     pub tab: usize,
@@ -91,7 +86,6 @@ pub struct DetailsView {
     /// The names of the mods chosen all shown, not the first ones only.
     pub summary_open: bool,
     pub mods: gpui::WeakEntity<super::Mods>,
-    /// The About tab's fields: the tags, the group and the note of the mod shown.
     pub(super) tags: gpui::Entity<crate::ui::text_field::TextField>,
     pub(super) group: gpui::Entity<crate::ui::text_field::TextField>,
     pub(super) note: gpui::Entity<crate::ui::text_field::TextField>,
@@ -183,7 +177,6 @@ impl DetailsView {
         }
     }
 
-    /// Whether the card `key` is folded, and what folds or opens it.
     pub(super) fn fold(
         &self,
         key: &'static str,
@@ -200,7 +193,6 @@ impl DetailsView {
         (folded, Box::new(fold))
     }
 
-    /// `text` that can be selected and copied, drawn at `size`.
     pub(super) fn copyable(
         &self,
         key: &'static str,

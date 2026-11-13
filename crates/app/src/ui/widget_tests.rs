@@ -117,7 +117,6 @@ fn tab_reaches_each_control_and_enter_or_space_presses_it(cx: &mut TestAppContex
     assert!(!bench.read_with(cx, |b, _| b.on), "Shift+Tab goes back");
 }
 
-/// The frames a draw now asks for after it.
 fn frames_asked(cx: &mut VisualTestContext) -> usize {
     cx.run_until_parked();
     cx.update(|window, cx| {

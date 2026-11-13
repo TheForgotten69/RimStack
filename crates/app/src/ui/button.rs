@@ -1,6 +1,3 @@
-//! What is pressed, and the small tags beside a name. Both are reached
-//! by Tab when they can be pressed, tell a screen reader what they are, and show their tip.
-
 use super::focus;
 use super::theme::{self, Theme};
 use super::tip::tipped;
@@ -30,7 +27,6 @@ pub struct Btn {
     tip: SharedString,
     spoken: Option<SharedString>,
     on_click: Option<Click>,
-    /// Where the button was drawn, for a menu it opens.
     placed: Option<Rc<Cell<Bounds<Pixels>>>>,
     /// As wide as what holds it, as `width: parent.width` made it.
     fill: bool,
@@ -99,13 +95,11 @@ impl Btn {
         self
     }
 
-    /// A button that removes something: its words in the error colour.
     pub fn danger(mut self) -> Self {
         self.danger = true;
         self
     }
 
-    /// Tinted: the tone as its ground and its ink.
     pub fn tone(mut self, tone: Hsla) -> Self {
         self.tone = Some(tone);
         self
@@ -303,19 +297,16 @@ impl Chip {
         self
     }
 
-    /// Ringed in its tone, while what it stands for is on.
     pub fn held(mut self, held: bool) -> Self {
         self.held = held;
         self
     }
 
-    /// On a chosen row: a dark ground and the chosen row's ink.
     pub fn on_accent(mut self, on: bool) -> Self {
         self.on_accent = on;
         self
     }
 
-    /// As tall as a button, for a chip that is pressed.
     pub fn pressable(mut self) -> Self {
         self.pressable = true;
         self
@@ -336,7 +327,6 @@ impl Chip {
         self
     }
 
-    /// Pressed to do `run`: as tall as a button, and reached by Tab.
     pub fn on_click(
         mut self,
         id: impl Into<ElementId>,

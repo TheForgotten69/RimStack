@@ -1,18 +1,13 @@
-//! `GameData` as the window held it: whether the game runs, what changed on disk while the window
-//! is open, and the game started.
-
 use crate::changes::Changes;
 use gpui::{Context, EventEmitter};
 use rimstack_core::base::watch::{Stamps, Watcher};
 use std::time::Duration;
 
-/// What the window is told of the game and of the files it writes.
 pub enum Told {
     /// The game emptied its list on a new version; the last launch from RimStack had these.
     ResetByGame(Vec<String>),
     /// ModsConfig.xml was written outside RimStack and now lists these.
     WrittenOutside(Vec<String>),
-    /// The game could not be started, and why.
     NotStarted(String),
 }
 

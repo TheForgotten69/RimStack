@@ -1,6 +1,3 @@
-//! How the saves screen is laid out: the heading with the RimSaves folders, the saves with their
-//! verdicts, and the chosen save beside them.
-
 mod row;
 mod side;
 
@@ -29,7 +26,6 @@ impl Saves {
         theme.sized(360.).min(window.viewport_size().width * 0.36)
     }
 
-    /// A save's row: its picture or its facts, whichever is taller, and the room around them.
     fn row_height(theme: &Theme, save: &SaveShown<'_>, pictured: bool) -> Pixels {
         let chips = chips_of(save).next().is_some();
         let facts = theme.line(theme.title())

@@ -1,6 +1,3 @@
-//! What is newer, what changed since the game last started, what Steam or
-//! Git should fetch, and the download list beside it.
-
 mod changed;
 pub mod list;
 mod screen;
@@ -27,7 +24,6 @@ use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
 use std::time::Duration;
 
-/// How often the time for an update check is looked at, when updates come by themselves.
 const TICK: Duration = Duration::from_secs(60);
 
 /// A task waiting for the one before it: two would write the same SteamCMD folder.
@@ -87,10 +83,8 @@ pub struct Downloads {
     replacements: Vec<Replaceable>,
     steamcmd: bool,
     list: Rc<ListShown>,
-    /// The list as the side pane shows it.
     list_view: Entity<list::DownloadList>,
     tasks: Tasks,
-    /// Open parts: the inactive mods' updates, all the changed mods, the mods already installed.
     inactive_open: bool,
     since_open: bool,
     installed_open: bool,
@@ -105,7 +99,6 @@ pub struct Downloads {
     changed_drawn: Rc<std::cell::RefCell<Vec<gpui::Bounds<gpui::Pixels>>>>,
 }
 
-/// The load order's mods its rules ask for that are not installed.
 fn to_get(
     overview: &Option<Rc<crate::workspace::load_order::Overview>>,
 ) -> Vec<crate::workspace::load_order::ProblemSaid> {
@@ -116,7 +109,6 @@ fn to_get(
 }
 
 impl Downloads {
-    /// What the other sections show of Downloads, told as it changes.
     fn tell_listed(&self, cx: &mut Context<Self>) {
         let fresh = super::listed::Listed {
             list: self.list.clone(),
@@ -195,7 +187,6 @@ impl Downloads {
         downloads
     }
 
-    /// The `App`'s news, handed to the window's thread as it comes.
     fn hear(&self, cx: &mut Context<Self>) {
         super::hear(cx, READS, Self::heard);
     }
@@ -246,7 +237,6 @@ impl Downloads {
         }
     }
 
-    /// Every minute, whether an update check is due, when updates come by themselves.
     fn keep_time(&self, cx: &mut Context<Self>) {
         cx.spawn(async move |downloads, cx| {
             loop {
@@ -388,7 +378,6 @@ impl Downloads {
         }
     }
 
-    /// Folds or opens the card `key`.
     fn fold(&mut self, key: &'static str, cx: &mut Context<Self>) {
         if !self.folded.remove(key) {
             self.folded.insert(key);

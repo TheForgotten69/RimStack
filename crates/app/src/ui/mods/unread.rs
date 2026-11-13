@@ -1,6 +1,3 @@
-//! The Mods tab when the mods could not be read: why, and the game
-//! folder to choose when none was found.
-
 use super::Mods;
 use crate::ui::button::Btn;
 use crate::ui::theme::{self, Theme};

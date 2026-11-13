@@ -1,6 +1,3 @@
-//! A titled part of a page, with a note beside its title, actions at its right (on a
-//! line of their own when the title row is too narrow), and an arrow when it folds.
-
 use super::theme::{self, Theme};
 use super::widgets::{TextSized, icon, label, measure};
 use crate::words::put;
@@ -23,7 +20,6 @@ thread_local! {
         Default::default();
 }
 
-/// One animation for each unfolding: a new press starts it again.
 fn turn_of(id: &ElementId, when: std::time::Instant) -> usize {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -52,7 +48,6 @@ pub struct Card {
     body: Vec<AnyElement>,
 }
 
-/// Whether a title is one of the terms the window explains: those are underlined with dots.
 pub fn defined(title: &str) -> bool {
     meaning(title).is_some()
 }
@@ -92,7 +87,6 @@ impl Card {
         self
     }
 
-    /// A card that folds: its head, pressed, calls `fold`.
     pub fn folds(
         mut self,
         folded: bool,
@@ -307,7 +301,6 @@ impl Card {
     }
 }
 
-/// `GroupTitle`: a defined term is underlined with dots, with an info mark, and means its tip.
 pub fn group_title(theme: &Theme, title: String) -> AnyElement {
     use gpui::SharedString;
     let c = &theme.colours;

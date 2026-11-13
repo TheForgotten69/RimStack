@@ -1,6 +1,3 @@
-//! The View menu: the load order's columns, their widths and order, the
-//! headings, and how each list is ordered, as `[Mods]` keeps them.
-
 use super::Mods;
 use super::list::bar_room;
 use super::rows::Columns;
@@ -29,7 +26,6 @@ pub struct Placed {
     pub order: Rc<Cell<Bounds<Pixels>>>,
 }
 
-/// `control` with where it is drawn kept in `at`.
 pub(super) fn placed(control: impl IntoElement, at: Rc<Cell<Bounds<Pixels>>>) -> gpui::Div {
     div().relative().child(control).child(
         canvas(move |bounds, _, _| at.set(bounds), |_, _, _, _| {})
@@ -43,7 +39,6 @@ pub(super) fn placed(control: impl IntoElement, at: Rc<Cell<Bounds<Pixels>>>) ->
 pub(super) type Reachable =
     std::collections::HashMap<&'static str, (gpui::FocusHandle, Rc<Cell<Bounds<Pixels>>>)>;
 
-/// A column's left edge dragged to size it.
 #[derive(Clone, Copy)]
 pub struct ColumnEdge(pub &'static str);
 
@@ -51,7 +46,6 @@ pub struct ColumnEdge(pub &'static str);
 #[derive(Clone, Copy)]
 pub struct ColumnHeld(pub &'static str, pub usize);
 
-/// The line left of a column's heading, and the room either side of it that sizes the column.
 pub(super) fn edge(
     theme: &Theme,
     key: &'static str,
@@ -97,7 +91,6 @@ pub(super) fn edge(
     )
 }
 
-/// Every column the View menu offers, in its order.
 const ALL: [&str; 7] = [
     "author",
     "version",
@@ -130,7 +123,6 @@ pub(super) fn column_name(key: &str) -> Sentence {
     }
 }
 
-/// The widest "… ago" a time column shows.
 fn ago_widest(window: &Window, theme: &Theme) -> Pixels {
     [
         put(&say_n!(59, "{} minute ago", "{} minutes ago")),
@@ -144,7 +136,6 @@ fn ago_widest(window: &Window, theme: &Theme) -> Pixels {
     .fold(px(0.), Pixels::max)
 }
 
-/// `Columns.widths` and `ModList.fitting` for a load order this wide.
 pub(super) fn columns(
     theme: &Theme,
     orders: &Orders,
@@ -330,7 +321,6 @@ impl Mods {
         cx.notify();
     }
 
-    /// A heading dropped more than half its width away moves one place that way.
     pub(super) fn drop_column(&mut self, held: ColumnHeld, x: Pixels, cx: &mut Context<Self>) {
         let Some((from_x, width)) = self.layout.column_drag.take() else {
             return;
@@ -424,7 +414,6 @@ impl Mods {
             .collect()
     }
 
-    /// How load times are had, while there are none.
     fn load_times_how(&self, cx: &gpui::App) -> Option<String> {
         self.list
             .read(cx)
@@ -434,7 +423,6 @@ impl Mods {
             .map(|o| put(&o.load_times_how))
     }
 
-    /// The View menu: the headings, the order shown, and the columns.
     pub(super) fn view_menu(
         &self,
         below: Bounds<Pixels>,
@@ -471,7 +459,6 @@ impl Mods {
         menu::open_buttons_under_end(below, Some(40), entries, window, cx);
     }
 
-    /// The columns alone, as a right click on a heading offers them.
     pub(super) fn columns_menu(
         &self,
         at: Point<Pixels>,
@@ -551,7 +538,6 @@ impl Mods {
 }
 
 impl Mods {
-    /// A column moved `by` places among those shown.
     pub(super) fn move_column(&mut self, column: &'static str, by: i32, cx: &mut Context<Self>) {
         let Some(at) = kept::chosen(&self.view.columns)
             .iter()

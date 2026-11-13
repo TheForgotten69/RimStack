@@ -1,6 +1,3 @@
-//! A one-line field with an icon, a placeholder, the keys that reach it, a
-//! count of what it found, and a cross that empties it.
-
 use super::text_field::TextField;
 use super::theme::{self, Theme};
 use super::widgets::{TextSized, halo, icon, label};
@@ -14,9 +11,7 @@ pub struct Field<'a> {
     pub text: &'a Entity<TextField>,
     pub icon: &'static str,
     pub placeholder: String,
-    /// What the text found, shown at the right while there is text.
     pub found: Option<String>,
-    /// The keys that reach the field, shown at the right while it is empty and not typed in.
     pub keys: Option<String>,
 }
 
@@ -105,7 +100,6 @@ impl Field<'_> {
             })
     }
 
-    /// The field of several lines, its placeholder at the top.
     pub fn area(self, theme: &Theme, window: &Window, cx: &Cx) -> gpui::Stateful<gpui::Div> {
         let c = &theme.colours;
         let field = self.text.read(cx);
@@ -140,8 +134,6 @@ impl Field<'_> {
     }
 }
 
-/// The focus colour drawn over the border, fading
-/// in and out.
 fn focus_line(theme: &Theme, focused: bool) -> impl IntoElement {
     let edge = -px(1.);
     super::motion::layer(

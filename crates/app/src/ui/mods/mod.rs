@@ -1,5 +1,3 @@
-//! The inactive mods, the load order and the details, side by side.
-
 mod about;
 mod active;
 mod asked;
@@ -41,7 +39,6 @@ use std::rc::Rc;
 
 const READS: Changes = Changes::ALL;
 
-/// A list's rows as last read from the load order.
 #[derive(Default)]
 pub struct Shown {
     pub rows: Rc<Vec<RowView>>,
@@ -78,7 +75,6 @@ const ROWS_UNTOUCHED: Changes = Changes::LOGS
 
 type AfterDrawn = Box<dyn FnMut(&mut Mods, &mut gpui::Window, &mut Context<Mods>) -> bool>;
 
-/// How far the mods are read, for what waits on them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Progress {
     ListRead,
@@ -378,7 +374,6 @@ impl Mods {
         );
     }
 
-    /// Hands the details pane what it shows.
     fn sync_details(&mut self, cx: &mut Context<Self>) {
         let list = self.list.read(cx);
         let (dirty, unsaved) = (list.standing.dirty, list.standing.unsaved.clone());
@@ -580,7 +575,6 @@ impl Mods {
         self.select(Some(mod_id), side == Side::Active, cx);
     }
 
-    /// What the details show of the mod chosen, when one alone is.
     fn describe(&mut self, cx: &mut Context<Self>) {
         let app = super::app(cx);
         let marks_before = self.details.as_ref().map(|d| d.conflict_marks.clone());
@@ -627,7 +621,6 @@ impl Mods {
         }
     }
 
-    /// Hands each list its rows and what is chosen in it.
     fn sync_lists(&mut self, cx: &mut Context<Self>) {
         let state = self.list.read(cx);
         let orders = Rc::new(state.order.orders());
@@ -685,7 +678,6 @@ impl Mods {
         }
     }
 
-    /// Four mods of the load order chosen, as `--several` asks.
     pub fn choose_several(&mut self, cx: &mut Context<Self>) {
         self.choose_nth(Side::Active, 14, false, cx);
         for at in [15, 16, 19] {
@@ -693,7 +685,6 @@ impl Mods {
         }
     }
 
-    /// Chooses the `nth` mod of a list, as `--several` and the checks do.
     pub fn choose_nth(&mut self, side: Side, nth: usize, also: bool, cx: &mut Context<Self>) {
         let rows = match side {
             Side::Active => &self.active.rows,

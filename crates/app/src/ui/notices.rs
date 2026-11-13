@@ -1,6 +1,3 @@
-//! What was just done, said at the window's bottom left for a few
-//! seconds, with a way to undo it when there is one. The last ones are kept for the history.
-
 use super::theme::{self, Theme};
 use super::widgets::{Btn, TextSized};
 use crate::words::put;
@@ -90,7 +87,6 @@ pub fn say(text: impl Into<SharedString>, tone: Tone, cx: &mut App) {
     }
 }
 
-/// A toast with a button that does `run`, such as Undo.
 pub fn offer(
     text: impl Into<SharedString>,
     label: impl Into<SharedString>,

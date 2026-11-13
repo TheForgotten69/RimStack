@@ -405,7 +405,6 @@ pub const COLOUR_NAMES: [&str; 28] = [
 ];
 
 impl Appearance {
-    /// The swatch a category was painted with, when not its own.
     pub fn swatch_of(&self, category: usize) -> Option<&str> {
         self.category_colours.split(',').find_map(|pair| {
             let (at, name) = pair.split_once('=')?;
@@ -483,7 +482,6 @@ pub struct Theme {
     pub colours: Palette,
     pub light: bool,
     pub family: gpui::SharedString,
-    /// The system's monospace family, for paths.
     pub mono: gpui::SharedString,
     /// The font's ascent and descent over its size: Qt gives a line their two roundings.
     pub ascent: f32,
@@ -499,7 +497,6 @@ impl Global for Theme {}
 
 /// The window as it first opens, as Qt's first start opened it.
 pub const WINDOW: (Pixels, Pixels) = (px(1440.), px(860.));
-/// The edge between two panes: `SplitView`'s handle, a line in its middle.
 pub const HANDLE: Pixels = px(7.);
 /// The size a font's ascent and descent are read at, to be kept as parts of its size.
 pub const PROBE: Pixels = px(1000.);
@@ -556,7 +553,6 @@ impl Theme {
         }
     }
 
-    /// This theme in another appearance: the same family and font measures.
     pub fn with_appearance(&self, appearance: Appearance) -> Self {
         Self {
             mono: self.mono.clone(),
@@ -613,7 +609,6 @@ impl Theme {
     pub fn field(&self) -> Pixels {
         self.sized(28.)
     }
-    /// `Theme.outline`: the frame's width, drawn only for high contrast.
     pub fn outline(&self) -> Pixels {
         gpui::px(if self.appearance.high_contrast {
             1.
@@ -656,7 +651,6 @@ impl Theme {
         hex(if self.light { light } else { dark })
     }
 
-    /// A swatch's colour by its name, in this theme.
     pub fn swatch(&self, name: &str) -> Option<Hsla> {
         let (_, dark, light) = SWATCHES.iter().find(|s| s.0 == name)?;
         Some(hex(if self.light { light } else { dark }))

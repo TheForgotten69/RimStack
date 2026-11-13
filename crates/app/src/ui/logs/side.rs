@@ -1,6 +1,3 @@
-//! The right of the logs screen: the chosen error, its mods, what it logged and its stack trace;
-//! or, in the Mods view, the chosen mod and its errors.
-
 use super::{Logs, View};
 use crate::ui::button::Btn;
 use crate::ui::page::page;

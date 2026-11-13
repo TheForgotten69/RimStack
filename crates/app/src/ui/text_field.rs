@@ -37,7 +37,6 @@ actions!(
 );
 
 const CONTEXT: &str = "TextField";
-/// Added to `CONTEXT` in a field of several lines.
 const AREA: &str = "area";
 
 /// A key held with Command on macOS and Ctrl elsewhere, as GPUI names it.
@@ -76,7 +75,6 @@ pub fn bind_keys(cx: &mut Cx) {
 /// Told after each change of the text.
 pub struct Edited;
 
-/// Told when Enter is pressed in the field.
 pub struct Entered;
 
 pub struct TextField {
@@ -104,16 +102,12 @@ pub struct TextField {
     read_only: bool,
     weight: Option<gpui::FontWeight>,
     colour: Option<gpui::Hsla>,
-    /// A press is held to select.
     dragging: bool,
-    /// What a screen reader calls it.
     spoken: gpui::SharedString,
 }
 
-/// What was painted, and where, kept by the painter for the field to read.
 type Painted<T> = std::rc::Rc<std::cell::RefCell<Option<(T, Bounds<Pixels>)>>>;
 
-/// What a masked field shows for each character.
 const BULLET: char = '\u{25cf}';
 
 impl EventEmitter<Edited> for TextField {}
@@ -175,7 +169,6 @@ impl TextField {
         Some(self.text_at(shaped.closest_index_for_x(at.x - bounds.left())))
     }
 
-    /// The word around `at`, as a double click chooses it.
     fn word_at(&self, at: usize) -> Range<usize> {
         let word = |c: char| c.is_alphanumeric() || c == '_';
         let start = self.text[..at]
@@ -231,7 +224,6 @@ impl TextField {
         self
     }
 
-    /// Esc does not empty it.
     pub fn kept_on_escape(mut self) -> Self {
         self.kept_on_escape = true;
         self
@@ -384,7 +376,6 @@ impl TextField {
         self.move_to(at, cx);
     }
 
-    /// The cursor a row up or down, where it stands across.
     fn by_row(&mut self, rows: f32, cx: &mut Context<Self>) {
         let line = cx.global::<Theme>().line(self.size);
         let Some((at, to)) = self.wrapped.borrow().as_ref().map(|(wrapped, _)| {
@@ -504,8 +495,6 @@ impl TextField {
 }
 
 impl TextField {
-    /// The field with what its keys do.
-    /// Named for a screen reader as `spoken`.
     pub fn speak_as(&mut self, spoken: &str) {
         self.spoken = spoken.to_string().into();
     }

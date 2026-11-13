@@ -136,7 +136,6 @@ pub fn why_not<T>(done: &Result<T, Error>) -> String {
     done.as_ref().err().map_or_else(String::new, said_of)
 }
 
-/// A record as a view reads it: each sentence in it put in words.
 pub fn as_shown(value: &impl serde::Serialize) -> Value {
     fn shown(value: Value) -> Value {
         match value {
