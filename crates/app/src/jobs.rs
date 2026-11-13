@@ -66,9 +66,53 @@ const QUICK_THREADS: usize = 8;
 
 type Job = Box<dyn FnOnce() + Send>;
 
-/// Threads running jobs, and the jobs waiting for one.
-static RUNNING: Mutex<(usize, std::collections::VecDeque<(String, Job)>)> =
-    Mutex::new((0, std::collections::VecDeque::new()));
+/// Threads running each kind of job, and the jobs waiting for one. Ordinary jobs never hold
+/// more than `MOST_THREADS`, whichever thread runs them, so `QUICK_THREADS` stay for quick ones.
+struct Pool {
+    ordinary: usize,
+    quick: usize,
+    waiting: std::collections::VecDeque<(String, Job)>,
+    waiting_quick: std::collections::VecDeque<(String, Job)>,
+}
+
+impl Pool {
+    fn room(&self, quick: bool) -> bool {
+        match quick {
+            true => self.ordinary + self.quick < MOST_THREADS + QUICK_THREADS,
+            false => self.ordinary < MOST_THREADS,
+        }
+    }
+
+    fn count(&mut self, quick: bool) -> &mut usize {
+        match quick {
+            true => &mut self.quick,
+            false => &mut self.ordinary,
+        }
+    }
+
+    /// The job a thread that has just run one of kind `was` takes next, quick ones first.
+    fn next(&mut self, was: bool) -> Option<(bool, Job)> {
+        *self.count(was) -= 1;
+        let taken = if !self.waiting_quick.is_empty() && self.room(true) {
+            self.waiting_quick.pop_front().map(|(_, job)| (true, job))
+        } else if self.room(false) {
+            self.waiting.pop_front().map(|(_, job)| (false, job))
+        } else {
+            None
+        };
+        if let Some((quick, _)) = &taken {
+            *self.count(*quick) += 1;
+        }
+        taken
+    }
+}
+
+static RUNNING: Mutex<Pool> = Mutex::new(Pool {
+    ordinary: 0,
+    quick: 0,
+    waiting: std::collections::VecDeque::new(),
+    waiting_quick: std::collections::VecDeque::new(),
+});
 
 pub fn spawn(name: &str, work: impl FnOnce() + Send + 'static) {
     spawn_as(name, false, work);
@@ -81,40 +125,36 @@ fn spawn_as(name: &str, quick: bool, work: impl FnOnce() + Send + 'static) {
         executor.spawn(async move { as_job(work) }).detach();
         return;
     }
-    let mut running = RUNNING.held();
-    let most = MOST_THREADS + if quick { QUICK_THREADS } else { 0 };
-    if running.0 >= most {
-        let job = (name.to_string(), Box::new(work) as Job);
-        match quick {
-            true => running.1.push_front(job),
-            false => running.1.push_back(job),
-        }
+    let mut pool = RUNNING.held();
+    let job = Box::new(work) as Job;
+    if !pool.room(quick) {
+        let waiting = match quick {
+            true => &mut pool.waiting_quick,
+            false => &mut pool.waiting,
+        };
+        waiting.push_back((name.to_string(), job));
         return;
     }
-    running.0 += 1;
-    drop(running);
-    start(name.to_string(), Box::new(work));
+    *pool.count(quick) += 1;
+    drop(pool);
+    start(name.to_string(), quick, job);
 }
 
-fn start(name: String, work: Job) {
+fn start(name: String, quick: bool, work: Job) {
     let started = std::thread::Builder::new()
         .name(name.clone())
         .spawn(move || {
-            let mut work = work;
+            let (mut quick, mut work) = (quick, work);
             loop {
                 work();
-                let mut running = RUNNING.held();
-                match running.1.pop_front() {
-                    Some((_, next)) => work = next,
-                    None => {
-                        running.0 -= 1;
-                        return;
-                    }
+                match RUNNING.held().next(quick) {
+                    Some(next) => (quick, work) = next,
+                    None => return,
                 }
             }
         });
     if let Err(problem) = started {
-        RUNNING.held().0 -= 1;
+        *RUNNING.held().count(quick) -= 1;
         rimstack_core::problem!("{name} not started: {problem}");
     }
 }
@@ -297,6 +337,9 @@ impl<T: Send + 'static> Single<T> {
 mod tests {
     use super::*;
 
+    /// The pool is the process's own: tests that fill it take turns.
+    static POOL: Mutex<()> = Mutex::new(());
+
     #[test]
     fn a_long_wait_on_the_windows_thread_fails_outside_a_job_alone() {
         keep_window_thread();
@@ -309,6 +352,7 @@ mod tests {
 
     #[test]
     fn work_a_view_waits_on_runs_while_every_other_thread_is_held() {
+        let _turn = POOL.held();
         let (release, held) = std::sync::mpsc::channel::<()>();
         let held = Arc::new(Mutex::new(held));
         let (started, starting) = std::sync::mpsc::channel();
@@ -334,7 +378,42 @@ mod tests {
     }
 
     #[test]
+    fn quick_work_keeps_its_threads_while_ordinary_jobs_wait() {
+        let _turn = POOL.held();
+        let (release, held) = std::sync::mpsc::channel::<()>();
+        let held = Arc::new(Mutex::new(held));
+        let (started, starting) = std::sync::mpsc::channel();
+        let asked = MOST_THREADS + 4 * QUICK_THREADS;
+        for _ in 0..asked {
+            let (held, started) = (held.clone(), started.clone());
+            spawn("held", move || {
+                let _ = started.send(());
+                let _ = held.held().recv();
+            });
+        }
+        for _ in 0..MOST_THREADS {
+            let _ = starting.recv_timeout(std::time::Duration::from_secs(5));
+        }
+        let answered = (0..2 * QUICK_THREADS)
+            .filter(|_| {
+                let (told, answer) = std::sync::mpsc::channel();
+                spawn_as("quick", true, move || {
+                    let _ = told.send(());
+                });
+                answer
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .is_ok()
+            })
+            .count();
+        for _ in 0..asked {
+            let _ = release.send(());
+        }
+        assert_eq!(answered, 2 * QUICK_THREADS);
+    }
+
+    #[test]
     fn jobs_past_the_most_threads_wait_for_one_and_all_run() {
+        let _turn = POOL.held();
         let (release, held) = std::sync::mpsc::channel::<()>();
         let held = Arc::new(Mutex::new(held));
         let (done, finished) = std::sync::mpsc::channel();
@@ -348,7 +427,11 @@ mod tests {
                 let _ = done.send(at);
             });
         }
-        assert!(RUNNING.held().0 <= MOST_THREADS + QUICK_THREADS);
+        {
+            let pool = RUNNING.held();
+            assert!(pool.ordinary <= MOST_THREADS);
+            assert!(pool.ordinary + pool.quick <= MOST_THREADS + QUICK_THREADS);
+        }
         for _ in 0..MOST_THREADS {
             release.send(()).unwrap();
         }
