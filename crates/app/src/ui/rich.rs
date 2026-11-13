@@ -91,7 +91,6 @@ impl Selection {
     }
 }
 
-/// Qt indents a list and a quote by 40 at the text size it was made for.
 fn indent(theme: &Theme) -> Pixels {
     theme.sized(40.)
 }
@@ -227,7 +226,7 @@ pub fn blocks(
                 Kind::Paragraph => text.child(shown),
                 Kind::Heading(level) => {
                     let size = match level {
-                        3 => theme.body() * 1.2,
+                        1 => theme.body() * 1.2,
                         _ => theme.body(),
                     };
                     text.sized_text(theme, size)

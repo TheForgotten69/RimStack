@@ -1,10 +1,7 @@
-//! The HTML `rich` writes, read back into blocks of styled runs, for a view that draws text
-//! itself instead of handing HTML to a rich text view.
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Paragraph,
-    /// 3 for a title, 4 for a subtitle, as `rich` writes `h1` and `h2`.
+    /// 1 for `[h1]`, 2 for `[h2]` and `[h3]`.
     Heading(u8),
     /// `depth` from 1; `number` in an ordered list.
     Item {
@@ -38,8 +35,21 @@ impl Block {
     }
 }
 
+pub(super) enum Tag {
+    Bold,
+    Italic,
+    Underline,
+    Strike,
+    Heading(u8),
+    List { ordered: bool },
+    Item,
+    Quote,
+    Code,
+    Rule,
+}
+
 #[derive(Default)]
-struct Reader {
+pub(super) struct Reader {
     done: Vec<Block>,
     runs: Vec<Run>,
     kind: Option<Kind>,
@@ -61,12 +71,12 @@ impl Reader {
         })
     }
 
-    fn text(&mut self, text: &str) {
+    pub(super) fn text(&mut self, text: &str) {
         if text.is_empty() {
             return;
         }
         let run = Run {
-            text: decode(text),
+            text: text.to_string(),
             bold: self.bold > 0,
             italic: self.italic > 0,
             underline: self.underline > 0,
@@ -90,47 +100,27 @@ impl Reader {
         self.kind = next;
     }
 
-    fn tag(&mut self, tag: &str) {
-        let (closing, name) = match tag.strip_prefix('/') {
-            Some(name) => (true, name),
-            None => (false, tag),
-        };
-        let name = name
-            .split_whitespace()
-            .next()
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        let count = |n: &mut usize| match closing {
-            true => *n = n.saturating_sub(1),
-            false => *n += 1,
-        };
-        match (name.as_str(), closing) {
-            ("b", _) => count(&mut self.bold),
-            ("i", _) => count(&mut self.italic),
-            ("u", _) => count(&mut self.underline),
-            ("s", _) => count(&mut self.strike),
-            ("br", _) => self.text("\n"),
-            ("a", false) => self.link = href(tag),
-            ("a", true) => self.link = None,
-            ("h3" | "h4", false) => {
-                let level = if name == "h3" { 3 } else { 4 };
-                self.end(Some(Kind::Heading(level)));
-            }
-            ("h3" | "h4", true) | ("pre", true) => self.end(None),
-            ("pre", false) => self.end(Some(Kind::Code)),
-            ("hr", _) => {
+    pub(super) fn link(&mut self, to: Option<String>) {
+        self.link = to;
+    }
+
+    pub(super) fn open(&mut self, tag: Tag) {
+        match tag {
+            Tag::Bold => self.bold += 1,
+            Tag::Italic => self.italic += 1,
+            Tag::Underline => self.underline += 1,
+            Tag::Strike => self.strike += 1,
+            Tag::Heading(level) => self.end(Some(Kind::Heading(level))),
+            Tag::Code => self.end(Some(Kind::Code)),
+            Tag::Rule => {
                 self.end(Some(Kind::Rule));
                 self.end(None);
             }
-            ("ul" | "ol", false) => {
+            Tag::List { ordered } => {
                 self.end(None);
-                self.lists.push((name == "ol", 0));
+                self.lists.push((ordered, 0));
             }
-            ("ul" | "ol", true) => {
-                self.end(None);
-                self.lists.pop();
-            }
-            ("li", false) => {
+            Tag::Item => {
                 let depth = self.lists.len().max(1);
                 let number = self.lists.last_mut().and_then(|(ordered, at)| {
                     *at += 1;
@@ -138,16 +128,36 @@ impl Reader {
                 });
                 self.end(Some(Kind::Item { depth, number }));
             }
-            ("blockquote", false) => {
+            Tag::Quote => {
                 self.end(None);
                 self.quotes += 1;
             }
-            ("blockquote", true) => {
-                self.end(None);
-                self.quotes = self.quotes.saturating_sub(1);
-            }
-            _ => {}
         }
+    }
+
+    pub(super) fn close(&mut self, tag: Tag) {
+        let less = |n: &mut usize| *n = n.saturating_sub(1);
+        match tag {
+            Tag::Bold => less(&mut self.bold),
+            Tag::Italic => less(&mut self.italic),
+            Tag::Underline => less(&mut self.underline),
+            Tag::Strike => less(&mut self.strike),
+            Tag::Heading(_) | Tag::Code => self.end(None),
+            Tag::List { .. } => {
+                self.end(None);
+                self.lists.pop();
+            }
+            Tag::Quote => {
+                self.end(None);
+                less(&mut self.quotes);
+            }
+            Tag::Item | Tag::Rule => {}
+        }
+    }
+
+    pub(super) fn finish(mut self) -> Vec<Block> {
+        self.end(None);
+        self.done
     }
 }
 
@@ -176,48 +186,13 @@ fn trim_edges(runs: &mut Vec<Run>) {
     }
 }
 
-fn href(tag: &str) -> Option<String> {
-    let from = tag.find("href=\"")? + "href=\"".len();
-    let to = tag[from..].find('"')? + from;
-    Some(decode(&tag[from..to]))
-}
-
-fn decode(text: &str) -> String {
-    text.replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&amp;", "&")
-}
-
-/// Reads what `super::rich` writes; another tag is passed over and its text kept.
-pub fn blocks(html: &str) -> Vec<Block> {
-    let mut reader = Reader::default();
-    let mut rest = html;
-    while let Some(open) = rest.find('<') {
-        reader.text(&rest[..open]);
-        let Some(close) = rest[open..].find('>') else {
-            reader.text(&rest[open..]);
-            rest = "";
-            break;
-        };
-        reader.tag(&rest[open + 1..open + close]);
-        rest = &rest[open + close + 1..];
-    }
-    reader.text(rest);
-    reader.end(None);
-    reader.done
-}
-
 #[cfg(test)]
 mod tests {
-    use super::super::rich;
+    use super::super::blocks;
     use super::*;
 
     fn kinds(text: &str) -> Vec<(Kind, String)> {
-        blocks(&rich(text))
-            .iter()
-            .map(|b| (b.kind, b.text()))
-            .collect()
+        blocks(text).iter().map(|b| (b.kind, b.text())).collect()
     }
 
     #[test]
@@ -227,7 +202,7 @@ mod tests {
                 "[h1]Title[/h1]\nIntro\nmore\n[list]\n[*]One\n[*]Two\n[/list]\n[hr][/hr]\n[quote]Said[/quote]\nEnd"
             ),
             [
-                (Kind::Heading(3), "Title".into()),
+                (Kind::Heading(1), "Title".into()),
                 (Kind::Paragraph, "Intro\nmore".into()),
                 (
                     Kind::Item {
@@ -281,10 +256,8 @@ mod tests {
     }
 
     #[test]
-    fn runs_keep_their_style_their_link_and_the_characters_escaped() {
-        let read = blocks(&rich(
-            "a [b]bold [i]both[/i][/b] [url=https://e.org/?a=1&b=2]x < y[/url]",
-        ));
+    fn runs_keep_their_style_their_link_and_their_characters() {
+        let read = blocks("a [b]bold [i]both[/i][/b] [url=https://e.org/?a=1&b=2]x < y[/url]");
         assert_eq!(read.len(), 1);
         let runs = &read[0].runs;
         let styled: Vec<(&str, bool, bool, Option<&str>)> = runs
@@ -305,7 +278,7 @@ mod tests {
 
     #[test]
     fn nothing_but_breaks_and_spaces_makes_no_block() {
-        assert!(blocks("<br><br>  ").is_empty());
+        assert!(blocks("\n\n  ").is_empty());
         assert!(blocks("").is_empty());
     }
 }

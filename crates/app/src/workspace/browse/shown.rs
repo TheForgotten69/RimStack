@@ -1,5 +1,5 @@
 use super::sidebar::Sidebar;
-use rimstack_core::base::markup::{Block, Piece, blocks, pieces};
+use rimstack_core::base::markup::{Block, Piece, pieces};
 use rimstack_core::base::{elapsed::ago, sentence::Sentence, sizes};
 use rimstack_core::rimworld::workshop::{Details, Votes};
 use rimstack_core::rimworld::workshopindex::Entry;
@@ -151,7 +151,7 @@ impl Shown {
             .iter()
             .filter_map(|piece| match piece {
                 Piece::Image(url) => Some(url.clone()),
-                Piece::Html(_) => None,
+                Piece::Text(_) => None,
             })
             .collect()
     }
@@ -160,8 +160,8 @@ impl Shown {
         self.pieces
             .iter()
             .map(|piece| match piece {
-                Piece::Html(html) => Part {
-                    blocks: blocks(html),
+                Piece::Text(blocks) => Part {
+                    blocks: blocks.clone(),
                     image: String::new(),
                     note: None,
                 },

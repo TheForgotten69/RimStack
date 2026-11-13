@@ -15,7 +15,6 @@ use gpui::{
     AnyElement, Context, FontWeight, IntoElement, ParentElement, Pixels, Styled, Window, div,
     prelude::FluentBuilder, px,
 };
-use rimstack_core::base::markup::blocks;
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::{say, say_n};
 use std::rc::Rc;
@@ -671,12 +670,8 @@ impl DetailsView {
     ) -> Vec<AnyElement> {
         let mut shown = Vec::new();
         shown.extend(self.before_play(theme, details, inner, window));
-        if !details.description.is_empty() {
+        if !details.description_blocks.is_empty() {
             let link: Link = Rc::new(|url, _, cx| cx.open_url(url));
-            let rich = match details.description_rich.is_empty() {
-                true => blocks(&details.description),
-                false => blocks(&details.description_rich),
-            };
             let text =
                 self.description
                     .holding(
@@ -687,7 +682,7 @@ impl DetailsView {
                             .children(rich::blocks(
                                 "mod-description",
                                 theme,
-                                &rich,
+                                &details.description_blocks,
                                 &link,
                                 Some(&self.description),
                             )),

@@ -113,7 +113,8 @@ pub struct Details {
     pub version: String,
     pub game_versions: String,
     pub description: String,
-    pub description_rich: String,
+    #[serde(skip)]
+    pub description_blocks: Vec<rimstack_core::base::markup::Block>,
     pub url: String,
     pub load_time: String,
     pub unreadable: Option<Sentence>,
@@ -282,7 +283,7 @@ impl LoadOrder {
                 said.version = about.mod_version.clone().unwrap_or_default();
                 said.game_versions = about.supported_versions.join(", ");
                 said.description = about.description.clone().unwrap_or_default();
-                said.description_rich = rimstack_core::base::markup::rich(&said.description);
+                said.description_blocks = rimstack_core::base::markup::blocks(&said.description);
                 said.url = about.url.clone().unwrap_or_default();
                 said.load_time =
                     rimstack_core::rimworld::startup::in_words(&app.startup(), &about.package_id);
