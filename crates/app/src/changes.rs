@@ -34,8 +34,17 @@ impl Changes {
     pub const KEY: Self = Self(1 << 22);
     pub const SOURCE: Self = Self(1 << 23);
 
+    pub const fn or(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
     pub fn contains(self, any_of: Self) -> bool {
         self.0 & any_of.0 != 0
+    }
+
+    /// Whether every change here is among `set`.
+    pub fn within(self, set: Self) -> bool {
+        self.0 & !set.0 == 0
     }
 
     pub fn is_empty(self) -> bool {
@@ -112,6 +121,8 @@ mod tests {
         let heard = heard.held();
         assert_eq!(heard.len(), 2);
         assert!(heard[0].contains(Changes::PROBLEMS) && !heard[0].contains(Changes::LIBRARY));
+        assert!(heard[0].within(Changes::NOTES | Changes::PROBLEMS | Changes::LOGS));
+        assert!(!heard[0].within(Changes::NOTES));
     }
 
     #[test]

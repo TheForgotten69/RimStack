@@ -59,6 +59,16 @@ fn give_back_freed() {
     }
 }
 
+/// What changes nothing of the lists' rows, only the details.
+const ROWS_UNTOUCHED: Changes = Changes::LOGS
+    .or(Changes::SAVES)
+    .or(Changes::LISTS)
+    .or(Changes::THEME)
+    .or(Changes::DOWNLOAD_LIST)
+    .or(Changes::KEY)
+    .or(Changes::SOURCE)
+    .or(Changes::MOD_FILES);
+
 type AfterDrawn = Box<dyn FnMut(&mut Mods, &mut gpui::Window, &mut Context<Mods>) -> bool>;
 
 /// How far the mods are read, for what waits on them.
@@ -328,6 +338,13 @@ impl Mods {
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
         let app = super::app(cx);
         self.reread(changes, cx);
+        if changes.within(ROWS_UNTOUCHED) {
+            if self.details.is_some() {
+                self.describe(cx);
+            }
+            self.sync_details(cx);
+            return;
+        }
         if changes.contains(Changes::LIBRARY | Changes::LANGUAGE) {
             return self.load(changes.contains(Changes::LIBRARY), cx);
         }
