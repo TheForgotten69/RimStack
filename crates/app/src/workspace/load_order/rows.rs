@@ -334,7 +334,7 @@ impl LoadOrder {
             collapsed: false,
             category: m.category as i32,
             mod_index: index as i32,
-            mod_id: m.installed.map_or(-1, ModId::to_qml),
+            mod_id: m.installed.map_or(-1, ModId::to_packed),
             moved_from: if preview {
                 self.moved_from(index) as i32
             } else {

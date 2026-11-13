@@ -135,7 +135,7 @@ impl Downloads {
                 }
                 if !running {
                     for id in checkouts {
-                        downloads.update_from_git(id.to_qml(), cx);
+                        downloads.update_from_git(id.to_packed(), cx);
                     }
                 }
                 cx.notify();
@@ -248,7 +248,7 @@ impl Downloads {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let path = ModId::from_qml(mod_id)
+        let path = ModId::from_packed(mod_id)
             .and_then(|id| crate::ui::app(cx).mod_path(id))
             .unwrap_or_default();
         let lines = vec![
@@ -299,7 +299,7 @@ impl Downloads {
     }
 
     pub fn unsubscribe(&mut self, mod_id: i32, cx: &mut Context<Self>) {
-        let workshop = ModId::from_qml(mod_id).and_then(|id| crate::ui::app(cx).workshop_id(id));
+        let workshop = ModId::from_packed(mod_id).and_then(|id| crate::ui::app(cx).workshop_id(id));
         self.ask_steam(SteamAsk::Unsubscribe, workshop.into_iter().collect(), cx);
     }
 
@@ -308,7 +308,7 @@ impl Downloads {
     }
 
     pub fn redownload(&mut self, mod_id: i32, cx: &mut Context<Self>) {
-        let Some(id) = ModId::from_qml(mod_id) else {
+        let Some(id) = ModId::from_packed(mod_id) else {
             return;
         };
         let app = crate::ui::app(cx);
@@ -321,7 +321,7 @@ impl Downloads {
     }
 
     pub fn update_from_git(&mut self, mod_id: i32, cx: &mut Context<Self>) {
-        let Some(id) = ModId::from_qml(mod_id) else {
+        let Some(id) = ModId::from_packed(mod_id) else {
             return;
         };
         let app = crate::ui::app(cx);

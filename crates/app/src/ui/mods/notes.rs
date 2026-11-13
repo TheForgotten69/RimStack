@@ -43,8 +43,8 @@ impl Mods {
     /// The rule of your own between the chosen mod and `other`, as the picking asked.
     pub(super) fn pick(&mut self, other: i32, cx: &mut Context<Self>) {
         let (Some(chosen), Some(other)) = (
-            self.selected_id().and_then(ModId::from_qml),
-            ModId::from_qml(other),
+            self.selected_id().and_then(ModId::from_packed),
+            ModId::from_packed(other),
         ) else {
             return;
         };
@@ -64,7 +64,7 @@ impl Mods {
 
     /// A rule of your own that the chosen mod loads after `other`, and the move it asks.
     pub(super) fn win_over(&mut self, other: ModId, cx: &mut Context<Self>) {
-        let Some(id) = self.selected_id().and_then(ModId::from_qml) else {
+        let Some(id) = self.selected_id().and_then(ModId::from_packed) else {
             return;
         };
         let app = super::super::app(cx);
@@ -77,7 +77,7 @@ impl Mods {
 
     /// The shared textures of the chosen mod and `other` side by side.
     pub(super) fn compare_with(&mut self, other: ModId, cx: &mut Context<Self>) {
-        let Some(id) = self.selected_id().and_then(ModId::from_qml) else {
+        let Some(id) = self.selected_id().and_then(ModId::from_packed) else {
             return;
         };
         let list = self.order.list(Side::Active);
@@ -87,7 +87,7 @@ impl Mods {
     }
 
     pub(super) fn warn_again(&mut self, cx: &mut Context<Self>) {
-        let Some(id) = self.selected_id().and_then(ModId::from_qml) else {
+        let Some(id) = self.selected_id().and_then(ModId::from_packed) else {
             return;
         };
         let app = super::super::app(cx);
@@ -97,14 +97,14 @@ impl Mods {
     }
 
     pub(super) fn draft_note(&mut self, tags: String, note: String, cx: &mut Context<Self>) {
-        if let Some(id) = self.selected_id().and_then(ModId::from_qml) {
+        if let Some(id) = self.selected_id().and_then(ModId::from_packed) {
             self.drafts.note = Some((id, tags, note));
             self.wait_for_drafts(cx);
         }
     }
 
     pub(super) fn draft_group(&mut self, name: String, cx: &mut Context<Self>) {
-        if let Some(id) = self.selected_id().and_then(ModId::from_qml) {
+        if let Some(id) = self.selected_id().and_then(ModId::from_packed) {
             self.drafts.group = Some((id, name));
             self.wait_for_drafts(cx);
         }
@@ -161,7 +161,7 @@ impl Mods {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(id) = self.selected_id().and_then(ModId::from_qml) else {
+        let Some(id) = self.selected_id().and_then(ModId::from_packed) else {
             return;
         };
         let chosen = self
@@ -214,7 +214,7 @@ impl Mods {
             .details
             .as_ref()
             .and(self.selected_id())
-            .and_then(ModId::from_qml)
+            .and_then(ModId::from_packed)
         else {
             self.chosen_read.cancel();
             self.chosen_files = None;
@@ -269,7 +269,7 @@ impl Mods {
 
     /// The chosen mod's textures set aside brought back.
     pub(super) fn unhide_chosen(&mut self, cx: &mut Context<Self>) {
-        let Some(id) = self.selected_id().and_then(ModId::from_qml) else {
+        let Some(id) = self.selected_id().and_then(ModId::from_packed) else {
             return;
         };
         let app = super::super::app(cx);

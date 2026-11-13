@@ -117,7 +117,7 @@ impl DetailsView {
                     |mods, cx| {
                         let ids = mods
                             .selected_id()
-                            .and_then(rimstack_core::mods::library::ModId::from_qml)
+                            .and_then(rimstack_core::mods::library::ModId::from_packed)
                             .into_iter()
                             .collect();
                         mods.trust(ids, false, cx)
@@ -612,7 +612,7 @@ impl DetailsView {
                         self.on_mods(move |mods, cx| {
                             let ids = mods
                                 .selected_id()
-                                .and_then(rimstack_core::mods::library::ModId::from_qml)
+                                .and_then(rimstack_core::mods::library::ModId::from_packed)
                                 .into_iter()
                                 .collect();
                             mods.group(ids, &tag, cx)

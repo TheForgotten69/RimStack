@@ -44,7 +44,7 @@ impl Mods {
     fn ids(&self) -> Vec<ModId> {
         self.selection
             .iter()
-            .filter_map(|id| ModId::from_qml(*id))
+            .filter_map(|id| ModId::from_packed(*id))
             .collect()
     }
 
@@ -60,7 +60,7 @@ impl Mods {
         self.order.move_mod(&app, side, from, to);
         self.changed(cx);
         if let Some(id) = moved {
-            let slides = [(id.to_qml(), from as i32 - to as i32)].into();
+            let slides = [(id.to_packed(), from as i32 - to as i32)].into();
             self.list(side)
                 .update(cx, |list, cx| list.slide(slides, cx));
         }
@@ -116,7 +116,7 @@ impl Mods {
 
     /// The mod chosen moved across, and the one beside it chosen, as Enter does.
     pub(super) fn activate_selected(&mut self, side: Side, cx: &mut Context<Self>) {
-        let Some(first) = self.selected_id().and_then(ModId::from_qml) else {
+        let Some(first) = self.selected_id().and_then(ModId::from_packed) else {
             return;
         };
         let list = self.order.list(side);
@@ -126,13 +126,14 @@ impl Mods {
         let next = list.beside_mod(first);
         self.take(side, position, None, cx);
         if let Some(next) = next {
-            self.select(Some(next.to_qml()), side == Side::Active, cx);
+            self.select(Some(next.to_packed()), side == Side::Active, cx);
         }
     }
 
     /// The mod chosen moved across or back, as the row's button and a double click do.
     pub(super) fn toggle_mod(&mut self, side: Side, mod_id: i32, cx: &mut Context<Self>) {
-        let position = ModId::from_qml(mod_id).and_then(|id| self.order.list(side).position_of(id));
+        let position =
+            ModId::from_packed(mod_id).and_then(|id| self.order.list(side).position_of(id));
         if let (Some(position), false) = (position, self.order.previewing()) {
             self.take(side, position, None, cx);
         }
@@ -168,7 +169,7 @@ impl Mods {
 
     /// The mod chosen moved `by` places, as Alt + an arrow does.
     fn nudge(&mut self, side: Side, by: isize, cx: &mut Context<Self>) {
-        let Some(first) = self.selected_id().and_then(ModId::from_qml) else {
+        let Some(first) = self.selected_id().and_then(ModId::from_packed) else {
             return;
         };
         let sorted_by_column = side == Side::Active && !self.orders.active_key.is_empty();
@@ -342,8 +343,8 @@ impl Mods {
         let first = self
             .selected_id()
             .filter(|_| self.selected_active == in_active)
-            .and_then(ModId::from_qml);
-        let (Some(first), Some(to)) = (first, ModId::from_qml(mod_id)) else {
+            .and_then(ModId::from_packed);
+        let (Some(first), Some(to)) = (first, ModId::from_packed(mod_id)) else {
             return self.select(Some(mod_id), in_active, cx);
         };
         let list = self.order.list(Side::of(in_active));
@@ -352,7 +353,7 @@ impl Mods {
         };
         let ids = std::iter::once(first)
             .chain(others)
-            .map(ModId::to_qml)
+            .map(ModId::to_packed)
             .collect();
         self.keep_selection(ids, in_active, cx);
     }
@@ -360,7 +361,7 @@ impl Mods {
     pub(super) fn invert_selection(&mut self, in_active: bool, cx: &mut Context<Self>) {
         let (side, on) = (Side::of(in_active), Side::of(self.selected_active));
         let inverted = self.order.inverted(side, on, &self.ids());
-        let ids = inverted.ids.iter().map(|id| id.to_qml()).collect();
+        let ids = inverted.ids.iter().map(|id| id.to_packed()).collect();
         self.keep_selection(ids, in_active, cx);
     }
 
@@ -397,7 +398,7 @@ impl Mods {
 
     /// The selection follows its first mod into the list it went to.
     fn follow_selection(&mut self) {
-        let Some(first) = self.selected_id().and_then(ModId::from_qml) else {
+        let Some(first) = self.selected_id().and_then(ModId::from_packed) else {
             return;
         };
         let on = |side| self.order.list(side).position_of(first).is_some();
@@ -446,7 +447,7 @@ impl Mods {
                     .selected_id()
                     .filter(|_| self.selected_active == (side == Side::Active));
                 let list = self.order.list(side);
-                let row = list.step_from(current.and_then(ModId::from_qml), by);
+                let row = list.step_from(current.and_then(ModId::from_packed), by);
                 let id = row
                     .and_then(|row| self.shown(side).rows.get(row))
                     .map(|r| r.mod_id);
@@ -480,7 +481,7 @@ impl Mods {
             return None;
         };
         let id = list.mods().get(index)?.installed?;
-        if self.selected_id() != Some(id.to_qml()) {
+        if self.selected_id() != Some(id.to_packed()) {
             return None;
         }
         let marked: Vec<bool> = self

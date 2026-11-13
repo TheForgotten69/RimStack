@@ -126,7 +126,7 @@ impl Find {
         cx.subscribe(&inside, |find, _, _: &Entered, cx| find.inside_step(1, cx))
             .detach();
         cx.observe(&mods, |find, mods, cx| {
-            let selected = mods.read(cx).selected_id().and_then(ModId::from_qml);
+            let selected = mods.read(cx).selected_id().and_then(ModId::from_packed);
             if selected != find.selected {
                 find.selected = selected;
                 find.count_extensions(cx);
@@ -141,7 +141,7 @@ impl Find {
                 .set_reduce_motion(theme.appearance.reduce_motion);
             scroll
         };
-        let selected = mods.read(cx).selected_id().and_then(ModId::from_qml);
+        let selected = mods.read(cx).selected_id().and_then(ModId::from_packed);
         let mut find = Self {
             selected,
             request: Request::default(),

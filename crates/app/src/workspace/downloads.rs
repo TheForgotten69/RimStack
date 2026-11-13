@@ -426,7 +426,7 @@ mod tests {
         let shown = updates_shown(&report, &HashSet::new());
         assert_eq!(shown.checkouts_due.len(), 1);
         assert_eq!(shown.checkouts_said.to_string(), "1 behind");
-        assert_eq!(crate::words::as_shown(&row)["modId"], id.to_qml());
+        assert_eq!(crate::words::as_shown(&row)["modId"], id.to_packed());
         drop(loaded);
 
         app.checkout_updated(&roads);

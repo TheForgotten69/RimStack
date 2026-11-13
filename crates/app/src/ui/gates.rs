@@ -1,6 +1,6 @@
 //! A size in a view follows the text size or a measure, never a fixed count of pixels: a
-//! two-digit `px(…)` belongs in `theme.rs`, where the Theme's tokens are, as `gates.rs` held it
-//! for the QML. A hairline (a border, a bar) stays a pixel or three.
+//! two-digit `px(…)` belongs in `theme.rs`, where the Theme's tokens are. A hairline (a border,
+//! a bar) stays a pixel or three.
 
 use std::path::Path;
 
@@ -23,12 +23,42 @@ fn views(dir: &Path, into: &mut Vec<std::path::PathBuf>) {
     }
 }
 
-/// The numbers written right after `px(` in `line`.
+/// The whole numbers written inside each `px(…)` of `line`, as `px(x + 100.)` holds `100`.
 fn pixels(line: &str) -> Vec<String> {
-    line.match_indices("px(")
-        .map(|(at, _)| line[at + 3..].trim_start().trim_start_matches('-'))
-        .map(|rest| rest.chars().take_while(|c| c.is_ascii_digit()).collect())
-        .collect()
+    let mut found = Vec::new();
+    for (at, _) in line.match_indices("px(") {
+        let before = line[..at].chars().next_back().unwrap_or(' ');
+        if before.is_alphanumeric() || matches!(before, '_' | '.') {
+            continue;
+        }
+        let mut depth = 1;
+        let inside: String = line[at + 3..]
+            .chars()
+            .take_while(|c| {
+                depth += match c {
+                    '(' => 1,
+                    ')' => -1,
+                    _ => 0,
+                };
+                depth > 0
+            })
+            .collect();
+        let mut after = ' ';
+        let mut run = String::new();
+        for c in inside.chars().chain([' ']) {
+            match c.is_ascii_digit() {
+                true if run.is_empty()
+                    && (after.is_alphanumeric() || matches!(after, '_' | '.')) => {}
+                true => run.push(c),
+                false if !run.is_empty() => found.push(std::mem::take(&mut run)),
+                false => {}
+            }
+            if !c.is_ascii_digit() || run.is_empty() {
+                after = c;
+            }
+        }
+    }
+    found
 }
 
 #[test]
@@ -39,7 +69,10 @@ fn no_view_sizes_a_thing_in_fixed_pixels() {
     let mut found = Vec::new();
     for file in files {
         let text = std::fs::read_to_string(&file).unwrap();
-        let shown = text.split("#[cfg(test)]").next().unwrap_or_default();
+        let shown = text
+            .split("#[cfg(test)]\nmod tests {")
+            .next()
+            .unwrap_or_default();
         for (n, line) in shown.lines().enumerate() {
             if pixels(line).iter().any(|digits| digits.len() >= 2) {
                 found.push(format!(
@@ -62,4 +95,8 @@ fn no_view_sizes_a_thing_in_fixed_pixels() {
 fn the_check_sees_a_fixed_size() {
     assert_eq!(pixels("div().w(px(120.)).h(px(2.))"), ["120", "2"]);
     assert_eq!(pixels(".top(px(-12.))"), ["12"]);
+    assert_eq!(pixels("px(width + 100.)"), ["100"]);
+    assert_eq!(pixels("px(0.25).max(px(f(2) * 3.5))"), ["0", "2", "3"]);
+    assert!(pixels("px(size_16)").is_empty());
+    assert!(pixels(".px(theme.sized(40.)).mx_px(12)").is_empty());
 }

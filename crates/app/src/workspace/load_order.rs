@@ -681,7 +681,7 @@ impl LoadOrder {
             .filter_map(|id| {
                 Some(FoundMod {
                     name: library.get(id)?.display_name().to_string(),
-                    mod_id: id.to_qml(),
+                    mod_id: id.to_packed(),
                     active: active.position_of(id).is_some(),
                 })
             })
@@ -752,11 +752,11 @@ impl Holding {
     pub fn of(id: Option<ModId>, name: &str, selected: &[ModId]) -> Holding {
         match id {
             Some(id) if selected.len() > 1 && selected.contains(&id) => Holding {
-                ids: selected.iter().map(|id| id.to_qml()).collect(),
+                ids: selected.iter().map(|id| id.to_packed()).collect(),
                 name: say_n!(selected.len(), "{} mod", "{} mods"),
             },
             _ => Holding {
-                ids: id.iter().map(|id| id.to_qml()).collect(),
+                ids: id.iter().map(|id| id.to_packed()).collect(),
                 name: Sentence::Plain(name.to_string()),
             },
         }

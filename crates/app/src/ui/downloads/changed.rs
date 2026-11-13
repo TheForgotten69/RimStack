@@ -30,7 +30,7 @@ impl Downloads {
     ) -> AnyElement {
         let c = &theme.colours;
         let row = shown.row;
-        let mod_id = row.mod_id.to_qml();
+        let mod_id = row.mod_id.to_packed();
         let now = row.now.unwrap_or_default();
         let when = match shown.same_day {
             true => format!("{} → {}", clock(row.was), clock(now)),
@@ -188,7 +188,7 @@ impl Downloads {
             .take(most)
             .map(|shown| {
                 let row = shown.row;
-                (row.mod_id.to_qml(), (!row.git).then(|| row.id.clone()))
+                (row.mod_id.to_packed(), (!row.git).then(|| row.id.clone()))
             })
             .collect();
         let mut body = vec![

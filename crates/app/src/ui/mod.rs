@@ -263,7 +263,17 @@ pub fn appearance(app: &App, options: &Options) -> Appearance {
 /// `theme` in `family`, the system's when none: its weights, and its ascent and descent read.
 fn in_family(theme: Theme, family: Option<&str>, cx: &Cx) -> Theme {
     let family = family.map_or_else(system_family, str::to_string);
-    let weights = weights_of(&family);
+    thread_local! {
+        static WEIGHTS: std::cell::RefCell<std::collections::HashMap<String, Vec<f32>>> =
+            Default::default();
+    }
+    let weights = WEIGHTS.with(|known| {
+        known
+            .borrow_mut()
+            .entry(family.clone())
+            .or_insert_with(|| weights_of(&family))
+            .clone()
+    });
     let mut theme = Theme::new(theme.appearance.clone(), family).with_weights(&weights);
     let text = cx.text_system();
     let id = text.resolve_font(&font(theme.family.clone()));

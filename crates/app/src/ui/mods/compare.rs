@@ -775,7 +775,7 @@ impl Mods {
             .map(|r| r.mod_id)
             .collect();
         for id in ids {
-            let Some(found) = ModId::from_qml(id) else {
+            let Some(found) = ModId::from_packed(id) else {
                 continue;
             };
             let details = self.order.details(&app, found);

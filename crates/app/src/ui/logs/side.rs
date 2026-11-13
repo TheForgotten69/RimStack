@@ -121,7 +121,7 @@ impl Logs {
             .iter()
             .enumerate()
             .map(|(at, named)| {
-                let mod_id = named.mod_id.to_qml();
+                let mod_id = named.mod_id.to_packed();
                 div()
                     .flex()
                     .items_center()

@@ -56,7 +56,7 @@ pub struct ProblemSaid {
 impl ProblemSaid {
     fn of(m: &Mod, trouble: &Trouble) -> Self {
         Self {
-            mod_id: m.installed.map_or(-1, |i| i64::from(i.to_qml())),
+            mod_id: m.installed.map_or(-1, |i| i64::from(i.to_packed())),
             trust: trouble.fix == rimstack_core::mods::describe::Fix::Trust,
             name: m.name.clone(),
             error: trouble.error,

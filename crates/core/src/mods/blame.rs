@@ -61,7 +61,7 @@ pub fn of(
     name_of: &dyn Fn(ModId) -> String,
 ) -> (Vec<Pointed>, Vec<Blamed>) {
     let runs = logs::runs(groups);
-    let numbered = |id: Option<ModId>| id.map_or(-1, |id| i64::from(id.to_qml()));
+    let numbered = |id: Option<ModId>| id.map_or(-1, |id| i64::from(id.to_packed()));
     let mut counted: Vec<(Option<ModId>, usize)> = Vec::with_capacity(groups.len());
     let errors = groups
         .iter()
@@ -147,7 +147,7 @@ mod tests {
         ];
         let (errors, blamed) = of(&groups, &clues, &name_of);
         let pointed: Vec<i64> = errors.iter().map(|error| error.mod_id).collect();
-        let roads_id = i64::from(roads().to_qml());
+        let roads_id = i64::from(roads().to_packed());
         assert_eq!(pointed, [roads_id, -1, roads_id, -1]);
         assert_eq!(errors[0].first.as_deref(), Some("Better Roads"));
         assert_eq!(errors[3].mods, []);

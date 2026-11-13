@@ -54,8 +54,8 @@ fn picking_a_mod_while_asked_adds_a_rule_of_your_own() {
             assert_eq!(
                 (rules[0].first, rules[0].then),
                 (
-                    ModId::from_qml(other).unwrap(),
-                    ModId::from_qml(id).unwrap()
+                    ModId::from_packed(other).unwrap(),
+                    ModId::from_packed(id).unwrap()
                 )
             );
         })

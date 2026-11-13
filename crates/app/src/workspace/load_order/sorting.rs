@@ -159,7 +159,7 @@ impl LoadOrder {
                         name: m.name.clone(),
                         from,
                         to: now + 1,
-                        mod_id: m.installed.map_or(-1, ModId::to_qml),
+                        mod_id: m.installed.map_or(-1, ModId::to_packed),
                         why: why.text.clone(),
                     })
                     .collect(),

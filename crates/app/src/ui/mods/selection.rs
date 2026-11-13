@@ -23,7 +23,7 @@ impl Mods {
     fn chosen_ids(&self) -> Vec<ModId> {
         self.selection
             .iter()
-            .filter_map(|id| ModId::from_qml(*id))
+            .filter_map(|id| ModId::from_packed(*id))
             .collect()
     }
 

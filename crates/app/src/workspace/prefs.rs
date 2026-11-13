@@ -106,15 +106,27 @@ impl App {
             return Ok(());
         }
         view.write(&mut prefs);
-        prefs.write(&self.prefs_file())
+        self.write_prefs(prefs)
     }
 
     fn prefs_file(&self) -> PathBuf {
         self.settings_dir.join("RimStack.conf")
     }
 
+    /// Read again only once the file's time changes: the top bar asks at every draw.
     pub fn prefs(&self) -> Prefs {
-        Prefs::read(&self.prefs_file())
+        let file = self.prefs_file();
+        let read = self
+            .prefs
+            .get(super::written(file.clone()), || Prefs::read(&file));
+        (*read).clone()
+    }
+
+    fn write_prefs(&self, prefs: Prefs) -> Result<(), Error> {
+        let file = self.prefs_file();
+        prefs.write(&file)?;
+        self.prefs.put(super::written(file), prefs);
+        Ok(())
     }
 
     /// The interface size of RimStack before 0.6 (`interfaceScale` in the settings) carried into
@@ -141,7 +153,7 @@ impl App {
             return Ok(());
         }
         prefs.set(group, key, value);
-        prefs.write(&self.prefs_file())?;
+        self.write_prefs(prefs)?;
         if group == "Appearance" {
             self.publish(Changes::THEME);
         }

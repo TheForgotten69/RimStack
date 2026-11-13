@@ -241,7 +241,7 @@ pub fn row(
     let c = &theme.colours;
     let colour = category_colour(theme, row.category);
     let big_header = row.is_header && !row.is_sub && !row.again;
-    let mark = rimstack_core::mods::library::ModId::from_qml(row.mod_id)
+    let mark = rimstack_core::mods::library::ModId::from_packed(row.mod_id)
         .and_then(|id| around.marks.get(&id))
         .filter(|_| columns.is_some() && !row.is_header);
     let pointed = around.pointed == Some(at);
@@ -416,7 +416,7 @@ pub fn row(
                 index: row.mod_index as usize,
                 ids: ids
                     .into_iter()
-                    .filter_map(rimstack_core::mods::library::ModId::from_qml)
+                    .filter_map(rimstack_core::mods::library::ModId::from_packed)
                     .collect(),
             };
             d.on_drag(held, move |_, grabbed, _, cx| {

@@ -328,7 +328,7 @@ impl LoadOrder {
         let mut group = Vec::new();
         for fix in &subject.fixes {
             let action = Action::ApplyFix {
-                mod_id: at.id.map_or(-1, ModId::to_qml),
+                mod_id: at.id.map_or(-1, ModId::to_packed),
                 fix: fix.clone(),
             };
             group.push(Entry::item(

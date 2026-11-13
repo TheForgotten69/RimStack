@@ -45,7 +45,7 @@ struct Waiting {
 struct Tasks {
     running: bool,
     note: String,
-    /// The checkout being updated, by its `ModId::to_qml`.
+    /// The checkout being updated, by its `ModId::to_packed`.
     updating: Option<i32>,
     /// The repository being cloned, by its place in what was looked up.
     cloning: Option<usize>,
@@ -379,7 +379,7 @@ impl Downloads {
     }
 
     pub fn ignore_replacement(&mut self, mod_id: Option<i32>, cx: &mut Context<Self>) {
-        let id = mod_id.and_then(rimstack_core::mods::library::ModId::from_qml);
+        let id = mod_id.and_then(rimstack_core::mods::library::ModId::from_packed);
         if let Err(problem) = super::app(cx).ignore_replacement(id) {
             rimstack_core::problem!("{problem}");
         }

@@ -470,7 +470,7 @@ impl Mods {
             problems_open: self.problems_open,
             position: self
                 .selected_id()
-                .and_then(ModId::from_qml)
+                .and_then(ModId::from_packed)
                 .and_then(|id| self.order.list(Side::Active).position_of(id))
                 .map_or(0, |at| at + 1),
             picking: self.picking,
@@ -478,7 +478,7 @@ impl Mods {
             files: self
                 .chosen_files
                 .as_ref()
-                .filter(|(of, _)| self.selected_id().and_then(ModId::from_qml) == Some(*of))
+                .filter(|(of, _)| self.selected_id().and_then(ModId::from_packed) == Some(*of))
                 .map(|(_, read)| read.clone()),
             unhide_problem: self.unhide_problem.clone(),
             comparison: self.compared.clone(),
@@ -498,7 +498,7 @@ impl Mods {
             commits: self
                 .chosen_commits
                 .as_ref()
-                .filter(|(of, _)| self.selected_id().and_then(ModId::from_qml) == Some(*of))
+                .filter(|(of, _)| self.selected_id().and_then(ModId::from_packed) == Some(*of))
                 .map(|(_, read)| read.clone()),
             hunting: self.hunting,
             previewing: self.order.previewing(),
@@ -535,10 +535,10 @@ impl Mods {
                     let held: Vec<ModId> = mods
                         .selection
                         .iter()
-                        .filter_map(|id| ModId::from_qml(*id))
+                        .filter_map(|id| ModId::from_packed(*id))
                         .collect();
                     let kept = mods.order.carried(&same, &held);
-                    mods.selection = kept.ids.iter().map(|id| id.to_qml()).collect();
+                    mods.selection = kept.ids.iter().map(|id| id.to_packed()).collect();
                     mods.selected_active = kept.active;
                 }
                 mods.order = order;
@@ -629,7 +629,7 @@ impl Mods {
     fn describe(&mut self, cx: &mut Context<Self>) {
         let app = super::app(cx);
         let alone = match self.selection.as_slice() {
-            [one] => rimstack_core::mods::library::ModId::from_qml(*one),
+            [one] => rimstack_core::mods::library::ModId::from_packed(*one),
             _ => None,
         };
         let marks_before = self.details.as_ref().map(|d| d.conflict_marks.clone());

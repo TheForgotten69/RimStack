@@ -500,7 +500,7 @@ mod tests {
     }
 
     fn put(results: &mut Results, found: FileHits<Option<ModId>>) -> Vec<Op> {
-        let n = found.key.map_or(0, ModId::to_qml);
+        let n = found.key.map_or(0, ModId::to_packed);
         let shown = found
             .file
             .file_name()

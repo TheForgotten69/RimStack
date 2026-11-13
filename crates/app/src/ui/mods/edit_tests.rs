@@ -124,7 +124,7 @@ fn shift_ctrl_and_invert_choose_several_mods_in_one_list() {
                 .mods()
                 .iter()
                 .filter_map(|m| m.installed)
-                .map(ModId::to_qml)
+                .map(ModId::to_packed)
                 .collect();
             mods.select(Some(ids[1]), true, cx);
             mods.select_through(ids[4], true, cx);

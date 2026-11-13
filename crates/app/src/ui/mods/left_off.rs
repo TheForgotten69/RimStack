@@ -47,7 +47,7 @@ impl Mods {
             })
             .flatten();
         if let Some(id) = found {
-            self.show_mod(id.to_qml(), cx);
+            self.show_mod(id.to_packed(), cx);
             let tab = view.last_tab.min(2);
             self.details_view.update(cx, |details, cx| {
                 details.tab = tab;
@@ -71,7 +71,7 @@ impl Mods {
         }
         let app = super::super::app(cx);
         let alone = match self.selection.as_slice() {
-            [one] => ModId::from_qml(*one),
+            [one] => ModId::from_packed(*one),
             _ => None,
         };
         let key = alone

@@ -39,7 +39,7 @@ impl gpui::EventEmitter<Wanted> for Mods {}
 
 impl Mods {
     pub(super) fn open_folder(&mut self, mod_id: i32, cx: &mut Context<Self>) {
-        let Some(id) = ModId::from_qml(mod_id) else {
+        let Some(id) = ModId::from_packed(mod_id) else {
             return;
         };
         let app = crate::ui::app(cx);
@@ -69,12 +69,12 @@ impl Mods {
         let selected: Vec<ModId> = self
             .selection
             .iter()
-            .filter_map(|id| ModId::from_qml(*id))
+            .filter_map(|id| ModId::from_packed(*id))
             .collect();
         let clicked = Clicked {
             active: side == Side::Active,
             index,
-            id: ModId::from_qml(mod_id),
+            id: ModId::from_packed(mod_id),
             selected: &selected,
         };
         let entries = self.order.row_menu(&app, &clicked);
@@ -202,13 +202,13 @@ impl Mods {
             }
             Action::Redownload { mod_id, ask } => {
                 let me = cx.entity().downgrade();
-                let id = mod_id.to_qml();
+                let id = mod_id.to_packed();
                 ask_with(ask, false, window, cx, move |cx| {
                     let _ = me.update(cx, |_, cx| cx.emit(Wanted::Redownload(id)));
                 });
             }
-            Action::Unsubscribe { mod_id } => self.ask_unsubscribe(mod_id.to_qml(), window, cx),
-            Action::UpdateFromGit { mod_id } => cx.emit(Wanted::UpdateFromGit(mod_id.to_qml())),
+            Action::Unsubscribe { mod_id } => self.ask_unsubscribe(mod_id.to_packed(), window, cx),
+            Action::UpdateFromGit { mod_id } => cx.emit(Wanted::UpdateFromGit(mod_id.to_packed())),
             Action::PutInSub { mod_id, tag } => self.group(vec![*mod_id], tag, cx),
             Action::NewSub { mod_id } => self.ask_name(vec![*mod_id], Naming::NewSub, window, cx),
             Action::Trust { ids, yes } => self.trust(ids.clone(), *yes, cx),
@@ -255,7 +255,7 @@ impl Mods {
                 }
             }
             "trust" => {
-                let ids = ModId::from_qml(mod_id).into_iter().collect();
+                let ids = ModId::from_packed(mod_id).into_iter().collect();
                 self.trust(ids, true, cx);
             }
             "sort" => self.preview_sort(cx),
@@ -427,7 +427,7 @@ impl Mods {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(id) = ModId::from_qml(mod_id) else {
+        let Some(id) = ModId::from_packed(mod_id) else {
             return;
         };
         let app = crate::ui::app(cx);

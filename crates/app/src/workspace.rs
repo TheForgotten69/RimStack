@@ -80,6 +80,7 @@ pub struct App {
     system_languages: Vec<String>,
     detected_language: Derived<u64, String>,
     settings: RwLock<Settings>,
+    prefs: Derived<Written, rimstack_core::kept::prefs::Prefs>,
     install: Reread<install::Install>,
     session: OnceLock<Mutex<Session>>,
     notes: OnceLock<RwLock<Notes>>,
@@ -155,6 +156,7 @@ impl App {
         let web: Arc<dyn Transport> = Arc::new(Web::default());
         Self {
             settings: RwLock::new(Settings::read(&settings_dir.join("settings.json"))),
+            prefs: Derived::default(),
             home,
             settings_dir,
             data_dir: data_root.join("RimStack"),

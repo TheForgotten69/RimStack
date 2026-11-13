@@ -116,7 +116,7 @@ fn the_mod_tab_and_filter_left_come_back_and_a_new_choice_is_kept() {
             let app = crate::ui::app(cx);
             let chosen = mods
                 .selected_id()
-                .and_then(rimstack_core::mods::library::ModId::from_qml);
+                .and_then(rimstack_core::mods::library::ModId::from_packed);
             let key = chosen.and_then(|id| mods.order.package_of(&app, id));
             assert_eq!(key.as_deref(), Some("fixture.mod010"));
             assert_eq!(mods.details_view.read(cx).tab, 2);
@@ -124,7 +124,7 @@ fn the_mod_tab_and_filter_left_come_back_and_a_new_choice_is_kept() {
                 .active
                 .rows
                 .iter()
-                .find(|r| !r.is_header && r.mod_id != chosen.unwrap().to_qml())
+                .find(|r| !r.is_header && r.mod_id != chosen.unwrap().to_packed())
                 .unwrap()
                 .mod_id;
             mods.choose(Side::Active, other, cx);
@@ -461,7 +461,7 @@ fn scrolling_the_load_order_draws_the_list_alone_again() {
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
             let chosen = mods.order.list(Side::Active).mods()[4].installed.unwrap();
-            mods.choose(Side::Active, chosen.to_qml(), cx);
+            mods.choose(Side::Active, chosen.to_packed(), cx);
         })
     });
     for _ in 0..3 {

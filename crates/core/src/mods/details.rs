@@ -186,7 +186,7 @@ pub fn slowest(mods: &[Mod], most: usize) -> Vec<Slow> {
     timed.sort_by_key(|(_, micros)| std::cmp::Reverse(*micros));
     let longest = timed.first().map_or(1, |(_, micros)| *micros);
     let one = |&(m, micros): &(&Mod, u32)| Slow {
-        mod_id: m.installed.map_or(-1, |id| i64::from(id.to_qml())),
+        mod_id: m.installed.map_or(-1, |id| i64::from(id.to_packed())),
         name: m.name.clone(),
         took: crate::rimworld::startup::seconds(f64::from(micros) / 1000.0),
         part: f64::from(micros) / f64::from(longest),

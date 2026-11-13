@@ -269,7 +269,7 @@ fn a_mod_made_for_another_game_version_is_marked_on_either_side_until_trusted() 
     let marked = |order: &LoadOrder| {
         let rows = order.rows(&app, Side::Inactive);
         rows.iter()
-            .any(|r| r.mod_id == id.to_qml() && r.outdated && r.made_for == "1.5")
+            .any(|r| r.mod_id == id.to_packed() && r.outdated && r.made_for == "1.5")
     };
     assert!(marked(&order));
     app.set_version_ok(&[id], true);
@@ -282,7 +282,7 @@ fn a_mod_made_for_another_game_version_is_marked_on_either_side_until_trusted() 
     assert!(
         active
             .iter()
-            .any(|r| r.mod_id == id.to_qml() && r.made_for == "1.5")
+            .any(|r| r.mod_id == id.to_packed() && r.made_for == "1.5")
     );
 }
 
@@ -628,16 +628,16 @@ fn the_inverse_of_a_selection_is_the_rest_of_its_list() {
         .mods()
         .iter()
         .filter_map(|m| m.installed)
-        .map(ModId::to_qml)
+        .map(ModId::to_packed)
         .collect();
     let roads = roads(&order, Side::Inactive);
     let rest = order.inverted(Side::Inactive, Side::Inactive, &[roads]);
-    let mut chosen: Vec<i32> = rest.ids.iter().map(|id| id.to_qml()).collect();
+    let mut chosen: Vec<i32> = rest.ids.iter().map(|id| id.to_packed()).collect();
     chosen.sort_unstable();
     let mut others: Vec<i32> = inactive
         .iter()
         .copied()
-        .filter(|id| *id != roads.to_qml())
+        .filter(|id| *id != roads.to_packed())
         .collect();
     others.sort_unstable();
     assert_eq!((chosen, rest.active), (others, false));
@@ -659,12 +659,12 @@ fn a_drag_takes_the_selection_along_only_when_it_starts_on_part_of_it() {
     let roads = roads(&order, Side::Inactive);
     let core = ids_of(&order, Side::Active, &["ludeon.rimworld"])[0];
     let both = Holding::of(Some(roads), "Ann.Roads", &[core, roads]);
-    assert_eq!(both.ids, [core.to_qml(), roads.to_qml()]);
+    assert_eq!(both.ids, [core.to_packed(), roads.to_packed()]);
     assert_eq!(both.name.to_string(), "2 mods");
     let alone = Holding::of(Some(roads), "Ann.Roads", &[core]);
     assert_eq!(
         (alone.ids, alone.name.to_string()),
-        (vec![roads.to_qml()], "Ann.Roads".to_string())
+        (vec![roads.to_packed()], "Ann.Roads".to_string())
     );
     assert!(Holding::of(None, "Gone", &[core, roads]).ids.is_empty());
 }
