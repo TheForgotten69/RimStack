@@ -1,4 +1,5 @@
-//! Every thread RimStack starts goes through here, named for the diagnostics.
+//! Every thread RimStack starts for its own work goes through here, named for the diagnostics;
+//! rayon's and gpui's pools are their own.
 //!
 //! Under test, a job asked for on the window's thread runs on the test's own executor instead:
 //! gpui's test scheduler takes a wake from any other thread for a fault, and hung when one came
@@ -59,6 +60,9 @@ fn as_job(work: impl FnOnce()) {
 /// Threads running jobs at most; a job asked beyond it waits for one of them, and the asker
 /// never waits.
 const MOST_THREADS: usize = 32;
+/// Threads past `MOST_THREADS` for work a view waits on the answer of, so that downloads,
+/// searches and SteamCMD filling every thread never hold the window's reads.
+const QUICK_THREADS: usize = 8;
 
 type Job = Box<dyn FnOnce() + Send>;
 
@@ -67,14 +71,24 @@ static RUNNING: Mutex<(usize, std::collections::VecDeque<(String, Job)>)> =
     Mutex::new((0, std::collections::VecDeque::new()));
 
 pub fn spawn(name: &str, work: impl FnOnce() + Send + 'static) {
+    spawn_as(name, false, work);
+}
+
+/// `quick`: a view waits on its answer, as a `Lane`'s; it runs ahead of the rest.
+fn spawn_as(name: &str, quick: bool, work: impl FnOnce() + Send + 'static) {
     #[cfg(test)]
     if let Some(executor) = TESTED.with(|tested| tested.borrow().clone()) {
         executor.spawn(async move { as_job(work) }).detach();
         return;
     }
     let mut running = RUNNING.held();
-    if running.0 >= MOST_THREADS {
-        running.1.push_back((name.to_string(), Box::new(work)));
+    let most = MOST_THREADS + if quick { QUICK_THREADS } else { 0 };
+    if running.0 >= most {
+        let job = (name.to_string(), Box::new(work) as Job);
+        match quick {
+            true => running.1.push_front(job),
+            false => running.1.push_back(job),
+        }
         return;
     }
     running.0 += 1;
@@ -126,8 +140,16 @@ pub fn off_thread<R: Send + 'static>(
     name: &str,
     work: impl FnOnce() -> R + Send + 'static,
 ) -> oneshot::Receiver<R> {
+    off_thread_as(name, false, work)
+}
+
+fn off_thread_as<R: Send + 'static>(
+    name: &str,
+    quick: bool,
+    work: impl FnOnce() -> R + Send + 'static,
+) -> oneshot::Receiver<R> {
     let (found, waiting) = oneshot::channel();
-    spawn(name, move || {
+    spawn_as(name, quick, move || {
         let _ = found.send(work());
     });
     waiting
@@ -199,7 +221,7 @@ impl Lane {
                 return;
             }
             let mine = turn.clone();
-            let Ok(found) = off_thread(&name, move || work(&mine)).await else {
+            let Ok(found) = off_thread_as(&name, true, move || work(&mine)).await else {
                 return;
             };
             // Checked on the window's thread: another run may be asked for meanwhile.
@@ -286,6 +308,32 @@ mod tests {
     }
 
     #[test]
+    fn work_a_view_waits_on_runs_while_every_other_thread_is_held() {
+        let (release, held) = std::sync::mpsc::channel::<()>();
+        let held = Arc::new(Mutex::new(held));
+        let (started, starting) = std::sync::mpsc::channel();
+        for _ in 0..MOST_THREADS {
+            let (held, started) = (held.clone(), started.clone());
+            spawn("held", move || {
+                let _ = started.send(());
+                let _ = held.held().recv();
+            });
+        }
+        for _ in 0..MOST_THREADS {
+            let _ = starting.recv_timeout(std::time::Duration::from_secs(5));
+        }
+        let (told, answer) = std::sync::mpsc::channel();
+        spawn_as("quick", true, move || {
+            let _ = told.send(7);
+        });
+        let answer = answer.recv_timeout(std::time::Duration::from_secs(5)).ok();
+        for _ in 0..MOST_THREADS {
+            let _ = release.send(());
+        }
+        assert_eq!(answer, Some(7));
+    }
+
+    #[test]
     fn jobs_past_the_most_threads_wait_for_one_and_all_run() {
         let (release, held) = std::sync::mpsc::channel::<()>();
         let held = Arc::new(Mutex::new(held));
@@ -300,7 +348,7 @@ mod tests {
                 let _ = done.send(at);
             });
         }
-        assert!(RUNNING.held().0 <= MOST_THREADS);
+        assert!(RUNNING.held().0 <= MOST_THREADS + QUICK_THREADS);
         for _ in 0..MOST_THREADS {
             release.send(()).unwrap();
         }

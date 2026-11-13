@@ -195,4 +195,41 @@ mod tests {
         app.launch(false).unwrap();
         assert_eq!(launches::read(&app.launches_file()).len(), 1);
     }
+
+    /// What the game watcher's look every 2 s costs: the stamps of every mod and the game's
+    /// files, and whether the game runs.
+    #[test]
+    #[ignore = "reads this machine's own install; RIMSTACK_TIME_HOME names a scratch folder"]
+    fn times_the_watchers_look_on_this_machines_install() {
+        let Ok(scratch) = std::env::var("RIMSTACK_TIME_HOME") else {
+            return;
+        };
+        let scratch = std::path::PathBuf::from(scratch);
+        let home = std::path::PathBuf::from(std::env::var("HOME").unwrap());
+        let app = App::new(
+            home,
+            &scratch.join("settings"),
+            &scratch.join("data"),
+            Default::default(),
+        );
+        let count = app
+            .library()
+            .as_ref()
+            .as_ref()
+            .map_or(0, |(l, _)| l.installed.len());
+        app.stamps();
+        let mut took: Vec<std::time::Duration> = (0..20)
+            .map(|_| {
+                let started = std::time::Instant::now();
+                let _ = (app.game_running(), app.stamps());
+                started.elapsed()
+            })
+            .collect();
+        took.sort();
+        eprintln!(
+            "watcher_look mods={count} median={:?} worst={:?}",
+            took[took.len() / 2],
+            took[took.len() - 1]
+        );
+    }
 }
