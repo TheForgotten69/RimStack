@@ -251,6 +251,13 @@ impl Element for Rows {
         let (scroll, line, view, hitbox) =
             (self.scroll.clone(), self.line, self.view, hitbox.clone());
         window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
+            let sideways = match event.delta {
+                ScrollDelta::Pixels(moved) => moved.x.abs() > moved.y.abs(),
+                ScrollDelta::Lines(lines) => lines.x.abs() > lines.y.abs(),
+            };
+            if sideways || event.modifiers.shift {
+                return;
+            }
             if phase.bubble() && hitbox.should_handle_scroll(window) {
                 scroll.borrow_mut().wheel(event.delta, line);
                 cx.notify(view);

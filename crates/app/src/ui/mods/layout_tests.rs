@@ -257,3 +257,16 @@ fn a_texture_comparison_fits() {
         &[],
     );
 }
+
+#[test]
+fn every_column_fits_in_both_lists() {
+    let all: Act = |mods, cx| {
+        for column in ["updated", "downloaded", "activated", "size"] {
+            mods.toggle_column(Side::Active, column, cx);
+        }
+        for column in ["author", "version", "updated", "downloaded", "size"] {
+            mods.toggle_column(Side::Inactive, column, cx);
+        }
+    };
+    fits("every column", 40, Options::default(), nothing, all, &[]);
+}

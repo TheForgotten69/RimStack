@@ -2,7 +2,7 @@
 //! nothing else, with its bar always shown and its thumb held to scroll.
 
 use super::Mods;
-use super::columns::columns;
+use super::columns::{chosen, columns};
 use super::rows;
 use super::rows::Columns;
 use crate::ui::rows::{Scroll, Scrolling};
@@ -51,6 +51,7 @@ pub struct ModList {
     tops: Rc<[Pixels]>,
     scroll: Scrolling,
     thumbs: thumbs::Shared,
+    sideways: gpui::Entity<super::sideways::Sideways>,
     mods: WeakEntity<Mods>,
     made: Rc<RefCell<Made>>,
     pub(super) bench: Option<super::bench::Bench>,
@@ -102,6 +103,7 @@ impl ModList {
         side: Side,
         shown: Shown,
         thumbs: thumbs::Shared,
+        sideways: gpui::Entity<super::sideways::Sideways>,
         mods: WeakEntity<Mods>,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -124,6 +126,7 @@ impl ModList {
             shown,
             scroll: Rc::new(std::cell::RefCell::new(scroll)),
             thumbs,
+            sideways,
             mods,
             made: Rc::default(),
             bench: None,
@@ -326,6 +329,10 @@ impl Render for ModList {
         let drawn_theme = theme.clone();
         let room = bar_room(&theme);
         let line = theme.sized(40.);
+        let (x, reach) = {
+            let sideways = self.sideways.read(cx);
+            (sideways.x(), sideways.reach())
+        };
         let list = crate::ui::rows::rows(
             ("mod-list", side as usize),
             self.scroll.clone(),
@@ -336,8 +343,17 @@ impl Render for ModList {
                 let theme = &drawn_theme;
                 let mut made = made.borrow_mut();
                 if made.width != width || !Rc::ptr_eq(&made.view, &shown.view) {
-                    let columns = (side == Side::Active).then(|| {
-                        Rc::new(columns(theme, &shown.orders, &shown.view, width, window))
+                    let shows = side == Side::Active
+                        || !chosen(&shown.view, &shown.orders, side).is_empty();
+                    let columns = shows.then(|| {
+                        Rc::new(columns(
+                            theme,
+                            &shown.orders,
+                            &shown.view,
+                            side,
+                            width,
+                            window,
+                        ))
                     });
                     *made = Made {
                         width,
@@ -345,6 +361,11 @@ impl Render for ModList {
                         columns,
                     };
                 }
+                let past = made
+                    .columns
+                    .as_ref()
+                    .map_or(px(0.), |columns| columns.across - columns.room);
+                reach.set(past.max(px(0.)));
                 let name_room = match &made.columns {
                     Some(columns) => columns.name_room,
                     None => {
@@ -357,6 +378,7 @@ impl Render for ModList {
                 };
                 let chosen_ids: Vec<ModId> = shown.chosen.iter().copied().collect();
                 let around = rows::Around {
+                    x,
                     pointed,
                     movable: shown.movable,
                     chosen_ids: &chosen_ids,
@@ -364,12 +386,14 @@ impl Render for ModList {
                     single: shown.single,
                     buttons: !shown.previewing && !shown.picking,
                     previewing: shown.previewing,
-                    headed: shown.orders.active_key.is_empty() && shown.view.headings,
+                    headed: side == Side::Active
+                        && shown.orders.active_key.is_empty()
+                        && shown.view.headings,
                     order_shown: made.columns.as_ref().is_some_and(|columns| {
                         columns
                             .fitting
                             .iter()
-                            .any(|(key, _)| *key == shown.orders.active_key)
+                            .any(|(key, _)| *key == shown.orders.key(side))
                     }),
                 };
                 let tiles = made.columns.as_ref().is_some_and(|columns| columns.tile);
@@ -467,6 +491,15 @@ impl Render for ModList {
             .on_key_down(move |event: &gpui::KeyDownEvent, window, cx| {
                 let _ = keyed.update(cx, |mods, cx| mods.list_key(side, event, window, cx));
             })
+            .on_scroll({
+                let sideways = self.sideways.clone();
+                move |event, _, cx| {
+                    if super::sideways::is_sideways(event) {
+                        super::sideways::wheel(&sideways, event, line, cx);
+                        cx.stop_propagation();
+                    }
+                }
+            })
             .child(list)
             .children(footer)
             .children(heading)
@@ -485,6 +518,7 @@ impl Render for ModList {
                 self.scroll.clone(),
                 cx.entity_id(),
             ))
+            .child(super::sideways::bar(&theme, &self.sideways, cx))
     }
 }
 

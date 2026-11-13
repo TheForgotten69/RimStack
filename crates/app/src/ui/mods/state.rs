@@ -20,7 +20,9 @@ pub struct Layout {
     pub details_width: Pixels,
     pub drawer_open: bool,
     pub drawer_turn: usize,
-    pub column_drag: Option<(Pixels, Pixels)>,
+    pub edge_drag: Option<columns::EdgeDrag>,
+    /// The columns each list showed when last drawn.
+    pub shown: [Vec<&'static str>; 2],
     pub menu_buttons: columns::Placed,
 }
 
@@ -31,7 +33,8 @@ impl Layout {
             details_width,
             drawer_open: false,
             drawer_turn: 0,
-            column_drag: None,
+            edge_drag: None,
+            shown: Default::default(),
             menu_buttons: Default::default(),
         }
     }

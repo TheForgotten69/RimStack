@@ -1,6 +1,7 @@
 //! The appearance and the screens' places, kept in `RimStack.conf` in the settings folder.
 
 use super::App;
+use super::load_order::Side;
 use crate::changes::Changes;
 use rimstack_core::base::error::Error;
 use rimstack_core::base::locks::Held;
@@ -12,8 +13,11 @@ use std::path::PathBuf;
 pub struct ModsView {
     /// As `columns::chosen` reads it.
     pub columns: String,
-    /// As `columns::widths` reads it.
+    /// As `columns::shares` reads it.
     pub column_sizes: String,
+    /// The inactive mods' own, as the two above.
+    pub inactive_columns: String,
+    pub inactive_column_sizes: String,
     /// The load order under category headings: kept as 1, 0 or -1, and only 0 turns them off.
     pub headings: bool,
     /// As `columns::from_kept` reads it; "" by category.
@@ -36,6 +40,8 @@ impl Default for ModsView {
         Self {
             columns: "author,version,load".into(),
             column_sizes: String::new(),
+            inactive_columns: String::new(),
+            inactive_column_sizes: String::new(),
             headings: true,
             inactive_order: String::new(),
             inactive_hidden: false,
@@ -58,7 +64,9 @@ impl ModsView {
         let number = |key: &str| prefs.number(Self::GROUP, key).unwrap_or(0.) as f32;
         Self {
             columns: text("columns", first.columns),
-            column_sizes: text("columnSizes", first.column_sizes),
+            column_sizes: text("columnShares", first.column_sizes),
+            inactive_columns: text("inactiveColumns", first.inactive_columns),
+            inactive_column_sizes: text("inactiveColumnShares", first.inactive_column_sizes),
             headings: prefs.number(Self::GROUP, "headings") != Some(0.),
             inactive_order: text("inactiveOrder", first.inactive_order),
             inactive_hidden: prefs.flag(Self::GROUP, "inactiveHidden").unwrap_or(false),
@@ -71,11 +79,28 @@ impl ModsView {
         }
     }
 
+    /// A list's columns and their widths.
+    pub fn columns_of(&self, side: Side) -> (&str, &str) {
+        match side {
+            Side::Active => (&self.columns, &self.column_sizes),
+            Side::Inactive => (&self.inactive_columns, &self.inactive_column_sizes),
+        }
+    }
+
+    pub fn columns_of_mut(&mut self, side: Side) -> (&mut String, &mut String) {
+        match side {
+            Side::Active => (&mut self.columns, &mut self.column_sizes),
+            Side::Inactive => (&mut self.inactive_columns, &mut self.inactive_column_sizes),
+        }
+    }
+
     fn write(&self, prefs: &mut Prefs) {
         let flag = |on: bool| if on { "true" } else { "false" };
         let pairs = [
             ("columns", self.columns.clone()),
-            ("columnSizes", self.column_sizes.clone()),
+            ("columnShares", self.column_sizes.clone()),
+            ("inactiveColumns", self.inactive_columns.clone()),
+            ("inactiveColumnShares", self.inactive_column_sizes.clone()),
             ("headings", if self.headings { "1" } else { "0" }.into()),
             ("inactiveOrder", self.inactive_order.clone()),
             ("inactiveHidden", flag(self.inactive_hidden).into()),
@@ -189,7 +214,7 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use super::ModsView;
+    use super::{ModsView, Side};
     use crate::workspace::tests::installed;
 
     #[test]
@@ -208,6 +233,8 @@ mod tests {
         assert_eq!(read.inactive, 479.5);
         let view = ModsView {
             columns: "version,author".into(),
+            inactive_columns: "size".into(),
+            inactive_column_sizes: "size=0.2".into(),
             headings: false,
             inactive_order: "name down".into(),
             ..read
@@ -215,6 +242,7 @@ mod tests {
         app.keep_mods_view(&view).unwrap();
         let again = app.mods_view();
         assert_eq!(again.columns, "version,author");
+        assert_eq!(again.columns_of(Side::Inactive), ("size", "size=0.2"));
         assert!(!again.headings);
         assert_eq!(again.inactive_order, "name down");
         assert_eq!(again.inactive, 480., "a width is kept in whole pixels");

@@ -10,6 +10,7 @@ mod details;
 mod edit;
 mod filter;
 mod frame;
+mod heads;
 mod hints;
 mod inactive;
 mod latest;
@@ -22,6 +23,7 @@ mod panes;
 mod problems;
 mod rows;
 mod selection;
+mod sideways;
 mod sort_moves;
 mod state;
 mod tabs;
@@ -132,6 +134,8 @@ pub struct Mods {
     mirror: Entity<TextField>,
     view_kept: Lane,
     left_off: left_off::LeftOff,
+    /// How far each list, active then inactive, is scrolled sideways.
+    sideways: [Entity<sideways::Sideways>; 2],
 }
 
 impl Mods {
@@ -168,6 +172,7 @@ impl Mods {
         let orders = Rc::new(order.orders());
         let order_orders = order.orders();
         let list = cx.new(|_| ListState::new(order, demo));
+        let sideways = [(); 2].map(|_| cx.new(|_| sideways::Sideways::default()));
         let lists = [Side::Active, Side::Inactive].map(|side| {
             let shown = list::Shown {
                 rows: Rc::default(),
@@ -183,7 +188,8 @@ impl Mods {
                 count: 0,
             };
             let (thumbs, mods) = (thumbs.clone(), cx.weak_entity());
-            cx.new(|cx| list::ModList::new(side, shown, thumbs, mods, cx))
+            let sideways = sideways[side as usize].clone();
+            cx.new(|cx| list::ModList::new(side, shown, thumbs, sideways, mods, cx))
         });
         let [active_list, inactive_list] = lists;
         let me = cx.weak_entity();
@@ -238,6 +244,7 @@ impl Mods {
                 true => left_off::LeftOff::Off,
                 false => left_off::LeftOff::Waiting,
             },
+            sideways,
         };
         mods.show(cx);
         if !demo {

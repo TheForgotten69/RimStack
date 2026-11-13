@@ -11,13 +11,13 @@ fn the_view_chosen_is_kept_and_read_again_with_the_mods() {
         mods.update(cx, |mods, cx| {
             mods.set_headings(false, cx);
             assert!(!mods.list.read(cx).order.headings());
-            mods.toggle_column("updated", cx);
+            mods.toggle_column(Side::Active, "updated", cx);
             mods.order_inactive("name down", cx);
             assert_eq!(
                 mods.list.read(cx).order.inactive_by(),
                 Some((SortKey::Name, true))
             );
-            mods.heading_pressed("name", cx);
+            mods.heading_pressed(Side::Active, "name", cx);
             assert_eq!(mods.orders.active_key, "name");
             let kept = crate::ui::app(cx).mods_view();
             assert!(!kept.headings);
@@ -163,33 +163,248 @@ fn the_mod_tab_and_filter_left_come_back_and_a_new_choice_is_kept() {
 }
 
 #[test]
-fn a_column_is_sized_by_its_edge_and_moved_by_its_heading() {
+fn an_edge_sizes_the_column_left_of_it_as_explorer_does() {
+    let drags = [
+        ("author", -20.),
+        ("author", 20.),
+        ("name", 10.),
+        ("name", -10.),
+        ("version", 10.),
+        ("version", -10.),
+    ];
+    edges_at(None, "author=0.2", &drags);
+}
+
+#[test]
+fn an_edge_follows_the_pointer_at_a_text_size_between_whole_pixels() {
+    edges_at(Some(1.25), "author=0.25", &[("author", -10.)]);
+}
+
+/// With the widths `shares`, the drags each move their edge by as much as asked: they ask no
+/// more than there is room for.
+fn edges_at(text_scale: Option<f32>, shares: &str, drags: &[(&str, f32)]) {
     use super::columns::ColumnHeld;
-    use gpui::px;
+    use gpui::{MouseButton, PlatformInput, point, px};
+    let (_tmp, mut cx, mods) = super::edit_tests::opened_at(text_scale, |_| {});
+    let window = cx.update(|cx| cx.windows()[0]);
+    let draw = |cx: &mut gpui::HeadlessAppContext| {
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+    };
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            mods.toggle_column(Side::Active, "updated", cx)
+        })
+    });
+    draw(&mut cx);
+    const HEADS: [&str; 4] = ["name", "author", "version", "updated"];
+    let lefts = |cx: &mut gpui::HeadlessAppContext| {
+        cx.update(|cx| HEADS.map(|key| f32::from(mods.read(cx).keys[key].1.get().left())))
+    };
+    let send = |cx: &mut gpui::HeadlessAppContext, input: PlatformInput| {
+        cx.update_window(window, |_, window, cx| window.dispatch_event(input, cx))
+            .unwrap();
+    };
+    let at = |x: f32, y: f32| point(px(x), px(y));
+    let moved = |x: f32, y: f32, pressed| {
+        PlatformInput::MouseMove(gpui::MouseMoveEvent {
+            position: at(x, y),
+            pressed_button: pressed,
+            modifiers: Default::default(),
+        })
+    };
+    let press = |x: f32, y: f32, clicks| {
+        PlatformInput::MouseDown(gpui::MouseDownEvent {
+            button: MouseButton::Left,
+            position: at(x, y),
+            modifiers: Default::default(),
+            click_count: clicks,
+            first_mouse: false,
+        })
+    };
+    let release = |x: f32, y: f32, clicks| {
+        PlatformInput::MouseUp(gpui::MouseUpEvent {
+            button: MouseButton::Left,
+            position: at(x, y),
+            modifiers: Default::default(),
+            click_count: clicks,
+        })
+    };
+    // The edge right of a cell is over the gap before the next heading.
+    let edge_after = |cx: &mut gpui::HeadlessAppContext, key: &str| {
+        let next = HEADS[HEADS.iter().position(|k| *k == key).unwrap() + 1];
+        let drawn = cx.update(|cx| mods.read(cx).keys[next].1.get());
+        let gap = f32::from(crate::ui::theme::GAP_LARGE);
+        (
+            f32::from(drawn.left()) - gap / 2.,
+            f32::from(drawn.center().y),
+        )
+    };
+    let drag = |cx: &mut gpui::HeadlessAppContext, key: &str, path: &[f32]| {
+        let (x, y) = edge_after(cx, key);
+        send(cx, moved(x, y, None));
+        draw(cx);
+        send(cx, press(x, y, 1));
+        for by in path {
+            send(cx, moved(x + by, y, Some(MouseButton::Left)));
+            draw(cx);
+        }
+        send(cx, release(x + path.last().copied().unwrap_or(0.), y, 1));
+        draw(cx);
+    };
+    let first = lefts(&mut cx);
+    drag(&mut cx, "author", &[10., 25., 40., 20., 0.]);
+    let back = lefts(&mut cx);
+    assert!(
+        back.iter()
+            .zip(first)
+            .all(|(now, was)| (now - was).abs() < 1.),
+        "dragged and brought back, nothing changed: {first:?} {back:?}"
+    );
+    let view_at = |cx: &mut gpui::HeadlessAppContext| {
+        cx.update(|cx| mods.read(cx).layout.menu_buttons.view.get().left())
+    };
+    let view_first = view_at(&mut cx);
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            mods.set_hidden(true, cx);
+            mods.keep_view(|view| view.column_sizes = shares.into(), cx);
+            mods.sync_lists(cx);
+            cx.notify();
+        })
+    });
+    draw(&mut cx);
+    for &(key, by) in drags {
+        let was = lefts(&mut cx);
+        drag(&mut cx, key, &[by / 2., by]);
+        let now = lefts(&mut cx);
+        let sized = HEADS.iter().position(|k| *k == key).unwrap();
+        for (at, head) in HEADS.iter().enumerate() {
+            let shift = if at > sized { by } else { 0. };
+            assert!(
+                (now[at] - was[at] - shift).abs() < 1.,
+                "the edge after {key} dragged {by}: {head} went from {} to {}",
+                was[at],
+                now[at]
+            );
+        }
+        assert_eq!(view_at(&mut cx), view_first, "View stays where it is");
+    }
+    let sizes = cx.update(|cx| mods.read(cx).view.column_sizes.clone());
+    assert!(
+        sizes.contains("name="),
+        "the name keeps its width once an edge moved: {sizes}"
+    );
+    let (x, y) = edge_after(&mut cx, "name");
+    send(&mut cx, press(x, y, 1));
+    send(&mut cx, release(x, y, 1));
+    send(&mut cx, press(x, y, 2));
+    send(&mut cx, release(x, y, 2));
+    draw(&mut cx);
+    let sizes = cx.update(|cx| mods.read(cx).view.column_sizes.clone());
+    assert!(
+        !sizes.contains("name="),
+        "clicked twice, the name fills the row again: {sizes}"
+    );
+
+    let was = lefts(&mut cx);
+    drag(&mut cx, "version", &[300., 900.]);
+    let now = lefts(&mut cx);
+    let grew = now[3] - was[3];
+    assert!(
+        (0. ..900.).contains(&grew) && now[..3] == was[..3],
+        "dragged far, Version grows only by what Updated can give: {was:?} {now:?}"
+    );
+    assert_eq!(view_at(&mut cx), view_first);
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            for column in ["downloaded", "activated", "size"] {
+                mods.toggle_column(Side::Active, column, cx);
+            }
+            mods.set_hidden(false, cx);
+            mods.sync_lists(cx);
+            cx.notify();
+        })
+    });
+    draw(&mut cx);
+    let before = lefts(&mut cx);
+    let list = cx.update(|cx| mods.read(cx).list(Side::Active).clone());
+    let over = cx.update(|cx| list.read(cx).drawn_at(4) + px(2.));
+    send(
+        &mut cx,
+        PlatformInput::Scroll(gpui::ScrollEvent {
+            position: point(px(700.), over),
+            delta: gpui::ScrollDelta::Pixels(point(px(-40.), px(0.))),
+            ..gpui::ScrollEvent::default()
+        }),
+    );
+    draw(&mut cx);
+    let after = lefts(&mut cx);
+    for (at, head) in HEADS.iter().enumerate() {
+        assert!(
+            (before[at] - after[at] - 40.).abs() < 1.,
+            "wider than the list, the headings scroll sideways with it: {head} {} to {}",
+            before[at],
+            after[at]
+        );
+    }
+    let x = cx.update(|cx| mods.read(cx).sideways[0].read(cx).x());
+    assert_eq!(x, px(40.));
+
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            mods.natural_width(Side::Active, "version", cx)
+        })
+    });
+    draw(&mut cx);
+    let (version, updated) = cx.update(|cx| {
+        let keys = &mods.read(cx).keys;
+        (keys["version"].1.get(), keys["updated"].1.get())
+    });
+    let past = (version.right() + updated.left()) / 2. + px(1.);
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            let held = ColumnHeld {
+                side: Side::Active,
+                key: "author",
+            };
+            mods.drop_column(held, version.center().x - px(1.), cx);
+            assert_eq!(
+                mods.view.columns,
+                "author,version,load,updated,downloaded,activated,size"
+            );
+            mods.drop_column(held, past, cx);
+            assert_eq!(
+                mods.view.columns, "version,author,load,updated,downloaded,activated,size",
+                "past Version's middle, Author goes after it"
+            );
+        })
+    });
+}
+
+#[test]
+fn the_inactive_mods_have_columns_of_their_own_that_order_them() {
     let (_tmp, mut cx, mods) = opened_with(|_| {});
     cx.update(|cx| {
-        let grow = f32::from(cx.global::<crate::ui::theme::Theme>().sized(1.));
         mods.update(cx, |mods, cx| {
-            mods.layout.column_drag = Some((px(500.), px(100.)));
-            mods.size_column("author", px(470.), cx);
-            let wide = (130. / grow).round() as u32;
+            mods.toggle_column(Side::Inactive, "size", cx);
+            mods.toggle_column(Side::Inactive, "activated", cx);
+            assert_eq!(mods.view.columns, "author,version,load");
+            assert_eq!(mods.view.inactive_columns, "size,activated");
             assert_eq!(
-                mods.view.column_sizes,
-                format!("author={wide}"),
-                "further left is wider"
+                super::columns::chosen(&mods.view, &mods.orders, Side::Inactive),
+                ["size"],
+                "an inactive mod has no date it was activated"
             );
-            mods.layout.column_drag = Some((px(500.), px(100.)));
-            mods.drop_column(ColumnHeld("author", 0), px(530.), cx);
+            mods.heading_pressed(Side::Inactive, "size", cx);
             assert_eq!(
-                mods.view.columns, "author,version,load",
-                "less than half its width stays"
+                mods.list.read(cx).order.inactive_by(),
+                Some((SortKey::Size, true))
             );
-            mods.layout.column_drag = Some((px(500.), px(100.)));
-            mods.drop_column(ColumnHeld("author", 0), px(600.), cx);
-            assert_eq!(mods.view.columns, "version,author,load");
             assert_eq!(
-                crate::ui::app(cx).mods_view().columns,
-                "version,author,load"
+                crate::ui::app(cx).mods_view().inactive_columns,
+                "size,activated"
             );
         })
     });
@@ -326,9 +541,9 @@ fn a_column_and_a_divider_move_by_their_keys() {
     cx.update(|cx| {
         let step = cx.global::<crate::ui::theme::Theme>().sized(24.);
         mods.update(cx, |mods, cx| {
-            mods.move_column("author", 1, cx);
+            mods.move_column(Side::Active, "author", 1, cx);
             assert_eq!(mods.view.columns, "version,author,load");
-            mods.move_column("author", -1, cx);
+            mods.move_column(Side::Active, "author", -1, cx);
             assert_eq!(mods.view.columns, "author,version,load");
             let before = mods.layout.inactive_width;
             let right = gpui::KeyDownEvent {

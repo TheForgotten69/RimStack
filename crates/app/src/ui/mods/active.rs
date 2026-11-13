@@ -1,30 +1,14 @@
-use super::list::bar_room;
-use super::rows::Columns;
 use super::{Mods, Standing};
 use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{Btn, Chip, TextSized, btn_width, icon, label, measure, notice};
 use crate::words::{count, put};
 use crate::workspace::load_order::Side;
 use gpui::{
-    Context, FontWeight, InteractiveElement, MouseButton, ParentElement, Pixels,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
+    Context, FontWeight, ParentElement, Pixels, Styled, Window, div, prelude::FluentBuilder, px,
 };
 use rimstack_core::{say, say_n};
-use std::rc::Rc;
 
 impl Mods {
-    fn heading_label(&self, key: &str) -> String {
-        self.orders
-            .active_by
-            .get(key)
-            .map(|entry| put(&entry.label))
-            .unwrap_or_default()
-    }
-
-    fn columns(&self, theme: &Theme, width: Pixels, window: &Window) -> Columns {
-        super::columns::columns(theme, &self.orders, &self.view, width, window)
-    }
-
     pub(super) fn active_pane(
         &mut self,
         theme: &Theme,
@@ -32,169 +16,9 @@ impl Mods {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
-        let c = &theme.colours;
-        let columns = Rc::new(self.columns(theme, width, window));
-        let me = cx.entity().downgrade();
-        let tip = put(&say!(
-            "Click to order the list by this column; click again to reverse it. Right-click to choose the columns. Drag it, or press Ctrl + Alt + Left or Right, to move it."
-        ));
-        let named = ["", "name"]
-            .into_iter()
-            .chain(columns.fitting.iter().map(|(key, _)| *key));
-        let reach: std::collections::HashMap<&'static str, _> =
-            named.map(|key| (key, self.reachable(key, cx))).collect();
-        let heading = |key: &'static str, text: String, on: bool| {
-            let (pressed, asked, keyed) = (me.clone(), me.clone(), me.clone());
-            let said = match key {
-                "" => put(&say!("The load order itself")),
-                _ => tip.clone(),
-            };
-            let (handle, drawn) = reach[key].clone();
-            let focused = handle.is_focused(window);
-            crate::ui::tip::tipped(
-                div()
-                    .id(gpui::SharedString::from(format!("heading-{key}")))
-                    .relative()
-                    .role(gpui::Role::ColumnHeader)
-                    .aria_label(text.clone())
-                    .track_focus(&handle)
-                    .capture_any_mouse_down(|_, window, _| window.prevent_default())
-                    .cursor_pointer()
-                    .child(
-                        label(
-                            theme,
-                            theme.caption(),
-                            if on { c.ink } else { c.ink3 },
-                            text,
-                        )
-                        .font_weight(theme.medium)
-                        .when(focused, |d| d.underline()),
-                    )
-                    .child(
-                        gpui::canvas(move |bounds, _, _| drawn.set(bounds), |_, _, _, _| {})
-                            .absolute()
-                            .inset_0(),
-                    )
-                    .on_key_down(move |event, window, cx| {
-                        let _ =
-                            keyed.update(cx, |mods, cx| mods.heading_key(key, event, window, cx));
-                    })
-                    .on_click(move |_, _, cx| {
-                        let _ = pressed.update(cx, |mods, cx| mods.heading_pressed(key, cx));
-                    })
-                    .on_mouse_down(MouseButton::Right, move |event, window, cx| {
-                        let at = event.position;
-                        let _ = asked.update(cx, |mods, cx| mods.columns_menu(at, window, cx));
-                    }),
-                said.into(),
-            )
-        };
-        let name_on = self.orders.active_by.get("name").is_some_and(|e| e.on);
-        let view_menu = cx.entity().downgrade();
-        let headings = div()
-            .id("headings")
-            .relative()
-            .flex_none()
-            .h(theme.control())
-            .on_drag_move::<super::columns::ColumnEdge>(cx.listener(
-                |mods, event: &gpui::DragMoveEvent<super::columns::ColumnEdge>, _, cx| {
-                    let key = event.drag(cx).0;
-                    mods.size_column(key, event.event.position.x, cx);
-                },
-            ))
-            .on_drop(
-                cx.listener(|mods, edge: &super::columns::ColumnEdge, _, cx| {
-                    mods.layout.column_drag = None;
-                    let _ = (edge, cx);
-                }),
-            )
-            .on_drop(
-                cx.listener(|mods, held: &super::columns::ColumnHeld, window, cx| {
-                    mods.drop_column(*held, window.mouse_position().x, cx);
-                }),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .flex()
-                    .items_center()
-                    .pl(theme::GAP_WIDE)
-                    .pr(theme::GAP_WIDE + bar_room(theme))
-                    .gap(theme::GAP_LARGE)
-                    .child(
-                        div()
-                            .flex()
-                            .flex_none()
-                            .justify_end()
-                            .w(columns.number)
-                            .child(heading("", "#".into(), false)),
-                    )
-                    .child(div().flex_1().min_w_0().child(heading(
-                        "name",
-                        self.heading_label("name"),
-                        name_on,
-                    )))
-                    .children(
-                        columns
-                            .fitting
-                            .iter()
-                            .enumerate()
-                            .map(|(at, (key, width))| {
-                                let on = self.orders.active_by.get(key).is_some_and(|e| e.on);
-                                let (key, width) = (*key, *width);
-                                div()
-                                    .id(gpui::SharedString::from(format!("column-{key}")))
-                                    .relative()
-                                    .flex()
-                                    .flex_none()
-                                    .h_full()
-                                    .items_center()
-                                    .w(width)
-                                    .when(matches!(key, "load" | "size"), |d| d.justify_end())
-                                    .child(super::columns::edge(theme, key, width, cx))
-                                    .child(heading(key, self.heading_label(key), on))
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(
-                                            move |mods, event: &gpui::MouseDownEvent, _, _| {
-                                                mods.layout.column_drag =
-                                                    Some((event.position.x, width));
-                                            },
-                                        ),
-                                    )
-                                    .on_drag(super::columns::ColumnHeld(key, at), |_, _, _, cx| {
-                                        gpui::AppContext::new(cx, |_| super::rows::Ghost)
-                                    })
-                            }),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_none()
-                            .justify_end()
-                            .w(columns.quick)
-                            .child(super::columns::placed(
-                                Btn::new("view", put(&say!("View")))
-                                    .spoken(put(&say!("View options")))
-                                    .opens(move |below, window, cx| {
-                                        let _ = view_menu.update(cx, |mods, cx| {
-                                            mods.view_menu(below, window, cx)
-                                        });
-                                    }),
-                                self.layout.menu_buttons.view.clone(),
-                            )),
-                    ),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .bottom_0()
-                    .left(theme::GAP_SMALL)
-                    .right(theme::GAP_SMALL)
-                    .h(px(1.))
-                    .bg(c.line),
-            );
+        let columns =
+            super::columns::columns(theme, &self.orders, &self.view, Side::Active, width, window);
+        let headings = self.heads(theme, Side::Active, &columns, window, cx);
         div()
             .flex()
             .flex_col()

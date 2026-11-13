@@ -32,6 +32,7 @@ pub(super) struct Fitted {
 }
 
 pub(super) struct Shown<'a> {
+    pub x: Pixels,
     pub columns: Option<&'a Columns>,
     pub chosen: bool,
     pub alone: bool,
@@ -53,6 +54,7 @@ pub(super) fn fit(
 ) -> Fitted {
     let half = room / 2.;
     let mut room = room;
+    let load_order = columns.is_some_and(|c| c.load_order);
     let small = |text: &str| measure(window, theme, text, theme.small(), gpui::FontWeight::NORMAL);
     if row.outdated {
         room -= chip_width(window, theme, &row.made_for, false) + theme::GAP_SMALL;
@@ -63,10 +65,10 @@ pub(super) fn fit(
     if row.version_ignored {
         room -= theme.sized(12.) + theme::GAP_SMALL;
     }
-    if row.twin && columns.is_none() {
+    if row.twin && !load_order {
         room -= small(&put(&row.version_line)) + theme::GAP_SMALL;
     }
-    if columns.is_none() && row.source == Origin::Git {
+    if !load_order && row.source == Origin::Git {
         room -= theme.sized(12.) + theme::GAP_SMALL;
     }
     let ordered_by = (!row.ordered_by.is_empty() && !(columns.is_some() && around.order_shown))
@@ -166,6 +168,7 @@ fn tile(
 pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'_>) -> AnyElement {
     let c = &theme.colours;
     let Shown {
+        x,
         columns,
         chosen,
         alone,
@@ -174,6 +177,7 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
         picture,
         mark,
     } = shown;
+    let load_order = columns.is_some_and(|c| c.load_order);
     let quiet = if chosen { c.on_selected_dim } else { c.ink2 };
     let ink = if chosen { c.on_selected } else { c.ink };
     let name_text = crate::ui::widgets::watched(
@@ -192,9 +196,12 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
         true => put(&row.name),
         false => String::new(),
     };
-    let name = div()
+    let name = match columns {
+        Some(columns) => div().flex_none().w(columns.name_cell),
+        None => div().flex_1(),
+    };
+    let name = name
         .flex()
-        .flex_1()
         .min_w_0()
         .items_center()
         .gap(theme::GAP_SMALL)
@@ -269,7 +276,7 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
                     .tip(row.tags.clone()),
             ),
         })
-        .when(row.twin && columns.is_none(), |d| {
+        .when(row.twin && !load_order, |d| {
             d.child(label(theme, theme.small(), quiet, put(&row.version_line)))
         })
         .child(div().flex_1())
@@ -286,7 +293,7 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
                     .child(value),
             )
         })
-        .when(columns.is_none() && row.source == Origin::Git, |d| {
+        .when(!load_order && row.source == Origin::Git, |d| {
             d.child(tipped_label(
                 format!("git-{}", put(&row.name)),
                 div().child(icon(
@@ -325,26 +332,31 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
     };
     let quick = quick_chip(theme, row, columns.wide, chosen, mark)
         .map(|chip| chip.max_width(columns.quick - margin));
-    div()
+    let scrolled = div()
         .absolute()
-        .inset_0()
+        .top_0()
+        .bottom_0()
+        .left(-x)
+        .w(columns.across)
         .flex()
         .items_center()
-        .px(theme::GAP_WIDE)
+        .pl(theme::GAP_WIDE)
         .gap(theme::GAP_LARGE)
-        .child(
-            div()
-                .flex()
-                .flex_none()
-                .justify_end()
-                .w(columns.number)
-                .child(label(
-                    theme,
-                    theme.small(),
-                    if chosen { c.on_selected_dim } else { c.ink3 },
-                    row.number.to_string(),
-                )),
-        )
+        .when(load_order, |d| {
+            d.child(
+                div()
+                    .flex()
+                    .flex_none()
+                    .justify_end()
+                    .w(columns.number)
+                    .child(label(
+                        theme,
+                        theme.small(),
+                        if chosen { c.on_selected_dim } else { c.ink3 },
+                        row.number.to_string(),
+                    )),
+            )
+        })
         .child(name)
         .children(columns.fitting.iter().map(|(key, width)| {
             let right = matches!(*key, "load" | "size");
@@ -364,16 +376,21 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
                 .h_full()
                 .w(*width)
                 .when(right, |d| d.justify_end())
-                .child(
-                    div()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .whitespace_nowrap()
-                        .text_ellipsis()
-                        .sized_text(theme, if right { theme.small() } else { theme.body() })
-                        .text_color(colour)
-                        .child(value(key)),
-                )
+                .child({
+                    let said = value(key);
+                    crate::ui::widgets::watched(
+                        div()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .sized_text(theme, if right { theme.small() } else { theme.body() })
+                            .text_color(colour),
+                        said.clone(),
+                        said,
+                        true,
+                    )
+                })
                 .when(bar, |d| {
                     d.child(
                         div()
@@ -391,16 +408,35 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
                 _ => String::new(),
             };
             crate::ui::tip::tipped(cell, tip.into())
-        }))
+        }));
+    div()
+        .absolute()
+        .inset_0()
         .child(
             div()
-                .flex()
-                .flex_none()
-                .justify_end()
-                .w(columns.quick)
-                .pr(margin)
-                .children(quick),
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .left_0()
+                .right(columns.fixed)
+                .overflow_hidden()
+                .child(scrolled),
         )
+        .when(load_order, |d| {
+            d.child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .bottom_0()
+                    .right(theme::GAP_WIDE)
+                    .w(columns.quick)
+                    .flex()
+                    .items_center()
+                    .justify_end()
+                    .pr(margin)
+                    .children(quick),
+            )
+        })
         .into_any_element()
 }
 

@@ -288,11 +288,6 @@ impl LoadOrder {
         nth: &mut impl FnMut(RowKey) -> usize,
     ) -> RowView {
         let now = around.now;
-        let columns = side == Side::Active;
-        let column = |text: fn(&Mod, u64) -> Sentence| match columns {
-            true => text(m, now),
-            false => Sentence::default(),
-        };
         let own: &[Trouble] = match side {
             Side::Active => self
                 .troubles
@@ -378,10 +373,10 @@ impl LoadOrder {
                 .copied()
                 .unwrap_or(false),
             ordered_by: self.ordered_by(m, side, now),
-            updated_ago: column(|m, now| ago(m.updated, now)),
-            downloaded_ago: column(|m, now| ago(m.downloaded, now)),
-            activated_ago: column(|m, now| ago(m.activated, now)),
-            size_text: column(|m, _| size_text(m)),
+            updated_ago: ago(m.updated, now),
+            downloaded_ago: ago(m.downloaded, now),
+            activated_ago: ago(m.activated, now),
+            size_text: size_text(m),
             accessible_name,
             load_seconds: took.map_or(0.0, |micros| f64::from(micros) / 1_000_000.0),
             version_line,

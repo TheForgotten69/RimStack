@@ -16,11 +16,22 @@ fn opened() -> (tempfile::TempDir, HeadlessAppContext, Entity<Mods>) {
 pub(super) fn opened_with(
     prepare: impl FnOnce(&std::path::Path),
 ) -> (tempfile::TempDir, HeadlessAppContext, Entity<Mods>) {
+    opened_at(None, prepare)
+}
+
+/// As `opened_with`, the text at `text_scale`.
+pub(super) fn opened_at(
+    text_scale: Option<f32>,
+    prepare: impl FnOnce(&std::path::Path),
+) -> (tempfile::TempDir, HeadlessAppContext, Entity<Mods>) {
     let (tmp, app) = made_up();
     prepare(tmp.path());
     let text = crate::ui::made_up::text_system();
     let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(crate::ui::assets::Assets));
-    let options = Options::default();
+    let options = Options {
+        text_scale,
+        ..Options::default()
+    };
     cx.update(|cx| install(Arc::new(app), &options, cx));
     let shape = cx.update(|cx| {
         let _ = cx.global::<Theme>();

@@ -8,14 +8,13 @@ use rimstack_core::say;
 
 impl Mods {
     pub(super) fn inactive_pane(
-        &self,
+        &mut self,
         theme: &Theme,
         width: gpui::Pixels,
         drawer: bool,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
-        let c = &theme.colours;
         let title = put(&say!("Inactive"));
         let counted = count(self.list.read(cx).count(Side::Inactive));
         let order = put(&self.orders.inactive_said);
@@ -93,6 +92,22 @@ impl Mods {
                     .on_click(cx.listener(|mods, _, _, cx| mods.activate_fresh(cx))),
                 )
         });
+        let shows = !super::columns::chosen(&self.view, &self.orders, Side::Inactive).is_empty();
+        let headings = shows.then(|| {
+            let columns = super::columns::columns(
+                theme,
+                &self.orders,
+                &self.view,
+                Side::Inactive,
+                width,
+                window,
+            );
+            self.heads(theme, Side::Inactive, &columns, window, cx)
+        });
+        if !shows {
+            self.layout.shown[Side::Inactive as usize].clear();
+        }
+        let c = &theme.colours;
         div()
             .flex()
             .flex_col()
@@ -139,6 +154,7 @@ impl Mods {
             )
             .children(mirror)
             .children(activate)
+            .children(headings)
             .child(
                 div()
                     .flex_1()

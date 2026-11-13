@@ -15,9 +15,36 @@ pub struct Orders {
     /// "" for the load order itself.
     pub active_key: &'static str,
     pub inactive: Vec<OrderEntry>,
+    pub inactive_by: BTreeMap<&'static str, OrderEntry>,
+    pub inactive_key: &'static str,
     pub inactive_said: Sentence,
-    /// The widest text of the load order's author, version and load columns, a first author only.
+    /// The widest text of each list's name, author, version and load columns, a first author
+    /// only.
     pub widest: BTreeMap<&'static str, String>,
+    pub inactive_widest: BTreeMap<&'static str, String>,
+}
+
+impl Orders {
+    pub fn by(&self, side: Side) -> &BTreeMap<&'static str, OrderEntry> {
+        match side {
+            Side::Active => &self.active_by,
+            Side::Inactive => &self.inactive_by,
+        }
+    }
+
+    pub fn key(&self, side: Side) -> &'static str {
+        match side {
+            Side::Active => self.active_key,
+            Side::Inactive => self.inactive_key,
+        }
+    }
+
+    pub fn widest(&self, side: Side) -> &BTreeMap<&'static str, String> {
+        match side {
+            Side::Active => &self.widest,
+            Side::Inactive => &self.inactive_widest,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -90,22 +117,28 @@ impl LoadOrder {
             .filter(|k| !matches!(k, SortKey::Activated | SortKey::Load))
             .collect();
         let active = entries(self.order_of(Side::Active), Side::Active, &active_keys);
+        let inactive = entries(
+            self.order_of(Side::Inactive),
+            Side::Inactive,
+            &inactive_keys,
+        );
+        let by = |entries: &[OrderEntry]| entries.iter().map(|e| (e.key, e.clone())).collect();
+        let key = |side| self.order_of(side).map_or("", |(key, _)| key.key());
         Orders {
-            active_by: active.iter().map(|e| (e.key, e.clone())).collect(),
-            active_key: self.order_of(Side::Active).map_or("", |(key, _)| key.key()),
+            active_by: by(&active),
+            active_key: key(Side::Active),
             active,
-            inactive: entries(
-                self.order_of(Side::Inactive),
-                Side::Inactive,
-                &inactive_keys,
-            ),
+            inactive_by: by(&inactive),
+            inactive_key: key(Side::Inactive),
+            inactive,
             inactive_said: said(self.inactive_by, Side::Inactive),
-            widest: self.widest(),
+            widest: self.widest(Side::Active),
+            inactive_widest: self.widest(Side::Inactive),
         }
     }
 
-    fn widest(&self) -> BTreeMap<&'static str, String> {
-        let mods = self.active.mods();
+    fn widest(&self, side: Side) -> BTreeMap<&'static str, String> {
+        let mods = self.list(side).mods();
         let widest = |texts: Vec<String>| {
             let most = texts.into_iter().max_by_key(|t| t.chars().count());
             most.unwrap_or_default()
@@ -113,6 +146,10 @@ impl LoadOrder {
         let first_author = |m: &Mod| m.author.split(", ").next().unwrap_or_default().to_string();
         let seconds = |micros: u32| startup::seconds(f64::from(micros) / 1000.0);
         BTreeMap::from([
+            (
+                "name",
+                widest(mods.iter().map(|m| m.name.clone()).collect()),
+            ),
             ("author", widest(mods.iter().map(first_author).collect())),
             (
                 "version",

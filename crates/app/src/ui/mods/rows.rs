@@ -17,12 +17,28 @@ use rimstack_core::mods::list::Category;
 use rimstack_core::say;
 
 pub struct Columns {
+    /// The load order's: a number before the name and the quick chip after the columns.
+    pub load_order: bool,
     pub number: Pixels,
+    /// The name's text, and its whole cell with the category's icon and the picture.
     pub name_room: Pixels,
+    pub name_cell: Pixels,
     pub fitting: Vec<(&'static str, Pixels)>,
     pub quick: Pixels,
     pub wide: bool,
     pub tile: bool,
+    /// The cells that scroll sideways from end to end, and the room they have: wider, the
+    /// list scrolls sideways.
+    pub across: Pixels,
+    pub room: Pixels,
+    /// What stays at the row's right as the rest scrolls: the quick chip under the View
+    /// button, with the row's padding.
+    pub fixed: Pixels,
+    /// The room the name and the columns share, the least each column but the name may be
+    /// dragged to, and what the last column, filling the row, can give a column dragged wider.
+    pub cells: Pixels,
+    pub leasts: Vec<Pixels>,
+    pub give: Pixels,
 }
 
 pub fn height(theme: &Theme, row: &RowView, columns: bool) -> Pixels {
@@ -102,6 +118,8 @@ impl gpui::Render for HeldGhost {
 }
 
 pub struct Around<'a> {
+    /// How far the columns are scrolled sideways.
+    pub x: Pixels,
     pub movable: bool,
     pub chosen_ids: &'a [ModId],
     pub marks: &'a Marks,
@@ -287,6 +305,7 @@ pub fn row(
             false => None,
         };
         let shown = cells::Shown {
+            x: around.x,
             columns,
             chosen,
             alone: chosen && around.single,
@@ -327,7 +346,7 @@ pub fn row(
         .when(!is_header, |d| d.aria_selected(chosen))
         .relative()
         .w_full()
-        .h(height(theme, row, columns.is_some()))
+        .h(height(theme, row, side == Side::Active))
         .child(
             div()
                 .absolute()
