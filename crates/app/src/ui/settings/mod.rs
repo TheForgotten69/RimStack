@@ -46,6 +46,15 @@ struct Said {
     rimsort: String,
 }
 
+const READS: Changes = Changes::SETTINGS
+    .or(Changes::FOLDERS)
+    .or(Changes::LIBRARY)
+    .or(Changes::LOGS)
+    .or(Changes::COMMUNITY)
+    .or(Changes::LANGUAGE)
+    .or(Changes::THEME)
+    .or(Changes::KEY);
+
 pub struct Settings {
     unseen: crate::ui::section::Unseen,
     demo: bool,
@@ -167,7 +176,7 @@ impl Settings {
     }
 
     fn hear(&self, cx: &mut Context<Self>) {
-        super::hear(cx, Self::heard);
+        super::hear(cx, READS, Self::heard);
     }
 
     /// What Settings shows, read off the window's thread; the demo reads it in place.
@@ -212,9 +221,10 @@ impl Settings {
             }
             cx.notify();
         };
-        match self.demo {
-            true => show(self, read(), cx),
-            false => self.reading.run("settings read", cx, move |_| read(), show),
+        match (report || databases || languages, self.demo) {
+            (false, _) => self.unread = Changes::NONE,
+            (true, true) => show(self, read(), cx),
+            (true, false) => self.reading.run("settings read", cx, move |_| read(), show),
         }
         if changes.contains(Changes::THEME) {
             self.prefs = super::app(cx).prefs();

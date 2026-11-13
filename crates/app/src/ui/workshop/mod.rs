@@ -48,6 +48,15 @@ struct Opened {
     images: HashMap<String, String>,
 }
 
+const READS: Changes = Changes::COMMUNITY
+    .or(Changes::SOURCE)
+    .or(Changes::KEY)
+    .or(Changes::LANGUAGE)
+    .or(Changes::DOWNLOAD_LIST)
+    .or(Changes::LIBRARY)
+    .or(Changes::MOD_FILES)
+    .or(Changes::SETTINGS);
+
 pub struct Workshop {
     unseen: crate::ui::section::Unseen,
     demo: bool,
@@ -167,7 +176,7 @@ impl Workshop {
     }
 
     fn hear(&self, cx: &mut Context<Self>) {
-        super::hear(cx, Self::heard);
+        super::hear(cx, READS, Self::heard);
     }
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {

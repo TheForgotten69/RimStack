@@ -12,6 +12,11 @@ use crate::workspace::saves::SavesReport;
 use gpui::{AppContext, Context, Entity, FocusHandle};
 use std::rc::Rc;
 
+const READS: Changes = Changes::LIBRARY
+    .or(Changes::LOAD_ORDER)
+    .or(Changes::SAVES)
+    .or(Changes::LANGUAGE);
+
 pub struct Saves {
     unseen: crate::ui::section::Unseen,
     demo: bool,
@@ -80,7 +85,7 @@ impl Saves {
     }
 
     fn hear(&self, cx: &mut Context<Self>) {
-        super::hear(cx, Self::heard);
+        super::hear(cx, READS, Self::heard);
     }
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {

@@ -9,6 +9,20 @@ use crate::workspace::logs::LastStartSaid;
 use gpui::{App as Cx, AppContext, Context, Entity, Global};
 use std::rc::Rc;
 
+const COUNTED: Changes = Changes::LIBRARY
+    .or(Changes::LISTS)
+    .or(Changes::LAUNCHES)
+    .or(Changes::SAVES)
+    .or(Changes::RULES)
+    .or(Changes::UPDATES)
+    .or(Changes::COMMUNITY)
+    .or(Changes::LANGUAGE);
+const STARTED: Changes = Changes::LAUNCHES
+    .or(Changes::LOGS)
+    .or(Changes::FOLDERS)
+    .or(Changes::LANGUAGE);
+const READS: Changes = COUNTED.or(STARTED);
+
 #[derive(Default)]
 pub struct Outside {
     pub summary: Option<Rc<Summary>>,
@@ -34,22 +48,14 @@ impl Outside {
     fn new(demo: bool, cx: &mut Context<Self>) -> Self {
         let mut outside = Self::default();
         if !demo {
-            super::hear(cx, Self::read);
+            super::hear(cx, READS, Self::read);
             outside.read(Changes::LAUNCHES | Changes::LISTS, cx);
         }
         outside
     }
 
     fn read(&mut self, changes: Changes, cx: &mut Context<Self>) {
-        let counted = Changes::LIBRARY
-            | Changes::LISTS
-            | Changes::LAUNCHES
-            | Changes::SAVES
-            | Changes::RULES
-            | Changes::UPDATES
-            | Changes::COMMUNITY
-            | Changes::LANGUAGE;
-        if changes.contains(counted) {
+        if changes.contains(COUNTED) {
             let app = super::app(cx);
             self.summary_reading.run(
                 "summary",
@@ -61,8 +67,7 @@ impl Outside {
                 },
             );
         }
-        let started = Changes::LAUNCHES | Changes::LOGS | Changes::FOLDERS | Changes::LANGUAGE;
-        if changes.contains(started) {
+        if changes.contains(STARTED) {
             let app = super::app(cx);
             self.last_start_reading.run(
                 "last start",

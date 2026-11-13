@@ -53,6 +53,16 @@ struct Read {
     list: ListShown,
 }
 
+const READS: Changes = Changes::SETTINGS
+    .or(Changes::LANGUAGE)
+    .or(Changes::FOLDERS)
+    .or(Changes::LIBRARY)
+    .or(Changes::COMMUNITY)
+    .or(Changes::DOWNLOAD_LIST)
+    .or(Changes::UPDATES)
+    .or(Changes::LAUNCHES)
+    .or(Changes::LOGS);
+
 pub struct Downloads {
     demo: bool,
     report: Rc<SettingsReport>,
@@ -163,7 +173,7 @@ impl Downloads {
 
     /// The `App`'s news, handed to the window's thread as it comes.
     fn hear(&self, cx: &mut Context<Self>) {
-        super::hear(cx, Self::heard);
+        super::hear(cx, READS, Self::heard);
     }
 
     /// What Downloads shows of the `App` beside the updates and the changes, read off the

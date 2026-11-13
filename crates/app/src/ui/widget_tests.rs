@@ -275,3 +275,28 @@ fn a_view_that_asks_while_it_is_drawn_is_drawn_again_after() {
     let drawn = cx.update(|cx| window.read(cx).unwrap().drawn);
     assert_eq!(drawn, 2);
 }
+
+struct Hearer(Vec<crate::changes::Changes>);
+
+#[gpui::test]
+fn a_view_hears_only_what_it_reads(cx: &mut TestAppContext) {
+    use crate::changes::Changes;
+    let (_root, _bench, cx) = bench(cx);
+    let hearer = cx.update(|_, cx| {
+        cx.new(|cx| {
+            super::hear(
+                cx,
+                Changes::LOGS | Changes::SAVES,
+                |hearer: &mut Hearer, changes, _| hearer.0.push(changes),
+            );
+            Hearer(Vec::new())
+        })
+    });
+    let publish = |changes, cx: &mut VisualTestContext| {
+        cx.update(|_, cx| super::app(cx).publish(changes));
+        cx.run_until_parked();
+    };
+    publish(Changes::FACTS, cx);
+    publish(Changes::FACTS | Changes::LOGS, cx);
+    assert_eq!(hearer.read_with(cx, |h, _| h.0.clone()), [Changes::LOGS]);
+}

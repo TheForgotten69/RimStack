@@ -23,6 +23,12 @@ pub enum View {
     Log,
 }
 
+const READS: Changes = Changes::LOAD_ORDER
+    .or(Changes::LIBRARY)
+    .or(Changes::LOGS)
+    .or(Changes::LAUNCHES)
+    .or(Changes::LANGUAGE);
+
 pub struct Logs {
     unseen: crate::ui::section::Unseen,
     demo: bool,
@@ -149,7 +155,7 @@ impl Logs {
     }
 
     fn hear(&self, cx: &mut Context<Self>) {
-        super::hear(cx, Self::heard);
+        super::hear(cx, READS, Self::heard);
     }
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {

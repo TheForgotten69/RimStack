@@ -217,13 +217,18 @@ pub fn change_notes(id: &str) -> String {
     format!("https://steamcommunity.com/sharedfiles/filedetails/changelog/{id}")
 }
 
-/// The `App`'s news, handed to the window's thread: what came meanwhile is told at once.
+/// The `App`'s news among what the view `reads`, handed to the window's thread: what came
+/// meanwhile is told at once. A view is told only what it reads, and woken for nothing else.
 pub fn hear<V: 'static>(
     cx: &mut gpui::Context<V>,
+    reads: crate::changes::Changes,
     heard: impl Fn(&mut V, crate::changes::Changes, &mut gpui::Context<V>) + 'static,
 ) {
     let (tell, mut told) = futures::channel::mpsc::unbounded();
-    app(cx).listen_while(move |changes| tell.unbounded_send(changes).is_ok());
+    app(cx).listen_while(move |changes| match changes.and(reads) {
+        read if read.is_empty() => !tell.is_closed(),
+        read => tell.unbounded_send(read).is_ok(),
+    });
     cx.spawn(async move |view, cx| {
         use futures::StreamExt;
         while let Some(mut changes) = told.next().await {

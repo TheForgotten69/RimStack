@@ -47,6 +47,10 @@ struct Viewing {
     said: Option<Sentence>,
 }
 
+const READS: Changes = Changes::LIBRARY
+    .or(Changes::LOAD_ORDER)
+    .or(Changes::LANGUAGE);
+
 pub struct Find {
     unseen: crate::ui::section::Unseen,
     selected: Option<ModId>,
@@ -200,7 +204,7 @@ impl Find {
     }
 
     fn hear(&self, cx: &mut Context<Self>) {
-        super::hear(cx, Self::heard);
+        super::hear(cx, READS, Self::heard);
     }
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {

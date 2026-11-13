@@ -75,7 +75,7 @@ impl Render for Mods {
             .on_action(cx.listener(|mods, _: &Undo, _, cx| mods.undo(cx)))
             .on_action(cx.listener(|mods, _: &Redo, _, cx| mods.redo(cx)))
             .on_action(cx.listener(|mods, _: &Save, _, cx| {
-                if crate::ui::app(cx).session().is_dirty() {
+                if mods.standing.dirty {
                     mods.save(None, cx);
                 }
             }))

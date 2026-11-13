@@ -38,6 +38,8 @@ use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::list::Category;
 use std::rc::Rc;
 
+const READS: Changes = Changes::ALL;
+
 /// A list's rows as last read from the load order.
 #[derive(Default)]
 pub struct Shown {
@@ -83,8 +85,19 @@ pub enum Progress {
 
 impl gpui::EventEmitter<Progress> for Mods {}
 
+/// The list's session as last shown: read once each time the Mods tab shows, never while drawn.
+#[derive(Default, Clone, PartialEq)]
+pub struct Standing {
+    pub dirty: bool,
+    /// The changes not saved, in words.
+    pub unsaved: String,
+    pub can_undo: bool,
+    pub can_redo: bool,
+}
+
 pub struct Mods {
     order: LoadOrder,
+    standing: Standing,
     active: Shown,
     inactive: Shown,
     orders: Orders,
@@ -204,6 +217,7 @@ impl Mods {
         )
         .detach();
         let mut mods = Self {
+            standing: Standing::default(),
             thumbs,
             status: Default::default(),
             layout: state::Layout::new(inactive_width, details_width),
@@ -259,7 +273,7 @@ impl Mods {
 
     /// The `App`'s news, handed to the window's thread as it comes.
     fn hear(&self, cx: &mut Context<Self>) {
-        super::hear(cx, Self::heard);
+        super::hear(cx, READS, Self::heard);
     }
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
@@ -362,17 +376,7 @@ impl Mods {
 
     /// Hands the details pane what it shows.
     fn sync_details(&mut self, cx: &mut Context<Self>) {
-        let (dirty, unsaved) = match self.demo {
-            true => (false, String::new()),
-            false => {
-                let app = super::app(cx);
-                let session = app.session();
-                (
-                    session.is_dirty(),
-                    crate::words::put(&session.changes().said()),
-                )
-            }
-        };
+        let (dirty, unsaved) = (self.standing.dirty, self.standing.unsaved.clone());
         let shown = chosen::DetailsShown {
             demo: self.demo,
             active: self.count(Side::Active),
@@ -477,6 +481,17 @@ impl Mods {
 
     fn show(&mut self, cx: &mut Context<Self>) {
         let app = super::app(cx);
+        self.standing = match self.demo {
+            true => Standing::default(),
+            false => app
+                .session_if_read()
+                .map_or_else(Standing::default, |session| Standing {
+                    dirty: session.is_dirty(),
+                    unsaved: crate::words::put(&session.changes().said()),
+                    can_undo: session.can_undo(),
+                    can_redo: session.can_redo(),
+                }),
+        };
         for side in [Side::Active, Side::Inactive] {
             let rows = self.order.rows(&app, side);
             self.shown_mut(side).rows = Rc::new(rows);

@@ -493,10 +493,8 @@ impl Shell {
 /// The game's logs copied among the kept ones at the start and each time they change.
 fn keep_logs(cx: &mut Context<Shell>) {
     super::app(cx).keep_logs_soon();
-    super::hear(cx, |_: &mut Shell, changes, cx| {
-        if changes.contains(crate::changes::Changes::LOGS) {
-            super::app(cx).keep_logs_soon();
-        }
+    super::hear(cx, crate::changes::Changes::LOGS, |_: &mut Shell, _, cx| {
+        super::app(cx).keep_logs_soon();
     });
 }
 

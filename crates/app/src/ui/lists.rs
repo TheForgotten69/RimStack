@@ -79,11 +79,11 @@ impl Lists {
     }
 
     fn hear(&self, cx: &mut Context<Self>) {
-        super::hear(cx, |lists: &mut Self, changes, cx| {
-            if changes.contains(Changes::LISTS | Changes::LANGUAGE) {
-                lists.read(cx);
-            }
-        });
+        super::hear(
+            cx,
+            Changes::LISTS | Changes::LANGUAGE,
+            |lists: &mut Self, _, cx| lists.read(cx),
+        );
     }
 
     /// Every kept list's file is read and parsed: off the window's thread.
@@ -149,16 +149,14 @@ impl Lists {
     }
 
     fn list_name(&self, cx: &gpui::App) -> String {
-        super::app(cx)
-            .prefs()
-            .get("Mods", "listName")
-            .unwrap_or_default()
+        super::around::around(cx).read(cx).list_name.clone()
     }
 
     /// The load order now goes by `name`; "" when it has none.
     fn go_by(&self, name: &str, cx: &mut Context<Self>) {
-        if let Err(problem) = super::app(cx).keep_pref("Mods", "listName", name) {
-            notices::say(crate::words::said_of(&problem), notices::Tone::Err, cx);
+        match super::app(cx).keep_pref("Mods", "listName", name) {
+            Ok(()) => super::around::change(cx, |around| around.list_name = name.to_string()),
+            Err(problem) => notices::say(crate::words::said_of(&problem), notices::Tone::Err, cx),
         }
         cx.notify();
     }

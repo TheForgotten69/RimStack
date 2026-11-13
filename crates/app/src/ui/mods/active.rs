@@ -1,8 +1,8 @@
 //! The load order, its filter and its column headings.
 
-use super::Mods;
 use super::list::bar_room;
 use super::rows::Columns;
+use super::{Mods, Standing};
 use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{Btn, Chip, TextSized, btn_width, icon, label, measure, notice};
 use crate::words::{count, put};
@@ -238,7 +238,6 @@ impl Mods {
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let c = &theme.colours;
-        let app = crate::ui::app(cx);
         let (errors, warnings) = self.order.errors_and_warnings();
         let problems = self
             .order
@@ -257,14 +256,12 @@ impl Mods {
         } else {
             warnings
         };
-        let (dirty, can_undo, can_redo) = match self.demo {
-            true => (false, false, false),
-            false => app
-                .session_if_read()
-                .map_or((false, false, false), |session| {
-                    (session.is_dirty(), session.can_undo(), session.can_redo())
-                }),
-        };
+        let Standing {
+            dirty,
+            can_undo,
+            can_redo,
+            ..
+        } = self.standing.clone();
         let title = put(&say!("Active"));
         let counted = count(self.count(Side::Active));
         let sort = match (self.files_read, self.sort_pending) {
@@ -675,10 +672,7 @@ impl Mods {
         if !entries.is_empty() {
             entries.push(Entry::Line);
         }
-        let app = crate::ui::app(cx);
-        let session = app.session();
-        let (can_undo, can_redo) = (session.can_undo(), session.can_redo());
-        drop(session);
+        let (can_undo, can_redo) = (self.standing.can_undo, self.standing.can_redo);
         let previewing = self.order.previewing();
         entries.push(
             Entry::item(put(&say!("Undo (Ctrl + Z)")), run(|m, cx| m.undo(cx)))

@@ -611,16 +611,10 @@ impl Mods {
     }
 
     /// Whether a mod has errors, Sort would move mods, and the list is not saved, with its
-    /// changes in words. A session not read yet has no changes, and is not read for this.
-    pub fn standing(&self, cx: &gpui::App) -> (bool, bool, bool, Option<String>) {
-        if self.demo {
-            return (false, false, false, None);
-        }
-        let app = super::super::app(cx);
-        let unsaved = app
-            .session_if_read()
-            .filter(|session| session.is_dirty() && self.order.is_installed())
-            .map(|session| put(&session.changes().said()));
+    /// changes in words, as last shown.
+    pub fn standing(&self) -> (bool, bool, bool, Option<String>) {
+        let unsaved = (self.standing.dirty && self.order.is_installed())
+            .then(|| self.standing.unsaved.clone());
         (
             self.order.errors_and_warnings().0 > 0,
             self.sort_pending > 0,

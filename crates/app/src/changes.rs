@@ -33,9 +33,14 @@ impl Changes {
     pub const DOWNLOAD_LIST: Self = Self(1 << 21);
     pub const KEY: Self = Self(1 << 22);
     pub const SOURCE: Self = Self(1 << 23);
+    pub const ALL: Self = Self(u64::MAX);
 
     pub const fn or(self, other: Self) -> Self {
         Self(self.0 | other.0)
+    }
+
+    pub const fn and(self, other: Self) -> Self {
+        Self(self.0 & other.0)
     }
 
     pub fn contains(self, any_of: Self) -> bool {

@@ -64,16 +64,8 @@ impl Mods {
             return shown;
         }
         let previewing = self.order.previewing();
-        let (dirty, unsaved) = {
-            let app = crate::ui::app(cx);
-            match app.session_if_read() {
-                Some(session) => (
-                    session.is_dirty() && self.order.is_installed(),
-                    put(&session.changes().said()),
-                ),
-                None => (false, String::new()),
-            }
-        };
+        let dirty = self.standing.dirty && self.order.is_installed();
+        let unsaved = self.standing.unsaved.clone();
         let band = |tone| {
             div()
                 .flex_none()

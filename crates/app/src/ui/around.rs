@@ -16,7 +16,8 @@ pub struct Around {
     /// The list has changes not saved, and these in words.
     pub dirty: bool,
     pub unsaved: Option<String>,
-    /// The kept list the load order came from, empty when none.
+    /// The kept list the load order came from, empty when none: read at the start, then told
+    /// by `Lists` as it keeps it.
     pub list_name: String,
     /// The Mods tab's work under way, worded.
     pub mods_work: Vec<String>,
@@ -30,7 +31,14 @@ struct Held(Entity<Around>);
 impl Global for Held {}
 
 pub fn install(cx: &mut Cx) {
-    let around = cx.new(|_| Around::default());
+    let list_name = super::app(cx)
+        .prefs()
+        .get("Mods", "listName")
+        .unwrap_or_default();
+    let around = cx.new(|_| Around {
+        list_name,
+        ..Around::default()
+    });
     cx.set_global(Held(around));
 }
 
@@ -55,10 +63,8 @@ pub fn change<V>(cx: &mut Context<V>, change: impl FnOnce(&mut Around)) {
 
 /// What the Mods tab shows the window, read again after it changed.
 pub fn from_mods<V>(mods: &Entity<Mods>, cx: &mut Context<V>) {
-    let app = super::app(cx);
-    let list_name = app.prefs().get("Mods", "listName").unwrap_or_default();
     let mods = mods.read(cx);
-    let (errors, sort_pending, dirty, unsaved) = mods.standing(cx);
+    let (errors, sort_pending, dirty, unsaved) = mods.standing();
     let in_the_way = mods.in_the_way_said(errors, sort_pending, dirty);
     let work = mods.work_said();
     change(cx, |around| {
@@ -67,7 +73,6 @@ pub fn from_mods<V>(mods: &Entity<Mods>, cx: &mut Context<V>) {
         around.sort_pending = sort_pending;
         around.dirty = dirty;
         around.unsaved = unsaved;
-        around.list_name = list_name;
         around.mods_work = work;
     });
 }

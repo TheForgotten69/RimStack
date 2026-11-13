@@ -51,13 +51,8 @@ impl FirstRun {
             mods: (0, 0, String::new()),
         };
         first.read(cx);
-        super::hear(cx, |first: &mut Self, changes, cx| {
-            let read =
-                Changes::SETTINGS | Changes::COMMUNITY | Changes::LANGUAGE | Changes::FOLDERS;
-            if changes.contains(read) {
-                first.read(cx);
-            }
-        });
+        let reads = Changes::SETTINGS | Changes::COMMUNITY | Changes::LANGUAGE | Changes::FOLDERS;
+        super::hear(cx, reads, |first: &mut Self, _, cx| first.read(cx));
         first
     }
 
