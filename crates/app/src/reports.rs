@@ -1,4 +1,4 @@
-//! Renaming a field here renames what QML must read; each type's test lists its fields.
+//! Renaming a field here renames what the views read; each type's test lists its fields.
 
 use crate::workspace::KeyState;
 use rimstack_core::base::sentence::Sentence;
@@ -149,35 +149,6 @@ pub struct Database {
     pub waiting: bool,
 }
 
-/// Where the window opens. `visibility` is Qt's `QWindow::Visibility`.
-#[derive(Serialize, Debug, PartialEq)]
-pub struct WindowStart {
-    pub x: i32,
-    pub y: i32,
-    pub width: i32,
-    pub height: i32,
-    pub visibility: i32,
-}
-
-impl WindowStart {
-    pub const WINDOWED: i32 = 2;
-    pub const MAXIMIZED: i32 = 4;
-
-    pub fn of(area: rimstack_core::base::window::Area, maximized: bool) -> Self {
-        Self {
-            x: area.x,
-            y: area.y,
-            width: area.width,
-            height: area.height,
-            visibility: if maximized {
-                Self::MAXIMIZED
-            } else {
-                Self::WINDOWED
-            },
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -186,12 +157,12 @@ mod tests {
     fn an_answer_is_its_result_or_its_problem_and_never_both() {
         let failed: Answer<Written> = Err(rimstack_core::base::error::Error::refused("no")).into();
         assert_eq!(
-            crate::qml::values::as_shown(&failed),
+            crate::words::as_shown(&failed),
             serde_json::json!({ "problem": "no" })
         );
         let done: Answer<Written> = Ok(Written { file: "/a".into() }).into();
         assert_eq!(
-            crate::qml::values::as_shown(&done),
+            crate::words::as_shown(&done),
             serde_json::json!({ "file": "/a" })
         );
     }
@@ -199,6 +170,7 @@ mod tests {
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct KeyShown {
     pub stored: bool,
     pub available: bool,

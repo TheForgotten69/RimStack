@@ -170,6 +170,15 @@ impl App {
         }
     }
 
+    /// The page of the repository a Git checkout was cloned from; empty without one.
+    pub fn repository_of(&self, id: ModId) -> String {
+        let loaded = self.library();
+        let found = loaded.as_ref().as_ref().ok().and_then(|(l, _)| l.get(id));
+        found
+            .and_then(|m| rimstack_core::sources::git::page(&m.path))
+            .unwrap_or_default()
+    }
+
     pub fn commits_of(&self, id: ModId) -> Vec<Note> {
         let loaded = self.library();
         let Some(m) = loaded.as_ref().as_ref().ok().and_then(|(l, _)| l.get(id)) else {

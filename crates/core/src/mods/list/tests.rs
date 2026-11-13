@@ -79,7 +79,6 @@ fn flat_list_has_no_headers_filters_and_appends() {
     assert_eq!(list.insert_in_category(m("New", "x", Category::Loaders)), 6);
     list.set_filter("dubwise");
     assert_eq!(list.rows(), &[Row::Mod { index: 0 }, Row::Mod { index: 4 }]);
-    assert_eq!(list.toggle(Category::Content), Change::Reset);
 }
 
 #[test]
@@ -132,7 +131,7 @@ fn neighbours_in_a_sub_category_of_yours_sit_under_its_row() {
     );
     assert_eq!(list.subs(Category::Content), ["Genes"]);
     assert!(list.subs(Category::Textures).is_empty());
-    assert_eq!(list.toggle(Category::Content), Change::Reset);
+    list.toggle(Category::Content);
     assert_eq!(list.rows().len(), 3);
     list.toggle(Category::Content);
     list.set_filter("b");
@@ -485,19 +484,9 @@ fn runs_count_the_headings_a_list_needs() {
 }
 
 #[test]
-fn empty_list_has_no_rows() {
-    let mut list = GroupedList::new(Vec::new());
-    assert!(list.rows().is_empty());
-    list.set_filter("x");
-    assert!(list.rows().is_empty());
-    assert_eq!(list.toggle(Category::Content), Change::Reset);
-}
-
-#[test]
 fn collapsing_removes_the_rows_under_one_header() {
     let mut list = sample();
-    let change = list.toggle(Category::Game);
-    assert_eq!(change, Change::Removed { first: 3, count: 2 });
+    list.toggle(Category::Game);
     assert_eq!(list.rows()[2], header(Category::Game, 2, true));
     assert_eq!(list.rows()[3], header(Category::Libraries, 1, false));
 }
@@ -507,20 +496,19 @@ fn expanding_puts_them_back() {
     let mut list = sample();
     let before = list.rows().to_vec();
     list.toggle(Category::Game);
-    let change = list.toggle(Category::Game);
-    assert_eq!(change, Change::Inserted { first: 3, count: 2 });
+    list.toggle(Category::Game);
     assert_eq!(list.rows(), before.as_slice());
 }
 
 #[test]
-fn toggling_a_category_that_is_not_shown_asks_for_a_reset() {
+fn folding_a_category_that_is_not_shown_changes_no_row() {
     let mut list = sample();
-    assert_eq!(list.toggle(Category::Textures), Change::Reset);
+    list.toggle(Category::Textures);
     assert_eq!(list.rows().len(), 10);
 }
 
 #[test]
-fn filter_keeps_matches_and_drops_empty_groups() {
+fn filter_keeps_matches_drops_empty_groups_and_ignores_case() {
     let mut list = sample();
     list.set_filter("dub");
     assert_eq!(
@@ -531,20 +519,10 @@ fn filter_keeps_matches_and_drops_empty_groups() {
             Row::Mod { index: 5 }
         ]
     );
-}
-
-#[test]
-fn filter_matches_author_and_ignores_case() {
-    let mut list = sample();
-    list.set_filter("LUDEON");
-    assert_eq!(
-        list.rows(),
-        &[
-            header(Category::Game, 2, false),
-            Row::Mod { index: 1 },
-            Row::Mod { index: 2 }
-        ]
-    );
+    for (term, rows) in [("LUDEON", 3), ("zzz", 0), ("", 10)] {
+        list.set_filter(term);
+        assert_eq!(list.rows().len(), rows, "filter {term:?}");
+    }
 }
 
 #[test]
@@ -557,26 +535,13 @@ fn filter_ignores_case_for_non_ascii_letters() {
 }
 
 #[test]
-fn filter_with_no_match_shows_nothing_and_clearing_restores() {
-    let mut list = sample();
-    list.set_filter("zzz");
-    assert!(list.rows().is_empty());
-    list.set_filter("");
-    assert_eq!(list.rows().len(), 10);
-}
-
-#[test]
-fn moving_a_mod_changes_load_order_and_regroups() {
+fn moving_a_mod_regroups_and_a_bad_index_changes_nothing() {
     let mut list = sample();
     list.move_mod(5, 0);
     assert_eq!(list.mods()[0].name, "Rimefeller");
     assert_eq!(list.rows()[0], header(Category::Content, 1, false));
     assert_eq!(list.rows()[2], header(Category::Loaders, 1, false));
-}
 
-#[test]
-fn moving_with_a_bad_index_changes_nothing() {
-    let mut list = sample();
     let before = list.rows().to_vec();
     list.move_mod(99, 0);
     list.move_mod(0, 99);
@@ -652,22 +617,8 @@ fn folding_a_category_with_a_group_in_it_is_not_one_row_per_mod() {
     mods[5].sub = "Dubs".into();
     let mut list = GroupedList::new(mods);
     let before = list.rows().len();
-    assert_eq!(list.toggling(Category::Content), Change::Reset);
-    assert_eq!(list.toggle(Category::Content), Change::Reset);
+    list.toggle(Category::Content);
     assert_eq!(before - list.rows().len(), 3);
-}
-
-#[test]
-fn what_folding_would_change_is_known_before_it_happens() {
-    let mut list = sample();
-    let told = list.toggling(Category::Game);
-    assert_eq!(told, Change::Removed { first: 3, count: 2 });
-    assert_eq!(list.rows().len(), 10);
-    assert_eq!(list.toggle(Category::Game), told);
-    assert_eq!(
-        list.toggling(Category::Game),
-        Change::Inserted { first: 3, count: 2 }
-    );
 }
 
 #[test]

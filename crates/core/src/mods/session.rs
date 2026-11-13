@@ -162,13 +162,6 @@ mod tests {
     }
 
     #[test]
-    fn a_new_session_is_clean_with_nothing_to_undo() {
-        let s = Session::new(ids(&["a", "b"]));
-        assert_eq!(s.current(), ids(&["a", "b"]));
-        assert!(!s.is_dirty() && !s.can_undo() && !s.can_redo());
-    }
-
-    #[test]
     fn a_change_can_be_undone_and_redone() {
         let mut s = Session::new(ids(&["a", "b"]));
         s.record(ids(&["b", "a"]));

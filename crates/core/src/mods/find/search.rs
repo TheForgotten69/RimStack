@@ -1,4 +1,5 @@
 use super::lists::{FileLists, FolderSettings};
+use crate::base::locks::Held;
 use crate::base::pattern::Pattern;
 use rayon::prelude::*;
 use std::io::Read;
@@ -117,7 +118,7 @@ pub fn search<K: Clone + Send + Sync>(
             ) else {
                 return;
             };
-            let mut held = held.lock().unwrap();
+            let mut held = held.held();
             held.1 += hits.len();
             held.0.push(FileHits {
                 key: key.clone(),

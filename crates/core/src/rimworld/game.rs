@@ -278,6 +278,11 @@ mod tests {
         assert_eq!(when(&game, "Verse.Game", "LoadDefs"), Some(When::Loading));
         assert_eq!(when(&game, "Verse.Game", "DebugAction"), None);
         assert_eq!(when(&game, "Verse.Game", "Log"), Some(When::Playing));
+        assert_eq!(
+            when(&game, "Verse.Thing", "Update"),
+            None,
+            "unity calls by name only the objects it keeps"
+        );
     }
 
     #[test]
@@ -302,11 +307,6 @@ mod tests {
     }
 
     #[test]
-    fn unity_calls_by_name_only_the_objects_it_keeps() {
-        assert_eq!(when(&game(), "Verse.Thing", "Update"), None);
-    }
-
-    #[test]
     fn a_method_is_found_on_the_type_or_above_it() {
         let game = game();
         assert_eq!(when(&game, "Verse.Pawn", "Tick"), Some(When::Playing));
@@ -317,11 +317,6 @@ mod tests {
         assert!(game.method("Verse.Pawn", "Fly").is_none());
         assert!(game.method("Not.There", "Tick").is_none());
         assert!(game.has("Verse.Pawn") && !game.has("Not.There"));
-    }
-
-    #[test]
-    fn a_file_that_is_not_the_game_gives_nothing() {
-        assert!(Game::read(b"not an assembly").is_none());
     }
 
     #[test]

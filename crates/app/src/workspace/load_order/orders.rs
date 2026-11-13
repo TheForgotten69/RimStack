@@ -7,31 +7,31 @@ use rimstack_core::say;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Orders {
-    active: Vec<OrderEntry>,
-    active_by: BTreeMap<&'static str, OrderEntry>,
+    pub active: Vec<OrderEntry>,
+    pub active_by: BTreeMap<&'static str, OrderEntry>,
     /// "" for the load order itself.
-    active_key: &'static str,
-    inactive: Vec<OrderEntry>,
-    inactive_said: Sentence,
+    pub active_key: &'static str,
+    pub inactive: Vec<OrderEntry>,
+    pub inactive_said: Sentence,
     /// The widest text of the load order's author, version and load columns, a first author only.
-    widest: BTreeMap<&'static str, String>,
+    pub widest: BTreeMap<&'static str, String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct OrderEntry {
     /// A `SortKey::key`; "" for the list's own order.
-    key: &'static str,
+    pub key: &'static str,
     /// With its way when it is the order shown.
-    label: Sentence,
+    pub label: Sentence,
     /// "check" on the order shown, "" on the others.
-    icon: &'static str,
+    pub icon: &'static str,
     /// Shown by a key, not the list's own order.
-    on: bool,
+    pub on: bool,
     /// The order once this one is picked, as `columns::kept` writes it.
-    then: String,
+    pub then: String,
 }
 
 fn label(key: Option<SortKey>, side: Side) -> Sentence {

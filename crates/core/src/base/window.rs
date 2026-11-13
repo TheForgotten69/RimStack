@@ -1,5 +1,3 @@
-//! Where the window opens: where it was closed, moved back onto a screen that is there now.
-
 use serde::Serialize;
 
 /// In logical pixels. A window's position is that of its inside: the title bar is above it.
@@ -140,7 +138,7 @@ mod tests {
     }
 
     #[test]
-    fn a_first_window_is_centred_at_the_size_asked_for_or_the_screen_s() {
+    fn a_first_window_is_centred_and_fits_its_screen_but_centring_alone_keeps_its_size() {
         assert_eq!(
             place(None, 1440, 860, &[LAPTOP]),
             area(240, TITLE + 66, 1440, 860)
@@ -150,6 +148,9 @@ mod tests {
             place(None, 1440, 860, &[small]),
             area(0, TITLE, 1280, 680 - TITLE)
         );
+        let narrow = area(0, 0, 800, 600);
+        assert_eq!(centred(1440, 860, Some(&narrow)), area(0, TITLE, 1440, 860));
+        assert_eq!(centred(400, 300, Some(&BESIDE)), area(3000, 570, 400, 300));
     }
 
     #[test]
@@ -157,13 +158,6 @@ mod tests {
         let kept = area(10, 20, 800, 600);
         assert_eq!(place(Some(kept), 1440, 860, &[]), kept);
         assert_eq!(place(None, 1440, 860, &[]), area(0, TITLE, 1440, 860));
-    }
-
-    #[test]
-    fn a_window_centred_keeps_its_size_on_a_smaller_screen() {
-        let small = area(0, 0, 800, 600);
-        assert_eq!(centred(1440, 860, Some(&small)), area(0, TITLE, 1440, 860));
-        assert_eq!(centred(400, 300, Some(&BESIDE)), area(3000, 570, 400, 300));
     }
 
     #[test]

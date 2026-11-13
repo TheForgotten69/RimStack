@@ -83,7 +83,6 @@ struct FileGroup {
 }
 
 struct Group {
-    key: Option<ModId>,
     name: Sentence,
     files: Vec<FileGroup>,
     collapsed: bool,
@@ -159,35 +158,67 @@ pub struct FoundMods {
     pub rows: Vec<FoundMod>,
 }
 
-pub enum Cell<'a> {
-    Flag(bool),
-    Number(i32),
-    Text(Cow<'a, str>),
-    Said(&'a Sentence),
-    Parts(Vec<Part<'a>>),
+pub enum Shown<'a> {
+    Mod {
+        name: Cow<'a, Sentence>,
+        matches: usize,
+        files: usize,
+        collapsed: bool,
+    },
+    File {
+        path: Cow<'a, str>,
+        matches: usize,
+        collapsed: bool,
+    },
+    /// A gap's `number` is that of the line after it.
+    Line {
+        number: usize,
+        matched: bool,
+        gap: bool,
+        parts: Vec<(Cow<'a, str>, bool)>,
+    },
 }
 
-#[derive(Serialize)]
-pub struct Part<'a> {
-    text: &'a str,
-    marked: bool,
+impl Shown<'_> {
+    pub fn into_owned(self) -> Shown<'static> {
+        match self {
+            Shown::Mod {
+                name,
+                matches,
+                files,
+                collapsed,
+            } => Shown::Mod {
+                name: Cow::Owned(name.into_owned()),
+                matches,
+                files,
+                collapsed,
+            },
+            Shown::File {
+                path,
+                matches,
+                collapsed,
+            } => Shown::File {
+                path: Cow::Owned(path.into_owned()),
+                matches,
+                collapsed,
+            },
+            Shown::Line {
+                number,
+                matched,
+                gap,
+                parts,
+            } => Shown::Line {
+                number,
+                matched,
+                gap,
+                parts: parts
+                    .into_iter()
+                    .map(|(text, mark)| (Cow::Owned(text.into_owned()), mark))
+                    .collect(),
+            },
+        }
+    }
 }
-
-/// The roles of the model, in the order `Results::cell` answers them.
-pub const ROLES: [&str; 12] = [
-    "isMod",
-    "isFile",
-    "name",
-    "modId",
-    "file",
-    "count",
-    "files",
-    "collapsed",
-    "number",
-    "isMatch",
-    "isGap",
-    "parts",
-];
 
 pub struct Located {
     pub file: PathBuf,
@@ -252,7 +283,6 @@ impl Results {
                     .picked
                     .is_some_and(|picked| picked != self.groups.len());
                 self.groups.push(Group {
-                    key: found.key,
                     name: name(),
                     files: Vec::new(),
                     collapsed: false,
@@ -386,7 +416,7 @@ impl Results {
         if at.is_mod() {
             return false;
         }
-        at.is_file() || !matches!(self.cell(at, 10), Some(Cell::Flag(true)))
+        at.is_file() || !matches!(self.shown(at), Some(Shown::Line { gap: true, .. }))
     }
 
     /// The position of the file or line row `by` such rows from `from` in `rows`, none past
@@ -440,39 +470,34 @@ impl Results {
         })
     }
 
-    pub fn cell(&self, at: RowRef, field: usize) -> Option<Cell<'_>> {
+    pub fn shown(&self, at: RowRef) -> Option<Shown<'_>> {
         let group = self.groups.get(at.group as usize)?;
-        let file = group.files.get(at.file as usize);
-        let line = file
-            .zip(Some(at.hit))
-            .and_then(|(f, l)| f.lines.get(l as usize));
-        let (is_mod, is_file) = (at.is_mod(), at.is_file());
-        let text = |t: &'static str| Cell::Text(Cow::Borrowed(t));
-        Some(match field {
-            0 => Cell::Flag(is_mod),
-            1 => Cell::Flag(is_file),
-            2 if is_mod => Cell::Said(&group.name),
-            2 => text(""),
-            3 => Cell::Number(group.key.map_or(-1, ModId::to_qml)),
-            4 => Cell::Text(Cow::Borrowed(
-                file.filter(|_| is_file).map_or("", |f| f.shown.as_str()),
-            )),
-            5 if is_mod => Cell::Number(group.matches as i32),
-            5 => Cell::Number(file.map_or(0, |f| f.visible.len() as i32)),
-            6 => Cell::Number(if is_mod { group.shown_files as i32 } else { 0 }),
-            7 if is_mod => Cell::Flag(group.collapsed),
-            7 => Cell::Flag(file.is_some_and(|f| f.collapsed && is_file)),
-            8 => Cell::Number(line.filter(|l| !l.gap).map_or(0, |l| l.number as i32)),
-            9 => Cell::Flag(line.is_some_and(Line::is_match)),
-            10 => Cell::Flag(line.is_some_and(|l| l.gap)),
-            11 => Cell::Parts(
-                line.map(Line::parts)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|(text, marked)| Part { text, marked })
-                    .collect(),
-            ),
-            _ => return None,
+        if at.is_mod() {
+            return Some(Shown::Mod {
+                name: Cow::Borrowed(&group.name),
+                matches: group.matches,
+                files: group.shown_files,
+                collapsed: group.collapsed,
+            });
+        }
+        let file = group.files.get(at.file as usize)?;
+        if at.is_file() {
+            return Some(Shown::File {
+                path: Cow::Borrowed(&file.shown),
+                matches: file.visible.len(),
+                collapsed: file.collapsed,
+            });
+        }
+        let line = file.lines.get(at.hit as usize)?;
+        Some(Shown::Line {
+            number: line.number,
+            matched: line.is_match(),
+            gap: line.gap,
+            parts: line
+                .parts()
+                .into_iter()
+                .map(|(text, mark)| (Cow::Borrowed(text), mark))
+                .collect(),
         })
     }
 
@@ -495,9 +520,66 @@ impl Results {
     }
 }
 
+impl Folded {
+    /// The rows shown after the fold at `row`, and where the row chosen went: none once hidden.
+    pub fn apply(
+        self,
+        rows: &mut Vec<RowRef>,
+        row: usize,
+        current: Option<usize>,
+    ) -> Option<usize> {
+        let at = rows[row];
+        match self {
+            Folded::Hid => {
+                let inside = |other: &&RowRef| match at.is_mod() {
+                    true => other.same_mod(at),
+                    false => other.same_file(at),
+                };
+                let below = rows[row + 1..].iter().take_while(inside).count();
+                rows.drain(row + 1..row + 1 + below);
+                match current {
+                    Some(current) if current > row + below => Some(current - below),
+                    Some(current) if current > row => None,
+                    current => current,
+                }
+            }
+            Folded::Showed(coming) => {
+                let count = coming.len();
+                rows.splice(row + 1..row + 1, coming);
+                current.map(|current| {
+                    if current > row {
+                        current + count
+                    } else {
+                        current
+                    }
+                })
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_folded_file_takes_its_lines_and_the_row_chosen_among_them() {
+        let mut rows = vec![
+            RowRef::of_mod(0),
+            RowRef::of_file(0, 0),
+            RowRef::of_hit(0, 0, 0),
+            RowRef::of_hit(0, 0, 1),
+            RowRef::of_file(0, 1),
+        ];
+        let lines = rows[2..4].to_vec();
+        assert_eq!(Folded::Hid.apply(&mut rows, 1, Some(3)), None);
+        assert_eq!(rows.len(), 3);
+        assert_eq!(Folded::Showed(lines).apply(&mut rows, 1, Some(2)), Some(4));
+        assert_eq!(rows.len(), 5);
+        assert_eq!(Folded::Hid.apply(&mut rows, 1, Some(4)), Some(2));
+        assert_eq!(Folded::Hid.apply(&mut rows, 0, Some(0)), Some(0));
+        assert_eq!(rows.len(), 1);
+    }
 
     fn hit(line: usize, text: &str, word: &str) -> Hit {
         let from = text.find(word).unwrap();
@@ -520,7 +602,7 @@ mod tests {
     }
 
     fn put(results: &mut Results, found: FileHits<Option<ModId>>) -> Vec<Op> {
-        let n = found.key.map_or(0, ModId::to_qml);
+        let n = found.key.map_or(0, ModId::to_packed);
         let shown = found
             .file
             .file_name()
@@ -658,21 +740,22 @@ mod tests {
         put(&mut results, found);
         let rows = results.refs();
         assert_eq!(rows.len(), 2 + 3);
-        let cell = |at: RowRef, field| results.cell(at, field).unwrap();
-        let number = |at| match cell(at, 8) {
-            Cell::Number(n) => n,
-            _ => panic!("not a number"),
+        let line = |at| match results.shown(at) {
+            Some(Shown::Line {
+                number,
+                matched,
+                parts,
+                ..
+            }) => (number, matched, parts),
+            _ => panic!("not a line"),
         };
         assert_eq!(
-            [number(rows[2]), number(rows[3]), number(rows[4])],
+            [line(rows[2]).0, line(rows[3]).0, line(rows[4]).0],
             [4, 5, 6]
         );
-        assert!(matches!(cell(rows[3], 9), Cell::Flag(true)));
-        assert!(matches!(cell(rows[2], 9), Cell::Flag(false)));
-        let Cell::Parts(parts) = cell(rows[3], 11) else {
-            panic!("not parts");
-        };
-        let marked: Vec<&str> = parts.iter().filter(|p| p.marked).map(|p| p.text).collect();
+        assert!(line(rows[3]).1 && !line(rows[2]).1);
+        let parts = line(rows[3]).2;
+        let marked: Vec<&str> = parts.iter().filter(|p| p.1).map(|p| p.0.as_ref()).collect();
         assert_eq!(marked, ["Steel", "Steel"]);
         let located = results.locate(rows[1]).unwrap();
         assert_eq!(
@@ -684,19 +767,6 @@ mod tests {
     }
 
     #[test]
-    fn blocks_apart_are_told_by_a_gap_row() {
-        let mut results = Results::default();
-        let mut found = file(1, "a.xml", 1);
-        found.hits.push(hit(9, "other Steel", "Steel"));
-        put(&mut results, found);
-        let rows = results.refs();
-        let is_gap = |at| matches!(results.cell(at, 10), Some(Cell::Flag(true)));
-        assert_eq!(rows.len(), 5);
-        assert!(is_gap(rows[3]));
-        assert_eq!(results.locate(rows[3]).unwrap().line, 9);
-    }
-
-    #[test]
     fn stepping_goes_from_file_to_line_row_passing_mod_rows_and_gaps_and_stops_at_the_ends() {
         let mut results = Results::default();
         let mut found = file(1, "a.xml", 1);
@@ -704,8 +774,9 @@ mod tests {
         put(&mut results, found);
         put(&mut results, file(2, "b.xml", 1));
         let rows = results.refs();
-        let is_gap = |at| matches!(results.cell(at, 10), Some(Cell::Flag(true)));
+        let is_gap = |at| matches!(results.shown(at), Some(Shown::Line { gap: true, .. }));
         assert!(rows[0].is_mod() && rows[1].is_file() && is_gap(rows[3]) && rows[5].is_mod());
+        assert_eq!(results.locate(rows[3]).unwrap().line, 9);
         let step = |from, by| results.step(&rows, from, by);
         assert_eq!(step(None, 1), Some(1));
         assert_eq!(step(None, -1), Some(7));

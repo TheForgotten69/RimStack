@@ -156,7 +156,10 @@ fn workshop_mods_go_by_the_time_and_size_steam_records() {
 fn a_mod_is_dated_when_its_activation_is_saved_and_forgotten_when_it_leaves() {
     let (_tmp, app) = installed();
     let mut order = LoadOrder::read(&app, true, None);
-    let kept = || rimstack_core::kept::activated::read(&app.activated_file()).unwrap();
+    let kept = || {
+        app.settle_writes();
+        rimstack_core::kept::activated::read(&app.activated_file()).unwrap()
+    };
     assert_eq!(kept().keys().collect::<Vec<_>>(), ["ludeon.rimworld"]);
     order.take(&app, Side::Inactive, 0, None);
     assert!(!kept().contains_key("ann.roads"), "not before it is saved");
@@ -269,7 +272,7 @@ fn a_mod_made_for_another_game_version_is_marked_on_either_side_until_trusted() 
     let marked = |order: &LoadOrder| {
         let rows = order.rows(&app, Side::Inactive);
         rows.iter()
-            .any(|r| r.mod_id == id.to_qml() && r.outdated && r.made_for == "1.5")
+            .any(|r| r.mod_id == Some(id) && r.outdated && r.made_for == "1.5")
     };
     assert!(marked(&order));
     app.set_version_ok(&[id], true);
@@ -282,7 +285,7 @@ fn a_mod_made_for_another_game_version_is_marked_on_either_side_until_trusted() 
     assert!(
         active
             .iter()
-            .any(|r| r.mod_id == id.to_qml() && r.made_for == "1.5")
+            .any(|r| r.mod_id == Some(id) && r.made_for == "1.5")
     );
 }
 
@@ -372,7 +375,7 @@ fn every_row_has_a_key_of_its_own_and_a_mod_row_its_id() {
         .iter()
         .find(|r| r.name.to_string() == "Ann.Roads")
         .unwrap();
-    assert!(roads.mod_id >= 0 && roads.number == 2 && roads.outdated);
+    assert!(roads.mod_id.is_some() && roads.number == 2 && roads.outdated);
 }
 
 #[test]
@@ -411,15 +414,6 @@ fn a_sort_of_a_list_in_order_moves_nothing_and_says_so() {
     assert_eq!(order.sort_count().map(|count| count.moves(&app)), Some(0));
 }
 
-#[test]
-fn made_up_lists_have_rows_and_no_problems() {
-    let (_tmp, app) = installed();
-    let order = LoadOrder::demo(40, 10);
-    assert_eq!(order.list(Side::Active).mods().len(), 40);
-    assert!(order.rows(&app, Side::Active).len() >= 40);
-    assert_eq!(order.errors_and_warnings(), (0, 0));
-}
-
 fn nothing_found() -> crate::workspace::Conflicts {
     crate::workspace::Conflicts {
         members: Vec::new(),
@@ -429,19 +423,15 @@ fn nothing_found() -> crate::workspace::Conflicts {
 }
 
 #[test]
-fn a_scan_overtaken_by_a_change_of_textures_writes_nothing() {
+fn a_scan_is_kept_unless_a_change_of_textures_overtook_it() {
+    let (_tmp, app) = installed();
+    app.keep_files_read(app.conflicts_generation(), nothing_found());
+    assert!(app.conflicts().reading().is_some());
     let (_tmp, app) = installed();
     let generation = app.conflicts_generation();
     app.textures_changed();
     app.keep_files_read(generation, nothing_found());
     assert!(app.conflicts().reading().is_none());
-}
-
-#[test]
-fn a_scan_nothing_overtook_is_kept() {
-    let (_tmp, app) = installed();
-    app.keep_files_read(app.conflicts_generation(), nothing_found());
-    assert!(app.conflicts().reading().is_some());
 }
 
 #[cfg(target_os = "linux")]
@@ -623,22 +613,17 @@ fn the_inverse_of_a_selection_is_the_rest_of_its_list() {
     let (tmp, app) = installed();
     with_more_mods(&tmp);
     let order = LoadOrder::read(&app, true, None);
-    let inactive: Vec<i32> = order
+    let inactive: Vec<ModId> = order
         .list(Side::Inactive)
         .mods()
         .iter()
         .filter_map(|m| m.installed)
-        .map(ModId::to_qml)
         .collect();
     let roads = roads(&order, Side::Inactive);
     let rest = order.inverted(Side::Inactive, Side::Inactive, &[roads]);
-    let mut chosen: Vec<i32> = rest.ids.iter().map(|id| id.to_qml()).collect();
+    let mut chosen = rest.ids;
     chosen.sort_unstable();
-    let mut others: Vec<i32> = inactive
-        .iter()
-        .copied()
-        .filter(|id| *id != roads.to_qml())
-        .collect();
+    let mut others: Vec<ModId> = inactive.iter().copied().filter(|id| *id != roads).collect();
     others.sort_unstable();
     assert_eq!((chosen, rest.active), (others, false));
     let core = ids_of(&order, Side::Active, &["ludeon.rimworld"]);
@@ -659,12 +644,129 @@ fn a_drag_takes_the_selection_along_only_when_it_starts_on_part_of_it() {
     let roads = roads(&order, Side::Inactive);
     let core = ids_of(&order, Side::Active, &["ludeon.rimworld"])[0];
     let both = Holding::of(Some(roads), "Ann.Roads", &[core, roads]);
-    assert_eq!(both.ids, [core.to_qml(), roads.to_qml()]);
+    assert_eq!(both.ids, [core, roads]);
     assert_eq!(both.name.to_string(), "2 mods");
     let alone = Holding::of(Some(roads), "Ann.Roads", &[core]);
     assert_eq!(
         (alone.ids, alone.name.to_string()),
-        (vec![roads.to_qml()], "Ann.Roads".to_string())
+        (vec![roads], "Ann.Roads".to_string())
     );
     assert!(Holding::of(None, "Gone", &[core, roads]).ids.is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn mods_activated_together_each_load_after_what_they_follow() {
+    let (_tmp, app) = crate::ui::made_up::made_up();
+    let mut order = LoadOrder::read(&app, true, None);
+    let id_of = |order: &LoadOrder, side: Side, package: &str| {
+        let mods = order.list(side).mods();
+        mods.iter()
+            .find(|m| m.id == package)
+            .and_then(|m| m.installed)
+    };
+    let inactive: Vec<ModId> = order
+        .list(Side::Inactive)
+        .mods()
+        .iter()
+        .filter_map(|m| m.installed)
+        .collect();
+    assert!(id_of(&order, Side::Inactive, "fixture.mod042").is_some());
+    order.take_all(&app, Side::Inactive, &inactive, None);
+    let place = |package: &str| {
+        let id = id_of(&order, Side::Active, package).unwrap();
+        order.list(Side::Active).position_of(id).unwrap()
+    };
+    for n in (42..=98).step_by(7) {
+        let (then, first) = (
+            format!("fixture.mod{n:03}"),
+            format!("fixture.mod{:03}", n - 1),
+        );
+        assert!(place(&then) > place(&first), "{then} loads after {first}");
+    }
+    assert!(order.list(Side::Inactive).mods().is_empty());
+}
+
+#[test]
+#[ignore = "reads this machine's own install; RIMSTACK_TIME_HOME names a scratch folder"]
+fn times_the_mods_tab_on_this_machines_install() {
+    let Ok(scratch) = std::env::var("RIMSTACK_TIME_HOME") else {
+        return;
+    };
+    let scratch = std::path::PathBuf::from(scratch);
+    let home = std::path::PathBuf::from(std::env::var("HOME").unwrap());
+    let app = App::new(
+        home,
+        &scratch.join("settings"),
+        &scratch.join("data"),
+        Default::default(),
+    );
+    let time = |what: &str, f: &mut dyn FnMut()| {
+        let runs = 5;
+        let started = std::time::Instant::now();
+        for _ in 0..runs {
+            f();
+        }
+        eprintln!("{what}: {:?}", started.elapsed() / runs);
+    };
+    let started = std::time::Instant::now();
+    let mut order = LoadOrder::read(&app, true, None);
+    eprintln!("read: {:?}", started.elapsed());
+    eprintln!(
+        "mods: {} active, {} inactive",
+        order.rows(&app, Side::Active).len(),
+        order.rows(&app, Side::Inactive).len()
+    );
+    if std::env::var("RIMSTACK_TIME_ALL").is_ok() {
+        let ids: Vec<ModId> = order
+            .rows(&app, Side::Inactive)
+            .iter()
+            .filter(|r| !r.is_header)
+            .filter_map(|r| r.mod_id)
+            .collect();
+        let started = std::time::Instant::now();
+        order.take_all(&app, Side::Inactive, &ids, None);
+        eprintln!("take_all {}: {:?}", ids.len(), started.elapsed());
+        eprintln!("now {} active", order.rows(&app, Side::Active).len());
+    }
+    time("recheck", &mut || order.recheck(&app));
+    time("refile", &mut || order.refile(&app));
+    time("settle", &mut || order.settle(&app));
+    time("rows both", &mut || {
+        let _ = order.rows(&app, Side::Active);
+        let _ = order.rows(&app, Side::Inactive);
+    });
+    time("overview", &mut || {
+        let _ = order.overview(&app);
+    });
+    time("fresh", &mut || {
+        let _ = order.fresh(&app, Side::Inactive);
+    });
+    time("in_conflict", &mut || {
+        let _ = order.in_conflict(&app);
+    });
+    time("orders", &mut || {
+        let _ = order.orders();
+    });
+    time("set_filter a", &mut || order.set_filter("a"));
+    time("set_filter ''", &mut || order.set_filter(""));
+    time("sync", &mut || order.sync(&app));
+}
+
+#[test]
+fn only_the_settings_the_lists_read_count_as_read() {
+    let tmp = tempfile::tempdir().unwrap();
+    let app = App::new(
+        tmp.path().into(),
+        &tmp.path().join("s"),
+        &tmp.path().join("d"),
+        Default::default(),
+    );
+    let before = LoadOrder::settings_read(&app);
+    app.keep_setting("autoUpdates", "on").unwrap();
+    assert_eq!(LoadOrder::settings_read(&app), before);
+    let dimmed = app.settings().switch(Switch::DimLeftOut);
+    app.keep_setting("dimLeftOut", if dimmed { "off" } else { "on" })
+        .unwrap();
+    assert_ne!(LoadOrder::settings_read(&app), before);
 }

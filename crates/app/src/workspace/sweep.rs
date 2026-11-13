@@ -59,6 +59,7 @@ impl App {
                 }
                 Err(error) => return problem!("the Workshop sweep failed: {error}"),
             }
+            let _ = app.workshop_index();
             app.publish(Changes::COMMUNITY);
         });
     }

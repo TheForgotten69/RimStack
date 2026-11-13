@@ -1,6 +1,6 @@
 use super::*;
 use crate::workspace::find::type_offers;
-use crate::workspace::find::{Cell, Look};
+use crate::workspace::find::{Look, Shown};
 use crate::workspace::tests::installed;
 use std::sync::Mutex;
 
@@ -197,7 +197,7 @@ fn hits_past_the_cap_are_not_kept_and_the_summary_says_so() {
         let hits = r
             .refs()
             .iter()
-            .filter(|&&at| matches!(r.cell(at, 9), Some(Cell::Flag(true))))
+            .filter(|&&at| matches!(r.shown(at), Some(Shown::Line { matched: true, .. })))
             .count();
         assert_eq!(hits, MOST_HITS);
         assert_eq!(r.mods_found(), 1);
@@ -216,7 +216,7 @@ fn a_row_resolves_to_its_file_folder_line_and_preview_without_a_path_from_outsid
     let matched = app.find_results(|r| {
         rows.iter()
             .copied()
-            .find(|&at| matches!(r.cell(at, 9), Some(Cell::Flag(true))))
+            .find(|&at| matches!(r.shown(at), Some(Shown::Line { matched: true, .. })))
     });
     let matched = matched.unwrap();
     assert_eq!(app.find_file(matched), Some(roads.clone()));
@@ -396,22 +396,6 @@ fn a_search_inside_the_file_finds_lines_steps_around_and_centres_the_window_on_t
     assert_eq!(back.at, Some(1));
     let none = look("zinc", None, None, 1);
     assert_eq!((none.found.len(), none.at, none.shown.line), (0, None, 1));
-}
-
-#[test]
-fn the_mods_found_are_listed_with_counts_and_a_pick_keeps_one_mods_rows() {
-    let (_tmp, app) = made_up();
-    run(&app, &ask("steel", Place::Installed));
-    let list = app.find_results(|r| r.found_mods());
-    assert!(list.rows.len() >= 2 && list.all_chosen);
-    assert_eq!(
-        list.all_count,
-        list.rows.iter().map(|m| m.count).sum::<usize>()
-    );
-    let one = list.rows[0].index;
-    let rows = app.find_change(|r| r.set_pick(Some(one)));
-    assert!(rows.iter().all(|r| r.same_mod(rows[0])));
-    assert!(app.find_results(|r| r.found_mods()).rows[0].chosen);
 }
 
 #[test]

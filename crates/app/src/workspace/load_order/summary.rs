@@ -1,29 +1,27 @@
-use super::rows::{load_time_text, trouble_level};
+use super::rows::{Level, load_time_text, trouble_level};
 use super::{LoadOrder, Side};
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::library::ModId;
-use rimstack_core::mods::list::Row;
+use rimstack_core::mods::list::{Category, Row};
 use rimstack_core::say;
-use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
-#[derive(Serialize)]
+#[derive(PartialEq)]
 pub struct Chosen {
-    name: String,
-    category: i32,
-    load: String,
-    trouble: i32,
+    pub name: String,
+    pub category: Category,
+    pub load: String,
+    pub trouble: Level,
 }
 
-#[derive(Serialize, Default)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default, PartialEq)]
 pub struct SelectionSummary {
-    place: Sentence,
+    pub place: Sentence,
     /// Those with a row in view, in the order of their list.
-    rows: Vec<Chosen>,
+    pub rows: Vec<Chosen>,
     /// Empty when none has a problem.
-    troubled: Sentence,
-    not_in_view: usize,
+    pub troubled: Sentence,
+    pub not_in_view: usize,
 }
 
 impl LoadOrder {
@@ -60,7 +58,7 @@ impl LoadOrder {
                 let m = &list.mods()[at];
                 Chosen {
                     name: m.name.clone(),
-                    category: m.category as i32,
+                    category: m.category,
                     load: load_time_text(m),
                     trouble: trouble_level(own(at)),
                 }
@@ -76,7 +74,7 @@ impl LoadOrder {
                 say!("In the load order, between {} and {}", first + 1, last + 1)
             }
         };
-        let troubled = rows.iter().filter(|m| m.trouble > 0).count();
+        let troubled = rows.iter().filter(|m| m.trouble > Level::None).count();
         let version = self.version_warned(selected).len();
         let troubled = match (troubled, version) {
             (0, _) => Sentence::default(),
@@ -143,7 +141,7 @@ mod tests {
     }
 
     #[test]
-    fn mods_chosen_in_a_row_say_where_the_run_starts_and_ends() {
+    fn mods_chosen_say_where_the_run_starts_and_ends_or_between_which_places() {
         let (_tmp, app) = four_active();
         let order = LoadOrder::read(&app, true, None);
         let chosen = ids(&order, Side::Active, &["ann.c", "ann.b"]);
@@ -152,15 +150,19 @@ mod tests {
         let names: Vec<&str> = summary.rows.iter().map(|r| r.name.as_str()).collect();
         assert_eq!(names, ["Ann.B", "Ann.C"]);
         assert_eq!(summary.not_in_view, 0);
+        let apart = ids(&order, Side::Active, &["ludeon.rimworld", "ann.c"]);
+        let summary = order.selection_summary(true, &apart);
+        assert_eq!(said(&summary.place), "In the load order, between 1 and 4");
     }
 
     #[test]
-    fn mods_apart_are_between_two_places() {
-        let (_tmp, app) = four_active();
+    fn inactive_mods_are_only_called_inactive() {
+        let (_tmp, app) = installed();
         let order = LoadOrder::read(&app, true, None);
-        let chosen = ids(&order, Side::Active, &["ludeon.rimworld", "ann.c"]);
-        let summary = order.selection_summary(true, &chosen);
-        assert_eq!(said(&summary.place), "In the load order, between 1 and 4");
+        let roads = ids(&order, Side::Inactive, &["ann.roads"]);
+        let summary = order.selection_summary(false, &roads);
+        assert_eq!(said(&summary.place), "Inactive");
+        assert_eq!(summary.rows.len(), 1);
     }
 
     #[test]
@@ -191,15 +193,5 @@ mod tests {
         assert_eq!(said(&summary.troubled), "2, 1 for the game version");
         let none = ids(&order, Side::Active, &["ann.b", "ludeon.rimworld"]);
         assert!(order.selection_summary(true, &none).troubled.is_empty());
-    }
-
-    #[test]
-    fn inactive_mods_are_only_called_inactive() {
-        let (_tmp, app) = installed();
-        let order = LoadOrder::read(&app, true, None);
-        let roads = ids(&order, Side::Inactive, &["ann.roads"]);
-        let summary = order.selection_summary(false, &roads);
-        assert_eq!(said(&summary.place), "Inactive");
-        assert_eq!(summary.rows.len(), 1);
     }
 }

@@ -16,12 +16,12 @@ const MOST_PATCHES: usize = 200;
 
 const FIRST_ERRORS: usize = 4;
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct FixSaid {
-    pub(super) action: &'static str,
-    pub(super) target: String,
-    pub(super) label: &'static str,
-    pub(super) page: Option<String>,
+    pub action: &'static str,
+    pub target: String,
+    pub label: &'static str,
+    pub page: Option<String>,
 }
 
 impl FixSaid {
@@ -35,28 +35,27 @@ impl FixSaid {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProblemSaid {
-    /// -1 for a mod that is not installed.
-    mod_id: i64,
+    pub mod_id: Option<ModId>,
     #[serde(skip)]
-    trust: bool,
-    name: String,
-    error: bool,
-    group: &'static str,
-    words: Sentence,
-    short: Sentence,
-    fix: FixSaid,
+    pub trust: bool,
+    pub name: String,
+    pub error: bool,
+    pub group: &'static str,
+    pub words: Sentence,
+    pub short: Sentence,
+    pub fix: FixSaid,
     /// With `ignore`, what `App::ignore_problem` is given; empty when it cannot be ignored.
-    package_id: String,
-    ignore: String,
+    pub package_id: String,
+    pub ignore: String,
 }
 
 impl ProblemSaid {
     fn of(m: &Mod, trouble: &Trouble) -> Self {
         Self {
-            mod_id: m.installed.map_or(-1, |i| i64::from(i.to_qml())),
+            mod_id: m.installed,
             trust: trouble.fix == rimstack_core::mods::describe::Fix::Trust,
             name: m.name.clone(),
             error: trouble.error,
@@ -70,98 +69,99 @@ impl ProblemSaid {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 pub struct Detected {
-    name: String,
-    why: Sentence,
-    code: bool,
+    pub name: String,
+    pub why: Sentence,
+    pub code: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 pub struct Branch {
-    folder: String,
-    files: usize,
+    pub folder: String,
+    pub files: usize,
 }
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Default, PartialEq)]
 pub struct Files {
-    tree: Vec<Branch>,
-    assemblies: String,
+    pub tree: Vec<Branch>,
+    pub assemblies: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 pub struct Patched {
-    method: Sentence,
-    note: Sentence,
+    pub method: Sentence,
+    pub note: Sentence,
 }
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Details {
-    pub(super) name: String,
-    pub(super) source: &'static str,
-    pub(super) workshop: bool,
-    pub(super) official: bool,
-    pub(super) contains: Sentence,
-    pub(super) path: String,
-    pub(super) repository: String,
-    pub(super) folder: String,
-    pub(super) preview: Option<String>,
-    pub(super) author: String,
-    pub(super) package_id: String,
-    pub(super) version: String,
-    pub(super) game_versions: String,
-    pub(super) description: String,
-    pub(super) description_rich: String,
-    pub(super) url: String,
-    pub(super) load_time: String,
-    pub(super) unreadable: Option<Sentence>,
-    pub(super) tags: String,
-    pub(super) note: String,
-    pub(super) category_chosen: String,
-    pub(super) version_ok: bool,
-    pub(super) problems_ignored: usize,
-    pub(super) made_for: Option<String>,
-    pub(super) replaced_by: Option<String>,
-    pub(super) replaced_by_id: Option<String>,
-    pub(super) replaced_by_versions: Option<String>,
-    pub(super) copies: Option<Sentence>,
-    pub(super) bin_local_copy: Option<LocalCopy>,
-    pub(super) updated: Option<u64>,
-    pub(super) megabytes: Option<f64>,
-    pub(super) requires: Vec<Named>,
-    pub(super) load_folders: Vec<Sentence>,
-    pub(super) code: Sentence,
-    pub(super) sub: String,
-    pub(super) patches: Vec<Patched>,
-    pub(super) category: Option<&'static str>,
-    pub(super) held: Sentence,
-    pub(super) problems: Vec<ProblemSaid>,
-    pub(super) your_rules: Vec<OwnRule>,
-    pub(super) detected: Vec<Detected>,
-    pub(super) loses_to: Vec<Clash>,
-    pub(super) wins_over: Vec<Clash>,
-    pub(super) conflict_marks:
-        std::collections::BTreeMap<ModId, rimstack_core::mods::details::Mark>,
-    pub(super) loads_after: Vec<Named>,
-    pub(super) loads_before: Vec<Named>,
-    pub(super) required_above: usize,
-    pub(super) placement: Option<Sentence>,
-    pub(super) offer_trust: bool,
-    pub(super) can_bin: bool,
-    pub(super) group_choices: Vec<String>,
-    pub(super) workshop_page: Option<String>,
-    pub(super) steam_page: Option<String>,
+    pub name: String,
+    pub source: &'static str,
+    pub workshop: bool,
+    pub official: bool,
+    pub contains: Sentence,
+    pub path: String,
+    /// A Git checkout: its repository's page is read off the window's thread, with its commits.
+    pub git: bool,
+    pub repository: String,
+    pub folder: String,
+    pub preview: Option<String>,
+    pub author: String,
+    pub package_id: String,
+    pub version: String,
+    pub game_versions: String,
+    pub description: String,
+    #[serde(skip)]
+    pub description_blocks: Vec<rimstack_core::base::markup::Block>,
+    pub url: String,
+    pub load_time: String,
+    pub unreadable: Option<Sentence>,
+    pub tags: String,
+    pub note: String,
+    pub category_chosen: String,
+    pub version_ok: bool,
+    pub problems_ignored: usize,
+    pub made_for: Option<String>,
+    pub replaced_by: Option<String>,
+    pub replaced_by_id: Option<String>,
+    pub replaced_by_versions: Option<String>,
+    pub copies: Option<Sentence>,
+    pub bin_local_copy: Option<LocalCopy>,
+    pub updated: Option<u64>,
+    pub megabytes: Option<f64>,
+    pub requires: Vec<Named>,
+    pub load_folders: Vec<Sentence>,
+    pub code: Sentence,
+    pub sub: String,
+    pub patches: Vec<Patched>,
+    pub category: Option<&'static str>,
+    pub held: Sentence,
+    pub problems: Vec<ProblemSaid>,
+    pub your_rules: Vec<OwnRule>,
+    pub detected: Vec<Detected>,
+    pub loses_to: Vec<Clash>,
+    pub wins_over: Vec<Clash>,
+    pub conflict_marks: std::collections::BTreeMap<ModId, rimstack_core::mods::details::Mark>,
+    pub loads_after: Vec<Named>,
+    pub loads_before: Vec<Named>,
+    pub required_above: usize,
+    pub placement: Option<Sentence>,
+    pub offer_trust: bool,
+    pub can_bin: bool,
+    pub group_choices: Vec<String>,
+    pub workshop_page: Option<String>,
+    pub steam_page: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalCopy {
-    mod_id: ModId,
-    path: String,
+    pub mod_id: ModId,
+    pub path: String,
 }
 
-/// An active row whose mod is not installed, in place of its details for its menu.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NotInstalled {
@@ -172,47 +172,47 @@ pub struct NotInstalled {
     pub(super) resubscribe: Vec<String>,
 }
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Textures {
-    count: usize,
-    dds_made: usize,
+    pub count: usize,
+    pub dds_made: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 pub struct ProblemGroup {
-    name: &'static str,
-    error: bool,
-    trusted: usize,
-    shared: bool,
-    lines: Vec<ProblemSaid>,
+    pub name: &'static str,
+    pub error: bool,
+    pub trusted: usize,
+    pub shared: bool,
+    pub lines: Vec<ProblemSaid>,
 }
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Overview {
-    game_version: String,
-    categories: Vec<&'static str>,
-    troubles: Vec<ProblemSaid>,
-    error_count: usize,
-    first_errors: Vec<ProblemSaid>,
-    more_errors: usize,
-    to_get: Vec<ProblemSaid>,
-    trouble_groups: Vec<ProblemGroup>,
-    needed: Vec<String>,
-    version_only: usize,
-    other_warnings: usize,
-    slowest: Vec<Slow>,
-    load_times: bool,
-    load_times_how: Sentence,
-    installed: usize,
-    missing: usize,
-    unreadable: usize,
-    read_ms: u128,
-    works_on: usize,
-    trusted: Vec<Named>,
-    community_mods: Option<usize>,
-    community_time: Option<i64>,
+    pub game_version: String,
+    pub categories: Vec<&'static str>,
+    pub troubles: Vec<ProblemSaid>,
+    pub error_count: usize,
+    pub first_errors: Vec<ProblemSaid>,
+    pub more_errors: usize,
+    pub to_get: Vec<ProblemSaid>,
+    pub trouble_groups: Vec<ProblemGroup>,
+    pub needed: Vec<String>,
+    pub version_only: usize,
+    pub other_warnings: usize,
+    pub slowest: Vec<Slow>,
+    pub load_times: bool,
+    pub load_times_how: Sentence,
+    pub installed: usize,
+    pub missing: usize,
+    pub unreadable: usize,
+    pub read_ms: u128,
+    pub works_on: usize,
+    pub trusted: Vec<Named>,
+    pub community_mods: Option<usize>,
+    pub community_time: Option<i64>,
 }
 
 impl LoadOrder {
@@ -257,7 +257,7 @@ impl LoadOrder {
             source: m.source_label(),
             contains: m.contains(),
             path: m.path.to_string_lossy().into_owned(),
-            repository: rimstack_core::sources::git::page(&m.path).unwrap_or_default(),
+            git: m.git,
             folder: m.folder.clone(),
             preview: m.preview.as_ref().map(|p| p.to_string_lossy().into_owned()),
             tags: note.tags.join(", "),
@@ -283,7 +283,7 @@ impl LoadOrder {
                 said.version = about.mod_version.clone().unwrap_or_default();
                 said.game_versions = about.supported_versions.join(", ");
                 said.description = about.description.clone().unwrap_or_default();
-                said.description_rich = rimstack_core::base::markup::rich(&said.description);
+                said.description_blocks = rimstack_core::base::markup::blocks(&said.description);
                 said.url = about.url.clone().unwrap_or_default();
                 said.load_time =
                     rimstack_core::rimworld::startup::in_words(&app.startup(), &about.package_id);

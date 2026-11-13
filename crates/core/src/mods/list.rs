@@ -230,14 +230,6 @@ pub enum Row {
     },
 }
 
-/// After `Inserted` or `Removed`, the header at `first - 1` also changed.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Change {
-    Reset,
-    Inserted { first: usize, count: usize },
-    Removed { first: usize, count: usize },
-}
-
 pub fn runs(mods: &[Mod]) -> usize {
     let changes = mods.windows(2).filter(|w| w[0].category != w[1].category);
     changes.count() + usize::from(!mods.is_empty())
@@ -260,6 +252,8 @@ pub struct GroupedList {
     shown_by: Option<(SortKey, bool)>,
     rows: Vec<Row>,
     facts: Arc<HashMap<ModId, Arc<Facts>>>,
+    /// While held, the rows are made again only once, when let go.
+    held: bool,
 }
 
 fn haystack(m: &Mod) -> String {
@@ -323,9 +317,20 @@ impl GroupedList {
             shown_by: None,
             rows: Vec::new(),
             facts: Arc::default(),
+            held: false,
         };
         list.rebuild();
         list
+    }
+
+    /// Many edits in a row: the rows stay as they were until `let_go`.
+    pub fn hold(&mut self) {
+        self.held = true;
+    }
+
+    pub fn let_go(&mut self) {
+        self.held = false;
+        self.rebuild();
     }
 
     pub fn flat(mods: Vec<Mod>) -> Self {
@@ -485,36 +490,11 @@ impl GroupedList {
         self.rebuild();
     }
 
-    /// Qt must be told which rows go or come before the change.
-    pub fn toggling(&self, category: Category) -> Change {
-        if self.mods.iter().any(|m| !m.sub.is_empty()) {
-            return Change::Reset;
-        }
-        let mut headers = self.rows.iter().enumerate().filter_map(|(row, r)| match r {
-            Row::Header {
-                category: c, count, ..
-            } if *c == category => Some((row, *count)),
-            _ => None,
-        });
-        match (headers.next(), headers.next()) {
-            (Some((row, count)), None) if count > 0 => {
-                let first = row + 1;
-                match self.collapsed.contains(&category) {
-                    true => Change::Inserted { first, count },
-                    false => Change::Removed { first, count },
-                }
-            }
-            _ => Change::Reset,
-        }
-    }
-
-    pub fn toggle(&mut self, category: Category) -> Change {
-        let change = self.toggling(category);
+    pub fn toggle(&mut self, category: Category) {
         if !self.collapsed.remove(&category) {
             self.collapsed.insert(category);
         }
         self.rebuild();
-        change
     }
 
     pub fn move_mod(&mut self, from: usize, to: usize) {
@@ -579,6 +559,9 @@ impl GroupedList {
     }
 
     fn rebuild(&mut self) {
+        if self.held {
+            return;
+        }
         self.unmatched = !self.filter.is_empty() && !(0..self.mods.len()).any(|i| self.matches(i));
         if let Some((key, descending)) = self.shown_by {
             let shown: Vec<usize> = (0..self.mods.len()).filter(|&i| self.shows(i)).collect();

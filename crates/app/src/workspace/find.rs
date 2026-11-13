@@ -1,6 +1,7 @@
 use super::App;
 use crate::changes::Changes;
 use rimstack_core::base::error::Error;
+use rimstack_core::base::locks::Held;
 use rimstack_core::base::pattern::{Pattern, Switches};
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::kept::searches::{Search, Searches};
@@ -18,7 +19,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 mod results;
-pub use results::{Cell, Folded, FoundMods, MOST_HITS, Op, Part, ROLES, Results, RowRef};
+pub use results::{Folded, FoundMods, MOST_HITS, Op, Results, RowRef, Shown};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Place {
@@ -393,7 +394,7 @@ impl App {
 
     pub fn find_launch(&self, prepared: Prepared) -> Started {
         let cancel = Arc::new(AtomicBool::new(false));
-        let mut state = self.find.state.lock().unwrap();
+        let mut state = self.find.state.held();
         if let Some(older) = state.cancel.replace(cancel.clone()) {
             older.store(true, Ordering::Relaxed);
         }
@@ -445,7 +446,7 @@ impl App {
     }
 
     pub fn find_stop(&self) {
-        if let Some(cancel) = &self.find.state.lock().unwrap().cancel {
+        if let Some(cancel) = &self.find.state.held().cancel {
             cancel.store(true, Ordering::Relaxed);
         }
     }
@@ -454,7 +455,7 @@ impl App {
     pub fn find_add(&self, generation: u64, batch: Batch<Option<ModId>>) -> Option<Arrived> {
         let loaded = self.library();
         let library = loaded.as_ref().as_ref().ok().map(|(library, _)| library);
-        let mut state = self.find.state.lock().unwrap();
+        let mut state = self.find.state.held();
         if state.generation != generation {
             return None;
         }
@@ -485,7 +486,7 @@ impl App {
     }
 
     pub fn find_finish(&self, generation: u64, summary: Summary) -> Option<Sentence> {
-        let state = self.find.state.lock().unwrap();
+        let state = self.find.state.held();
         if state.generation != generation {
             return None;
         }
@@ -515,7 +516,7 @@ impl App {
     }
 
     fn find_keep_mods(&self, mods: HashSet<ModId>) {
-        let mut kept = self.find.hit_mods.lock().unwrap();
+        let mut kept = self.find.hit_mods.held();
         if **kept != mods {
             *kept = Arc::new(mods);
             drop(kept);
@@ -524,22 +525,22 @@ impl App {
     }
 
     pub fn find_mods(&self) -> Arc<HashSet<ModId>> {
-        self.find.hit_mods.lock().unwrap().clone()
+        self.find.hit_mods.held().clone()
     }
 
     pub fn find_show_in_mods(&self) -> usize {
-        let mods = self.find.state.lock().unwrap().results.mods().clone();
+        let mods = self.find.state.held().results.mods().clone();
         let count = mods.len();
         self.find_keep_mods(mods);
         count
     }
 
     pub fn find_results<T>(&self, read: impl FnOnce(&Results) -> T) -> T {
-        read(&self.find.state.lock().unwrap().results)
+        read(&self.find.state.held().results)
     }
 
     pub fn find_change<T>(&self, change: impl FnOnce(&mut Results) -> T) -> T {
-        change(&mut self.find.state.lock().unwrap().results)
+        change(&mut self.find.state.held().results)
     }
 
     pub fn find_file(&self, at: RowRef) -> Option<PathBuf> {

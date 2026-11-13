@@ -167,7 +167,7 @@ fn no_text_parser_panics_on_thirty_thousand_made_up_texts() {
         let _ = modsconfig::parse(made);
         let _ = modsconfig::with_active(made, &["a.b".to_string()]);
         let _ = modsconfig::short_version(made);
-        let _ = markup::rich(made);
+        let _ = markup::blocks(made);
         let _ = vdf::libraries(made);
         let _ = about::parse(made.as_bytes());
         let _ = logs::errors(made);

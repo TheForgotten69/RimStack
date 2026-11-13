@@ -42,7 +42,7 @@ pub struct CheckoutShown<'a> {
     pub row: &'a Checkout,
     pub said: Sentence,
     pub due: bool,
-    /// The colour QML gives it, by index: 0 not checked, 1 up to date, 2 behind, 3 failed.
+    /// The colour shown for it, by index: 0 not checked, 1 up to date, 2 behind, 3 failed.
     pub standing: u8,
     pub updatable: bool,
 }
@@ -378,6 +378,12 @@ impl App {
         let m = library.get(id).filter(|m| m.source == Source::Workshop)?;
         Some(m.folder.clone())
     }
+
+    pub fn mod_path(&self, id: ModId) -> Option<String> {
+        let loaded = self.library();
+        let (library, _) = loaded.as_ref().as_ref().ok()?;
+        Some(library.get(id)?.path.to_string_lossy().into_owned())
+    }
 }
 
 #[cfg(test)]
@@ -420,7 +426,7 @@ mod tests {
         let shown = updates_shown(&report, &HashSet::new());
         assert_eq!(shown.checkouts_due.len(), 1);
         assert_eq!(shown.checkouts_said.to_string(), "1 behind");
-        assert_eq!(crate::qml::values::as_shown(&row)["modId"], id.to_qml());
+        assert_eq!(crate::words::as_shown(&row)["modId"], id.to_packed());
         drop(loaded);
 
         app.checkout_updated(&roads);

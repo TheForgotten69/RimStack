@@ -1,11 +1,10 @@
-//! Sentences are put in words here, on the window's thread, as they are handed to QML.
+//! Sentences are put in words here, on the window's thread, as they are handed to a view.
 
-use cxx_qt_lib::QString;
 use icu_decimal::DecimalFormatter;
 use icu_decimal::input::Decimal;
 use icu_decimal::options::DecimalFormatterOptions;
 use rimstack_core::base::error::Error;
-use rimstack_core::base::sentence::{Language, Sentence};
+use rimstack_core::base::sentence::{Language, MARK, Sentence};
 use rimstack_core::base::translate::{Counting, LOCALE};
 use serde_json::{Map, Value};
 use std::cell::RefCell;
@@ -25,7 +24,7 @@ fn digits_for(locale: &str) -> DecimalFormatter {
     let english = icu_locale_core::locale!("en");
     parsed
         .ok()
-        .and_then(|locale| DecimalFormatter::try_new((&locale).into(), options.clone()).ok())
+        .and_then(|locale| DecimalFormatter::try_new((&locale).into(), options).ok())
         .or_else(|| DecimalFormatter::try_new((&english).into(), options).ok())
         .expect("English digits are compiled in")
 }
@@ -76,9 +75,44 @@ pub fn show_in(words: Words) {
     ON_SCREEN.with(|on_screen| *on_screen.borrow_mut() = Rc::new(words));
 }
 
+/// How many texts the language in use words otherwise than English, as `Theme.words` counted.
+pub fn translated() -> usize {
+    ON_SCREEN.with(|on_screen| {
+        on_screen
+            .borrow()
+            .table
+            .keys()
+            .filter(|key| key.as_str() != LOCALE)
+            .count()
+    })
+}
+
 pub fn put(sentence: &Sentence) -> String {
     let words = ON_SCREEN.with(|on_screen| on_screen.borrow().clone());
     sentence.put(words.as_ref())
+}
+
+/// The locale numbers are written in: `LC_NUMERIC` before the language.
+fn number_locale() -> String {
+    let from_env = ["LC_ALL", "LC_NUMERIC", "LANG"]
+        .iter()
+        .filter_map(|name| std::env::var(name).ok())
+        .find(|value| !value.is_empty() && value != "C" && value != "POSIX");
+    let named = from_env.or_else(sys_locale::get_locale).unwrap_or_default();
+    named
+        .split(['.', '@'])
+        .next()
+        .unwrap_or_default()
+        .replace('_', "-")
+}
+
+thread_local! {
+    static NUMBERS: DecimalFormatter = digits_for(&number_locale());
+}
+
+/// A count as `Theme.count` wrote it, grouped the system's way: "2 000" in French.
+pub fn count(n: usize) -> String {
+    NUMBERS.with(|digits| digits.format(&Decimal::from(n as u64)).to_string())
 }
 
 pub fn counted(n: usize, one: &str, many: &str, locale: &str) -> String {
@@ -89,17 +123,39 @@ pub fn counted(n: usize, one: &str, many: &str, locale: &str) -> String {
     Counting::of(locale).pick(n, one, many).to_string()
 }
 
-pub fn said(sentence: &Sentence) -> QString {
-    QString::from(&put(sentence))
+pub fn said(sentence: &Sentence) -> String {
+    put(sentence)
 }
 
-pub fn said_of(problem: &Error) -> QString {
+pub fn said_of(problem: &Error) -> String {
     said(problem.sentence())
 }
 
 /// Empty when it was done.
-pub fn why_not<T>(done: &Result<T, Error>) -> QString {
-    done.as_ref().err().map_or_else(QString::default, said_of)
+pub fn why_not<T>(done: &Result<T, Error>) -> String {
+    done.as_ref().err().map_or_else(String::new, said_of)
+}
+
+pub fn as_shown(value: &impl serde::Serialize) -> Value {
+    fn shown(value: Value) -> Value {
+        match value {
+            Value::Object(fields) if fields.len() == 1 && fields.contains_key(MARK) => {
+                Value::from(put(&Sentence::from_kept_value(&fields[MARK])))
+            }
+            Value::Object(fields) => {
+                Value::Object(fields.into_iter().map(|(k, v)| (k, shown(v))).collect())
+            }
+            Value::Array(items) => Value::Array(items.into_iter().map(shown).collect()),
+            other => other,
+        }
+    }
+    match serde_json::to_value(value) {
+        Ok(value) => shown(value),
+        Err(problem) => {
+            rimstack_core::problem!("not given to the window: {problem}");
+            Value::Null
+        }
+    }
 }
 
 #[cfg(test)]

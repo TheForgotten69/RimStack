@@ -124,13 +124,13 @@ pub struct Refused {
     pub why: Sentence,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, PartialEq)]
 pub struct Side {
     pub id: ModId,
     pub name: String,
 }
 
-#[derive(Serialize, Clone, Default)]
+#[derive(Serialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Shared {
     pub name: String,
@@ -150,7 +150,7 @@ pub struct Shared {
     pub used: Sentence,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Comparison {
     pub earlier: Side,
@@ -165,7 +165,6 @@ pub struct Comparison {
 }
 
 impl Comparison {
-    /// Ignores case.
     pub fn named(&self, filter: &str) -> Vec<&Shared> {
         let filter = filter.trim().to_lowercase();
         self.textures
@@ -556,7 +555,7 @@ mod tests {
         let (tmp, app) = installed();
         texture(&tmp.path().join("game/Mods/roads/Textures/road.png"));
         let rows = app.texture_rows();
-        let on_show = crate::qml::values::as_shown(&shown(&rows, false));
+        let on_show = crate::words::as_shown(&shown(&rows, false));
         assert_eq!(on_show["rows"][0]["name"], "Ann.Roads");
         assert_eq!(on_show["rows"][0]["state"], "Not converted");
         assert_eq!(on_show["usual"], "Not converted");
@@ -638,6 +637,7 @@ mod tests {
         let again = app.compare_textures(a, b).unwrap();
         assert_eq!((again.kept_earlier, again.yours), (1, 1));
         assert_eq!(again.textures[0].used.to_string(), "Ann.A, chosen");
+        app.settle_writes();
         let history = app.history();
         assert_eq!(history[0].said, said);
         assert_eq!(Path::new(&history[0].bring_back), mods.join("b"));

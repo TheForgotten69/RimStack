@@ -1,4 +1,4 @@
-//! the mature-content choice changes. No record that reaches QML, a log or the history holds it.
+//! the mature-content choice changes. No record that reaches the window, a log or the history holds it.
 
 use super::secret::Vault;
 use super::{App, Written, written};

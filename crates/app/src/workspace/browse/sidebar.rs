@@ -243,7 +243,6 @@ impl Sidebar {
     }
 }
 
-/// `1.6` of `1.6.4871`.
 fn minor_of(game: &str) -> String {
     let numbers = versions::numbers(game);
     match numbers.as_slice() {

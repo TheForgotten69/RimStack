@@ -1,5 +1,5 @@
 use crate::App;
-use rimstack_core::base::locks::Shared;
+use rimstack_core::base::locks::{Held, Shared};
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::kept::settings::Switch;
 use rimstack_core::kept::{activated, launches};
@@ -23,10 +23,11 @@ mod rules;
 mod sorting;
 mod summary;
 
-pub use details::{Details, Files, Overview};
-pub use menu::{Clicked, Entry};
-pub use orders::Orders;
-pub use rows::RowView;
+pub use details::{Details, Files, Overview, ProblemSaid, Textures};
+pub use menu::{Action, Ask, Clicked, Entry};
+pub use orders::{OrderEntry, Orders};
+pub use rows::{Level, Origin, RowView, sort_slides};
+pub use sorting::{SortGroup, SortMove};
 pub use summary::SelectionSummary;
 
 pub struct Preview {
@@ -155,6 +156,7 @@ impl LoadOrder {
                 return order;
             }
         };
+        app.seen();
         let mut order = Self::empty();
         order.reading = Some(loaded.clone());
         order.headings = headings;
@@ -188,9 +190,13 @@ impl LoadOrder {
         self.reading.is_some()
     }
 
-    /// The order's own reading; a made-up list has none and is given the current one.
+    /// The order's own reading; a made-up list has none and is given the current one, or none
+    /// while the mods are first read: the window never waits on that.
     fn reading(&self, app: &App) -> std::sync::Arc<crate::workspace::Loaded> {
-        self.reading.clone().unwrap_or_else(|| app.library())
+        self.reading
+            .clone()
+            .or_else(|| app.library_if_read())
+            .unwrap_or_else(|| std::sync::Arc::new(Ok(Default::default())))
     }
 
     pub fn list(&self, side: Side) -> &GroupedList {
@@ -345,13 +351,13 @@ impl LoadOrder {
     }
 
     pub fn sync(&mut self, app: &App) {
+        if !self.is_installed() {
+            return;
+        }
         let loaded = app.library();
         let Ok((library, _)) = &*loaded else {
             return;
         };
-        if !self.is_installed() {
-            return;
-        }
         self.preview = None;
         self.sort_note.clear();
         let mut now = arranged(app, library);
@@ -391,6 +397,25 @@ impl LoadOrder {
         self.inactive_by = order;
         self.inactive.arrange(order);
         self.settle(app);
+    }
+
+    /// The settings the lists and Sort read: a change to any other draws them as they were.
+    pub fn settings_read(app: &App) -> Vec<String> {
+        let settings = app.settings();
+        let switches = [
+            Switch::DimLeftOut,
+            Switch::CommunityRules,
+            Switch::FileHints,
+            Switch::VersionWarnings,
+        ];
+        let mut read: Vec<String> = switches
+            .into_iter()
+            .map(|switch| settings.switch(switch).to_string())
+            .collect();
+        for folder in ["game", "config", "workshop"] {
+            read.push(settings.get(folder).unwrap_or_default().to_string());
+        }
+        read
     }
 
     pub fn follow_left_out(&mut self, app: &App) {
@@ -503,6 +528,9 @@ impl LoadOrder {
         let Ok((library, _)) = &*loaded else {
             return Vec::new();
         };
+        if !self.list(side).mods().iter().any(|m| m.installed.is_some()) {
+            return Vec::new();
+        }
         let seen = app.seen().reading();
         let mods = self.list(side).mods().iter();
         mods.filter_map(|m| m.installed)
@@ -534,7 +562,11 @@ impl App {
         let emptied = launched
             .last()
             .is_some_and(|last| super::game::emptied_by_game(library, &saved, last));
-        let kept = activated::read(&file);
+        let kept = self
+            .activated_kept
+            .held()
+            .clone()
+            .or_else(|| activated::read(&file));
         if emptied {
             return kept.unwrap_or_default();
         }
@@ -543,8 +575,14 @@ impl App {
             |kept| (kept, false),
         );
         changed |= activated::follow(&mut since, &saved, at);
-        if changed && let Err(problem) = activated::write(&file, &since) {
-            rimstack_core::problem!("when mods were activated was not kept: {problem}");
+        if changed {
+            *self.activated_kept.held() = Some(since.clone());
+            self.activated_writes
+                .ask("activated.json written", since.clone(), move |since| {
+                    if let Err(problem) = activated::write(&file, &since) {
+                        rimstack_core::problem!("when mods were activated was not kept: {problem}");
+                    }
+                });
         }
         since
     }
@@ -635,11 +673,39 @@ impl App {
 #[serde(rename_all = "camelCase")]
 pub struct FoundMod {
     pub name: String,
-    pub mod_id: i32,
+    pub mod_id: ModId,
     pub active: bool,
 }
 
 impl LoadOrder {
+    /// A mod's package id as a mod lists it among others, lower case; `None` for one not installed.
+    pub fn package_of(&self, app: &App, id: ModId) -> Option<String> {
+        let loaded = self.reading(app);
+        let Ok((library, _)) = &*loaded else {
+            return None;
+        };
+        library.get(id)?.key()
+    }
+
+    /// The mod of `side` with this package id, as `package_of` gives it.
+    pub fn with_package(&self, app: &App, side: Side, key: &str) -> Option<ModId> {
+        let loaded = self.reading(app);
+        let Ok((library, _)) = &*loaded else {
+            return None;
+        };
+        let has = |id: &ModId| {
+            library
+                .get(*id)
+                .and_then(|m| m.key())
+                .is_some_and(|k| k == key)
+        };
+        self.list(side)
+            .mods()
+            .iter()
+            .filter_map(|m| m.installed)
+            .find(has)
+    }
+
     pub fn found(&self, app: &App, text: &str, most: usize) -> Vec<FoundMod> {
         let loaded = self.reading(app);
         let Ok((library, _)) = &*loaded else {
@@ -652,7 +718,7 @@ impl LoadOrder {
             .filter_map(|id| {
                 Some(FoundMod {
                     name: library.get(id)?.display_name().to_string(),
-                    mod_id: id.to_qml(),
+                    mod_id: id,
                     active: active.position_of(id).is_some(),
                 })
             })
@@ -687,7 +753,6 @@ impl LoadOrder {
         Carried::of(&kept, active)
     }
 
-    /// The mods `side` shows that are not selected there.
     pub fn inverted(&self, side: Side, selected_on: Side, selected: &[ModId]) -> Carried {
         let selected = if selected_on == side { selected } else { &[] };
         Carried::of(
@@ -715,7 +780,7 @@ impl Carried {
 /// What a drag of one mod takes along: the whole selection when it is part of it.
 #[derive(Debug, Serialize, PartialEq)]
 pub struct Holding {
-    pub ids: Vec<i32>,
+    pub ids: Vec<ModId>,
     pub name: Sentence,
 }
 
@@ -723,11 +788,11 @@ impl Holding {
     pub fn of(id: Option<ModId>, name: &str, selected: &[ModId]) -> Holding {
         match id {
             Some(id) if selected.len() > 1 && selected.contains(&id) => Holding {
-                ids: selected.iter().map(|id| id.to_qml()).collect(),
+                ids: selected.to_vec(),
                 name: say_n!(selected.len(), "{} mod", "{} mods"),
             },
             _ => Holding {
-                ids: id.iter().map(|id| id.to_qml()).collect(),
+                ids: id.into_iter().collect(),
                 name: Sentence::Plain(name.to_string()),
             },
         }

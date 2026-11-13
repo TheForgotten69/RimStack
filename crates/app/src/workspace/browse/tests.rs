@@ -169,7 +169,13 @@ fn details_come_through_the_source_and_name_what_is_required() {
     assert!(shown.loaded && shown.size > 0);
     let none = std::collections::HashMap::new();
     let pending = shown.description(&none);
-    assert!(matches!(pending[0].html.as_str(), h if h.contains("<b>")));
+    assert!(
+        pending[0]
+            .blocks
+            .iter()
+            .flat_map(|b| &b.runs)
+            .any(|run| run.bold)
+    );
     assert!(pending[1].note.is_some() && pending[1].image.is_empty());
     let urls = shown.picture_urls();
     assert_eq!(urls.len(), 1);

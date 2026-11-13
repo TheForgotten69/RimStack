@@ -17,8 +17,24 @@ pub enum RowKey {
     Sub(Category, String, usize),
     /// By its folder, the same over a rescan, which gives every mod a new `ModId`.
     Installed(std::path::PathBuf, usize),
-    /// By its package id.
     Missing(String, usize),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub enum Level {
+    #[default]
+    None,
+    Warning,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Origin {
+    #[default]
+    Workshop,
+    Local,
+    Git,
+    Game,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -31,18 +47,16 @@ pub struct RowView {
     pub author: String,
     pub version: String,
     /// 0 for a heading.
-    pub number: i32,
-    pub count: i32,
+    pub number: usize,
+    pub count: usize,
     pub collapsed: bool,
-    pub category: i32,
-    /// -1 for a heading.
-    pub mod_index: i32,
-    /// -1 for a heading or a mod that is not installed.
-    pub mod_id: i32,
-    /// Where Sort moves the mod from, numbered from 1; 0 when it stays.
-    pub moved_from: i32,
-    /// 0 nothing, 1 a warning, 2 an error.
-    pub trouble: i32,
+    pub category: Category,
+    pub mod_index: Option<usize>,
+    /// None for a heading or a mod that is not installed.
+    pub mod_id: Option<ModId>,
+    /// Where Sort moves the mod from, numbered from 1; None when it stays.
+    pub moved_from: Option<usize>,
+    pub trouble: Level,
     pub trouble_text: Sentence,
     pub tags: String,
     pub local: bool,
@@ -55,10 +69,9 @@ pub struct RowView {
     /// Empty when not outdated.
     pub made_for: String,
     pub fresh: bool,
-    /// 0 Workshop, 1 local, 2 a Git checkout, 3 the game's own.
-    pub source: i32,
+    pub source: Origin,
     pub why_moved: Sentence,
-    pub group_size: i32,
+    pub group_size: usize,
     pub twin: bool,
     /// The value the list is ordered by; empty by name or by the list's own order.
     pub ordered_by: Sentence,
@@ -73,16 +86,12 @@ pub struct RowView {
     pub accessible_name: Sentence,
     /// In seconds; 0 when not measured.
     pub load_seconds: f64,
-    /// The version, then where the mod comes from.
     pub version_line: Sentence,
 }
 
 impl RowView {
     fn heading_name(&self) -> Sentence {
-        Sentence::listed(vec![
-            self.name.clone(),
-            Sentence::Number(i64::from(self.count)),
-        ])
+        Sentence::listed(vec![self.name.clone(), Sentence::Number(self.count as i64)])
     }
 
     fn heading(key: RowKey, name: &str, category: Category) -> Self {
@@ -97,11 +106,11 @@ impl RowView {
             number: 0,
             count: 0,
             collapsed: false,
-            category: category as i32,
-            mod_index: -1,
-            mod_id: -1,
-            moved_from: 0,
-            trouble: 0,
+            category,
+            mod_index: None,
+            mod_id: None,
+            moved_from: None,
+            trouble: Level::None,
             trouble_text: Sentence::default(),
             tags: String::new(),
             local: false,
@@ -112,7 +121,7 @@ impl RowView {
             outdated: false,
             made_for: String::new(),
             fresh: false,
-            source: 0,
+            source: Origin::Workshop,
             why_moved: Sentence::default(),
             group_size: 0,
             twin: false,
@@ -134,13 +143,19 @@ struct Around<'a> {
     now: u64,
 }
 
-/// 2 for an error, 1 for a warning, 0 for none; the game version trusted aside is none.
-pub(super) fn trouble_level(own: &[Trouble]) -> i32 {
+/// A game version trusted aside counts as no trouble.
+pub(super) fn trouble_level(own: &[Trouble]) -> Level {
     let shown = own.iter().filter(|t| t.fix != Fix::Trust);
     shown
-        .map(|t| if t.error { 2 } else { 1 })
+        .map(|t| {
+            if t.error {
+                Level::Error
+            } else {
+                Level::Warning
+            }
+        })
         .max()
-        .unwrap_or(0)
+        .unwrap_or_default()
 }
 
 pub(super) fn load_time_text(m: &Mod) -> String {
@@ -154,11 +169,11 @@ fn ago(at: Option<u64>, now: u64) -> Sentence {
     at.map(ago).unwrap_or_default()
 }
 
-fn source_word(source: i32) -> Sentence {
+fn source_word(source: Origin) -> Sentence {
     match source {
-        2 => say!("Git"),
-        1 => say!("local"),
-        _ => say!("Workshop"),
+        Origin::Git => say!("Git"),
+        Origin::Local => say!("local"),
+        Origin::Workshop | Origin::Game => say!("Workshop"),
     }
 }
 
@@ -192,12 +207,12 @@ fn key_of(installed: Option<&Installed>, m: &Mod, nth: &mut impl FnMut(RowKey) -
     }
 }
 
-fn source_of(installed: Option<&Installed>) -> (i32, String) {
-    let source = installed.map_or(0, |i| match i.source {
-        Source::Official => 3,
-        Source::Local if i.git => 2,
-        Source::Local => 1,
-        Source::Workshop => 0,
+fn source_of(installed: Option<&Installed>) -> (Origin, String) {
+    let source = installed.map_or(Origin::Workshop, |i| match i.source {
+        Source::Official => Origin::Game,
+        Source::Local if i.git => Origin::Git,
+        Source::Local => Origin::Local,
+        Source::Workshop => Origin::Workshop,
     });
     let picture = installed.and_then(|i| i.preview.as_ref());
     let picture = picture.map_or(String::new(), |p| p.to_string_lossy().into_owned());
@@ -233,7 +248,7 @@ impl LoadOrder {
                     let mut view = RowView::heading(key, category.label(), category);
                     view.again = categories_shown.contains(&category);
                     categories_shown.push(category);
-                    view.count = count as i32;
+                    view.count = count;
                     view.collapsed = collapsed;
                     view.accessible_name = view.heading_name();
                     view
@@ -253,9 +268,9 @@ impl LoadOrder {
                     let mut view = RowView::heading(key, &of.sub, of.category);
                     view.is_sub = true;
                     view.again = mods[..first].iter().any(same);
-                    view.count = count as i32;
+                    view.count = count;
                     view.collapsed = collapsed;
-                    view.group_size = list.in_sub_of(first).len() as i32;
+                    view.group_size = list.in_sub_of(first).len();
                     view.accessible_name = view.heading_name();
                     view
                 }
@@ -329,16 +344,16 @@ impl LoadOrder {
             name,
             author: m.author.clone(),
             version: m.version.clone(),
-            number: index as i32 + 1,
+            number: index + 1,
             count: 0,
             collapsed: false,
-            category: m.category as i32,
-            mod_index: index as i32,
-            mod_id: m.installed.map_or(-1, ModId::to_qml),
+            category: m.category,
+            mod_index: Some(index),
+            mod_id: m.installed,
             moved_from: if preview {
-                self.moved_from(index) as i32
+                Some(self.moved_from(index)).filter(|from| *from > 0)
             } else {
-                0
+                None
             },
             trouble: trouble_level(own),
             trouble_text: first.map_or_else(Sentence::default, |t| t.short.clone()),
@@ -372,4 +387,12 @@ impl LoadOrder {
             version_line,
         }
     }
+}
+
+/// How far each mod Sort's preview moved slides to its place, by its id: rows from where it was.
+pub fn sort_slides(rows: &[RowView]) -> std::collections::HashMap<ModId, i32> {
+    rows.iter()
+        .filter(|r| !r.is_header)
+        .filter_map(|r| Some((r.mod_id?, r.moved_from? as i32 - r.number as i32)))
+        .collect()
 }

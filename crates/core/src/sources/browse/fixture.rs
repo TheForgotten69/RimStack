@@ -249,27 +249,17 @@ mod tests {
     }
 
     #[test]
-    fn an_expansion_is_named_and_another_app_is_not() {
+    fn expansions_requirements_details_and_collections_are_answered_from_the_made_up_items() {
         let fixture = Fixture::new();
         assert_eq!(
             fixture.app_name("1149640").as_deref(),
             Some("Fixture Expansion One")
         );
         assert_eq!(fixture.app_name("294100"), None);
-    }
-
-    #[test]
-    fn harmony_is_needed_by_many_and_a_requirement_can_be_unknown() {
-        let fixture = Fixture::new();
         assert!(fixture.needed_by(HARMONY).unwrap().len() >= 3);
         assert_eq!(fixture.requires("3100000002").unwrap().len(), 2);
         assert_eq!(fixture.entry("3100000002").unwrap().requires.len(), 3);
         assert!(fixture.entry("3100000003").unwrap().author.is_none());
-    }
-
-    #[test]
-    fn details_are_canned_without_a_preview_and_a_collection_has_items() {
-        let fixture = Fixture::new();
         let found = fixture.details(&[HARMONY.into(), "1".into()]).unwrap();
         assert_eq!(found.len(), 1);
         assert!(found[0].preview_url.is_empty());

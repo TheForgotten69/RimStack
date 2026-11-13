@@ -260,7 +260,6 @@ pub fn fetch_all(steamcmd: &Path, ids: &[String], scratch: &Path) -> Fetched {
     }
 }
 
-/// Replaces an earlier download of the id.
 pub fn put_in_local(fresh: &Path, workshop_id: &str, local_mods: &Path) -> Result<PathBuf> {
     if !is_id(workshop_id) {
         return Err(not_an_id(workshop_id));
