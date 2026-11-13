@@ -91,7 +91,7 @@ fn main() -> std::process::ExitCode {
         });
     }
     #[cfg(target_os = "linux")]
-    if !std::env::args().any(|a| a.starts_with("--shot") || a.starts_with("--check")) {
+    if !std::env::args().any(|a| a.starts_with("--shot")) {
         put_among_applications();
     }
     ui::run(app, ui::Options::from_args(std::env::args()));

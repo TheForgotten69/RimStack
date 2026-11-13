@@ -5,7 +5,7 @@ use rimstack_core::base::locks::Held;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Changes(u32);
+pub struct Changes(u64);
 
 impl Changes {
     pub const NONE: Self = Self(0);

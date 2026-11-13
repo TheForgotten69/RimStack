@@ -129,10 +129,8 @@ impl App {
         let env = &paths::from_environment;
         let home = paths::home(env);
         let (settings, data) = paths::app_dirs(paths::Os::running(), &home, env);
-        let made_up = std::env::var("RIMSTACK_FIXTURE").is_ok_and(|v| !v.is_empty() && v != "0")
-            || std::env::args().any(|a| a == "--check=screens");
-        let checking = std::env::args()
-            .any(|a| a.starts_with("--check") || a.starts_with("--shot") || a == "--demo");
+        let made_up = std::env::var("RIMSTACK_FIXTURE").is_ok_and(|v| !v.is_empty() && v != "0");
+        let checking = std::env::args().any(|a| a.starts_with("--shot") || a == "--demo");
         let app = Self::new(home, &settings, &data, paths::Overrides::from_env())
             .speaking(sys_locale::get_locales().collect())
             .browsing_fixture(made_up);

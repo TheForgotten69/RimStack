@@ -23,16 +23,51 @@ pub fn run_on(executor: gpui::BackgroundExecutor) {
     TESTED.with(|tested| *tested.borrow_mut() = Some(executor));
 }
 
+/// Threads running jobs at most; a job asked beyond it waits for one of them, and the asker
+/// never waits.
+const MOST_THREADS: usize = 32;
+
+type Job = Box<dyn FnOnce() + Send>;
+
+/// Threads running jobs, and the jobs waiting for one.
+static RUNNING: Mutex<(usize, std::collections::VecDeque<(String, Job)>)> =
+    Mutex::new((0, std::collections::VecDeque::new()));
+
 pub fn spawn(name: &str, work: impl FnOnce() + Send + 'static) {
     #[cfg(test)]
     if let Some(executor) = TESTED.with(|tested| tested.borrow().clone()) {
         executor.spawn(async move { work() }).detach();
         return;
     }
+    let mut running = RUNNING.held();
+    if running.0 >= MOST_THREADS {
+        running.1.push_back((name.to_string(), Box::new(work)));
+        return;
+    }
+    running.0 += 1;
+    drop(running);
+    start(name.to_string(), Box::new(work));
+}
+
+fn start(name: String, work: Job) {
     let started = std::thread::Builder::new()
-        .name(name.to_string())
-        .spawn(work);
+        .name(name.clone())
+        .spawn(move || {
+            let mut work = work;
+            loop {
+                work();
+                let mut running = RUNNING.held();
+                match running.1.pop_front() {
+                    Some((_, next)) => work = next,
+                    None => {
+                        running.0 -= 1;
+                        return;
+                    }
+                }
+            }
+        });
     if let Err(problem) = started {
+        RUNNING.held().0 -= 1;
         rimstack_core::problem!("{name} not started: {problem}");
     }
 }
@@ -206,6 +241,32 @@ impl<T: Send + 'static> Single<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn jobs_past_the_most_threads_wait_for_one_and_all_run() {
+        let (release, held) = std::sync::mpsc::channel::<()>();
+        let held = Arc::new(Mutex::new(held));
+        let (done, finished) = std::sync::mpsc::channel();
+        let asked = MOST_THREADS + 8;
+        for at in 0..asked {
+            let (held, done) = (held.clone(), done.clone());
+            spawn("held", move || {
+                if at < MOST_THREADS {
+                    let _ = held.held().recv();
+                }
+                let _ = done.send(at);
+            });
+        }
+        assert!(RUNNING.held().0 <= MOST_THREADS);
+        for _ in 0..MOST_THREADS {
+            release.send(()).unwrap();
+        }
+        let wait = std::time::Duration::from_secs(5);
+        let ran = (0..asked)
+            .filter(|_| finished.recv_timeout(wait).is_ok())
+            .count();
+        assert_eq!(ran, asked);
+    }
 
     #[test]
     fn only_the_newest_turn_of_a_lane_is_current() {

@@ -346,13 +346,13 @@ impl LoadOrder {
     }
 
     pub fn sync(&mut self, app: &App) {
+        if !self.is_installed() {
+            return;
+        }
         let loaded = app.library();
         let Ok((library, _)) = &*loaded else {
             return;
         };
-        if !self.is_installed() {
-            return;
-        }
         self.preview = None;
         self.sort_note.clear();
         let mut now = arranged(app, library);
