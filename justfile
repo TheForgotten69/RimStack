@@ -43,7 +43,7 @@ package:
 audit:
     cargo audit
 
-# After a text was added or changed: wrap it and write words.json and English.json again
+# After a text was added or changed: write words.json and English.json again
 words:
     python3 tools/words.py
 
@@ -119,5 +119,5 @@ release version:
     echo
     echo "Tagged v$v. To publish: git push origin main v$v"
 
-# Everything before a commit: format, lint, tests
-ready: fmt lint test audit
+# Everything before a commit: format, lint, tests, the language files, advisories
+ready: fmt lint test languages audit

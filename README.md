@@ -16,6 +16,10 @@
 </p>
 
 <p align="center">
+  <a href="https://discord.gg/Za5CSzB52r"><img src="https://img.shields.io/badge/Join_the_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the RimStack Discord"></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/sponsors/TheForgotten69"><img src="https://img.shields.io/badge/GitHub_Sponsors-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub"></a>
   <a href="https://ko-fi.com/theforgotten69"><img src="https://img.shields.io/badge/Ko--fi-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white" alt="Support on Ko-fi"></a>
   <a href="https://www.patreon.com/theforgotten69"><img src="https://img.shields.io/badge/Patreon-F96854?style=for-the-badge&logo=patreon&logoColor=white" alt="Support on Patreon"></a>
