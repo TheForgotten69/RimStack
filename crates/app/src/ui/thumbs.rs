@@ -9,12 +9,16 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 /// Bytes of decoded pictures kept at least: about 1,300 tiles at 2x. A longer list's pictures
-/// are all kept, with `ROOM_BYTES` more beside them for those scrolled to.
+/// are all kept, with `ROOM_BYTES` more beside them for those scrolled to, up to
+/// `CEILING_BYTES`.
 const MOST_BYTES: usize = 48 << 20;
 /// Decodes running at once.
 const DECODING: usize = 4;
 /// Room past the list's own pictures, for those of another size or list.
 const ROOM_BYTES: usize = MOST_BYTES / 4;
+/// Bytes kept at most, however long the list: a list of 2,000 at 2x and text size 1 is kept
+/// whole (about 86 MB); past it, rows a jump of the scroll bar reaches are decoded as they show.
+const CEILING_BYTES: usize = 128 << 20;
 /// Pictures waiting to be decoded, the rows in view and three pages ahead of them; past it the
 /// oldest asked, scrolled by, are dropped.
 const WAITING: usize = 128;
@@ -50,7 +54,8 @@ pub struct Thumbs {
     /// jump of the scroll bar finds them; and which rows they were taken from.
     idle: Vec<Key>,
     idle_of: Option<(usize, Size)>,
-    /// Bytes kept: `MOST_BYTES`, or the list's pictures and `ROOM_BYTES` when more.
+    /// Bytes kept: `MOST_BYTES`, or the list's pictures and `ROOM_BYTES` when more, up to
+    /// `CEILING_BYTES`.
     most: usize,
 }
 
@@ -95,7 +100,8 @@ impl Thumbs {
         }
         self.idle_of = Some((id, size));
         self.idle = pictures.collect();
-        self.most = MOST_BYTES.max(self.idle.len() * tile_bytes(size) + ROOM_BYTES);
+        let whole = self.idle.len() * tile_bytes(size) + ROOM_BYTES;
+        self.most = whole.clamp(MOST_BYTES, CEILING_BYTES);
         true
     }
 
@@ -359,6 +365,26 @@ mod tests {
         }
         assert_eq!(thumbs.shown.len(), count);
         assert!(thumbs.bytes + ROOM_BYTES <= thumbs.most);
+    }
+
+    #[test]
+    fn a_list_too_long_to_keep_whole_keeps_no_more_than_the_ceiling() {
+        let mut thumbs = Thumbs::default();
+        let size = (512, 512);
+        let count = CEILING_BYTES / tile_bytes(size) * 2;
+        let keys = (0..count).rev().map(|at| (size, at.to_string()));
+        assert!(thumbs.take_list(1, size, keys));
+        while let Some(key) = thumbs.next_to_decode() {
+            thumbs.asked.remove(&key);
+            let made = picture(vec![0; tile_bytes(size)], size).unwrap();
+            thumbs.keep(key, Arc::new(made), None);
+        }
+        assert!(thumbs.bytes <= CEILING_BYTES);
+        assert!(
+            thumbs.shown.contains_key(&(size, "0".to_string())),
+            "the top first"
+        );
+        assert!(thumbs.gone.is_empty(), "nothing decoded only to be dropped");
     }
 
     #[test]
