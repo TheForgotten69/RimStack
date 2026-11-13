@@ -27,7 +27,6 @@ pub mod logs;
 mod mod_facts;
 mod notes;
 mod prefs;
-mod previews;
 mod records;
 pub mod saves;
 pub mod search;

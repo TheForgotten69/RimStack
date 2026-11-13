@@ -174,14 +174,7 @@ impl Mods {
             mods.filter_edited(&field, cx)
         })
         .detach();
-        let wanted: super::thumbs::Wanted = match demo {
-            true => std::sync::Arc::new(Vec::new),
-            false => {
-                let app = super::app(cx);
-                std::sync::Arc::new(move || app.mod_previews())
-            }
-        };
-        let thumbs = super::thumbs::shared("mods", wanted);
+        let thumbs = super::thumbs::Shared::default();
         let orders = Rc::new(order.orders());
         let lists = [Side::Active, Side::Inactive].map(|side| {
             let shown = list::Shown {
