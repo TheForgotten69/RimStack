@@ -297,6 +297,34 @@ pub fn appearance(app: &App, options: &Options) -> Appearance {
     appearance
 }
 
+/// The family texts are drawn in and its weights, and the monospace family, as fontconfig gives
+/// them: about 15 ms of programs run, so `run` asks while the platform starts.
+pub struct Fonts {
+    family: String,
+    weights: Vec<f32>,
+    mono: Option<String>,
+}
+
+impl Fonts {
+    fn probe(chosen: Option<String>) -> Self {
+        let family = chosen.unwrap_or_else(system_family);
+        let weights = weights_of(&family);
+        Self {
+            family,
+            weights,
+            mono: system_family_for("monospace"),
+        }
+    }
+}
+
+/// The font chosen in Settings, none for the system's.
+fn chosen_font(app: &App) -> Option<String> {
+    app.settings()
+        .get("font")
+        .map(str::to_string)
+        .filter(|f| !f.is_empty())
+}
+
 /// `theme` in `family`, the system's when none: its weights, and its ascent and descent read.
 fn in_family(theme: Theme, family: Option<&str>, cx: &Cx) -> Theme {
     let family = family.map_or_else(system_family, str::to_string);
@@ -311,7 +339,12 @@ fn in_family(theme: Theme, family: Option<&str>, cx: &Cx) -> Theme {
             .or_insert_with(|| weights_of(&family))
             .clone()
     });
-    let mut theme = Theme::new(theme.appearance.clone(), family).with_weights(&weights);
+    weighted(theme, family, &weights, cx)
+}
+
+/// `theme` in `family` with its `weights`, and its ascent and descent read.
+fn weighted(theme: Theme, family: String, weights: &[f32], cx: &Cx) -> Theme {
+    let mut theme = Theme::new(theme.appearance.clone(), family).with_weights(weights);
     let text = cx.text_system();
     let id = text.resolve_font(&font(theme.family.clone()));
     let at = theme::PROBE;
@@ -341,22 +374,29 @@ fn set_motion(theme: &Theme, cx: &mut Cx) {
 
 /// Sets what every view reads: the `App` and the Theme.
 pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
+    let fonts = Fonts::probe(chosen_font(&app));
+    install_with(app, options, fonts, cx);
+}
+
+/// As `install`, with the fonts already asked for.
+fn install_with(app: Arc<App>, options: &Options, fonts: Fonts, cx: &mut Cx) {
     #[cfg(test)]
     crate::jobs::run_on(cx.background_executor().clone());
     if let Err(problem) = app.carry_interface_scale() {
         rimstack_core::problem!("{problem}");
     }
-    let chosen = app
-        .settings()
-        .get("font")
-        .map(str::to_string)
-        .filter(|f| !f.is_empty());
-    let mut theme = in_family(
+    let Fonts {
+        family,
+        weights,
+        mono,
+    } = fonts;
+    let mut theme = weighted(
         Theme::new(appearance(&app, options), ""),
-        chosen.as_deref(),
+        family,
+        &weights,
         cx,
     );
-    if let Some(mono) = system_family_for("monospace") {
+    if let Some(mono) = mono {
         theme.mono = mono.into();
     }
     if options.still {
@@ -434,11 +474,15 @@ pub(crate) fn keep_window(window: &gpui::Window, cx: &Cx) {
 }
 
 pub fn run(app: Arc<App>, options: Options) {
+    let chosen = chosen_font(&app);
+    let fonts = crate::jobs::off_thread("fonts", move || Fonts::probe(chosen));
     gpui_platform::application()
         .with_assets(assets::Assets)
         .run(move |cx: &mut Cx| {
             let started = window_start(&app, cx);
-            install(app, &options, cx);
+            let fonts = futures::executor::block_on(fonts)
+                .unwrap_or_else(|_| Fonts::probe(chosen_font(&app)));
+            install_with(app, &options, fonts, cx);
             let least = {
                 let theme = cx.global::<theme::Theme>();
                 size(theme.sized(1000.), theme.sized(560.))
