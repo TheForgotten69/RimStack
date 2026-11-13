@@ -615,15 +615,57 @@ fn a_control_pointed_at_and_an_edit_draw_the_bars_again() {
     );
 }
 
-#[test]
-fn the_pictures_of_the_next_page_are_decoded_before_it_is_scrolled_to() {
-    let (_tmp, mut cx, mods) = opened_with(|root| {
+/// The made-up install with a preview for every mod.
+fn with_previews() -> (
+    tempfile::TempDir,
+    gpui::HeadlessAppContext,
+    gpui::Entity<super::Mods>,
+) {
+    opened_with(|root| {
         let preview = root.join("fx/game/Data/Core/About/Preview.png");
         for entry in std::fs::read_dir(root.join("fx/game/Mods")).unwrap() {
             let about = entry.unwrap().path().join("About");
             std::fs::copy(&preview, about.join("Preview.png")).unwrap();
         }
+    })
+}
+
+#[test]
+fn a_jump_of_the_scroll_bar_finds_the_pictures_decoded_while_idle() {
+    let (_tmp, mut cx, mods) = with_previews();
+    let window = cx.update(|cx| cx.windows()[0]);
+    let draw = |cx: &mut gpui::HeadlessAppContext| {
+        cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+    };
+    for _ in 0..5 {
+        cx.run_until_parked();
+        draw(&mut cx);
+    }
+    let thumbs = cx.update(|cx| mods.read(cx).thumbs.clone());
+    let list = cx.update(|cx| mods.read(cx).list(Side::Active).clone());
+    cx.update(|cx| {
+        list.update(cx, |list, cx| {
+            let most = list.scroll().borrow().most();
+            list.scroll().borrow_mut().set_top(most);
+            cx.notify();
+        })
     });
+    draw(&mut cx);
+    assert!(
+        thumbs.borrow().decoded() > 40,
+        "the list's pictures were not decoded"
+    );
+    assert_eq!(
+        thumbs.borrow().awaited_in_view(),
+        0,
+        "the end of the list drew without its pictures"
+    );
+}
+
+#[test]
+fn the_pictures_of_the_next_page_are_decoded_before_it_is_scrolled_to() {
+    let (_tmp, mut cx, mods) = with_previews();
     let window = cx.update(|cx| cx.windows()[0]);
     let draw = |cx: &mut gpui::HeadlessAppContext| {
         cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))

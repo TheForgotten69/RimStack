@@ -421,6 +421,7 @@ impl Render for ModList {
                     .collect();
                 if tiles {
                     rows::ahead(window, theme, &shown.rows, &range, &thumbs, cx);
+                    rows::while_idle(window, theme, &shown.rows, &thumbs, cx);
                 }
                 drawn
             },

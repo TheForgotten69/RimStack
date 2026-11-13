@@ -12,6 +12,8 @@ use std::sync::Arc;
 const MOST_BYTES: usize = 48 << 20;
 /// Decodes running at once.
 const DECODING: usize = 4;
+/// Bytes the pictures decoded while idle may fill, leaving the rest for those scrolled to.
+const IDLE_BYTES: usize = MOST_BYTES / 4 * 3;
 /// Pictures waiting to be decoded, the rows in view and three pages ahead of them; past it the
 /// oldest asked, scrolled by, are dropped.
 const WAITING: usize = 128;
@@ -34,6 +36,10 @@ pub struct Thumbs {
     /// Asked and not decoded yet, with the view to draw again once it is, if one shows it.
     asked: HashMap<Key, Option<EntityId>>,
     decoding: usize,
+    /// The whole list's pictures, decoded from the end while nothing else waits, so that a
+    /// jump of the scroll bar finds them; and which rows they were taken from.
+    idle: Vec<Key>,
+    idle_of: Option<(usize, Size)>,
 }
 
 pub type Shared = Rc<RefCell<Thumbs>>;
@@ -45,6 +51,25 @@ impl Thumbs {
         self.by_use.clear();
         self.bytes = 0;
         self.unreadable.clear();
+        self.idle_of = None;
+    }
+
+    /// The next picture to decode: one asked, else one of the list's while there is room.
+    fn next_to_decode(&mut self) -> Option<Key> {
+        if let Some(key) = self.waiting.pop() {
+            return Some(key);
+        }
+        while self.bytes < IDLE_BYTES {
+            let key = self.idle.pop()?;
+            if !self.shown.contains_key(&key)
+                && !self.unreadable.contains(&key)
+                && !self.asked.contains_key(&key)
+            {
+                self.asked.insert(key.clone(), None);
+                return Some(key);
+            }
+        }
+        None
     }
 
     fn used(&mut self) -> u64 {
@@ -165,12 +190,37 @@ pub fn ahead(thumbs: &Shared, path: &str, size: Size, cx: &mut Cx) {
     }
 }
 
+/// Every picture of `rows`, the rows' `id` (the same until they change), decoded while the
+/// window has nothing else to decode.
+pub fn while_idle<'a>(
+    thumbs: &Shared,
+    id: usize,
+    pictures: impl DoubleEndedIterator<Item = &'a str>,
+    size: Size,
+    cx: &mut Cx,
+) {
+    {
+        let mut held = thumbs.borrow_mut();
+        if held.idle_of == Some((id, size)) {
+            return;
+        }
+        held.idle_of = Some((id, size));
+        held.idle = pictures
+            .rev()
+            .map(|path| (size, path.to_string()))
+            .collect();
+    }
+    for _ in 0..DECODING {
+        decode_next(thumbs, cx);
+    }
+}
+
 fn decode_next(thumbs: &Shared, cx: &mut Cx) {
     let mut held = thumbs.borrow_mut();
     if held.decoding >= DECODING {
         return;
     }
-    let Some(key) = held.waiting.pop() else {
+    let Some(key) = held.next_to_decode() else {
         return;
     };
     held.decoding += 1;

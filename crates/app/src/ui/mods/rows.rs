@@ -254,6 +254,22 @@ pub fn ahead(
     }
 }
 
+/// Every preview of `rows`, decoded while the window is idle, so a jump finds them ready.
+pub fn while_idle(
+    window: &Window,
+    theme: &Theme,
+    rows: &std::rc::Rc<Vec<RowView>>,
+    thumbs: &thumbs::Shared,
+    cx: &mut gpui::App,
+) {
+    let pictures = rows
+        .iter()
+        .filter(|row| !row.is_header && !row.picture.is_empty())
+        .map(|row| row.picture.as_str());
+    let id = std::rc::Rc::as_ptr(rows) as usize;
+    thumbs::while_idle(thumbs, id, pictures, tile_size(window, theme), cx);
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn row(
     window: &Window,
