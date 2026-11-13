@@ -65,6 +65,7 @@ pub struct ChosenReads {
     pub files: Option<(ModId, Rc<chosen::FilesRead>)>,
     /// A Git checkout's last commits, for its Latest changes.
     pub commits: Option<(ModId, Rc<Vec<rimstack_core::sources::changes::Note>>)>,
+    pub repository: Option<(ModId, String)>,
     pub commits_read: Lane,
     /// The other mod of a rule of your own being chosen.
     pub picking: Option<notes::Picking>,

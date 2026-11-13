@@ -119,7 +119,6 @@ fn drawn_with(
         };
         cx.update(|cx| install(Arc::new(app), &options, cx));
         let shape = cx.update(|cx| window(cx.global::<Theme>()));
-        watch::start();
         let opened = cx
             .open_window(shape, |window, cx| {
                 cx.new(|cx| {
@@ -136,8 +135,13 @@ fn drawn_with(
                 })
             })
             .unwrap();
-        cx.update_window(opened.into(), |_, window, cx| window.draw(cx).clear(cx))
-            .unwrap();
+        cx.run_until_parked();
+        watch::start();
+        cx.update_window(opened.into(), |_, window, cx| {
+            window.refresh();
+            window.draw(cx).clear(cx)
+        })
+        .unwrap();
         watch::take()
     }
 }
@@ -147,13 +151,13 @@ fn every_part_of_settings_fits_at_every_text_size() {
     for part in 0..5 {
         check_scene(
             &format!("Settings part {part}, first window"),
-            30,
+            15,
             &|_| size(crate::ui::WINDOW.0, crate::ui::WINDOW.1),
             drawn(part),
         );
         check_scene(
             &format!("Settings part {part}, smallest window"),
-            30,
+            15,
             &|theme| size(theme.sized(1000.), theme.sized(560.)),
             drawn(part),
         );

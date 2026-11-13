@@ -194,6 +194,11 @@ impl Subject {
     }
 
     fn held(about: Details) -> Self {
+        let repository = match about.git {
+            true => rimstack_core::sources::git::page(std::path::Path::new(&about.path))
+                .unwrap_or_default(),
+            false => String::new(),
+        };
         Subject {
             name: about.name,
             path: about.path,
@@ -202,7 +207,7 @@ impl Subject {
             workshop: about.workshop,
             workshop_page: about.workshop_page.unwrap_or_default(),
             steam_page: about.steam_page.unwrap_or_default(),
-            repository: about.repository,
+            repository,
             group_choices: Some(about.group_choices),
             sub: about.sub,
             version_ok: about.version_ok,

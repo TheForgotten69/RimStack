@@ -103,6 +103,8 @@ pub struct Details {
     pub official: bool,
     pub contains: Sentence,
     pub path: String,
+    /// A Git checkout: its repository's page is read off the window's thread, with its commits.
+    pub git: bool,
     pub repository: String,
     pub folder: String,
     pub preview: Option<String>,
@@ -255,7 +257,7 @@ impl LoadOrder {
             source: m.source_label(),
             contains: m.contains(),
             path: m.path.to_string_lossy().into_owned(),
-            repository: rimstack_core::sources::git::page(&m.path).unwrap_or_default(),
+            git: m.git,
             folder: m.folder.clone(),
             preview: m.preview.as_ref().map(|p| p.to_string_lossy().into_owned()),
             tags: note.tags.join(", "),

@@ -119,7 +119,7 @@ impl Shell {
         shell.go(section, cx);
         shell.shown_turn = 0;
         shell.tell_hunting(cx);
-        let unset = !demo && !options.still && !super::app(cx).settings_report().setup_done;
+        let unset = !demo && !options.still && super::app(cx).settings().get("setupDone").is_none();
         if options.first || unset {
             shell.start_first_run(options.step, cx);
         }
@@ -378,7 +378,10 @@ fn check_release(cx: &mut Context<Shell>) {
     use rimstack_core::say;
     const SETTLED: std::time::Duration = std::time::Duration::from_secs(4);
     let app = super::app(cx);
-    if !app.settings_report().self_check {
+    let self_check = app
+        .settings()
+        .switch(rimstack_core::kept::settings::Switch::SelfCheck);
+    if !self_check {
         return;
     }
     cx.spawn(async move |shell, cx| {
@@ -393,7 +396,7 @@ fn check_release(cx: &mut Context<Shell>) {
                     if let crate::reports::ReleaseSaid::Newer { version, page } = found {
                         shell.release = Some((version.clone(), page.clone()));
                         cx.notify();
-                        let running = super::app(cx).settings_report().version;
+                        let running = crate::workspace::build_label();
                         notices::offer(
                             put(&say!(
                                 "RimStack {} is published; this is {}",

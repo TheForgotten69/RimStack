@@ -601,7 +601,7 @@ const COMMIT: &str = match option_env!("RIMSTACK_COMMIT") {
     None => "",
 };
 
-fn build_label() -> String {
+pub fn build_label() -> String {
     match COMMIT {
         "" => env!("CARGO_PKG_VERSION").to_string(),
         commit => format!("{} ({commit})", env!("CARGO_PKG_VERSION")),

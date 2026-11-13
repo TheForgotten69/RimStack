@@ -12,6 +12,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock, RwLockReadGuard};
 use std::time::{Duration, Instant};
 
+use rimstack_core::base::waits::slow;
+
 pub mod browse;
 pub mod changed;
 pub mod download_list;
@@ -38,7 +40,9 @@ pub mod upkeep;
 mod window;
 pub use key::KeyState;
 pub use prefs::ModsView;
-pub use settings::{font_choices, fonts_matching, judge_folder, newest_release, short_contrast};
+pub use settings::{
+    build_label, font_choices, fonts_matching, judge_folder, newest_release, short_contrast,
+};
 
 pub static STARTED: OnceLock<Instant> = OnceLock::new();
 
@@ -369,6 +373,11 @@ impl App {
         self.install().library()
     }
 
+    /// The mods as read, `None` while the first reading runs, never waiting on it.
+    pub fn library_if_read(&self) -> Option<Arc<Loaded>> {
+        self.install.now()?.library_if_read()
+    }
+
     pub fn texture_count(&self, mod_root: &Path) -> usize {
         self.install().texture_count(mod_root)
     }
@@ -505,6 +514,7 @@ impl App {
     pub fn community(&self) -> Arc<Option<community::Community>> {
         let file = community::file_in(&self.data_dir);
         self.community.get(written(file.clone()), || {
+            slow("the community rules");
             community::read(&file).unwrap_or_else(|problem| {
                 rimstack_core::problem!("{problem}");
                 None
@@ -520,8 +530,10 @@ impl App {
     /// Empty if never downloaded.
     pub fn works_on(&self) -> Arc<HashSet<String>> {
         let file = self.works_on_file();
-        self.works_on
-            .get(written(file.clone()), || community::read_works_on(&file))
+        self.works_on.get(written(file.clone()), || {
+            slow("the mods known to work");
+            community::read_works_on(&file)
+        })
     }
 
     pub fn replacements(&self) -> Arc<Replacements> {
@@ -532,6 +544,7 @@ impl App {
             .join("dbs/UseThisInstead/replacements.json.gz");
         let file = if own.is_file() { own } else { rimsort };
         self.replacements.get(written(file.clone()), || {
+            slow("the replacements");
             rimstack_core::sources::replacements::read(&file)
         })
     }
@@ -539,6 +552,7 @@ impl App {
     pub fn workshop_names(&self) -> Arc<rimstack_core::rimworld::workshopdb::Names> {
         let file = rimstack_core::rimworld::workshopdb::file_in(&self.data_dir);
         self.workshop_names.get(written(file.clone()), || {
+            slow("the Workshop names");
             rimstack_core::rimworld::workshopdb::read(&file)
         })
     }
@@ -547,6 +561,7 @@ impl App {
     pub fn texture_manifest(&self) -> Arc<rimstack_core::mods::textures::Manifest> {
         let file = self.texture_manifest_file();
         self.texture_manifest.get(written(file.clone()), || {
+            slow("the textures made");
             rimstack_core::mods::textures::Manifest::read(&file)
         })
     }

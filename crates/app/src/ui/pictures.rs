@@ -103,7 +103,7 @@ fn let_go(paths: impl Iterator<Item = PathBuf>, cx: &mut Cx) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gpui::{IntoElement, ParentElement, Render, Styled, Window, div, img};
+    use gpui::{IntoElement, ParentElement, Render, Styled, Window, div};
     use std::path::PathBuf;
     use std::sync::Arc;
 

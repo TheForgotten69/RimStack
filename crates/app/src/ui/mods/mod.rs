@@ -501,7 +501,8 @@ impl Mods {
         if self.details.is_some() {
             self.describe(cx);
         }
-        self.overview = (!self.demo).then(|| Rc::new(self.order.overview(&app)));
+        self.overview =
+            (!self.demo && self.order.is_installed()).then(|| Rc::new(self.order.overview(&app)));
         self.reads.fresh = if self.demo {
             0
         } else {
@@ -562,9 +563,15 @@ impl Mods {
             _ => None,
         };
         let marks_before = self.details.as_ref().map(|d| d.conflict_marks.clone());
-        self.details = alone
-            .filter(|_| self.order.is_installed())
-            .map(|id| Rc::new(self.order.details(&app, id)));
+        self.details = alone.filter(|_| self.order.is_installed()).map(|id| {
+            let mut details = self.order.details(&app, id);
+            if let Some((of, page)) = &self.chosen_reads.repository
+                && *of == id
+            {
+                details.repository = page.clone();
+            }
+            Rc::new(details)
+        });
         if self.details.as_ref().map(|d| d.conflict_marks.clone()) != marks_before {
             self.sync_lists(cx);
         }

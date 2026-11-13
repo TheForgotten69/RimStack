@@ -389,6 +389,7 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
 fn install_with(app: Arc<App>, options: &Options, fonts: Fonts, cx: &mut Cx) {
     #[cfg(test)]
     crate::jobs::run_on(cx.background_executor().clone());
+    crate::jobs::keep_window_thread();
     if let Err(problem) = app.carry_interface_scale() {
         rimstack_core::problem!("{problem}");
     }

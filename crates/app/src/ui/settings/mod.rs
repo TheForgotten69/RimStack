@@ -221,10 +221,9 @@ impl Settings {
             }
             cx.notify();
         };
-        match (report || databases || languages, self.demo) {
-            (false, _) => self.unread = Changes::NONE,
-            (true, true) => show(self, read(), cx),
-            (true, false) => self.reading.run("settings read", cx, move |_| read(), show),
+        match report || databases || languages {
+            false => self.unread = Changes::NONE,
+            true => self.reading.run("settings read", cx, move |_| read(), show),
         }
         if changes.contains(Changes::THEME) {
             self.prefs = super::app(cx).prefs();

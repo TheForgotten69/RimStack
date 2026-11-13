@@ -156,6 +156,7 @@ impl LoadOrder {
                 return order;
             }
         };
+        app.seen();
         let mut order = Self::empty();
         order.reading = Some(loaded.clone());
         order.headings = headings;
@@ -189,9 +190,13 @@ impl LoadOrder {
         self.reading.is_some()
     }
 
-    /// The order's own reading; a made-up list has none and is given the current one.
+    /// The order's own reading; a made-up list has none and is given the current one, or none
+    /// while the mods are first read: the window never waits on that.
     fn reading(&self, app: &App) -> std::sync::Arc<crate::workspace::Loaded> {
-        self.reading.clone().unwrap_or_else(|| app.library())
+        self.reading
+            .clone()
+            .or_else(|| app.library_if_read())
+            .unwrap_or_else(|| std::sync::Arc::new(Ok(Default::default())))
     }
 
     pub fn list(&self, side: Side) -> &GroupedList {
@@ -523,6 +528,9 @@ impl LoadOrder {
         let Ok((library, _)) = &*loaded else {
             return Vec::new();
         };
+        if !self.list(side).mods().iter().any(|m| m.installed.is_some()) {
+            return Vec::new();
+        }
         let seen = app.seen().reading();
         let mods = self.list(side).mods().iter();
         mods.filter_map(|m| m.installed)

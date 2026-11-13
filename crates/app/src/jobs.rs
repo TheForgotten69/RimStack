@@ -23,6 +23,39 @@ pub fn run_on(executor: gpui::BackgroundExecutor) {
     TESTED.with(|tested| *tested.borrow_mut() = Some(executor));
 }
 
+thread_local! {
+    static WINDOW: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Jobs running on this thread now, as a test's executor runs them on the window's.
+    static IN_JOB: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static NOTED: std::cell::RefCell<std::collections::HashSet<String>> = Default::default();
+}
+
+/// This thread draws the window: a long wait on it outside a job fails a test, and is noted in
+/// the diagnostics once for each kind otherwise.
+pub fn keep_window_thread() {
+    WINDOW.set(true);
+    rimstack_core::base::waits::watch(waited);
+}
+
+fn waited(what: &str) {
+    if !WINDOW.get() || IN_JOB.get() > 0 {
+        return;
+    }
+    #[cfg(test)]
+    panic!("the window's thread waited on {what}: read it in a job");
+    #[cfg(not(test))]
+    if NOTED.with_borrow_mut(|noted| noted.insert(what.to_string())) {
+        rimstack_core::problem!("the window waited on {what}");
+    }
+}
+
+#[cfg(test)]
+fn as_job(work: impl FnOnce()) {
+    IN_JOB.set(IN_JOB.get() + 1);
+    work();
+    IN_JOB.set(IN_JOB.get() - 1);
+}
+
 /// Threads running jobs at most; a job asked beyond it waits for one of them, and the asker
 /// never waits.
 const MOST_THREADS: usize = 32;
@@ -36,7 +69,7 @@ static RUNNING: Mutex<(usize, std::collections::VecDeque<(String, Job)>)> =
 pub fn spawn(name: &str, work: impl FnOnce() + Send + 'static) {
     #[cfg(test)]
     if let Some(executor) = TESTED.with(|tested| tested.borrow().clone()) {
-        executor.spawn(async move { work() }).detach();
+        executor.spawn(async move { as_job(work) }).detach();
         return;
     }
     let mut running = RUNNING.held();
@@ -241,6 +274,16 @@ impl<T: Send + 'static> Single<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_long_wait_on_the_windows_thread_fails_outside_a_job_alone() {
+        keep_window_thread();
+        as_job(|| rimstack_core::base::waits::slow("inside a job"));
+        let outside = std::panic::catch_unwind(|| rimstack_core::base::waits::slow("outside"));
+        assert!(outside.is_err());
+        let elsewhere = std::thread::spawn(|| rimstack_core::base::waits::slow("another thread"));
+        assert!(elsewhere.join().is_ok());
+    }
 
     #[test]
     fn jobs_past_the_most_threads_wait_for_one_and_all_run() {

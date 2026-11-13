@@ -230,10 +230,7 @@ impl Mods {
 
     /// A Git checkout's last commits, for the Latest changes card.
     fn read_commits(&mut self, id: ModId, cx: &mut Context<Self>) {
-        let git = self
-            .details
-            .as_ref()
-            .is_some_and(|d| !d.workshop && !d.repository.is_empty());
+        let git = self.details.as_ref().is_some_and(|d| !d.workshop && d.git);
         if !git
             || self
                 .chosen_reads
@@ -247,10 +244,11 @@ impl Mods {
         self.chosen_reads.commits_read.run(
             "commits of a mod",
             cx,
-            move |_| app.commits_of(id),
-            move |mods, commits, cx| {
+            move |_| (app.commits_of(id), app.repository_of(id)),
+            move |mods, (commits, page), cx| {
                 mods.chosen_reads.commits = Some((id, std::rc::Rc::new(commits)));
-                mods.sync_details(cx);
+                mods.chosen_reads.repository = Some((id, page));
+                mods.describe(cx);
             },
         );
     }

@@ -39,6 +39,7 @@ pub struct FirstRun {
     with_rimsort: bool,
     /// The load order as it was read: its active and inactive mods, or why it was not.
     mods: (usize, usize, String),
+    reading: crate::jobs::Lane,
     /// The official mods' previews in the glance at the list, let go with the first run.
     pictures: super::pictures::Pictures,
 }
@@ -56,6 +57,7 @@ impl FirstRun {
             languages: Rc::default(),
             with_rimsort: true,
             mods: (0, 0, String::new()),
+            reading: Default::default(),
             pictures: Default::default(),
         };
         first.read(cx);
@@ -65,10 +67,17 @@ impl FirstRun {
 
     fn read(&mut self, cx: &mut Context<Self>) {
         let app = super::app(cx);
-        self.report = Rc::new(app.settings_report());
-        self.databases = Rc::new(app.databases());
-        self.languages = Rc::new(app.languages());
-        cx.notify();
+        self.reading.run(
+            "first run read",
+            cx,
+            move |_| (app.settings_report(), app.databases(), app.languages()),
+            |first, (report, databases, languages), cx| {
+                first.report = Rc::new(report);
+                first.databases = Rc::new(databases);
+                first.languages = Rc::new(languages);
+                cx.notify();
+            },
+        );
     }
 
     /// What the Mods tab read, for the first step.

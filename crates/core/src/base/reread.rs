@@ -26,12 +26,18 @@ impl<T> Reread<T> {
         if let Some(known) = known {
             return known;
         }
+        crate::base::waits::slow(std::any::type_name::<T>());
         let _alone = self.reading.held();
         if let Some(known) = self.now.reading().clone() {
             return known;
         }
         let fresh = Arc::new(read());
         self.now.writing().get_or_insert(fresh).clone()
+    }
+
+    /// What was read, if anything has been, never waiting on a reading.
+    pub fn now(&self) -> Option<Arc<T>> {
+        self.now.reading().clone()
     }
 
     pub fn put(&self, fresh: T) {

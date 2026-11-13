@@ -181,10 +181,6 @@ impl Downloads {
     /// SteamCMD, as the Qt demo did not ask for them.
     fn read(&mut self, cx: &mut Context<Self>) {
         let app = super::app(cx);
-        if self.demo {
-            self.report = Rc::new(app.settings_report());
-            return;
-        }
         self.reading.run(
             "downloads read",
             cx,

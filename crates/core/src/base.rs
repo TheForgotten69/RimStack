@@ -19,6 +19,7 @@ pub mod thumbnail;
 pub mod translate;
 pub mod vdf;
 pub mod versions;
+pub mod waits;
 pub mod walk;
 pub mod watch;
 pub(crate) mod web;
