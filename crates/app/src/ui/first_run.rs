@@ -51,26 +51,13 @@ impl FirstRun {
             mods: (0, 0, String::new()),
         };
         first.read(cx);
-        let (tell, mut told) = futures::channel::mpsc::unbounded();
-        super::app(cx).listen(move |changes| {
-            let _ = tell.unbounded_send(changes);
-        });
-        cx.spawn(async move |first, cx| {
-            use futures::StreamExt;
-            while let Some(changes) = told.next().await {
-                let read =
-                    Changes::SETTINGS | Changes::COMMUNITY | Changes::LANGUAGE | Changes::FOLDERS;
-                let going = first.update(cx, |first, cx| {
-                    if changes.contains(read) {
-                        first.read(cx);
-                    }
-                });
-                if going.is_err() {
-                    return;
-                }
+        super::hear(cx, |first: &mut Self, changes, cx| {
+            let read =
+                Changes::SETTINGS | Changes::COMMUNITY | Changes::LANGUAGE | Changes::FOLDERS;
+            if changes.contains(read) {
+                first.read(cx);
             }
-        })
-        .detach();
+        });
         first
     }
 

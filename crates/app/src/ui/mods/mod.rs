@@ -96,6 +96,7 @@ pub struct Mods {
     demo: bool,
     loading: Lane,
     counting: Lane,
+    files_reading: crate::jobs::Single<Vec<ModId>>,
     files_read: bool,
     sort_pending: usize,
     inactive_width: Pixels,
@@ -253,6 +254,7 @@ impl Mods {
             demo,
             loading: Lane::default(),
             counting: Lane::default(),
+            files_reading: Default::default(),
             files_read: false,
             sort_pending: 0,
             inactive_width,
@@ -311,19 +313,7 @@ impl Mods {
 
     /// The `App`'s news, handed to the window's thread as it comes.
     fn hear(&self, cx: &mut Context<Self>) {
-        let (tell, mut told) = futures::channel::mpsc::unbounded();
-        super::app(cx).listen(move |changes| {
-            let _ = tell.unbounded_send(changes);
-        });
-        cx.spawn(async move |mods, cx| {
-            use futures::StreamExt;
-            while let Some(changes) = told.next().await {
-                if mods.update(cx, |mods, cx| mods.heard(changes, cx)).is_err() {
-                    return;
-                }
-            }
-        })
-        .detach();
+        super::hear(cx, Self::heard);
     }
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
@@ -376,7 +366,11 @@ impl Mods {
             return;
         };
         self.files_read = false;
-        crate::jobs::spawn("active files", move || app.read_active_files(members));
+        app.outdate_files_read();
+        self.files_reading
+            .ask("active files", members, move |members| {
+                app.read_active_files(members)
+            });
     }
 
     /// How many mods Sort would move, counted off the window's thread once the list is quiet.
@@ -388,15 +382,14 @@ impl Mods {
             return;
         };
         let app = super::app(cx);
-        self.counting.run(
+        self.counting.run_after(
+            QUIET,
             "sort count",
             cx,
-            move |turn| turn.after(QUIET).then(|| count.moves(&app)),
+            move |_| count.moves(&app),
             |mods, moves, cx| {
-                if let Some(moves) = moves {
-                    mods.sort_pending = moves;
-                    cx.notify();
-                }
+                mods.sort_pending = moves;
+                cx.notify();
             },
         );
     }

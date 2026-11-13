@@ -106,6 +106,11 @@ impl App {
         self.facts_runs().fetch_add(1, Ordering::SeqCst) + 1
     }
 
+    /// The files read under way, if any, stops at its next batch: a newer reading was asked for.
+    pub fn outdate_files_read(&self) {
+        self.begin_facts_run();
+    }
+
     fn facts_run_current(&self, run: u64) -> bool {
         self.facts_runs().load(Ordering::SeqCst) == run
     }

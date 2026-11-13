@@ -204,19 +204,7 @@ impl Find {
     }
 
     fn hear(&self, cx: &mut Context<Self>) {
-        let (tell, mut told) = futures::channel::mpsc::unbounded();
-        super::app(cx).listen(move |changes| {
-            let _ = tell.unbounded_send(changes);
-        });
-        cx.spawn(async move |find, cx| {
-            use futures::StreamExt;
-            while let Some(changes) = told.next().await {
-                if find.update(cx, |find, cx| find.heard(changes, cx)).is_err() {
-                    return;
-                }
-            }
-        })
-        .detach();
+        super::hear(cx, Self::heard);
     }
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
@@ -334,12 +322,8 @@ impl Find {
         }
         self.request.types = typed;
         self.show_options(cx);
-        self.retyped.run(
-            "find types",
-            cx,
-            |turn| turn.after(TYPES_PAUSE),
-            |find, _, cx| find.rerun(cx),
-        );
+        self.retyped
+            .after(TYPES_PAUSE, cx, |find, cx| find.rerun(cx));
     }
 
     fn rerun(&mut self, cx: &mut Context<Self>) {

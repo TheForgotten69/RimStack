@@ -568,17 +568,12 @@ impl Shell {
     }
 }
 
-/// The game's logs copied among the kept ones at the start and each time they change, as Qt's
-/// `LogsData` did from the window's start.
+/// The game's logs copied among the kept ones at the start and each time they change.
 fn keep_logs(cx: &mut Context<Shell>) {
-    let app = super::app(cx);
-    let keeping = app.clone();
-    crate::jobs::spawn("keep logs", move || keeping.keep_logs());
-    let kept = app.clone();
-    app.listen(move |changes| {
+    super::app(cx).keep_logs_soon();
+    super::hear(cx, |_: &mut Shell, changes, cx| {
         if changes.contains(crate::changes::Changes::LOGS) {
-            let kept = kept.clone();
-            crate::jobs::spawn("keep logs", move || kept.keep_logs());
+            super::app(cx).keep_logs_soon();
         }
     });
 }

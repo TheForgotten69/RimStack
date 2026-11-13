@@ -73,21 +73,15 @@ impl Game {
                 }
             },
         );
-        let (tell, mut told) = futures::channel::mpsc::unbounded::<(bool, Stamps)>();
-        crate::jobs::spawn("watch", move || {
-            loop {
-                std::thread::sleep(every);
-                if tell
-                    .unbounded_send((app.game_running(), app.stamps()))
-                    .is_err()
-                {
-                    break;
-                }
-            }
-        });
         cx.spawn(async move |game, cx| {
-            use futures::StreamExt;
-            while let Some((running, stamps)) = told.next().await {
+            loop {
+                cx.background_executor().timer(every).await;
+                let app = app.clone();
+                let looked =
+                    crate::jobs::off_thread("watch", move || (app.game_running(), app.stamps()));
+                let Ok((running, stamps)) = looked.await else {
+                    return;
+                };
                 if game
                     .update(cx, |game, cx| game.looked(running, stamps, cx))
                     .is_err()

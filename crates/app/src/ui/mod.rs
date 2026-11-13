@@ -210,6 +210,30 @@ pub fn change_notes(id: &str) -> String {
     format!("https://steamcommunity.com/sharedfiles/filedetails/changelog/{id}")
 }
 
+/// The `App`'s news, handed to the window's thread: what came meanwhile is told at once.
+pub fn hear<V: 'static>(
+    cx: &mut gpui::Context<V>,
+    heard: impl Fn(&mut V, crate::changes::Changes, &mut gpui::Context<V>) + 'static,
+) {
+    let (tell, mut told) = futures::channel::mpsc::unbounded();
+    app(cx).listen_while(move |changes| tell.unbounded_send(changes).is_ok());
+    cx.spawn(async move |view, cx| {
+        use futures::StreamExt;
+        while let Some(mut changes) = told.next().await {
+            while let Ok(more) = told.try_recv() {
+                changes |= more;
+            }
+            if view
+                .update(cx, |view, cx| heard(view, changes, cx))
+                .is_err()
+            {
+                return;
+            }
+        }
+    })
+    .detach();
+}
+
 /// `f` on the view, as a control's callback that is given a value.
 pub fn act<V: 'static, T: 'static>(
     cx: &gpui::Context<V>,
@@ -304,6 +328,8 @@ fn set_motion(theme: &Theme, cx: &mut Cx) {
 
 /// Sets what every view reads: the `App` and the Theme.
 pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
+    #[cfg(test)]
+    crate::jobs::run_on(cx.background_executor().clone());
     if let Err(problem) = app.carry_interface_scale() {
         rimstack_core::problem!("{problem}");
     }

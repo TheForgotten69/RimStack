@@ -290,6 +290,13 @@ impl App {
         self.settings().logs_kept().unwrap_or(10)
     }
 
+    /// `keep_logs` off the caller's thread, one copy at a time.
+    pub fn keep_logs_soon(self: &std::sync::Arc<Self>) {
+        let app = self.clone();
+        self.log_keeping
+            .ask("keep logs", (), move |()| app.keep_logs());
+    }
+
     pub fn keep_logs(&self) {
         let paths = self.paths();
         let Some(config) = paths.config.as_ref() else {

@@ -77,24 +77,11 @@ impl Lists {
     }
 
     fn hear(&self, cx: &mut Context<Self>) {
-        let (tell, mut told) = futures::channel::mpsc::unbounded();
-        super::app(cx).listen(move |changes| {
-            let _ = tell.unbounded_send(changes);
-        });
-        cx.spawn(async move |lists, cx| {
-            use futures::StreamExt;
-            while let Some(changes) = told.next().await {
-                let going = lists.update(cx, |lists, cx| {
-                    if changes.contains(Changes::LISTS | Changes::LANGUAGE) {
-                        lists.read(cx);
-                    }
-                });
-                if going.is_err() {
-                    return;
-                }
+        super::hear(cx, |lists: &mut Self, changes, cx| {
+            if changes.contains(Changes::LISTS | Changes::LANGUAGE) {
+                lists.read(cx);
             }
-        })
-        .detach();
+        });
     }
 
     fn read(&mut self, cx: &mut Context<Self>) {

@@ -118,6 +118,8 @@ pub struct App {
     git: OnceLock<Option<String>>,
     log_read: Mutex<Option<rimstack_core::kept::launches::LogRead>>,
     find: find::Find,
+    rescans: crate::jobs::Single<()>,
+    log_keeping: crate::jobs::Single<()>,
     bus: crate::changes::Bus,
 }
 
@@ -197,6 +199,8 @@ impl App {
             git: OnceLock::new(),
             log_read: Mutex::new(None),
             find: find::Find::default(),
+            rescans: crate::jobs::Single::default(),
+            log_keeping: crate::jobs::Single::default(),
             bus: crate::changes::Bus::default(),
         }
     }
@@ -207,6 +211,13 @@ impl App {
 
     pub fn listen(&self, listener: impl Fn(crate::changes::Changes) + Send + Sync + 'static) {
         self.bus.listen(listener);
+    }
+
+    pub fn listen_while(
+        &self,
+        listener: impl Fn(crate::changes::Changes) -> bool + Send + Sync + 'static,
+    ) {
+        self.bus.listen_while(listener);
     }
 
     /// `$XDG_DATA_HOME/RimStack` on Linux; the system's place elsewhere.
@@ -360,6 +371,12 @@ impl App {
     }
 
     /// Whoever still shows the earlier reading holds it until done.
+    /// `rescan` off the caller's thread; asked again while one runs, it reads once more after.
+    pub fn rescan_soon(self: &Arc<Self>) {
+        let app = self.clone();
+        self.rescans.ask("rescan", (), move |()| app.rescan());
+    }
+
     pub fn rescan(&self) {
         let fresh = install::Install::of(self.paths()).read_all();
         self.install.put(fresh);

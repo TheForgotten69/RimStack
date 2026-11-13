@@ -410,7 +410,7 @@ impl Mods {
                         let binned = app.bin_mod(id);
                         mods.upkeep_problem = crate::words::why_not(&binned);
                         if binned.is_ok() {
-                            crate::jobs::spawn("rescan", move || app.rescan());
+                            app.rescan_soon();
                         }
                         cx.notify();
                     });

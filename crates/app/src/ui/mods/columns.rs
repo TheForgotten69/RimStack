@@ -282,19 +282,11 @@ impl Mods {
         if self.demo {
             return;
         }
-        self.view_kept.run(
-            "mods view",
-            cx,
-            |turn| turn.after(super::panes::SETTLED),
-            |mods, quiet, cx| {
-                if !quiet {
-                    return;
-                }
-                if let Err(problem) = super::super::app(cx).keep_mods_view(&mods.view) {
-                    notices::say(crate::words::said_of(&problem), notices::Tone::Err, cx);
-                }
-            },
-        );
+        self.view_kept.after(super::panes::SETTLED, cx, |mods, cx| {
+            if let Err(problem) = super::super::app(cx).keep_mods_view(&mods.view) {
+                notices::say(crate::words::said_of(&problem), notices::Tone::Err, cx);
+            }
+        });
     }
 
     pub(super) fn set_headings(&mut self, headings: bool, cx: &mut Context<Self>) {

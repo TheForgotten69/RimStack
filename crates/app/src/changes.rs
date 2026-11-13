@@ -1,8 +1,8 @@
-//! A part is told on its own thread, after the change is done: never while
-//! the one that changed it is still running.
+//! What changed in the `App`, told to whoever listens. A listener is called on the thread that
+//! published, so a view's hands the news to the window's thread (`ui::hear`).
 
 use rimstack_core::base::locks::Held;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Changes(u32);
@@ -56,11 +56,8 @@ impl std::ops::BitOrAssign for Changes {
     }
 }
 
-type Listener = Box<dyn Fn(Changes) + Send + Sync>;
+type Listener = Arc<dyn Fn(Changes) -> bool + Send + Sync>;
 
-/// Who is told of changes. Each listener hands the news to its own
-/// object's thread (`CxxQtThread::queue`), so telling never runs inside
-/// whoever published.
 #[derive(Default)]
 pub struct Bus {
     listeners: Mutex<Vec<Listener>>,
@@ -68,15 +65,31 @@ pub struct Bus {
 
 impl Bus {
     pub fn listen(&self, listener: impl Fn(Changes) + Send + Sync + 'static) {
-        self.listeners.held().push(Box::new(listener));
+        self.listen_while(move |changes| {
+            listener(changes);
+            true
+        });
     }
 
+    /// Told until it answers false, as one whose view has closed does.
+    pub fn listen_while(&self, listener: impl Fn(Changes) -> bool + Send + Sync + 'static) {
+        self.listeners.held().push(Arc::new(listener));
+    }
+
+    /// Listeners are called outside the lock: one may listen, or publish, in turn.
     pub fn publish(&self, changes: Changes) {
         if changes.is_empty() {
             return;
         }
-        for listener in self.listeners.held().iter() {
-            listener(changes);
+        let listeners = self.listeners.held().clone();
+        let gone: Vec<Listener> = listeners
+            .into_iter()
+            .filter(|listener| !listener(changes))
+            .collect();
+        if !gone.is_empty() {
+            self.listeners
+                .held()
+                .retain(|listener| !gone.iter().any(|left| Arc::ptr_eq(left, listener)));
         }
     }
 }
@@ -99,5 +112,25 @@ mod tests {
         let heard = heard.held();
         assert_eq!(heard.len(), 2);
         assert!(heard[0].contains(Changes::PROBLEMS) && !heard[0].contains(Changes::LIBRARY));
+    }
+
+    #[test]
+    fn a_listener_that_is_done_is_told_no_more_and_one_may_publish_in_turn() {
+        let bus = Arc::new(Bus::default());
+        let told = Arc::new(Mutex::new(0));
+        let counted = told.clone();
+        bus.listen_while(move |changes| {
+            *counted.held() += usize::from(changes.contains(Changes::NOTES));
+            false
+        });
+        let again = bus.clone();
+        bus.listen(move |changes| {
+            if changes.contains(Changes::NOTES) {
+                again.publish(Changes::RULES);
+            }
+        });
+        bus.publish(Changes::NOTES);
+        bus.publish(Changes::NOTES);
+        assert_eq!(*told.held(), 1);
     }
 }

@@ -170,22 +170,7 @@ impl Settings {
     }
 
     fn hear(&self, cx: &mut Context<Self>) {
-        let (tell, mut told) = futures::channel::mpsc::unbounded();
-        super::app(cx).listen(move |changes| {
-            let _ = tell.unbounded_send(changes);
-        });
-        cx.spawn(async move |settings, cx| {
-            use futures::StreamExt;
-            while let Some(changes) = told.next().await {
-                if settings
-                    .update(cx, |settings, cx| settings.heard(changes, cx))
-                    .is_err()
-                {
-                    return;
-                }
-            }
-        })
-        .detach();
+        super::hear(cx, Self::heard);
     }
 
     /// What Settings shows, read off the window's thread; the demo reads it in place.
@@ -331,17 +316,12 @@ impl Settings {
             return cx.notify();
         }
         let judged = typed.clone();
-        self.lane(name).run(
+        self.lane(name).run_after(
+            FOLDER_PAUSE,
             "folder check",
             cx,
-            move |turn| {
-                turn.after(FOLDER_PAUSE)
-                    .then(|| crate::workspace::judge_folder(name, &judged))
-            },
+            move |_| crate::workspace::judge_folder(name, &judged),
             move |settings, verdict, cx| {
-                let Some(verdict) = verdict else {
-                    return;
-                };
                 let app = super::app(cx);
                 if app.settings().get(name).unwrap_or_default() == typed {
                     settings.folder_checks.remove(name);
@@ -363,17 +343,13 @@ impl Settings {
             self.lane(name).cancel();
             return;
         }
-        self.lane(name).run(
-            "setting typed",
-            cx,
-            |turn| turn.after(SETTING_PAUSE),
-            move |settings, quiet, cx| {
+        self.lane(name)
+            .after(SETTING_PAUSE, cx, move |settings, cx| {
                 let same = super::app(cx).settings().get(name).unwrap_or_default() == typed;
-                if quiet && !same {
+                if !same {
                     settings.keep(name, &typed, cx);
                 }
-            },
-        );
+            });
     }
 
     fn check_key(&mut self, cx: &mut Context<Self>) {
@@ -465,7 +441,7 @@ impl Settings {
         let app = super::app(cx);
         crate::words::show_in(crate::words::Words::of(&app.speak()));
         if !self.demo {
-            app.rescan();
+            app.rescan_soon();
         }
         cx.refresh_windows();
     }

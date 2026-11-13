@@ -158,19 +158,7 @@ impl Logs {
     }
 
     fn hear(&self, cx: &mut Context<Self>) {
-        let (tell, mut told) = futures::channel::mpsc::unbounded();
-        super::app(cx).listen(move |changes| {
-            let _ = tell.unbounded_send(changes);
-        });
-        cx.spawn(async move |logs, cx| {
-            use futures::StreamExt;
-            while let Some(changes) = told.next().await {
-                if logs.update(cx, |logs, cx| logs.heard(changes, cx)).is_err() {
-                    return;
-                }
-            }
-        })
-        .detach();
+        super::hear(cx, Self::heard);
     }
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {

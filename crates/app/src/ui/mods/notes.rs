@@ -111,16 +111,9 @@ impl Mods {
     }
 
     fn wait_for_drafts(&mut self, cx: &mut Context<Self>) {
-        self.drafts.pause.run(
-            "note draft",
-            cx,
-            |turn| turn.after(PAUSE),
-            |mods, quiet, cx| {
-                if quiet {
-                    mods.keep_drafts(cx);
-                }
-            },
-        );
+        self.drafts
+            .pause
+            .after(PAUSE, cx, |mods, cx| mods.keep_drafts(cx));
     }
 
     /// Keeps what is waiting; says "Saved" only when something really changed.
@@ -141,17 +134,10 @@ impl Mods {
         self.order.sync(&app);
         self.notes_saved = true;
         self.show(cx);
-        self.drafts.fade.run(
-            "saved mark",
-            cx,
-            |turn| turn.after(SHOWN),
-            |mods, quiet, cx| {
-                if quiet {
-                    mods.notes_saved = false;
-                    mods.sync_details(cx);
-                }
-            },
-        );
+        self.drafts.fade.after(SHOWN, cx, |mods, cx| {
+            mods.notes_saved = false;
+            mods.sync_details(cx);
+        });
     }
 
     /// The categories to file the chosen mod under, or Automatic.

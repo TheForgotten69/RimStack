@@ -386,8 +386,7 @@ impl Shell {
             &say!("Mods"),
             none.clone(),
             Rc::new(|_, _, cx| {
-                let app = super::app(cx);
-                crate::jobs::spawn("rescan", move || app.rescan());
+                super::app(cx).rescan_soon();
             }),
         );
         push(
