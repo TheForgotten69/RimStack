@@ -73,13 +73,9 @@ pub struct ChosenReads {
     pub notes_saved: bool,
 }
 
-/// What the details and the status bar read beside the lists.
+/// What the lists' state counts for the details.
 #[derive(Default)]
 pub struct Reads {
-    pub summary: Option<Rc<crate::reports::Summary>>,
-    pub last_start: Option<Rc<crate::workspace::logs::LastStartSaid>>,
-    pub summary_reading: Lane,
-    pub last_start_reading: Lane,
     pub conflicts: usize,
     /// Inactive mods installed since the game was last started from RimStack.
     pub fresh: usize,

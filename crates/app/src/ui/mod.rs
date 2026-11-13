@@ -21,6 +21,7 @@ pub mod menu;
 pub mod mods;
 pub mod motion;
 pub mod notices;
+pub mod outside;
 pub mod page;
 pub mod play;
 #[cfg(all(test, target_os = "linux"))]
@@ -362,6 +363,7 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     cx.set_global(theme);
     cx.set_global(Shared(app));
     counts::install(cx);
+    outside::install(options.demo, cx);
     text_field::bind_keys(cx);
     focus::bind_keys(cx);
     keys::bind_keys(cx);

@@ -21,8 +21,6 @@ pub struct DetailsShown {
     pub game_version: String,
     pub overview: Option<Rc<Overview>>,
     pub details: Option<Rc<Details>>,
-    pub summary: Option<Rc<crate::reports::Summary>>,
-    pub last_start: Option<Rc<crate::workspace::logs::LastStartSaid>>,
     pub warnings: usize,
     pub troubled: bool,
     pub dirty: bool,

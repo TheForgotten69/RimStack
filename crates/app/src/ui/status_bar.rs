@@ -65,7 +65,11 @@ impl Shell {
         let height = theme.strip() - px(2.);
         let demo = self.demo;
         let unsaved = self.mods.read(cx).unsaved(cx);
-        let last = self.mods.read(cx).last_start();
+        let last = super::outside::outside(cx)
+            .read(cx)
+            .last_start
+            .as_ref()
+            .map(|said| (said.start.time, said.start.errors));
         let tasks = self.tasks(cx);
         let lists = self.lists.clone();
         let tray = (!tasks.is_empty() || self.tray_open || self.tray_fading).then(|| {

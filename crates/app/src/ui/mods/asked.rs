@@ -21,14 +21,6 @@ impl Mods {
         (ways, errors > 0)
     }
 
-    /// The last start of the game: when, and how many errors its log held.
-    pub fn last_start(&self) -> Option<(u64, Option<usize>)> {
-        self.reads
-            .last_start
-            .as_ref()
-            .map(|said| (said.start.time, said.start.errors))
-    }
-
     /// The mods the load order's rules ask for that are not installed.
     pub fn to_get(&self) -> Vec<crate::workspace::load_order::ProblemSaid> {
         self.overview

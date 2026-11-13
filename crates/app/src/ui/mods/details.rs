@@ -132,7 +132,7 @@ impl DetailsView {
         scrolled
             .gap(theme::GAP_CARD)
             .child(head)
-            .when(!self.shown.demo, |d| d.children(self.verdict(theme)))
+            .when(!self.shown.demo, |d| d.children(self.verdict(theme, cx)))
             .children(self.review(theme, cx))
             .children(self.slowest(theme, cx))
             .when(!self.shown.demo, |d| {
@@ -140,7 +140,7 @@ impl DetailsView {
             })
     }
 
-    fn verdict(&self, theme: &Theme) -> Option<gpui::Stateful<gpui::Div>> {
+    fn verdict(&self, theme: &Theme, cx: &gpui::App) -> Option<gpui::Stateful<gpui::Div>> {
         let c = &theme.colours;
         let overview = self.shown.overview.as_ref()?;
         let warnings = self.shown.warnings;
@@ -206,7 +206,8 @@ impl DetailsView {
                 )),
             ));
         }
-        if let Some(start) = &self.shown.last_start {
+        let outside = crate::ui::outside::outside(cx).read(cx);
+        if let Some(start) = outside.last_start.clone() {
             let logged = start.start.errors.unwrap_or(0) > 0;
             body.push(
                 div()
@@ -270,7 +271,8 @@ impl DetailsView {
     /// `ListSummary`'s "To review": not problems, things to look at when there is time.
     fn review(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<gpui::Stateful<gpui::Div>> {
         use super::chosen::Asked;
-        let replacements = self.shown.summary.as_ref().map_or(0, |s| s.replacements);
+        let summary = crate::ui::outside::outside(cx).read(cx).summary.clone();
+        let replacements = summary.as_ref().map_or(0, |s| s.replacements);
         let line = |id: &'static str, said: String, asked: fn() -> Asked| {
             let show = Btn::new(id, put(&say!("Show")))
                 .on_click(cx.listener(move |_, _, _, cx| cx.emit(asked())));
@@ -347,7 +349,8 @@ impl DetailsView {
         window: &gpui::Window,
         cx: &mut Context<Self>,
     ) -> Option<gpui::Stateful<gpui::Div>> {
-        let summary = self.shown.summary.as_ref()?;
+        let summary = crate::ui::outside::outside(cx).read(cx).summary.clone()?;
+        let summary = &summary;
         let (folded, fold) = self.fold("overview-inventory", true, cx);
         // Its note says what it holds while it is folded.
         let note = if folded {

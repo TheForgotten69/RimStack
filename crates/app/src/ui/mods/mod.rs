@@ -253,7 +253,6 @@ impl Mods {
         mods.show(cx);
         if !demo {
             mods.hear(cx);
-            mods.reread(Changes::LAUNCHES | Changes::LISTS, cx);
             mods.load(false, cx);
         }
         mods
@@ -266,7 +265,6 @@ impl Mods {
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
         let app = super::app(cx);
-        self.reread(changes, cx);
         if changes.within(ROWS_UNTOUCHED) {
             if self.details.is_some() {
                 self.describe(cx);
@@ -348,50 +346,6 @@ impl Mods {
         );
     }
 
-    /// What the details and the status bar read from disk, read again only when it changed.
-    fn reread(&mut self, changes: Changes, cx: &mut Context<Self>) {
-        if self.demo {
-            return;
-        }
-        let app = super::app(cx);
-        let counted = Changes::LIBRARY
-            | Changes::LISTS
-            | Changes::LAUNCHES
-            | Changes::SAVES
-            | Changes::RULES
-            | Changes::UPDATES
-            | Changes::COMMUNITY
-            | Changes::LANGUAGE;
-        if changes.contains(counted) {
-            let app = app.clone();
-            self.reads.summary_reading.run(
-                "summary",
-                cx,
-                move |_| app.summary(),
-                |mods, summary, cx| {
-                    mods.reads.summary = Some(Rc::new(summary));
-                    mods.sync_details(cx);
-                    cx.notify();
-                },
-            );
-        }
-        if changes
-            .contains(Changes::LAUNCHES | Changes::LOGS | Changes::FOLDERS | Changes::LANGUAGE)
-        {
-            let app = app.clone();
-            self.reads.last_start_reading.run(
-                "last start",
-                cx,
-                move |_| app.last_start_said(),
-                |mods, said, cx| {
-                    mods.reads.last_start = said.map(Rc::new);
-                    mods.sync_details(cx);
-                    cx.notify();
-                },
-            );
-        }
-    }
-
     /// Hands the details pane what it shows.
     fn sync_details(&mut self, cx: &mut Context<Self>) {
         let (dirty, unsaved) = match self.demo {
@@ -412,8 +366,6 @@ impl Mods {
             game_version: self.game_version(),
             overview: self.overview.clone(),
             details: self.details.clone(),
-            summary: self.reads.summary.clone(),
-            last_start: self.reads.last_start.clone(),
             warnings: self.order.errors_and_warnings().1,
             troubled: self.order.troubles().iter().any(|t| !t.is_empty()),
             dirty,
