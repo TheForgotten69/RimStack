@@ -43,6 +43,26 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new(crate::command!("7"), Section7, None),
         KeyBinding::new(crate::command!("8"), Section8, None),
     ]);
+    #[cfg(feature = "profiler")]
+    cx.bind_keys([KeyBinding::new("ctrl-alt-shift-f", FrameTimes, None)]);
+    #[cfg(feature = "inspector")]
+    cx.bind_keys([KeyBinding::new("ctrl-alt-shift-i", Inspector, None)]);
+}
+
+#[cfg(feature = "profiler")]
+actions!(window, [FrameTimes]);
+
+#[cfg(feature = "inspector")]
+actions!(window, [Inspector]);
+
+/// gpui-fast's developer tools on the window, when built in.
+pub fn developer_tools(shown: gpui::Div) -> gpui::Div {
+    #[cfg(feature = "profiler")]
+    let shown =
+        shown.on_action(|_: &FrameTimes, window, _| window.cycle_debug_frame_overlay_mode());
+    #[cfg(feature = "inspector")]
+    let shown = shown.on_action(|_: &Inspector, window, cx| window.toggle_inspector(cx));
+    shown
 }
 
 /// Each group's title, then its keys and what they do, as the sheet lists them.

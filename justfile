@@ -14,6 +14,11 @@ build:
 run *args: build
     {{app}} {{args}}
 
+# Run with gpui-fast's developer tools: Ctrl+Alt+Shift+F frame times over the window, Ctrl+Alt+Shift+I the inspector
+dev *args:
+    cargo build --release -q -p rimstack-app --features profiler,inspector
+    {{app}} {{args}}
+
 # Open on 2,300 made-up mods instead of the installed ones
 demo *args: build
     {{app}} --demo {{args}}

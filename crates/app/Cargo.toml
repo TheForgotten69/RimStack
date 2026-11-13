@@ -16,6 +16,13 @@ path = "src/main.rs"
 [[example]]
 name = "shot"
 
+[features]
+# gpui-fast's developer tools, off in every package: frame times drawn over the window, the
+# element inspector, and code patched into the running app by `dx serve --hot-patch`.
+profiler = ["gpui/profiler"]
+inspector = ["gpui/inspector"]
+hot-reload = ["gpui/hot-reload"]
+
 [dependencies]
 rimstack-core = { path = "../core" }
 # Pinned exactly: gpui-fast changes its API from one weekly release to the next (Apache-2.0).

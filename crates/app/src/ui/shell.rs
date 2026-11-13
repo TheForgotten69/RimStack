@@ -354,7 +354,7 @@ impl Render for Shell {
                 .child(self.menu.clone())
                 .child(self.prompt.clone());
         }
-        div()
+        super::keys::developer_tools(div())
             .relative()
             .flex()
             .flex_col()
