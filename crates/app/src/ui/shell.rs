@@ -353,7 +353,7 @@ thread_local! {
     pub(crate) static RENDERS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 impl Shell {
     pub(crate) fn behind(&self, cx: &gpui::App) -> usize {
         super::counts::read(cx).behind

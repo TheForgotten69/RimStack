@@ -265,7 +265,7 @@ impl Render for Prompt {
 }
 
 /// Whether a question is drawn, asked or fading out.
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 pub(crate) fn drawn(cx: &App) -> bool {
     cx.try_global::<Asking>().is_some_and(|asking| {
         let prompt = asking.0.read(cx);

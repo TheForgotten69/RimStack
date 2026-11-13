@@ -122,7 +122,7 @@ impl Lists {
     }
 
     /// Whether a popup is drawn, open or fading out.
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "linux"))]
     pub(crate) fn drawn(&self) -> bool {
         self.open.is_some() || self.fading.is_some()
     }

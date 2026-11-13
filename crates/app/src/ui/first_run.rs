@@ -87,7 +87,7 @@ impl FirstRun {
         self.read(cx);
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "linux"))]
     pub(crate) fn press_start(&mut self, cx: &mut Context<Self>) {
         self.start(cx);
     }

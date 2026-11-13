@@ -1,12 +1,12 @@
 //! A made-up install for the tests that need a game: `tools/fixture-game.sh` and
 //! `tools/fixture-downloads.sh`, all in a scratch folder.
 
-use crate::App;
-use std::time::Duration;
-
-pub(crate) fn made_up() -> (tempfile::TempDir, App) {
+#[cfg(target_os = "linux")]
+pub(crate) fn made_up() -> (tempfile::TempDir, crate::App) {
+    use crate::App;
     use rimstack_core::base::program;
     use rimstack_core::rimworld::paths::Overrides;
+    use std::time::Duration;
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let tools = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools");
@@ -50,8 +50,9 @@ pub(crate) fn text_system() -> std::sync::Arc<dyn gpui::PlatformTextSystem> {
 
 /// One step of a test waiting on the made-up install: the window's waits move on by as much as
 /// the `App`'s own threads are given.
+#[cfg(target_os = "linux")]
 pub(crate) fn step(cx: &gpui::HeadlessAppContext) {
-    const STEP: Duration = Duration::from_millis(10);
+    const STEP: std::time::Duration = std::time::Duration::from_millis(10);
     cx.advance_clock(STEP);
     cx.run_until_parked();
     std::thread::sleep(STEP);

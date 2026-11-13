@@ -118,7 +118,7 @@ impl Thumbs {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 impl Thumbs {
     /// Pictures asked for rows in view and not decoded yet.
     pub(crate) fn awaited_in_view(&self) -> usize {

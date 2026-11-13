@@ -131,12 +131,12 @@ impl Commands {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "linux"))]
     pub(crate) fn type_text(&mut self, text: &str, cx: &mut Context<Self>) {
         self.field.update(cx, |field, cx| field.set_text(text, cx));
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "linux"))]
     pub(crate) fn run_first(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.chosen = 0;
         self.run_chosen(window, cx);

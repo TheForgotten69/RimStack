@@ -1,3 +1,6 @@
+// Most of these tests need the made-up install, which is Linux's alone.
+#![cfg_attr(not(target_os = "linux"), allow(unused))]
+
 use super::Downloads;
 use crate::App;
 use crate::ui::layout_checks::check_scene;

@@ -510,14 +510,14 @@ impl Render for Menu {
 }
 
 /// Whether the menu is drawn, open or fading out.
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 pub(crate) fn drawn(cx: &App) -> bool {
     cx.try_global::<Shown>()
         .is_some_and(|shown| !shown.0.read(cx).entries.is_empty())
 }
 
 /// The menu drawn again, as a check that reads every text drawn asks.
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 pub(crate) fn redraw(cx: &mut App) {
     if let Some(menu) = cx.try_global::<Shown>().map(|shown| shown.0.clone()) {
         menu.update(cx, |_, cx| cx.notify());

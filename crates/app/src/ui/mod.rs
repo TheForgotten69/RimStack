@@ -518,9 +518,9 @@ pub fn run(app: Arc<App>, options: Options) {
 mod gates;
 #[cfg(test)]
 pub(crate) mod layout_checks;
-#[cfg(all(test, target_os = "linux"))]
-pub(crate) mod made_up;
 #[cfg(test)]
+pub(crate) mod made_up;
+#[cfg(all(test, target_os = "linux"))]
 mod motion_tests;
 #[cfg(test)]
 mod widget_tests;
