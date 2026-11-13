@@ -225,6 +225,34 @@ fn hover_buttons(
         .into_any_element()
 }
 
+/// A preview tile's size in device pixels.
+pub fn tile_size(window: &Window, theme: &Theme) -> (u32, u32) {
+    let scale = window.scale_factor();
+    let device = |logical: f32| f32::from(theme.sized(logical) - theme::GAP_LINE * 2.) * scale;
+    (device(64.).round() as u32, device(40.).round() as u32)
+}
+
+/// The previews of the rows a page above and below `range`, decoded before they are scrolled to.
+pub fn ahead(
+    window: &Window,
+    theme: &Theme,
+    rows: &[RowView],
+    range: &std::ops::Range<usize>,
+    thumbs: &thumbs::Shared,
+    cx: &mut gpui::App,
+) {
+    let page = range.len().max(1);
+    let size = tile_size(window, theme);
+    let above = range.start.saturating_sub(page)..range.start;
+    let below = range.end.min(rows.len())..(range.end + page).min(rows.len());
+    for at in below.chain(above.rev()) {
+        let row = &rows[at];
+        if !row.is_header && !row.picture.is_empty() {
+            thumbs::ahead(thumbs, &row.picture, size, cx);
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn row(
     window: &Window,
@@ -258,13 +286,7 @@ pub fn row(
     } else {
         let fitted = cells::fit(window, theme, row, name_room, columns, around);
         let picture = match columns.is_some_and(|c| c.tile) && !row.picture.is_empty() {
-            true => {
-                let scale = window.scale_factor();
-                let device =
-                    |logical: f32| f32::from(theme.sized(logical) - theme::GAP_LINE * 2.) * scale;
-                let size = (device(64.).round() as u32, device(40.).round() as u32);
-                thumbs::thumb(thumbs, &row.picture, size, shown_by, cx)
-            }
+            true => thumbs::thumb(thumbs, &row.picture, tile_size(window, theme), shown_by, cx),
             false => None,
         };
         let shown = cells::Shown {

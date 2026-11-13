@@ -375,7 +375,9 @@ impl Render for ModList {
                             .any(|(key, _)| *key == shown.orders.active_key)
                     }),
                 };
-                range
+                let tiles = made.columns.as_ref().is_some_and(|columns| columns.tile);
+                let drawn = range
+                    .clone()
                     .map(|at| {
                         let row = &shown.rows[at];
                         let chosen = row.mod_id.is_some_and(|id| shown.chosen.contains(&id));
@@ -416,7 +418,11 @@ impl Render for ModList {
                             _ => shown.into_any_element(),
                         }
                     })
-                    .collect()
+                    .collect();
+                if tiles {
+                    rows::ahead(window, theme, &shown.rows, &range, &thumbs, cx);
+                }
+                drawn
             },
         );
         let focused = self.focus.is_focused(window);

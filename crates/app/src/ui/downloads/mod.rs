@@ -219,7 +219,6 @@ impl Downloads {
         {
             self.read_since(cx);
         }
-        cx.notify();
     }
 
     /// Every minute, whether an update check is due, when updates come by themselves.

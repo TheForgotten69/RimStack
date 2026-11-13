@@ -45,8 +45,7 @@ pub(super) fn opened_with(
             started.elapsed() < Duration::from_secs(20),
             "the made-up mods were not read"
         );
-        cx.run_until_parked();
-        std::thread::sleep(Duration::from_millis(10));
+        crate::ui::made_up::step(&cx);
     }
     (tmp, cx, mods)
 }
@@ -159,8 +158,7 @@ fn sort_is_shown_before_it_is_kept_and_save_writes_the_list() {
             started.elapsed() < Duration::from_secs(20),
             "the save did not end"
         );
-        cx.run_until_parked();
-        std::thread::sleep(Duration::from_millis(10));
+        crate::ui::made_up::step(&cx);
     }
     cx.update(|cx| {
         let mods = mods.read(cx);
@@ -198,7 +196,6 @@ fn sort_counts_the_moves_it_would_make_once_the_files_are_read() {
             started.elapsed() < Duration::from_secs(10),
             "Sort never counted its moves"
         );
-        cx.run_until_parked();
-        std::thread::sleep(Duration::from_millis(10));
+        crate::ui::made_up::step(&cx);
     }
 }

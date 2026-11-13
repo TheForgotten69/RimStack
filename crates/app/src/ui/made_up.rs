@@ -47,3 +47,12 @@ pub(crate) fn text_system() -> std::sync::Arc<dyn gpui::PlatformTextSystem> {
     MADE.get_or_init(|| gpui_platform::current_platform(true).text_system())
         .clone()
 }
+
+/// One step of a test waiting on the made-up install: the window's waits move on by as much as
+/// the `App`'s own threads are given.
+pub(crate) fn step(cx: &gpui::HeadlessAppContext) {
+    const STEP: Duration = Duration::from_millis(10);
+    cx.advance_clock(STEP);
+    cx.run_until_parked();
+    std::thread::sleep(STEP);
+}

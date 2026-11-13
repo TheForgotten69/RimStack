@@ -48,8 +48,7 @@ fn opened(
             started.elapsed() < Duration::from_secs(20),
             "the made-up log was not read"
         );
-        cx.run_until_parked();
-        std::thread::sleep(Duration::from_millis(10));
+        crate::ui::made_up::step(&cx);
     }
     cx.run_until_parked();
     (tmp, cx, shell, logs)

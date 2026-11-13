@@ -315,9 +315,6 @@ impl Mods {
         }
         if changes.contains(Changes::FACTS) {
             order.facts_read(&app);
-            if changes == Changes::FACTS && !order.needs_facts() {
-                return;
-            }
         }
         if changes.contains(Changes::FILES_READ) {
             self.files_read = true;

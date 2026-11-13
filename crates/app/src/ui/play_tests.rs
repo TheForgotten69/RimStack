@@ -27,8 +27,7 @@ fn opened() -> (tempfile::TempDir, HeadlessAppContext, WindowHandle<Shell>) {
             started.elapsed() < Duration::from_secs(20),
             "the made-up mods were not read"
         );
-        cx.run_until_parked();
-        std::thread::sleep(Duration::from_millis(10));
+        crate::ui::made_up::step(&cx);
     }
     (tmp, cx, shell)
 }

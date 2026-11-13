@@ -63,8 +63,7 @@ fn wait(
             started.elapsed() < Duration::from_secs(20),
             "waited for {what}"
         );
-        cx.run_until_parked();
-        std::thread::sleep(Duration::from_millis(10));
+        crate::ui::made_up::step(cx);
     }
 }
 

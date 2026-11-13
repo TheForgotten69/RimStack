@@ -100,9 +100,9 @@ pub fn off_thread<R: Send + 'static>(
     waiting
 }
 
-/// A wait on the window's executor, which a test does not sit through.
+/// A wait on the window's executor: a test moves its clock on (`advance_clock`).
 fn pause(wait: Duration, cx: &AsyncApp) -> Task<()> {
-    match cfg!(test) || wait.is_zero() {
+    match wait.is_zero() {
         true => Task::ready(()),
         false => cx.background_executor().timer(wait),
     }
@@ -277,6 +277,102 @@ mod tests {
         assert!(!first.current() && second.current());
         lane.cancel();
         assert!(!second.current());
+    }
+
+    #[derive(Default)]
+    struct Probe {
+        lane: Lane,
+        done: Vec<&'static str>,
+    }
+
+    fn probed() -> (gpui::HeadlessAppContext, gpui::Entity<Probe>) {
+        let mut cx = gpui::HeadlessAppContext::with_asset_source(
+            crate::ui::made_up::text_system(),
+            Arc::new(crate::ui::assets::Assets),
+        );
+        let probe = cx.update(|cx| {
+            run_on(cx.background_executor().clone());
+            gpui::AppContext::new(cx, |_| Probe::default())
+        });
+        (cx, probe)
+    }
+
+    fn ask_after(
+        probe: &gpui::Entity<Probe>,
+        said: &'static str,
+        cx: &mut gpui::HeadlessAppContext,
+    ) {
+        cx.update(|cx| {
+            probe.update(cx, |probe, cx| {
+                probe.lane.run_after(
+                    Duration::from_millis(100),
+                    said,
+                    cx,
+                    move |_| said,
+                    |probe, said, _| probe.done.push(said),
+                )
+            })
+        });
+    }
+
+    fn done(probe: &gpui::Entity<Probe>, cx: &mut gpui::HeadlessAppContext) -> Vec<&'static str> {
+        cx.run_until_parked();
+        cx.update(|cx| probe.read(cx).done.clone())
+    }
+
+    #[test]
+    fn a_wait_starts_again_when_the_lane_is_asked_again() {
+        let (mut cx, probe) = probed();
+        ask_after(&probe, "first", &mut cx);
+        cx.advance_clock(Duration::from_millis(60));
+        ask_after(&probe, "second", &mut cx);
+        cx.advance_clock(Duration::from_millis(60));
+        assert!(done(&probe, &mut cx).is_empty());
+        cx.advance_clock(Duration::from_millis(50));
+        assert_eq!(done(&probe, &mut cx), ["second"]);
+    }
+
+    #[test]
+    fn an_answer_asked_again_meanwhile_is_dropped() {
+        let (mut cx, probe) = probed();
+        cx.update(|cx| {
+            probe.update(cx, |probe, cx| {
+                let asked = probe.lane.asked.clone();
+                probe.lane.run(
+                    "stale",
+                    cx,
+                    move |turn| {
+                        asked.fetch_add(1, Ordering::SeqCst);
+                        turn.current()
+                    },
+                    |probe, current, _| {
+                        assert!(!current);
+                        probe.done.push("stale");
+                    },
+                )
+            })
+        });
+        assert!(done(&probe, &mut cx).is_empty());
+    }
+
+    #[test]
+    fn quiet_waits_asked_in_a_burst_end_once_after_the_last() {
+        let (mut cx, probe) = probed();
+        for _ in 0..3 {
+            cx.update(|cx| {
+                probe.update(cx, |probe, cx| {
+                    probe
+                        .lane
+                        .after(Duration::from_millis(150), cx, |probe, _| {
+                            probe.done.push("quiet")
+                        })
+                })
+            });
+            cx.advance_clock(Duration::from_millis(50));
+        }
+        assert!(done(&probe, &mut cx).is_empty());
+        cx.advance_clock(Duration::from_millis(100));
+        assert_eq!(done(&probe, &mut cx), ["quiet"]);
     }
 
     #[test]

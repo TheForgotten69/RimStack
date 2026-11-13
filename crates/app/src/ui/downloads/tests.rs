@@ -168,8 +168,7 @@ fn opened(
             started.elapsed() < Duration::from_secs(20),
             "Downloads did not read the made-up install"
         );
-        cx.run_until_parked();
-        std::thread::sleep(Duration::from_millis(10));
+        crate::ui::made_up::step(&cx);
     }
     cx.run_until_parked();
     (tmp, cx, shell, downloads)
