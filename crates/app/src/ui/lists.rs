@@ -29,6 +29,8 @@ pub enum Which {
     History,
 }
 
+const READS: Changes = Changes::LISTS.or(Changes::LANGUAGE);
+
 pub struct Lists {
     mods: Entity<Mods>,
     saved: Vec<Saved>,
@@ -79,11 +81,7 @@ impl Lists {
     }
 
     fn hear(&self, cx: &mut Context<Self>) {
-        super::hear(
-            cx,
-            Changes::LISTS | Changes::LANGUAGE,
-            |lists: &mut Self, _, cx| lists.read(cx),
-        );
+        super::hear(cx, READS, |lists: &mut Self, _, cx| lists.read(cx));
     }
 
     /// Every kept list's file is read and parsed: off the window's thread.

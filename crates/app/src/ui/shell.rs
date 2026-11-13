@@ -6,10 +6,13 @@ use super::navigate::Go;
 use super::section::Section;
 use super::theme::Theme;
 use super::top_bar::top_bar;
+use crate::changes::Changes;
 use gpui::{
     AppContext, Context, Entity, Focusable, InteractiveElement, IntoElement, ParentElement, Render,
     Styled, Window, div,
 };
+
+const READS: Changes = Changes::LOGS;
 
 pub struct Shell {
     /// The keys' handles of the sections and of the search box.
@@ -363,7 +366,7 @@ impl Shell {
 /// The game's logs copied among the kept ones at the start and each time they change.
 fn keep_logs(cx: &mut Context<Shell>) {
     super::app(cx).keep_logs_soon();
-    super::hear(cx, crate::changes::Changes::LOGS, |_: &mut Shell, _, cx| {
+    super::hear(cx, READS, |_: &mut Shell, _, cx| {
         super::app(cx).keep_logs_soon();
     });
 }

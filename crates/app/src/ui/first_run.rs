@@ -19,6 +19,11 @@ use rimstack_core::base::sentence::Sentence;
 use rimstack_core::say;
 use std::rc::Rc;
 
+const READS: Changes = Changes::SETTINGS
+    .or(Changes::COMMUNITY)
+    .or(Changes::LANGUAGE)
+    .or(Changes::FOLDERS);
+
 /// Asked of the window: the setup ends, the community data fetched and RimSort's rules read
 /// when asked.
 pub struct Started {
@@ -51,8 +56,7 @@ impl FirstRun {
             mods: (0, 0, String::new()),
         };
         first.read(cx);
-        let reads = Changes::SETTINGS | Changes::COMMUNITY | Changes::LANGUAGE | Changes::FOLDERS;
-        super::hear(cx, reads, |first: &mut Self, _, cx| first.read(cx));
+        super::hear(cx, READS, |first: &mut Self, _, cx| first.read(cx));
         first
     }
 

@@ -193,7 +193,10 @@ fn each_change_a_view_tests_for_is_among_what_it_reads() {
     for file in files {
         let text = std::fs::read_to_string(&file).unwrap();
         let consts = change_consts(&text);
+        let hears = !file.ends_with("gates.rs")
+            && (text.contains("super::hear(") || text.contains("ui::hear("));
         let Some(reads) = consts.get("READS") else {
+            assert!(!hears, "{} hears the App without a READS", file.display());
             continue;
         };
         if reads.iter().any(|bit| bit == "ALL") {
@@ -226,5 +229,5 @@ fn each_change_a_view_tests_for_is_among_what_it_reads() {
             file.display()
         );
     }
-    assert!(checked >= 8, "only {checked} views declare what they read");
+    assert!(checked >= 11, "only {checked} views declare what they read");
 }
