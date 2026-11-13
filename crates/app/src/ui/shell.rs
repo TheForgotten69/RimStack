@@ -86,6 +86,12 @@ impl Shell {
         });
         cx.subscribe(&game, |shell, _, told, cx| shell.heard_game(told, cx))
             .detach();
+        let watched = game.downgrade();
+        window
+            .observe_window_visibility(move |visibility, _, cx| {
+                let _ = watched.update(cx, |game, _| game.shown(visibility.is_visible()));
+            })
+            .detach();
         let section = options.section;
         let lists = cx.new(|cx| super::lists::Lists::new(demo, cx));
         let mut shell = Self {

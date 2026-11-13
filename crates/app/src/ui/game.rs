@@ -21,6 +21,7 @@ pub struct Game {
     starting: bool,
     watcher: Watcher,
     demo: bool,
+    hidden: bool,
     /// What is under way on the load order: a change seen on disk waits for it.
     held: Box<dyn Fn(&gpui::App) -> bool>,
 }
@@ -31,6 +32,11 @@ impl EventEmitter<Told> for Game {}
 fn every(demo: bool, still: bool) -> Option<Duration> {
     (!demo && !still).then_some(Duration::from_secs(2))
 }
+
+/// While the window shows nothing, one look in this many. Not none: gpui-fast reports a window
+/// wholly behind another as it reports a minimised one, and behind the running game RimStack
+/// must still see it start and stop.
+const HIDDEN_LOOKS_ONE_IN: u32 = 5;
 
 impl Game {
     pub fn new(
@@ -44,6 +50,7 @@ impl Game {
             starting: false,
             watcher: Watcher::default(),
             demo,
+            hidden: false,
             held: Box::new(held),
         };
         if let Some(every) = every(demo, still) {
@@ -60,6 +67,10 @@ impl Game {
         self.starting
     }
 
+    pub fn shown(&mut self, visible: bool) {
+        self.hidden = !visible;
+    }
+
     fn watch(&self, every: Duration, cx: &mut Context<Self>) {
         let app = super::app(cx);
         let at_start = app.clone();
@@ -74,8 +85,17 @@ impl Game {
             },
         );
         cx.spawn(async move |game, cx| {
+            let mut skipped = 0;
             loop {
                 cx.background_executor().timer(every).await;
+                let Ok(hidden) = game.read_with(cx, |game, _| game.hidden) else {
+                    return;
+                };
+                if hidden && skipped + 1 < HIDDEN_LOOKS_ONE_IN {
+                    skipped += 1;
+                    continue;
+                }
+                skipped = 0;
                 let app = app.clone();
                 let looked =
                     crate::jobs::off_thread("watch", move || (app.game_running(), app.stamps()));
