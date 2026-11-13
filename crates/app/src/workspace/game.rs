@@ -31,8 +31,6 @@ pub fn steam_address(arguments: &str) -> String {
     }
 }
 
-/// Whether Steam is to start the game: always in a Flatpak, whose sandbox a program
-/// started from here would run in.
 fn through_steam(sandboxed: bool, directly: bool) -> bool {
     sandboxed || !directly
 }

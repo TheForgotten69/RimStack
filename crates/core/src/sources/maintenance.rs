@@ -155,8 +155,6 @@ pub fn game_among(processes: &[Process], game_dir: &Path) -> bool {
     })
 }
 
-/// A Flatpak's process list is its own, and reading the host's takes the Flatpak
-/// D-Bus name, which Flathub refuses: there the check is off.
 pub fn game_running(game_dir: &Path) -> bool {
     game_running_on(game_dir, sandbox::sandboxed())
 }

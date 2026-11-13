@@ -46,9 +46,6 @@ jobs:
       - name: uv, for the script that writes the manifest's crate sources
         uses: astral-sh/setup-uv@v6
         with:
-          # The generator's three wheels are unpinned and this container is
-          # thrown away after the run, so there is no lockfile to key the cache
-          # on; caching here would only mean a key that never changes.
           enable-cache: false
       - name: The crates in Cargo.lock, as sources
         run: packaging/flatpak/generated-sources.sh
