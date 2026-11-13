@@ -91,6 +91,48 @@ fn no_view_sizes_a_thing_in_fixed_pixels() {
     );
 }
 
+/// A file drawn with `img` stays in gpui's own store, with its place in the atlas, until the
+/// program ends: a view draws a file through `ui::pictures` (`pictures.img(…)`), which lets it
+/// go, or through `ui::thumbs`, which draws it decoded.
+#[test]
+fn no_view_draws_a_file_that_is_never_let_go() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui");
+    let mut files = Vec::new();
+    views(&root, &mut files);
+    let mut found = Vec::new();
+    for file in files {
+        if file.ends_with("pictures.rs") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&file).unwrap();
+        let shown = text
+            .split("#[cfg(test)]\nmod tests {")
+            .next()
+            .unwrap_or_default();
+        for (n, line) in shown.lines().enumerate() {
+            let bare = line.match_indices("img(").any(|(at, _)| {
+                let before = line[..at].chars().next_back().unwrap_or(' ');
+                let argument = &line[at..];
+                !(before == '.' || before == '_' || before.is_alphanumeric())
+                    && (argument.contains("PathBuf") || argument.contains("path"))
+            });
+            if bare {
+                found.push(format!(
+                    "{}:{}: {}",
+                    file.strip_prefix(&root).unwrap().display(),
+                    n + 1,
+                    line.trim()
+                ));
+            }
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "files drawn with nothing to let them go; draw them with `pictures.img`:\n{}",
+        found.join("\n")
+    );
+}
+
 #[test]
 fn the_check_sees_a_fixed_size() {
     assert_eq!(pixels("div().w(px(120.)).h(px(2.))"), ["120", "2"]);

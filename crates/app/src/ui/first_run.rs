@@ -39,6 +39,8 @@ pub struct FirstRun {
     with_rimsort: bool,
     /// The load order as it was read: its active and inactive mods, or why it was not.
     mods: (usize, usize, String),
+    /// The official mods' previews in the glance at the list, let go with the first run.
+    pictures: super::pictures::Pictures,
 }
 
 impl EventEmitter<Started> for FirstRun {}
@@ -54,6 +56,7 @@ impl FirstRun {
             languages: Rc::default(),
             with_rimsort: true,
             mods: (0, 0, String::new()),
+            pictures: Default::default(),
         };
         first.read(cx);
         super::hear(cx, READS, |first: &mut Self, _, cx| first.read(cx));

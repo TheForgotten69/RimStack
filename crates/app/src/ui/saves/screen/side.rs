@@ -13,7 +13,7 @@ use crate::workspace::logs::moment;
 use crate::workspace::saves::SaveShown;
 use gpui::{
     AnyElement, Context, IntoElement, ObjectFit, ParentElement, Styled, StyledImage, Window, div,
-    img, prelude::FluentBuilder,
+    prelude::FluentBuilder,
 };
 use rimstack_core::rimworld::saves::Verdict;
 use rimstack_core::{say, say_n};
@@ -82,6 +82,7 @@ impl Saves {
                 .flex()
                 .flex_col()
                 .when_some(row.preview.clone(), |d, preview| {
+                    let pictures = self.pictures.of(&preview, cx);
                     d.child(
                         div()
                             .w(inner)
@@ -90,7 +91,8 @@ impl Saves {
                             .bg(c.well)
                             .overflow_hidden()
                             .child(
-                                img(std::path::PathBuf::from(preview))
+                                pictures
+                                    .img(std::path::PathBuf::from(preview))
                                     .w(inner)
                                     .h(theme.sized(190.))
                                     .object_fit(ObjectFit::Cover),

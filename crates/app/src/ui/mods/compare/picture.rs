@@ -10,7 +10,7 @@ use crate::workspace::textures::Shared;
 use gpui::{
     AppContext, Bounds, Context, InteractiveElement, IntoElement, MouseButton, MouseMoveEvent,
     ObjectFit, ParentElement, Pixels, StatefulInteractiveElement, Styled, StyledImage, canvas, div,
-    fill, img, point, prelude::FluentBuilder, px, size,
+    fill, point, prelude::FluentBuilder, px, size,
 };
 use rimstack_core::say;
 use std::path::PathBuf;
@@ -113,9 +113,12 @@ impl CompareView {
                         .w(shown.width)
                         .h(shown.height)
                 };
+                let held = self.pictures.borrow_mut().entry(id).or_default().clone();
+                let pictures = held.of(&file, cx);
                 d.child(place(div()).child(checker.size_full())).child(
                     place(div()).child(
-                        img(PathBuf::from(&file))
+                        pictures
+                            .img(PathBuf::from(&file))
                             .size_full()
                             .object_fit(ObjectFit::Fill),
                     ),

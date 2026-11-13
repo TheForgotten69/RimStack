@@ -25,6 +25,7 @@ pub mod navigate;
 pub mod notices;
 pub mod outside;
 pub mod page;
+pub mod pictures;
 pub mod play;
 #[cfg(all(test, target_os = "linux"))]
 mod play_tests;

@@ -267,6 +267,7 @@ impl Workshop {
         let rows_shown: Vec<Row> = self.rows.iter().map(|row| self.row_of(row)).collect();
         let (shown, previews) = (Rc::new(rows_shown), Rc::new(self.previews.clone()));
         let (me, selected) = (cx.entity().downgrade(), self.selected.clone());
+        let thumbs = self.thumbs.clone();
         let list = rows(
             "workshop-grid",
             self.scroll.clone(),
@@ -286,6 +287,7 @@ impl Workshop {
                                     current: row.id == selected,
                                     width: each,
                                     me: me.clone(),
+                                    thumbs: thumbs.clone(),
                                 }
                             });
                         div().flex().gap(gap).children(cards).into_any_element()
@@ -534,6 +536,7 @@ struct Card {
     current: bool,
     width: Pixels,
     me: WeakEntity<Workshop>,
+    thumbs: crate::ui::thumbs::Shared,
 }
 
 impl RenderOnce for Card {
@@ -563,6 +566,13 @@ impl RenderOnce for Card {
                 .bg(tone)
                 .child(icon(name, theme.icon(), c.accent_ink))
         };
+        let picture = self.preview.as_ref().and_then(|path| {
+            let scale = window.scale_factor();
+            let device = |logical: Pixels| (f32::from(logical) * scale).round() as u32;
+            let size = (device(inner), device(inner * 9. / 16.));
+            let path = path.to_string_lossy();
+            crate::ui::thumbs::thumb(&self.thumbs, &path, size, self.me.entity_id(), cx)
+        });
         let picture = div()
             .relative()
             .w(inner)
@@ -574,9 +584,9 @@ impl RenderOnce for Card {
             .items_center()
             .justify_center()
             .child(label(&theme, theme.display(), c.ink3, letter).font_weight(theme.semibold))
-            .when_some(self.preview.clone(), |d, path| {
+            .when_some(picture, |d, picture| {
                 d.child(
-                    img(path)
+                    img(picture)
                         .absolute()
                         .inset_0()
                         .size_full()
@@ -694,6 +704,7 @@ impl Render for Workshop {
         let results = results_shown.then(|| self.results(&theme, layout, cx));
         let panel = panel_shown.then(|| self.panel(&theme, layout, window, cx));
         let enlarged = self.enlarged.clone().map(|path| {
+            let pictures = self.enlarged_pictures.of(&path.to_string_lossy(), cx);
             div()
                 .id("enlarged")
                 .absolute()
@@ -701,7 +712,12 @@ impl Render for Workshop {
                 .p(theme::GAP_WIDE)
                 .bg(theme.colours.scrim)
                 .occlude()
-                .child(img(path).size_full().object_fit(ObjectFit::Contain))
+                .child(
+                    pictures
+                        .img(path)
+                        .size_full()
+                        .object_fit(ObjectFit::Contain),
+                )
                 .on_click(cx.listener(|w, _, _, cx| {
                     w.enlarged = None;
                     cx.notify();

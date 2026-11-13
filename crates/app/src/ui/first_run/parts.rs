@@ -8,7 +8,7 @@ use crate::ui::widgets::{TextSized, elide_middle_in, icon, label, measure};
 use crate::words::put;
 use gpui::{
     AnyElement, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels, Role,
-    SharedString, StatefulInteractiveElement, Styled, StyledImage, Toggled, Window, div, img,
+    SharedString, StatefulInteractiveElement, Styled, StyledImage, Toggled, Window, div,
     prelude::FluentBuilder, px,
 };
 
@@ -238,6 +238,7 @@ impl FirstRun {
         let c = &theme.colours;
         let comfortable = theme.appearance.comfortable;
         let version = report.game_version.clone().unwrap_or_default();
+        let pictures = self.pictures.kept();
         let rows = report.official.iter().enumerate().map(|(at, one)| {
             let chosen = at == 1;
             let (ink, dim) = match chosen {
@@ -283,7 +284,8 @@ impl FirstRun {
                             .p(theme::GAP_LINE)
                             .when_some(one.picture.clone(), |d, picture| {
                                 d.child(
-                                    img(std::path::PathBuf::from(picture))
+                                    pictures
+                                        .img(std::path::PathBuf::from(picture))
                                         .size_full()
                                         .object_fit(gpui::ObjectFit::Cover),
                                 )

@@ -96,6 +96,8 @@ pub struct CompareView {
     dragged: Option<(Point<Pixels>, Point<f32>)>,
     /// Each picture's box as last laid out, for placing a zoomed picture.
     boxes: Rc<RefCell<HashMap<&'static str, Size<Pixels>>>>,
+    /// Each box's texture, let go once the box shows another.
+    pictures: RefCell<HashMap<&'static str, crate::ui::pictures::Pictures>>,
     scroll: Scrolling,
     pub(super) focus: FocusHandle,
     /// Every texture is being taken from one side: a second press waits for it.
@@ -134,6 +136,7 @@ impl CompareView {
             differing: crate::jobs::Lane::default(),
             dragged: None,
             boxes: Rc::default(),
+            pictures: Default::default(),
             scroll,
             focus: cx.focus_handle(),
             keeping: false,

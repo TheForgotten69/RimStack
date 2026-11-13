@@ -36,6 +36,8 @@ pub struct Saves {
     scroll: Scrolling,
     side_paging: super::page::Paging,
     thumbs: super::thumbs::Shared,
+    /// The chosen save's picture, let go once another is chosen.
+    pictures: super::pictures::Pictures,
     focus: FocusHandle,
 }
 
@@ -75,6 +77,7 @@ impl Saves {
             scroll,
             side_paging: super::page::Paging::new(theme.appearance.reduce_motion),
             thumbs: super::thumbs::Shared::default(),
+            pictures: Default::default(),
             focus: cx.focus_handle(),
         };
         if !demo {

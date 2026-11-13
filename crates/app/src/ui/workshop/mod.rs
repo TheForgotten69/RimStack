@@ -91,6 +91,11 @@ pub struct Workshop {
     /// The download list shown beside the results, with no item chosen.
     list: bool,
     enlarged: Option<PathBuf>,
+    /// The opened item's pictures, let go once another is opened; the one enlarged, once closed.
+    pictures: crate::ui::pictures::Pictures,
+    enlarged_pictures: crate::ui::pictures::Pictures,
+    /// The cards' previews, decoded at the size shown.
+    thumbs: crate::ui::thumbs::Shared,
     community_busy: bool,
     seeking: Lane,
     previewing: Lane,
@@ -153,6 +158,9 @@ impl Workshop {
             filters: false,
             list: false,
             enlarged: None,
+            pictures: Default::default(),
+            enlarged_pictures: Default::default(),
+            thumbs: Default::default(),
             community_busy: false,
             seeking: Lane::default(),
             previewing: Lane::default(),

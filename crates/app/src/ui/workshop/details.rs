@@ -10,7 +10,7 @@ use crate::words::put;
 use crate::workspace::browse::{Related, Row, Shown};
 use gpui::{
     AnyElement, Context, InteractiveElement, IntoElement, ObjectFit, ParentElement, Pixels,
-    StatefulInteractiveElement, Styled, StyledImage, Window, div, img, prelude::FluentBuilder,
+    StatefulInteractiveElement, Styled, StyledImage, Window, div, prelude::FluentBuilder,
 };
 use rimstack_core::say;
 use std::path::PathBuf;
@@ -164,6 +164,7 @@ impl Workshop {
         let c = &theme.colours;
         let row = &shown.row;
         let id = row.id.clone();
+        let pictures = self.pictures.of(&id, cx);
         let mut parts: Vec<AnyElement> = Vec::new();
         if let Some(path) = self
             .opened
@@ -179,7 +180,12 @@ impl Workshop {
                     .rounded(theme::CORNER)
                     .bg(c.ctl)
                     .overflow_hidden()
-                    .child(img(path).size_full().object_fit(ObjectFit::Contain))
+                    .child(
+                        pictures
+                            .img(path)
+                            .size_full()
+                            .object_fit(ObjectFit::Contain),
+                    )
                     .into_any_element(),
             );
         }
@@ -329,7 +335,12 @@ impl Workshop {
                             .bg(c.ctl)
                             .overflow_hidden()
                             .cursor_pointer()
-                            .child(img(path.clone()).size_full().object_fit(ObjectFit::Cover))
+                            .child(
+                                pictures
+                                    .img(path.clone())
+                                    .size_full()
+                                    .object_fit(ObjectFit::Cover),
+                            )
                             .on_click(move |_, _, cx| {
                                 let path = path.clone();
                                 let _ = me.update(cx, |w, cx| {
@@ -381,7 +392,8 @@ impl Workshop {
                     })
                     .when(!part.image.is_empty(), |d| {
                         d.child(
-                            img(PathBuf::from(&part.image))
+                            pictures
+                                .img(PathBuf::from(&part.image))
                                 .id(("description-picture", at))
                                 .w(width)
                                 .object_fit(ObjectFit::Contain),

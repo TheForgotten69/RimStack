@@ -7,7 +7,7 @@ use crate::words::put;
 use crate::workspace::load_order::{Details, Overview};
 use gpui::{
     Context, FontWeight, InteractiveElement, IntoElement, ObjectFit, ParentElement, Pixels,
-    StatefulInteractiveElement, Styled, StyledImage, Window, div, img, prelude::FluentBuilder, px,
+    StatefulInteractiveElement, Styled, StyledImage, Window, div, prelude::FluentBuilder, px,
 };
 use rimstack_core::say;
 use std::rc::Rc;
@@ -76,6 +76,8 @@ impl gpui::EventEmitter<Asked> for DetailsView {}
 
 /// The details pane, a view of its own: choosing a mod or a tab draws nothing else.
 pub struct DetailsView {
+    /// The chosen mod's preview, let go once another mod is chosen.
+    pictures: crate::ui::pictures::Pictures,
     /// What the pane showed last (a comparison, the problems, Sort's moves, a selection, a mod or
     /// the list), and the turn of its last change, which fades the pane in.
     view_shown: Option<u8>,
@@ -138,6 +140,7 @@ impl DetailsView {
             group,
             note,
             small_picture: false,
+            pictures: Default::default(),
             downloads: None,
             copyable: Default::default(),
             paging: crate::ui::page::Paging::new(cx.global::<Theme>().appearance.reduce_motion),
@@ -338,6 +341,7 @@ impl DetailsView {
         let c = &theme.colours;
         let inner = width - theme::GAP_CARD * 2. - theme.sized(9.) - theme::GAP_HAIR * 2.;
         let preview = details.preview.clone();
+        let pictures = self.pictures.of(&details.path, cx);
         let tile = |cx: &mut Context<Self>| -> gpui::AnyElement {
             if let Some(path) = preview.clone() {
                 let tip = put(&say!("Click for the picture at full size"));
@@ -350,7 +354,8 @@ impl DetailsView {
                     .overflow_hidden()
                     .cursor_pointer()
                     .child(
-                        img(std::path::PathBuf::from(path))
+                        pictures
+                            .img(std::path::PathBuf::from(path))
                             .size_full()
                             .object_fit(ObjectFit::Cover),
                     )
@@ -512,7 +517,8 @@ impl DetailsView {
                             cx.notify();
                         }))
                         .child(
-                            img(std::path::PathBuf::from(path))
+                            pictures
+                                .img(std::path::PathBuf::from(path))
                                 .w(inner)
                                 .h(tall)
                                 // The picture's own ratio would otherwise set the height.

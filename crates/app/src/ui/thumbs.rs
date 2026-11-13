@@ -380,7 +380,12 @@ mod tests {
         assert_eq!(thumbs.gone[0].1.as_slice(), [first]);
         thumbs.renew();
         assert_eq!(thumbs.gone.len(), fits + 1);
-        assert!(thumbs.gone.iter().any(|(_, by)| by.as_slice() == [first, second]));
+        assert!(
+            thumbs
+                .gone
+                .iter()
+                .any(|(_, by)| by.as_slice() == [first, second])
+        );
         assert!(thumbs.shown.is_empty() && thumbs.bytes == 0);
     }
 
@@ -437,9 +442,8 @@ mod tests {
             })
             .unwrap()
         };
-        let drawn = |cx: &mut gpui::HeadlessAppContext| {
-            cx.update(|cx| window.read(cx).unwrap().drawn)
-        };
+        let drawn =
+            |cx: &mut gpui::HeadlessAppContext| cx.update(|cx| window.read(cx).unwrap().drawn);
         draw(&mut cx);
         assert!(in_atlas(&mut cx));
         let before = drawn(&mut cx);
