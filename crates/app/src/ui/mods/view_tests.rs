@@ -60,7 +60,8 @@ fn the_view_chosen_is_kept_and_read_again_with_the_mods() {
 }
 
 #[test]
-fn the_inactive_mods_fold_into_the_rail_and_the_dividers_keep_their_least() {
+fn the_inactive_mods_fold_into_the_rail_the_dividers_keep_their_least_and_showing_a_mod_unfolds_them()
+ {
     use super::panes::{Grip, pane_widths};
     let (_tmp, mut cx, mods) = opened_with(|_| {});
     cx.update(|cx| {
@@ -104,8 +105,20 @@ fn the_inactive_mods_fold_into_the_rail_and_the_dividers_keep_their_least() {
                 mods.layout.inactive_width,
                 gpui::px(500.) - crate::ui::theme::HANDLE / 2.
             );
-            mods.set_hidden(false, cx);
-            assert!(!mods.panes_wanted().hidden);
+            let id = mods
+                .inactive
+                .rows
+                .iter()
+                .find(|r| !r.is_header)
+                .unwrap()
+                .mod_id
+                .unwrap();
+            mods.show_mod(id, cx);
+            assert!(
+                !mods.view.inactive_hidden && !mods.panes_wanted().hidden,
+                "an inactive mod shown unfolds the list"
+            );
+            assert_eq!(mods.selected_id(cx), Some(id));
         })
     });
 }
@@ -265,27 +278,6 @@ fn the_hints_go_one_after_the_other_and_are_not_shown_again() {
             assert_eq!(mods.hints.step, 0, "Done ends them");
             mods.start_hints(cx);
             assert_eq!(mods.hints.step, 0, "seen once, they do not start again");
-        })
-    });
-}
-
-#[test]
-fn an_inactive_mod_shown_while_the_list_is_folded_unfolds_it() {
-    let (_tmp, mut cx, mods) = opened_with(|_| {});
-    cx.update(|cx| {
-        mods.update(cx, |mods, cx| {
-            mods.set_hidden(true, cx);
-            let id = mods
-                .inactive
-                .rows
-                .iter()
-                .find(|r| !r.is_header)
-                .unwrap()
-                .mod_id
-                .unwrap();
-            mods.show_mod(id, cx);
-            assert!(!mods.view.inactive_hidden, "the list is pinned again");
-            assert_eq!(mods.selected_id(cx), Some(id));
         })
     });
 }

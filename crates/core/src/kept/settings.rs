@@ -220,7 +220,7 @@ mod tests {
     }
 
     #[test]
-    fn a_switch_is_as_it_was_set_and_otherwise_as_it_is_at_first() {
+    fn every_switch_is_as_it_was_set_and_otherwise_as_it_is_at_first() {
         let mut s = Settings::default();
         assert!(s.switch(Switch::CommunityRules) && s.switch(Switch::FileHints));
         assert!(!s.switch(Switch::GitForWorkshop));
@@ -229,6 +229,12 @@ mod tests {
         assert!(!s.switch(Switch::CommunityRules) && !s.switch(Switch::FileHints));
         s.set("communityRules", "").unwrap();
         assert!(s.switch(Switch::CommunityRules));
+        for switch in Switch::ALL {
+            for (value, on) in [("on", true), ("off", false)] {
+                s.set(switch.name(), value).unwrap();
+                assert_eq!(s.switch(switch), on, "{}", switch.name());
+            }
+        }
     }
 
     #[test]
@@ -238,17 +244,6 @@ mod tests {
         s.set("updateEvery", "60").unwrap();
         assert_eq!(s.update_every_minutes(), 60);
         assert!(s.set("updateEvery", "7").is_err());
-    }
-
-    #[test]
-    fn every_switch_can_be_set() {
-        let mut s = Settings::default();
-        for switch in Switch::ALL {
-            for (value, on) in [("on", true), ("off", false)] {
-                s.set(switch.name(), value).unwrap();
-                assert_eq!(s.switch(switch), on, "{}", switch.name());
-            }
-        }
     }
 
     #[test]

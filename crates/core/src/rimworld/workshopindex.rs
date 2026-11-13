@@ -617,16 +617,11 @@ mod tests {
     }
 
     #[test]
-    fn requirements_keep_to_what_the_index_knows() {
+    fn requirements_keep_to_what_the_index_knows_and_needed_by_and_same_author_leave_the_mod_out() {
         let index = sample();
         assert_eq!(index.requires("200"), ["100"]);
         assert_eq!(index.get("200").unwrap().requires.len(), 2);
         assert!(index.requires("nope").is_empty());
-    }
-
-    #[test]
-    fn needed_by_and_same_author_are_by_title_and_leave_the_mod_out() {
-        let index = sample();
         assert_eq!(index.needed_by("100"), ["300", "200"]);
         assert!(index.needed_by("300").is_empty());
         assert_eq!(index.same_author("200"), ["300"]);

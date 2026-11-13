@@ -528,13 +528,9 @@ mod tests {
     }
 
     #[test]
-    fn the_same_mods_in_the_same_order_are_no_difference() {
+    fn missing_added_and_reordered_are_told_apart_and_the_same_mods_are_no_difference() {
         let d = compare(&ids(&["A.a", "b.b_steam"]), &ids(&["a.a", "b.b"]));
         assert!(d.is_none());
-    }
-
-    #[test]
-    fn missing_added_and_reordered_are_told_apart() {
         let d = compare(&ids(&["a", "gone", "b"]), &ids(&["b", "new", "a"]));
         assert_eq!(d.missing, [1]);
         assert_eq!(d.added, [1]);

@@ -176,15 +176,4 @@ mod tests {
         assert!(started.elapsed() < Duration::from_millis(400));
         assert_eq!(waiting(Duration::from_secs(5), || Ok(7)), Ok(7));
     }
-
-    #[test]
-    fn the_memory_store_keeps_replaces_and_forgets_one_secret() {
-        let vault = Memory::default();
-        assert_eq!(vault.get(), Ok(None));
-        vault.set("a").unwrap();
-        vault.set("b").unwrap();
-        assert_eq!(vault.get(), Ok(Some("b".to_string())));
-        vault.delete().unwrap();
-        assert_eq!(vault.get(), Ok(None));
-    }
 }

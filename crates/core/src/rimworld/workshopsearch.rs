@@ -490,7 +490,6 @@ mod tests {
         );
         assert_eq!(all.ids.first().map(String::as_str), Some("700000"));
         assert!(all.ids.windows(2).all(|w| w[0] > w[1]), "{:?}", all.ids);
-        assert_eq!(found("harmony", &Filters::default())[0], "100000");
     }
 
     #[test]

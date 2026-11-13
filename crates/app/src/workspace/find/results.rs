@@ -767,19 +767,6 @@ mod tests {
     }
 
     #[test]
-    fn blocks_apart_are_told_by_a_gap_row() {
-        let mut results = Results::default();
-        let mut found = file(1, "a.xml", 1);
-        found.hits.push(hit(9, "other Steel", "Steel"));
-        put(&mut results, found);
-        let rows = results.refs();
-        let is_gap = |at| matches!(results.shown(at), Some(Shown::Line { gap: true, .. }));
-        assert_eq!(rows.len(), 5);
-        assert!(is_gap(rows[3]));
-        assert_eq!(results.locate(rows[3]).unwrap().line, 9);
-    }
-
-    #[test]
     fn stepping_goes_from_file_to_line_row_passing_mod_rows_and_gaps_and_stops_at_the_ends() {
         let mut results = Results::default();
         let mut found = file(1, "a.xml", 1);
@@ -789,6 +776,7 @@ mod tests {
         let rows = results.refs();
         let is_gap = |at| matches!(results.shown(at), Some(Shown::Line { gap: true, .. }));
         assert!(rows[0].is_mod() && rows[1].is_file() && is_gap(rows[3]) && rows[5].is_mod());
+        assert_eq!(results.locate(rows[3]).unwrap().line, 9);
         let step = |from, by| results.step(&rows, from, by);
         assert_eq!(step(None, 1), Some(1));
         assert_eq!(step(None, -1), Some(7));

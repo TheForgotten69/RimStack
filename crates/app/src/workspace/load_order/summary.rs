@@ -141,7 +141,7 @@ mod tests {
     }
 
     #[test]
-    fn mods_chosen_in_a_row_say_where_the_run_starts_and_ends() {
+    fn mods_chosen_say_where_the_run_starts_and_ends_or_between_which_places() {
         let (_tmp, app) = four_active();
         let order = LoadOrder::read(&app, true, None);
         let chosen = ids(&order, Side::Active, &["ann.c", "ann.b"]);
@@ -150,15 +150,19 @@ mod tests {
         let names: Vec<&str> = summary.rows.iter().map(|r| r.name.as_str()).collect();
         assert_eq!(names, ["Ann.B", "Ann.C"]);
         assert_eq!(summary.not_in_view, 0);
+        let apart = ids(&order, Side::Active, &["ludeon.rimworld", "ann.c"]);
+        let summary = order.selection_summary(true, &apart);
+        assert_eq!(said(&summary.place), "In the load order, between 1 and 4");
     }
 
     #[test]
-    fn mods_apart_are_between_two_places() {
-        let (_tmp, app) = four_active();
+    fn inactive_mods_are_only_called_inactive() {
+        let (_tmp, app) = installed();
         let order = LoadOrder::read(&app, true, None);
-        let chosen = ids(&order, Side::Active, &["ludeon.rimworld", "ann.c"]);
-        let summary = order.selection_summary(true, &chosen);
-        assert_eq!(said(&summary.place), "In the load order, between 1 and 4");
+        let roads = ids(&order, Side::Inactive, &["ann.roads"]);
+        let summary = order.selection_summary(false, &roads);
+        assert_eq!(said(&summary.place), "Inactive");
+        assert_eq!(summary.rows.len(), 1);
     }
 
     #[test]
@@ -189,15 +193,5 @@ mod tests {
         assert_eq!(said(&summary.troubled), "2, 1 for the game version");
         let none = ids(&order, Side::Active, &["ann.b", "ludeon.rimworld"]);
         assert!(order.selection_summary(true, &none).troubled.is_empty());
-    }
-
-    #[test]
-    fn inactive_mods_are_only_called_inactive() {
-        let (_tmp, app) = installed();
-        let order = LoadOrder::read(&app, true, None);
-        let roads = ids(&order, Side::Inactive, &["ann.roads"]);
-        let summary = order.selection_summary(false, &roads);
-        assert_eq!(said(&summary.place), "Inactive");
-        assert_eq!(summary.rows.len(), 1);
     }
 }

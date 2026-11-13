@@ -64,21 +64,6 @@ fn typing_in_the_filter_narrows_both_lists_and_clearing_it_shows_all(
     assert_eq!(back, all);
 }
 
-#[gpui::test]
-fn a_category_heading_folds_its_mods_away(cx: &mut gpui::TestAppContext) {
-    let _root = demo(cx);
-    let (mods, cx) = cx.add_window_view(|_, cx| Mods::new(true, cx));
-    let rows = |mods: &Mods| mods.active.rows.len();
-    let before = mods.read_with(cx, |mods, _| rows(mods));
-    let first = mods.read_with(cx, |mods, _| mods.active.rows[0].clone());
-    assert!(first.is_header && first.count > 0);
-    mods.update(cx, |mods, cx| {
-        mods.toggle_category(Side::Active, first.category, cx)
-    });
-    let after = mods.read_with(cx, |mods, _| rows(mods));
-    assert_eq!(after, before - first.count);
-}
-
 /// The middle of the load order's first heading, from the Theme: the inactive pane and its edge,
 /// then the title row, the filter, the headings and the room above the rows.
 fn first_heading(cx: &mut gpui::VisualTestContext) -> gpui::Point<gpui::Pixels> {

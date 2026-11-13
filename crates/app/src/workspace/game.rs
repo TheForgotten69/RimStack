@@ -128,19 +128,6 @@ mod tests {
     }
 
     #[test]
-    fn a_launch_is_recorded_with_its_list_and_steam_starts_the_game_by_default() {
-        let (_tmp, app) = installed();
-        app.record_launch();
-        let record = launches::read(&app.launches_file());
-        assert_eq!(record.len(), 1);
-        assert_eq!(record[0].ids, app.session().current().to_vec());
-        assert_eq!(
-            app.start_game().unwrap().as_deref(),
-            Some("steam://rungameid/294100")
-        );
-    }
-
-    #[test]
     fn a_list_emptied_to_the_official_mods_offers_the_last_launch_s() {
         let both = vec!["ludeon.rimworld".to_string(), "ann.roads".to_string()];
         let (_tmp, app) = installed();
@@ -191,7 +178,9 @@ mod tests {
             app.launch(true).unwrap().as_deref(),
             Some("steam://rungameid/294100")
         );
-        assert_eq!(launches::read(&app.launches_file()).len(), 1);
+        let record = launches::read(&app.launches_file());
+        assert_eq!(record.len(), 1);
+        assert_eq!(record[0].ids, app.session().current().to_vec());
         app.launch(false).unwrap();
         assert_eq!(launches::read(&app.launches_file()).len(), 1);
     }

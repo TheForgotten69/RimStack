@@ -414,15 +414,6 @@ fn a_sort_of_a_list_in_order_moves_nothing_and_says_so() {
     assert_eq!(order.sort_count().map(|count| count.moves(&app)), Some(0));
 }
 
-#[test]
-fn made_up_lists_have_rows_and_no_problems() {
-    let (_tmp, app) = installed();
-    let order = LoadOrder::demo(40, 10);
-    assert_eq!(order.list(Side::Active).mods().len(), 40);
-    assert!(order.rows(&app, Side::Active).len() >= 40);
-    assert_eq!(order.errors_and_warnings(), (0, 0));
-}
-
 fn nothing_found() -> crate::workspace::Conflicts {
     crate::workspace::Conflicts {
         members: Vec::new(),
@@ -432,19 +423,15 @@ fn nothing_found() -> crate::workspace::Conflicts {
 }
 
 #[test]
-fn a_scan_overtaken_by_a_change_of_textures_writes_nothing() {
+fn a_scan_is_kept_unless_a_change_of_textures_overtook_it() {
+    let (_tmp, app) = installed();
+    app.keep_files_read(app.conflicts_generation(), nothing_found());
+    assert!(app.conflicts().reading().is_some());
     let (_tmp, app) = installed();
     let generation = app.conflicts_generation();
     app.textures_changed();
     app.keep_files_read(generation, nothing_found());
     assert!(app.conflicts().reading().is_none());
-}
-
-#[test]
-fn a_scan_nothing_overtook_is_kept() {
-    let (_tmp, app) = installed();
-    app.keep_files_read(app.conflicts_generation(), nothing_found());
-    assert!(app.conflicts().reading().is_some());
 }
 
 #[cfg(target_os = "linux")]

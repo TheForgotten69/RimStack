@@ -56,7 +56,9 @@ fn shown_titles(settings: &Entity<Settings>, cx: &mut VisualTestContext) -> Vec<
 }
 
 #[gpui::test]
-fn a_search_shows_the_settings_it_names_from_every_part(cx: &mut TestAppContext) {
+fn a_search_shows_the_settings_it_names_from_every_part_and_the_arrows_go_from_part_to_part(
+    cx: &mut TestAppContext,
+) {
     let (_root, settings, cx) = settings(cx, 0);
     assert!(shown_titles(&settings, cx).contains(&"Launch arguments".to_string()));
     let field = settings.read_with(cx, |s, _| s.fields.find.clone());
@@ -66,6 +68,13 @@ fn a_search_shows_the_settings_it_names_from_every_part(cx: &mut TestAppContext)
         cx.notify();
     });
     assert_eq!(shown_titles(&settings, cx), ["Motion"]);
+    cx.update(|window, cx| {
+        let keys = settings.read(cx).part_keys.clone();
+        window.focus(&keys, cx);
+    });
+    cx.run_until_parked();
+    cx.simulate_keystrokes("down down up");
+    assert_eq!(settings.read_with(cx, |s, _| s.part), 1);
 }
 
 #[gpui::test]
@@ -198,16 +207,4 @@ fn a_choice_of_many_ends_before_the_way_back_to_its_default() {
             }
         }
     }
-}
-
-#[gpui::test]
-fn the_arrows_go_from_part_to_part_once_tab_reached_them(cx: &mut TestAppContext) {
-    let (_root, settings, cx) = settings(cx, 0);
-    cx.update(|window, cx| {
-        let keys = settings.read(cx).part_keys.clone();
-        window.focus(&keys, cx);
-    });
-    cx.run_until_parked();
-    cx.simulate_keystrokes("down down up");
-    assert_eq!(settings.read_with(cx, |s, _| s.part), 1);
 }

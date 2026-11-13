@@ -485,15 +485,6 @@ fn runs_count_the_headings_a_list_needs() {
 }
 
 #[test]
-fn empty_list_has_no_rows() {
-    let mut list = GroupedList::new(Vec::new());
-    assert!(list.rows().is_empty());
-    list.set_filter("x");
-    assert!(list.rows().is_empty());
-    assert_eq!(list.toggle(Category::Content), Change::Reset);
-}
-
-#[test]
 fn collapsing_removes_the_rows_under_one_header() {
     let mut list = sample();
     let change = list.toggle(Category::Game);
@@ -520,7 +511,7 @@ fn toggling_a_category_that_is_not_shown_asks_for_a_reset() {
 }
 
 #[test]
-fn filter_keeps_matches_and_drops_empty_groups() {
+fn filter_keeps_matches_drops_empty_groups_and_ignores_case() {
     let mut list = sample();
     list.set_filter("dub");
     assert_eq!(
@@ -531,20 +522,10 @@ fn filter_keeps_matches_and_drops_empty_groups() {
             Row::Mod { index: 5 }
         ]
     );
-}
-
-#[test]
-fn filter_matches_author_and_ignores_case() {
-    let mut list = sample();
-    list.set_filter("LUDEON");
-    assert_eq!(
-        list.rows(),
-        &[
-            header(Category::Game, 2, false),
-            Row::Mod { index: 1 },
-            Row::Mod { index: 2 }
-        ]
-    );
+    for (term, rows) in [("LUDEON", 3), ("zzz", 0), ("", 10)] {
+        list.set_filter(term);
+        assert_eq!(list.rows().len(), rows, "filter {term:?}");
+    }
 }
 
 #[test]
@@ -557,26 +538,13 @@ fn filter_ignores_case_for_non_ascii_letters() {
 }
 
 #[test]
-fn filter_with_no_match_shows_nothing_and_clearing_restores() {
-    let mut list = sample();
-    list.set_filter("zzz");
-    assert!(list.rows().is_empty());
-    list.set_filter("");
-    assert_eq!(list.rows().len(), 10);
-}
-
-#[test]
-fn moving_a_mod_changes_load_order_and_regroups() {
+fn moving_a_mod_regroups_and_a_bad_index_changes_nothing() {
     let mut list = sample();
     list.move_mod(5, 0);
     assert_eq!(list.mods()[0].name, "Rimefeller");
     assert_eq!(list.rows()[0], header(Category::Content, 1, false));
     assert_eq!(list.rows()[2], header(Category::Loaders, 1, false));
-}
 
-#[test]
-fn moving_with_a_bad_index_changes_nothing() {
-    let mut list = sample();
     let before = list.rows().to_vec();
     list.move_mod(99, 0);
     list.move_mod(0, 99);

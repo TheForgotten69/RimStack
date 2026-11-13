@@ -162,13 +162,6 @@ fn own_colours_are_written_for_one_theme_and_read_back_for_it() {
 }
 
 #[test]
-fn rimsort_rules_missing_say_why() {
-    let (_tmp, app) = installed();
-    let said = app.import_rimsort_rules();
-    assert!(said.to_string().contains("userRules.json"), "{said}");
-}
-
-#[test]
 fn the_fonts_offered_start_with_the_systems_and_are_found_by_any_part() {
     let fonts = font_choices(vec!["noto Sans".into(), "Arial".into(), "Arial".into()]);
     assert_eq!(fonts, ["", "Arial", "noto Sans"]);

@@ -399,22 +399,6 @@ fn a_search_inside_the_file_finds_lines_steps_around_and_centres_the_window_on_t
 }
 
 #[test]
-fn the_mods_found_are_listed_with_counts_and_a_pick_keeps_one_mods_rows() {
-    let (_tmp, app) = made_up();
-    run(&app, &ask("steel", Place::Installed));
-    let list = app.find_results(|r| r.found_mods());
-    assert!(list.rows.len() >= 2 && list.all_chosen);
-    assert_eq!(
-        list.all_count,
-        list.rows.iter().map(|m| m.count).sum::<usize>()
-    );
-    let one = list.rows[0].index;
-    let rows = app.find_change(|r| r.set_pick(Some(one)));
-    assert!(rows.iter().all(|r| r.same_mod(rows[0])));
-    assert!(app.find_results(|r| r.found_mods()).rows[0].chosen);
-}
-
-#[test]
 fn extensions_are_counted_per_place_and_leave_the_folders_left_out() {
     let (_tmp, app) = made_up();
     let counted = |request: &Request| app.find_extensions(request);

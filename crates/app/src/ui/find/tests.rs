@@ -75,8 +75,8 @@ fn first_window(_: &Theme) -> Size<Pixels> {
 }
 
 #[test]
-fn a_search_lists_mods_files_and_lines_and_the_chosen_line_is_previewed() {
-    let (_tmp, mut cx, _shell, find) = opened(1.0, &first_window, Some("Fixture"));
+fn a_search_lists_previews_folds_and_shows_in_mods_what_it_found() {
+    let (_tmp, mut cx, shell, find) = opened(1.0, &first_window, Some("Fixture"));
     cx.update(|cx| {
         let find = find.read(cx);
         let app = crate::ui::app(cx);
@@ -94,11 +94,6 @@ fn a_search_lists_mods_files_and_lines_and_the_chosen_line_is_previewed() {
             "Fixture is found inside the file"
         );
     });
-}
-
-#[test]
-fn folding_filtering_and_stepping_keep_the_rows_and_the_current_one_together() {
-    let (_tmp, mut cx, _shell, find) = opened(1.0, &first_window, Some("Fixture"));
     cx.update(|cx| {
         find.update(cx, |find, cx| {
             let all = find.rows.len();
@@ -123,11 +118,6 @@ fn folding_filtering_and_stepping_keep_the_rows_and_the_current_one_together() {
             assert!(find.rows.len() < all && find.rows.iter().filter(|r| r.is_mod()).count() == 1);
         })
     });
-}
-
-#[test]
-fn showing_the_mods_with_matches_goes_to_mods_filtered_by_the_search() {
-    let (_tmp, mut cx, shell, find) = opened(1.0, &first_window, Some("Fixture"));
     cx.update(|cx| find.update(cx, |find, cx| find.show_in_mods(cx)));
     cx.run_until_parked();
     let (section, filter) = cx

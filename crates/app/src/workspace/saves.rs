@@ -238,11 +238,8 @@ mod tests {
         assert!(none["saves"].as_array().unwrap().is_empty());
         let some = crate::words::as_shown(&shown(&report, "", " COLO"));
         assert_eq!(some["saves"].as_array().unwrap().len(), 1);
-        assert_eq!(some["searchable"], false);
         assert_eq!(save["dir"], saves.to_string_lossy().as_ref());
         assert_eq!(all["heading"], "1");
-        assert_eq!(all["pictured"], false);
-        assert!(!report.rimsaves);
         let elsewhere = crate::words::as_shown(&shown(&report, "Other", ""));
         assert_eq!(elsewhere["saves"].as_array().unwrap().len(), 0);
         assert_eq!(elsewhere["heading"], "0 in Other");

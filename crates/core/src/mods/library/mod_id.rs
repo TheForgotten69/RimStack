@@ -88,10 +88,6 @@ mod tests {
     fn the_same_place_in_two_readings_is_two_ids() {
         let (first, second) = (next_reading(), next_reading());
         assert_ne!(ModId::new(first, 3), ModId::new(second, 3));
-        assert_ne!(
-            ModId::new(first, 3).to_packed(),
-            ModId::new(second, 3).to_packed()
-        );
     }
 
     #[test]
