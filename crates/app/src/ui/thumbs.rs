@@ -21,10 +21,20 @@ const WAITING: usize = 128;
 
 type Size = (u32, u32);
 type Key = (Size, String);
+type Viewers = smallvec::SmallVec<[EntityId; 2]>;
+
+/// A decoded picture, when it was last shown, and the views that drew it.
+struct Kept {
+    image: Arc<RenderImage>,
+    at: u64,
+    by: Viewers,
+}
 
 pub struct Thumbs {
-    /// Each with when it was last shown.
-    shown: HashMap<Key, (Arc<RenderImage>, u64)>,
+    shown: HashMap<Key, Kept>,
+    /// Pictures let go, still in the window's atlas until `flush`, and the views to draw again
+    /// without them.
+    gone: Vec<(Arc<RenderImage>, Viewers)>,
     /// Least lately shown first, for dropping past `most`.
     by_use: BTreeMap<u64, Key>,
     uses: u64,
@@ -48,6 +58,7 @@ impl Default for Thumbs {
     fn default() -> Self {
         Self {
             shown: HashMap::new(),
+            gone: Vec::new(),
             by_use: BTreeMap::new(),
             uses: 0,
             bytes: 0,
@@ -66,8 +77,10 @@ pub type Shared = Rc<RefCell<Thumbs>>;
 
 impl Thumbs {
     /// The pictures may have changed on disk: each is read again when next shown.
-    pub fn renew(&mut self) {
-        self.shown.clear();
+    fn renew(&mut self) {
+        let shown = std::mem::take(&mut self.shown);
+        self.gone
+            .extend(shown.into_values().map(|kept| (kept.image, kept.by)));
         self.by_use.clear();
         self.bytes = 0;
         self.unreadable.clear();
@@ -109,11 +122,14 @@ impl Thumbs {
         self.uses
     }
 
-    fn hit(&mut self, key: &Key) -> Option<Arc<RenderImage>> {
+    fn hit(&mut self, key: &Key, by: EntityId) -> Option<Arc<RenderImage>> {
         let now = self.uses + 1;
-        let (shown, at) = self.shown.get_mut(key)?;
-        let was = std::mem::replace(at, now);
-        let shown = shown.clone();
+        let kept = self.shown.get_mut(key)?;
+        let was = std::mem::replace(&mut kept.at, now);
+        if !kept.by.contains(&by) {
+            kept.by.push(by);
+        }
+        let shown = kept.image.clone();
         self.uses = now;
         if let Some(key) = self.by_use.remove(&was) {
             self.by_use.insert(now, key);
@@ -121,13 +137,15 @@ impl Thumbs {
         Some(shown)
     }
 
-    fn keep(&mut self, key: Key, shown: Arc<RenderImage>) {
+    fn keep(&mut self, key: Key, image: Arc<RenderImage>, by: Option<EntityId>) {
         let at = self.used();
         let bytes = tile_bytes(key.0);
         self.by_use.insert(at, key.clone());
-        match self.shown.insert(key, (shown, at)) {
-            Some((_, was)) => {
-                self.by_use.remove(&was);
+        let by = by.into_iter().collect();
+        match self.shown.insert(key, Kept { image, at, by }) {
+            Some(was) => {
+                self.by_use.remove(&was.at);
+                self.gone.push((was.image, was.by));
             }
             None => self.bytes += bytes,
         }
@@ -135,8 +153,9 @@ impl Thumbs {
             let Some((_, old)) = self.by_use.pop_first() else {
                 break;
             };
-            if self.shown.remove(&old).is_some() {
+            if let Some(kept) = self.shown.remove(&old) {
                 self.bytes -= tile_bytes(old.0);
+                self.gone.push((kept.image, kept.by));
             }
         }
     }
@@ -187,6 +206,26 @@ impl Thumbs {
     }
 }
 
+/// The window's atlas keeps every picture ever drawn until it is told to let one go. A view
+/// that drew one let go is drawn again in the same update, before any frame could copy its
+/// last frame's sprites; so this runs only outside drawing.
+fn flush(thumbs: &Shared, cx: &mut Cx) {
+    let gone = std::mem::take(&mut thumbs.borrow_mut().gone);
+    for (image, by) in gone {
+        cx.drop_image(image, None);
+        for view in by {
+            cx.notify(view);
+        }
+    }
+}
+
+/// The pictures may have changed on disk: each is read again when next shown, and those held
+/// leave the atlas.
+pub fn renew(thumbs: &Shared, cx: &mut Cx) {
+    thumbs.borrow_mut().renew();
+    flush(thumbs, cx);
+}
+
 fn tile_bytes((width, height): Size) -> usize {
     width as usize * height as usize * 4
 }
@@ -202,7 +241,7 @@ pub fn thumb(
 ) -> Option<Arc<RenderImage>> {
     let key = (size, path.to_string());
     let mut held = thumbs.borrow_mut();
-    if let Some(shown) = held.hit(&key) {
+    if let Some(shown) = held.hit(&key, shown_by) {
         return Some(shown);
     }
     if held.unreadable.contains(&key) {
@@ -262,7 +301,7 @@ fn decode_next(thumbs: &Shared, cx: &mut Cx) {
             held.decoding -= 1;
             let shown_by = held.asked.remove(&key).flatten();
             match made.and_then(|pixels| picture(pixels, size)) {
-                Some(made) => held.keep(key, Arc::new(made)),
+                Some(made) => held.keep(key, Arc::new(made), shown_by),
                 None => {
                     held.unreadable.insert(key);
                 }
@@ -273,6 +312,7 @@ fn decode_next(thumbs: &Shared, cx: &mut Cx) {
             if let Some(view) = shown_by {
                 cx.notify(view);
             }
+            flush(&thumbs, cx);
             decode_next(&thumbs, cx);
         });
     })
@@ -297,7 +337,7 @@ mod tests {
         let fits = MOST_BYTES / tile_bytes(size);
         for at in 0..fits + 3 {
             let made = picture(vec![0; tile_bytes(size)], size).unwrap();
-            thumbs.keep((size, at.to_string()), Arc::new(made));
+            thumbs.keep((size, at.to_string()), Arc::new(made), None);
         }
         assert!(thumbs.bytes <= MOST_BYTES);
         assert_eq!(thumbs.shown.len(), fits);
@@ -315,10 +355,99 @@ mod tests {
         while let Some(key) = thumbs.next_to_decode() {
             thumbs.asked.remove(&key);
             let made = picture(vec![0; tile_bytes(size)], size).unwrap();
-            thumbs.keep(key, Arc::new(made));
+            thumbs.keep(key, Arc::new(made), None);
         }
         assert_eq!(thumbs.shown.len(), count);
         assert!(thumbs.bytes + ROOM_BYTES <= thumbs.most);
+    }
+
+    #[test]
+    fn a_picture_let_go_leaves_with_the_views_that_drew_it_and_renew_lets_all_go() {
+        let mut thumbs = Thumbs::default();
+        let size = (512, 512);
+        let fits = MOST_BYTES / tile_bytes(size);
+        let key = |at: usize| (size, at.to_string());
+        let (first, second) = (EntityId::from(1), EntityId::from(2));
+        for at in 0..fits {
+            let made = picture(vec![0; tile_bytes(size)], size).unwrap();
+            thumbs.keep(key(at), Arc::new(made), Some(first));
+        }
+        assert!(thumbs.hit(&key(0), second).is_some());
+        assert!(thumbs.gone.is_empty());
+        let made = picture(vec![0; tile_bytes(size)], size).unwrap();
+        thumbs.keep(key(fits), Arc::new(made), None);
+        assert_eq!(thumbs.gone.len(), 1);
+        assert_eq!(thumbs.gone[0].1.as_slice(), [first]);
+        thumbs.renew();
+        assert_eq!(thumbs.gone.len(), fits + 1);
+        assert!(thumbs.gone.iter().any(|(_, by)| by.as_slice() == [first, second]));
+        assert!(thumbs.shown.is_empty() && thumbs.bytes == 0);
+    }
+
+    struct Drawer {
+        thumbs: Shared,
+        key: Key,
+        drawn: usize,
+    }
+
+    impl gpui::Render for Drawer {
+        fn render(
+            &mut self,
+            _: &mut gpui::Window,
+            cx: &mut gpui::Context<Self>,
+        ) -> impl gpui::IntoElement {
+            use gpui::{ParentElement, Styled};
+            self.drawn += 1;
+            let shown = self.thumbs.borrow_mut().hit(&self.key, cx.entity_id());
+            gpui::div()
+                .size_full()
+                .children(shown.map(|image| gpui::img(image).size(gpui::px(8.))))
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn renewed_pictures_leave_the_atlas_and_their_views_are_drawn_again() {
+        let mut cx = gpui::HeadlessAppContext::with_asset_source(
+            crate::ui::made_up::text_system(),
+            Arc::new(crate::ui::assets::Assets),
+        );
+        let size = (4, 4);
+        let key: Key = (size, "a".to_string());
+        let image = Arc::new(picture(vec![255; tile_bytes(size)], size).unwrap());
+        let thumbs = Shared::default();
+        thumbs.borrow_mut().keep(key.clone(), image.clone(), None);
+        let window = cx
+            .open_window(gpui::size(gpui::px(40.), gpui::px(40.)), |_, cx| {
+                gpui::AppContext::new(cx, |_| Drawer {
+                    thumbs: thumbs.clone(),
+                    key,
+                    drawn: 0,
+                })
+            })
+            .unwrap();
+        let draw = |cx: &mut gpui::HeadlessAppContext| {
+            cx.run_until_parked();
+            cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+                .unwrap();
+        };
+        let in_atlas = |cx: &mut gpui::HeadlessAppContext| {
+            cx.update_window(window.into(), |_, window, _| {
+                window.has_image_atlas_entry(&image)
+            })
+            .unwrap()
+        };
+        let drawn = |cx: &mut gpui::HeadlessAppContext| {
+            cx.update(|cx| window.read(cx).unwrap().drawn)
+        };
+        draw(&mut cx);
+        assert!(in_atlas(&mut cx));
+        let before = drawn(&mut cx);
+        cx.update(|cx| renew(&thumbs, cx));
+        assert!(!in_atlas(&mut cx));
+        draw(&mut cx);
+        assert_eq!(drawn(&mut cx), before + 1);
+        assert!(!in_atlas(&mut cx));
     }
 
     #[test]
@@ -329,11 +458,11 @@ mod tests {
         let key = |at: usize| (size, at.to_string());
         for at in 0..fits {
             let made = picture(vec![0; tile_bytes(size)], size).unwrap();
-            thumbs.keep(key(at), Arc::new(made));
+            thumbs.keep(key(at), Arc::new(made), None);
         }
-        assert!(thumbs.hit(&key(0)).is_some());
+        assert!(thumbs.hit(&key(0), EntityId::from(1)).is_some());
         let made = picture(vec![0; tile_bytes(size)], size).unwrap();
-        thumbs.keep(key(fits), Arc::new(made));
+        thumbs.keep(key(fits), Arc::new(made), None);
         assert!(thumbs.shown.contains_key(&key(0)));
         assert!(!thumbs.shown.contains_key(&key(1)));
         assert_eq!(thumbs.by_use.len(), thumbs.shown.len());

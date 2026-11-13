@@ -463,7 +463,7 @@ impl Mods {
                 }
                 mods.order = order;
                 if anew {
-                    mods.thumbs.borrow_mut().renew();
+                    super::thumbs::renew(&mods.thumbs, cx);
                 }
                 mods.judge_unread(cx);
                 mods.show(cx);

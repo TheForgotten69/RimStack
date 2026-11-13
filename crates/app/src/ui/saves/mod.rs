@@ -118,7 +118,7 @@ impl Saves {
             cx,
             move |_| app.saves_report(),
             |saves, report, cx| {
-                saves.thumbs.borrow_mut().renew();
+                super::thumbs::renew(&saves.thumbs, cx);
                 saves.report = Rc::new(report);
                 saves.busy = false;
                 cx.notify();
