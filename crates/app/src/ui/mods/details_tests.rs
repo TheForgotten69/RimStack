@@ -5,7 +5,7 @@ use crate::workspace::load_order::Side;
 use gpui::{Entity, HeadlessAppContext};
 use rimstack_core::mods::library::ModId;
 
-fn active_id(mods: &Mods, nth: usize) -> i32 {
+fn active_id(mods: &Mods, nth: usize) -> ModId {
     mods.active
         .rows
         .iter()
@@ -13,9 +13,10 @@ fn active_id(mods: &Mods, nth: usize) -> i32 {
         .nth(nth)
         .unwrap()
         .mod_id
+        .unwrap()
 }
 
-fn chosen(cx: &mut HeadlessAppContext, mods: &Entity<Mods>, nth: usize) -> i32 {
+fn chosen(cx: &mut HeadlessAppContext, mods: &Entity<Mods>, nth: usize) -> ModId {
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
             let id = active_id(mods, nth);
@@ -47,17 +48,14 @@ fn picking_a_mod_while_asked_adds_a_rule_of_your_own() {
             mods.start_picking(Some(Picking::After), cx);
             let other = active_id(mods, 9);
             mods.choose(Side::Active, other, cx);
-            assert!(mods.picking.is_none(), "a pick ends the picking");
+            assert!(
+                mods.chosen_reads.picking.is_none(),
+                "a pick ends the picking"
+            );
             assert_eq!(mods.selected_id(), Some(id), "the mod chosen stays chosen");
             let rules = &mods.details.as_ref().unwrap().your_rules;
             assert_eq!(rules.len(), 1);
-            assert_eq!(
-                (rules[0].first, rules[0].then),
-                (
-                    ModId::from_packed(other).unwrap(),
-                    ModId::from_packed(id).unwrap()
-                )
-            );
+            assert_eq!((rules[0].first, rules[0].then), (other, id));
         })
     });
 }
@@ -73,10 +71,13 @@ fn tags_and_a_note_typed_are_kept_for_the_mod_they_were_typed_for() {
             let details = mods.details.as_ref().unwrap();
             assert_eq!(details.tags, "worn, kept");
             assert_eq!(details.note, "First line\nsecond");
-            assert!(mods.notes_saved);
-            mods.notes_saved = false;
+            assert!(mods.chosen_reads.notes_saved);
+            mods.chosen_reads.notes_saved = false;
             mods.keep_drafts(cx);
-            assert!(!mods.notes_saved, "nothing waiting is not said saved");
+            assert!(
+                !mods.chosen_reads.notes_saved,
+                "nothing waiting is not said saved"
+            );
         })
     });
 }

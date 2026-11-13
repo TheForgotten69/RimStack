@@ -6,6 +6,7 @@ use crate::ui::theme::Theme;
 use crate::ui::widgets::watch::{self, Seen};
 use crate::ui::{Options, install, prompt};
 use gpui::{AppContext, Entity, HeadlessAppContext, Pixels, Size, WindowHandle, point, px, size};
+use rimstack_core::mods::library::ModId;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -42,7 +43,7 @@ fn a_question_closes_on_escape_or_a_click_beside_it_and_does_nothing(
     let downloads = shell.update(cx, |shell, cx| shell.downloads(cx));
     let ask = |cx: &mut gpui::VisualTestContext| {
         downloads.update_in(cx, |d, window, cx| {
-            d.ask_unsubscribe(7, "Old Roads".into(), window, cx)
+            d.ask_unsubscribe(ModId::new(0, 7), "Old Roads".into(), window, cx)
         });
     };
     ask(cx);
@@ -89,7 +90,7 @@ fn the_page_under_a_question_keeps_its_place(cx: &mut gpui::TestAppContext) {
         downloads.read_with(cx, |d, _| d.paging.scroll.borrow().top())
     };
     downloads.update_in(cx, |d, window, cx| {
-        d.ask_unsubscribe(7, "Old Roads".into(), window, cx)
+        d.ask_unsubscribe(ModId::new(0, 7), "Old Roads".into(), window, cx)
     });
     cx.run_until_parked();
     wheel(cx);
@@ -123,7 +124,7 @@ fn showing_a_mod_from_downloads_goes_to_the_mods_tab(cx: &mut gpui::TestAppConte
         crate::ui::section::Section::Downloads
     );
     let downloads = shell.update(cx, |shell, cx| shell.downloads(cx));
-    downloads.update(cx, |_, cx| cx.emit(ShowMod(3)));
+    downloads.update(cx, |_, cx| cx.emit(ShowMod(ModId::new(0, 3))));
     assert_eq!(
         shell.read_with(cx, |shell, _| shell.section()),
         crate::ui::section::Section::Mods

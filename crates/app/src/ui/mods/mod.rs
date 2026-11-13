@@ -24,6 +24,7 @@ mod problems;
 mod rows;
 mod selection;
 mod sort_moves;
+mod state;
 mod tabs;
 mod unread;
 
@@ -96,6 +97,12 @@ pub struct Mods {
     focus_wanted: bool,
     keys: columns::Reachable,
     inactive_list: Entity<list::ModList>,
+    status: state::Status,
+    layout: state::Layout,
+    hints: state::Hinting,
+    chosen_reads: state::ChosenReads,
+    reads: state::Reads,
+    problem_nav: state::ProblemNav,
     /// Asked to be done once the view is drawn; each answers whether it was done.
     when_drawn: Vec<AfterDrawn>,
     thumbs: super::thumbs::Shared,
@@ -103,15 +110,8 @@ pub struct Mods {
     overview: Option<Rc<Overview>>,
     details: Option<Rc<Details>>,
     details_view: Entity<chosen::DetailsView>,
-    summary: Option<Rc<crate::reports::Summary>>,
-    last_start: Option<Rc<crate::workspace::logs::LastStartSaid>>,
-    summary_reading: Lane,
-    last_start_reading: Lane,
-    conflicts: usize,
-    /// Inactive mods installed since the game was last started from RimStack.
-    fresh: usize,
     /// `RowView::mod_id`s, the first chosen first.
-    selection: Vec<i32>,
+    selection: Vec<ModId>,
     selected_active: bool,
     demo: bool,
     loading: Lane,
@@ -122,60 +122,21 @@ pub struct Mods {
     why_unread: Option<(bool, Option<rimstack_core::base::sentence::Sentence>)>,
     files_read: bool,
     sort_pending: usize,
-    inactive_width: Pixels,
-    details_width: Pixels,
-    saving: bool,
-    save_problem: String,
-    /// Why a mod was not binned or copied to the game's folder.
-    upkeep_problem: String,
-    /// ModsConfig.xml was written outside RimStack since it was read: Save refused to overwrite it.
-    file_changed: bool,
-    /// The Sort note closed, by its words; and the one whose closing is on its way.
-    closed_note: String,
-    note_timer: String,
-    /// The row of the problem last shown by the arrows beside the problems.
-    problem_row: Option<usize>,
-    problems_open: bool,
     /// Told by the window while the search for the broken mod runs.
     hunting: bool,
-    /// The other mod of a rule of your own being chosen.
-    picking: Option<notes::Picking>,
-    drafts: notes::Drafts,
-    /// "Saved" shows beside the notes for a while after they are kept.
-    notes_saved: bool,
-    chosen_read: Lane,
-    /// What the Files tab shows of the chosen mod, read off the window's thread.
-    chosen_files: Option<(ModId, Rc<chosen::FilesRead>)>,
-    /// A Git checkout's last commits, for its Latest changes.
-    chosen_commits: Option<(ModId, Rc<Vec<rimstack_core::sources::changes::Note>>)>,
-    commits_read: Lane,
-    /// Why the game folder chosen was not taken.
-    folder_problem: String,
     /// The mod folders being read again.
     pub rescanning: bool,
-    /// The first-run hint shown, 1 to 3; 0 for none.
-    hint_step: u8,
-    hint_anchors: hints::Anchors,
-    unhide_problem: String,
     /// The shared textures of two mods, shown in place of the lists.
     comparing: Option<Entity<compare::CompareView>>,
     /// What the comparison shows, as it last told.
     compared: Option<Rc<crate::workspace::textures::Comparison>>,
     /// How the tab is shown, as `[Mods]` keeps it.
     view: Rc<crate::workspace::ModsView>,
-    /// Where the View and the inactive order buttons were drawn, for `--open=`.
-    menu_buttons: columns::Placed,
-    /// The inactive mods shown over the load order, from the rail.
-    pub drawer_open: bool,
-    /// The turn of the drawer's last opening, which slides it in.
-    drawer_turn: usize,
     /// The drawer's own filter, as `ModsFilter` mirrored the load order's.
     mirror: Entity<TextField>,
     /// The view kept once dragging rests.
     view_kept: Lane,
     left_off: left_off::LeftOff,
-    /// Where a heading or a column's edge was pressed, and the column's width then.
-    column_drag: Option<(Pixels, Pixels)>,
     /// The filter's terms shown as chips; the field holds what is typed after them.
     filter_terms: Vec<String>,
     /// The offers under the filter put away until it is typed in or clicked again.
@@ -253,6 +214,12 @@ impl Mods {
         .detach();
         let mut mods = Self {
             thumbs,
+            status: Default::default(),
+            layout: state::Layout::new(inactive_width, details_width),
+            hints: Default::default(),
+            chosen_reads: Default::default(),
+            reads: Default::default(),
+            problem_nav: Default::default(),
             when_drawn: Vec::new(),
             focus: cx.focus_handle(),
             filter,
@@ -262,12 +229,6 @@ impl Mods {
             overview: None,
             details: None,
             details_view,
-            summary: None,
-            last_start: None,
-            summary_reading: Lane::default(),
-            last_start_reading: Lane::default(),
-            conflicts: 0,
-            fresh: 0,
             order,
             active: Shown::default(),
             inactive: Shown::default(),
@@ -280,40 +241,15 @@ impl Mods {
             why_unread: None,
             files_read: false,
             sort_pending: 0,
-            inactive_width,
-            details_width,
-            saving: false,
-            save_problem: String::new(),
-            upkeep_problem: String::new(),
-            file_changed: false,
-            closed_note: String::new(),
-            note_timer: String::new(),
-            problem_row: None,
-            problems_open: false,
             hunting: false,
-            picking: None,
             focus_wanted: false,
             keys: Default::default(),
-            drafts: notes::Drafts::default(),
-            notes_saved: false,
-            chosen_read: Lane::default(),
-            chosen_files: None,
-            chosen_commits: None,
-            commits_read: Lane::default(),
-            folder_problem: String::new(),
             rescanning: false,
-            hint_step: 0,
-            hint_anchors: Default::default(),
-            unhide_problem: String::new(),
             comparing: None,
             compared: None,
             view,
-            menu_buttons: Default::default(),
-            drawer_open: false,
-            drawer_turn: 0,
             mirror,
             view_kept: Lane::default(),
-            column_drag: None,
             filter_terms: Vec::new(),
             offers_shut: false,
             left_off: match demo {
@@ -434,12 +370,12 @@ impl Mods {
             | Changes::LANGUAGE;
         if changes.contains(counted) {
             let app = app.clone();
-            self.summary_reading.run(
+            self.reads.summary_reading.run(
                 "summary",
                 cx,
                 move |_| app.summary(),
                 |mods, summary, cx| {
-                    mods.summary = Some(Rc::new(summary));
+                    mods.reads.summary = Some(Rc::new(summary));
                     mods.sync_details(cx);
                 },
             );
@@ -448,12 +384,12 @@ impl Mods {
             .contains(Changes::LAUNCHES | Changes::LOGS | Changes::FOLDERS | Changes::LANGUAGE)
         {
             let app = app.clone();
-            self.last_start_reading.run(
+            self.reads.last_start_reading.run(
                 "last start",
                 cx,
                 move |_| app.last_start_said(),
                 |mods, said, cx| {
-                    mods.last_start = said.map(Rc::new);
+                    mods.reads.last_start = said.map(Rc::new);
                     mods.sync_details(cx);
                 },
             );
@@ -480,36 +416,36 @@ impl Mods {
             game_version: self.game_version(),
             overview: self.overview.clone(),
             details: self.details.clone(),
-            summary: self.summary.clone(),
-            last_start: self.last_start.clone(),
+            summary: self.reads.summary.clone(),
+            last_start: self.reads.last_start.clone(),
             warnings: self.order.errors_and_warnings().1,
             troubled: self.order.troubles().iter().any(|t| !t.is_empty()),
             dirty,
             unsaved,
-            conflicts: self.conflicts,
+            conflicts: self.reads.conflicts,
             selected_active: self.selected_active,
             panes: self.panes_wanted(),
-            problems_open: self.problems_open,
+            problems_open: self.problem_nav.open,
             position: self
                 .selected_id()
-                .and_then(ModId::from_packed)
                 .and_then(|id| self.order.list(Side::Active).position_of(id))
                 .map_or(0, |at| at + 1),
-            picking: self.picking,
-            notes_saved: self.notes_saved,
+            picking: self.chosen_reads.picking,
+            notes_saved: self.chosen_reads.notes_saved,
             files: self
-                .chosen_files
+                .chosen_reads
+                .files
                 .as_ref()
-                .filter(|(of, _)| self.selected_id().and_then(ModId::from_packed) == Some(*of))
+                .filter(|(of, _)| self.selected_id() == Some(*of))
                 .map(|(_, read)| read.clone()),
-            unhide_problem: self.unhide_problem.clone(),
+            unhide_problem: self.status.unhide_problem.clone(),
             comparison: self.compared.clone(),
             sort_moves: self
                 .order
                 .previewing()
                 .then(|| Rc::new(self.order.sort_moves())),
             chosen_id: self.selected_id(),
-            fresh: self.fresh,
+            fresh: self.reads.fresh,
             community_problem: match self.demo {
                 true => String::new(),
                 false => super::app(cx)
@@ -518,9 +454,10 @@ impl Mods {
                     .unwrap_or_default(),
             },
             commits: self
-                .chosen_commits
+                .chosen_reads
+                .commits
                 .as_ref()
-                .filter(|(of, _)| self.selected_id().and_then(ModId::from_packed) == Some(*of))
+                .filter(|(of, _)| self.selected_id() == Some(*of))
                 .map(|(_, read)| read.clone()),
             hunting: self.hunting,
             previewing: self.order.previewing(),
@@ -554,13 +491,8 @@ impl Mods {
                 order.set_filter(&text);
                 if anew {
                     let same = mods.order.same_mods_in(&order);
-                    let held: Vec<ModId> = mods
-                        .selection
-                        .iter()
-                        .filter_map(|id| ModId::from_packed(*id))
-                        .collect();
-                    let kept = mods.order.carried(&same, &held);
-                    mods.selection = kept.ids.iter().map(|id| id.to_packed()).collect();
+                    let kept = mods.order.carried(&same, &mods.selection);
+                    mods.selection = kept.ids;
                     mods.selected_active = kept.active;
                 }
                 mods.order = order;
@@ -593,12 +525,12 @@ impl Mods {
             self.describe(cx);
         }
         self.overview = (!self.demo).then(|| Rc::new(self.order.overview(&app)));
-        self.fresh = if self.demo {
+        self.reads.fresh = if self.demo {
             0
         } else {
             self.order.fresh(&app, Side::Inactive).len()
         };
-        self.conflicts = if self.demo {
+        self.reads.conflicts = if self.demo {
             0
         } else {
             self.order.in_conflict(&app).len()
@@ -621,15 +553,10 @@ impl Mods {
         self.order.list(side).mods().len()
     }
 
-    pub fn toggle_category(&mut self, side: Side, category: i32, cx: &mut Context<Self>) {
-        let found = usize::try_from(category)
-            .ok()
-            .and_then(|at| Category::ALL.get(at));
-        if let Some(&category) = found {
-            let app = super::app(cx);
-            self.order.toggle_category(&app, side, category);
-            self.show(cx);
-        }
+    pub fn toggle_category(&mut self, side: Side, category: Category, cx: &mut Context<Self>) {
+        let app = super::app(cx);
+        self.order.toggle_category(&app, side, category);
+        self.show(cx);
     }
 
     pub fn toggle_sub(&mut self, side: Side, row: usize, cx: &mut Context<Self>) {
@@ -638,8 +565,8 @@ impl Mods {
         self.show(cx);
     }
 
-    pub fn choose(&mut self, side: Side, mod_id: i32, cx: &mut Context<Self>) {
-        let picks = self.picking.is_some() && side == Side::Active && mod_id >= 0;
+    pub fn choose(&mut self, side: Side, mod_id: ModId, cx: &mut Context<Self>) {
+        let picks = self.chosen_reads.picking.is_some() && side == Side::Active;
         if picks && Some(mod_id) != self.selected_id() {
             return self.pick(mod_id, cx);
         }
@@ -650,7 +577,7 @@ impl Mods {
     fn describe(&mut self, cx: &mut Context<Self>) {
         let app = super::app(cx);
         let alone = match self.selection.as_slice() {
-            [one] => rimstack_core::mods::library::ModId::from_packed(*one),
+            [one] => Some(*one),
             _ => None,
         };
         let marks_before = self.details.as_ref().map(|d| d.conflict_marks.clone());
@@ -674,7 +601,10 @@ impl Mods {
         match rows.get(row) {
             Some(found) if !found.is_header => {
                 self.details_view.update(cx, |view, _| view.tab = tab);
-                self.choose(side, found.mod_id, cx);
+                match found.mod_id {
+                    Some(id) => self.choose(side, id, cx),
+                    None => self.select(None, side == Side::Active, cx),
+                }
                 self.reveal_selected(side, false, cx);
             }
             _ => {}
@@ -693,12 +623,7 @@ impl Mods {
         for side in [Side::Active, Side::Inactive] {
             let on_side = self.selected_active == (side == Side::Active);
             let chosen = match on_side {
-                true => self
-                    .selection
-                    .iter()
-                    .copied()
-                    .filter(|id| *id >= 0)
-                    .collect(),
+                true => self.selection.iter().copied().collect(),
                 false => std::collections::HashSet::new(),
             };
             let in_order = side == Side::Inactive || orders.active_key.is_empty();
@@ -716,7 +641,7 @@ impl Mods {
                     == Some(rimstack_core::mods::list::LeftOut::Dimmed),
                 single: self.selection.len() == 1,
                 previewing: self.order.previewing(),
-                picking: self.picking.is_some(),
+                picking: self.chosen_reads.picking.is_some(),
                 count: self.order.list(side).mods().len(),
             };
             self.list(side).update(cx, |list, cx| list.show(shown, cx));
@@ -737,10 +662,10 @@ impl Mods {
         }
     }
 
-    pub fn is_chosen(&self, side: Side, mod_id: i32) -> bool {
-        mod_id >= 0
-            && self.selected_active == (side == Side::Active)
-            && self.selection.contains(&mod_id)
+    pub fn is_chosen(&self, side: Side, mod_id: Option<ModId>) -> bool {
+        mod_id.is_some_and(|id| {
+            self.selected_active == (side == Side::Active) && self.selection.contains(&id)
+        })
     }
 
     /// Four mods of the load order chosen, as `--several` asks.
@@ -761,7 +686,7 @@ impl Mods {
             .iter()
             .filter(|r| !r.is_header)
             .nth(nth)
-            .map(|r| r.mod_id)
+            .and_then(|r| r.mod_id)
         else {
             return;
         };

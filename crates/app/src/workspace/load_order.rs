@@ -26,7 +26,7 @@ mod summary;
 pub use details::{Details, Files, Overview, ProblemSaid, Textures};
 pub use menu::{Action, Ask, Clicked, Entry};
 pub use orders::{OrderEntry, Orders};
-pub use rows::{RowView, sort_slides};
+pub use rows::{Level, Origin, RowView, sort_slides};
 pub use sorting::{SortGroup, SortMove};
 pub use summary::SelectionSummary;
 
@@ -636,7 +636,7 @@ impl App {
 #[serde(rename_all = "camelCase")]
 pub struct FoundMod {
     pub name: String,
-    pub mod_id: i32,
+    pub mod_id: ModId,
     pub active: bool,
 }
 
@@ -681,7 +681,7 @@ impl LoadOrder {
             .filter_map(|id| {
                 Some(FoundMod {
                     name: library.get(id)?.display_name().to_string(),
-                    mod_id: id.to_packed(),
+                    mod_id: id,
                     active: active.position_of(id).is_some(),
                 })
             })
@@ -744,7 +744,7 @@ impl Carried {
 /// What a drag of one mod takes along: the whole selection when it is part of it.
 #[derive(Debug, Serialize, PartialEq)]
 pub struct Holding {
-    pub ids: Vec<i32>,
+    pub ids: Vec<ModId>,
     pub name: Sentence,
 }
 
@@ -752,11 +752,11 @@ impl Holding {
     pub fn of(id: Option<ModId>, name: &str, selected: &[ModId]) -> Holding {
         match id {
             Some(id) if selected.len() > 1 && selected.contains(&id) => Holding {
-                ids: selected.iter().map(|id| id.to_packed()).collect(),
+                ids: selected.to_vec(),
                 name: say_n!(selected.len(), "{} mod", "{} mods"),
             },
             _ => Holding {
-                ids: id.iter().map(|id| id.to_packed()).collect(),
+                ids: id.into_iter().collect(),
                 name: Sentence::Plain(name.to_string()),
             },
         }

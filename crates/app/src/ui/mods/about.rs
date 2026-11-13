@@ -115,11 +115,7 @@ impl DetailsView {
                 )),
                 Btn::new("trust-again", put(&say!("Warn again"))).on_click(self.on_mods(
                     |mods, cx| {
-                        let ids = mods
-                            .selected_id()
-                            .and_then(rimstack_core::mods::library::ModId::from_packed)
-                            .into_iter()
-                            .collect();
+                        let ids = mods.selected_id().into_iter().collect();
                         mods.trust(ids, false, cx)
                     },
                 )),
@@ -610,11 +606,7 @@ impl DetailsView {
                     .on_click(
                         ("tag-chip", at),
                         self.on_mods(move |mods, cx| {
-                            let ids = mods
-                                .selected_id()
-                                .and_then(rimstack_core::mods::library::ModId::from_packed)
-                                .into_iter()
-                                .collect();
+                            let ids = mods.selected_id().into_iter().collect();
                             mods.group(ids, &tag, cx)
                         }),
                     )

@@ -294,7 +294,7 @@ fn error_row(
             )
         })
         .when_some(error.first.clone(), |d, name| {
-            let tip = match mod_id >= 0 {
+            let tip = match mod_id.is_some() {
                 true => put(&say!("The mod the error points at. Click to go to it.")),
                 false => put(&say!("The mod the error points at")),
             };
@@ -304,11 +304,11 @@ fn error_row(
                 .tone(c.ink)
                 .icon("package")
                 .tip(tip);
-            d.child(match mod_id >= 0 {
-                true => chip.on_click(("error-mod", at), move |_, _, cx| {
-                    let _ = show_me.update(cx, |_, cx| cx.emit(ShowMod(mod_id as i32)));
+            d.child(match mod_id {
+                Some(mod_id) => chip.on_click(("error-mod", at), move |_, _, cx| {
+                    let _ = show_me.update(cx, |_, cx| cx.emit(ShowMod(mod_id)));
                 }),
-                false => chip,
+                None => chip,
             })
         })
         .on_click(move |_, _, cx| {

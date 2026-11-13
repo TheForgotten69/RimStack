@@ -26,7 +26,7 @@ impl Mods {
             false => put(&say!("Hide")),
         };
         // Qt's RowLayout gives its empty filler a gap too.
-        let fresh = (self.fresh > 0).then(|| put(&say!("{} new", count(self.fresh))));
+        let fresh = (self.reads.fresh > 0).then(|| put(&say!("{} new", count(self.reads.fresh))));
         let named = measure(window, theme, &title, theme.heading(), FontWeight::BOLD)
             + theme::GAP * 2.
             + measure(window, theme, &counted, theme.body(), FontWeight::NORMAL)
@@ -52,7 +52,7 @@ impl Mods {
                     .opens(move |below, window, cx| {
                         let _ = me.update(cx, |mods, cx| mods.inactive_order_menu(below, window, cx));
                     });
-                super::columns::placed(button, self.menu_buttons.order.clone())
+                super::columns::placed(button, self.layout.menu_buttons.order.clone())
             })
             .child(match drawer {
                 true => Btn::new("pin-inactive", hide)
@@ -77,7 +77,7 @@ impl Mods {
                     cx,
                 ))
         });
-        let only_new = self.fresh > 0 && self.filter_text(cx) == "is:new";
+        let only_new = self.reads.fresh > 0 && self.filter_text(cx) == "is:new";
         let activate = only_new.then(|| {
             div()
                 .flex()
@@ -86,7 +86,7 @@ impl Mods {
                 .child(
                     Btn::new(
                         "activate-fresh",
-                        put(&say!("Activate all {}", count(self.fresh))),
+                        put(&say!("Activate all {}", count(self.reads.fresh))),
                     )
                     .primary()
                     .enabled(!self.order.previewing())

@@ -40,19 +40,14 @@ pub(super) fn heading(theme: &Theme, row: &RowView, colour: Hsla) -> AnyElement 
         .child(arrow(theme, row.collapsed, c.ink2))
         .child(icon(category_icon(row.category), theme.icon(), colour))
         .child(tipped_label(
-            format!("heading-{}", row.category),
+            format!("heading-{}", row.category as usize),
             label(theme, theme.small(), c.ink, put(&row.name)).font_weight(theme.semibold),
             put(&match row.collapsed {
                 true => say!("Click to show its mods"),
                 false => say!("Click to hide its mods"),
             }),
         ))
-        .child(label(
-            theme,
-            theme.small(),
-            c.ink3,
-            count(row.count.max(0) as usize),
-        ))
+        .child(label(theme, theme.small(), c.ink3, count(row.count)))
         .into_any_element()
 }
 
@@ -66,12 +61,8 @@ pub(super) fn sub(
 ) -> AnyElement {
     let c = &theme.colours;
     let counted = match row.group_size > row.count {
-        true => put(&say!(
-            "{} of {}",
-            count(row.count as usize),
-            count(row.group_size as usize)
-        )),
-        false => count(row.count.max(0) as usize),
+        true => put(&say!("{} of {}", count(row.count), count(row.group_size))),
+        false => count(row.count),
     };
     div()
         .absolute()
@@ -126,14 +117,14 @@ pub(super) fn sub(
 
 pub(super) fn again(theme: &Theme, row: &RowView) -> AnyElement {
     let c = &theme.colours;
-    let said = format!("{}  {}", put(&row.name), count(row.count.max(0) as usize));
+    let said = format!("{}  {}", put(&row.name), count(row.count));
     let tip = put(&say!(
         "This category has mods further up as well. Sort brings a category's mods together."
     ));
     let line = div()
         .id(SharedString::from(format!(
             "again-{}-{}",
-            row.category, row.number
+            row.category as usize, row.number
         )))
         .absolute()
         .inset_0()

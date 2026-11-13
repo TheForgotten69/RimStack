@@ -7,13 +7,14 @@ use crate::ui::widgets::{
     Chip, TextSized, chip_width, elide_middle, icon, label, measure, with_alpha,
 };
 use crate::words::{count, put};
-use crate::workspace::load_order::RowView;
+use crate::workspace::load_order::{Level, Origin, RowView};
 use gpui::{
     AnyElement, Hsla, InteractiveElement, IntoElement, ParentElement, Pixels, RenderImage,
     SharedString, Styled, StyledImage, TextOverflow, Window, div, img, prelude::FluentBuilder, px,
 };
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::details::Mark;
+use rimstack_core::mods::list::Category;
 use rimstack_core::say;
 use std::sync::Arc;
 
@@ -73,7 +74,7 @@ pub(super) fn fit(
     if row.twin && columns.is_none() {
         room -= small(&put(&row.version_line)) + theme::GAP_SMALL;
     }
-    if columns.is_none() && row.source == 2 {
+    if columns.is_none() && row.source == Origin::Git {
         room -= theme.sized(12.) + theme::GAP_SMALL;
     }
     let ordered_by = (!row.ordered_by.is_empty() && !(columns.is_some() && around.order_shown))
@@ -117,10 +118,9 @@ pub(super) fn fit(
 }
 
 /// A category's name, as the menus and the details say it.
-fn category_name(category: i32) -> String {
-    usize::try_from(category)
-        .ok()
-        .and_then(|at| CATEGORY_NAMES.get(at))
+fn category_name(category: Category) -> String {
+    CATEGORY_NAMES
+        .get(category as usize)
         .map(|name| put(&Sentence::said(name, Vec::new())))
         .unwrap_or_default()
 }
@@ -295,7 +295,7 @@ pub(super) fn cells(theme: &Theme, row: &RowView, fitted: Fitted, shown: Shown<'
                     .child(value),
             )
         })
-        .when(columns.is_none() && row.source == 2, |d| {
+        .when(columns.is_none() && row.source == Origin::Git, |d| {
             d.child(tipped_label(
                 format!("git-{}", put(&row.name)),
                 div().child(icon(
@@ -422,18 +422,18 @@ fn quick_chip(
     mark: Option<&Mark>,
 ) -> Option<Chip> {
     let c = &theme.colours;
-    let chip = if row.moved_from > 0 {
-        let up = row.moved_from > row.number;
+    let chip = if let Some(from) = row.moved_from {
+        let up = from > row.number;
         let tip = match row.why_moved.is_empty() {
-            true => say!("Sort moves it from {} to {}", row.moved_from, row.number),
+            true => say!("Sort moves it from {} to {}", from, row.number),
             false => say!(
                 "Sort moves it from {} to {}: {}",
-                row.moved_from,
+                from,
                 row.number,
                 row.why_moved.inside()
             ),
         };
-        Chip::new(count(row.moved_from.abs_diff(row.number) as usize))
+        Chip::new(count(from.abs_diff(row.number)))
             .tone(c.moved)
             .icon(if up { "arrow-up" } else { "arrow-down" })
             .tip(put(&tip))
@@ -452,8 +452,8 @@ fn quick_chip(
             .tone(c.warn)
             .icon("image")
             .tip(put(&tip))
-    } else if row.trouble > 0 {
-        let error = row.trouble == 2;
+    } else if row.trouble > Level::None {
+        let error = row.trouble == Level::Error;
         Chip::new(if wide {
             put(&row.trouble_text)
         } else {

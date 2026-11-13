@@ -61,7 +61,7 @@ pub fn problem(
             }
         }
     };
-    let shows = acting.is_some() && !said.name.is_empty() && said.mod_id >= 0;
+    let shows = acting.is_some() && !said.name.is_empty() && said.mod_id.is_some();
     let words = div()
         .id(("problem-words", at))
         .when(shows, |d| d.cursor_pointer().on_click(press(Act::Show)))

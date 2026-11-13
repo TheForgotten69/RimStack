@@ -74,28 +74,28 @@ impl Mods {
             .flag("Appearance", "hintsSeen")
             .unwrap_or(false);
         if !seen && !self.demo {
-            self.hint_step = 1;
+            self.hints.step = 1;
             cx.notify();
         }
     }
 
     /// One hint shown, as `--hints=` asks.
     pub fn show_hint(&mut self, step: u8, cx: &mut Context<Self>) {
-        self.hint_step = step.min(3);
+        self.hints.step = step.min(3);
         cx.notify();
     }
 
     fn end_hints(&mut self, cx: &mut Context<Self>) {
-        self.hint_step = 0;
+        self.hints.step = 0;
         crate::ui::keep_appearance("hintsSeen", "true", cx);
         cx.notify();
     }
 
     pub(super) fn next_hint(&mut self, cx: &mut Context<Self>) {
-        match self.hint_step {
+        match self.hints.step {
             3 => self.end_hints(cx),
             step => {
-                self.hint_step = step + 1;
+                self.hints.step = step + 1;
                 cx.notify();
             }
         }
@@ -108,21 +108,21 @@ impl Mods {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        if self.hint_step == 0 {
+        if self.hints.step == 0 {
             return None;
         }
-        let step = self.hint_step;
-        if !self.hint_anchors.drawn.get()[usize::from(step - 1)] {
+        let step = self.hints.step;
+        if !self.hints.anchors.drawn.get()[usize::from(step - 1)] {
             if self.files_read && self.overview.is_some() {
                 cx.defer_in(window, move |mods, _, cx| {
-                    if mods.hint_step == step {
+                    if mods.hints.step == step {
                         mods.next_hint(cx);
                     }
                 });
             }
             return None;
         }
-        let Some(below) = self.hint_anchors.of(step).get() else {
+        let Some(below) = self.hints.anchors.of(step).get() else {
             crate::ui::redraw_after(cx.entity_id(), cx);
             return None;
         };

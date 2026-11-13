@@ -86,7 +86,7 @@ pub(super) fn edge(
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(move |mods, event: &gpui::MouseDownEvent, _, cx| {
-                    mods.column_drag = Some((event.position.x, width));
+                    mods.layout.column_drag = Some((event.position.x, width));
                     cx.stop_propagation();
                 }),
             )
@@ -249,8 +249,8 @@ impl Mods {
     /// The menu under its button; false while the button is not drawn yet.
     pub fn open_menu(&mut self, menu: Menu, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let at = match menu {
-            Menu::View => self.menu_buttons.view.get(),
-            Menu::InactiveOrder => self.menu_buttons.order.get(),
+            Menu::View => self.layout.menu_buttons.view.get(),
+            Menu::InactiveOrder => self.layout.menu_buttons.order.get(),
         };
         if at.size.width <= px(0.) {
             return false;
@@ -315,7 +315,7 @@ impl Mods {
 
     /// The column `key` as wide as its edge has been dragged to `x`: further left is wider.
     pub(super) fn size_column(&mut self, key: &'static str, x: Pixels, cx: &mut Context<Self>) {
-        let Some((from_x, from_width)) = self.column_drag else {
+        let Some((from_x, from_width)) = self.layout.column_drag else {
             return;
         };
         let grow = f32::from(cx.global::<Theme>().sized(1.));
@@ -330,7 +330,7 @@ impl Mods {
 
     /// A heading dropped more than half its width away moves one place that way.
     pub(super) fn drop_column(&mut self, held: ColumnHeld, x: Pixels, cx: &mut Context<Self>) {
-        let Some((from_x, width)) = self.column_drag.take() else {
+        let Some((from_x, width)) = self.layout.column_drag.take() else {
             return;
         };
         let moved = x - from_x;

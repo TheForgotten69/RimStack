@@ -107,7 +107,7 @@ impl Mods {
             ))
             .on_drop(
                 cx.listener(|mods, edge: &super::columns::ColumnEdge, _, cx| {
-                    mods.column_drag = None;
+                    mods.layout.column_drag = None;
                     let _ = (edge, cx);
                 }),
             )
@@ -161,7 +161,8 @@ impl Mods {
                                         MouseButton::Left,
                                         cx.listener(
                                             move |mods, event: &gpui::MouseDownEvent, _, _| {
-                                                mods.column_drag = Some((event.position.x, width));
+                                                mods.layout.column_drag =
+                                                    Some((event.position.x, width));
                                             },
                                         ),
                                     )
@@ -184,7 +185,7 @@ impl Mods {
                                             mods.view_menu(below, window, cx)
                                         });
                                     }),
-                                self.menu_buttons.view.clone(),
+                                self.layout.menu_buttons.view.clone(),
                             )),
                     ),
             )
@@ -393,8 +394,8 @@ impl Mods {
                                         "Opens the list of every problem, with the fix for each"
                                     )))
                                     .on_click(cx.listener(|m, _, _, cx| m.open_problems(cx))),
-                                &self.hint_anchors,
-                    self.hint_anchors.problems.clone(),
+                                &self.hints.anchors,
+                    self.hints.anchors.problems.clone(),
                             ))
                         })
                         .child(
@@ -455,8 +456,8 @@ impl Mods {
                         .tip(put(&say!("Shows the order the rules ask for, to keep or discard. Nothing is written before Save.")))
                         .enabled(!previewing && self.files_read)
                         .on_click(cx.listener(|m, _, _, cx| m.preview_sort(cx))),
-                    &self.hint_anchors,
-                    self.hint_anchors.sort.clone(),
+                    &self.hints.anchors,
+                    self.hints.anchors.sort.clone(),
                 ))
                 .child(super::hints::anchored_at(
                     Btn::new("save", shown_text(&save))
@@ -466,8 +467,8 @@ impl Mods {
                         .enabled(dirty)
                         .primary_if(dirty)
                         .on_click(cx.listener(|m, _, _, cx| m.save(None, cx))),
-                    &self.hint_anchors,
-                    self.hint_anchors.save.clone(),
+                    &self.hints.anchors,
+                    self.hints.anchors.save.clone(),
                 ))
             })
             .when(tight && !self.demo, |d| {
@@ -640,10 +641,10 @@ impl Mods {
                 .into(),
             );
         }
-        if self.conflicts > 0 {
+        if self.reads.conflicts > 0 {
             entries.push(
                 Entry::item(
-                    put(&say!("{} share textures", count(self.conflicts))),
+                    put(&say!("{} share textures", count(self.reads.conflicts))),
                     run(|m, cx| m.toggle_term("is:conflict", cx)),
                 )
                 .icon("image")

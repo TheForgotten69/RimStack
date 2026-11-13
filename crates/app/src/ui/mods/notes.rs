@@ -34,22 +34,19 @@ pub struct Drafts {
 
 impl Mods {
     pub(super) fn start_picking(&mut self, picking: Option<Picking>, cx: &mut Context<Self>) {
-        self.picking = picking;
+        self.chosen_reads.picking = picking;
         self.sync_lists(cx);
         self.sync_details(cx);
         cx.notify();
     }
 
     /// The rule of your own between the chosen mod and `other`, as the picking asked.
-    pub(super) fn pick(&mut self, other: i32, cx: &mut Context<Self>) {
-        let (Some(chosen), Some(other)) = (
-            self.selected_id().and_then(ModId::from_packed),
-            ModId::from_packed(other),
-        ) else {
+    pub(super) fn pick(&mut self, other: ModId, cx: &mut Context<Self>) {
+        let Some(chosen) = self.selected_id() else {
             return;
         };
         let app = super::super::app(cx);
-        match self.picking.take() {
+        match self.chosen_reads.picking.take() {
             Some(Picking::After) => app.change_rule(other, chosen, true),
             Some(Picking::Before) => app.change_rule(chosen, other, true),
             None => return,
@@ -64,7 +61,7 @@ impl Mods {
 
     /// A rule of your own that the chosen mod loads after `other`, and the move it asks.
     pub(super) fn win_over(&mut self, other: ModId, cx: &mut Context<Self>) {
-        let Some(id) = self.selected_id().and_then(ModId::from_packed) else {
+        let Some(id) = self.selected_id() else {
             return;
         };
         let app = super::super::app(cx);
@@ -77,7 +74,7 @@ impl Mods {
 
     /// The shared textures of the chosen mod and `other` side by side.
     pub(super) fn compare_with(&mut self, other: ModId, cx: &mut Context<Self>) {
-        let Some(id) = self.selected_id().and_then(ModId::from_packed) else {
+        let Some(id) = self.selected_id() else {
             return;
         };
         let list = self.order.list(Side::Active);
@@ -87,7 +84,7 @@ impl Mods {
     }
 
     pub(super) fn warn_again(&mut self, cx: &mut Context<Self>) {
-        let Some(id) = self.selected_id().and_then(ModId::from_packed) else {
+        let Some(id) = self.selected_id() else {
             return;
         };
         let app = super::super::app(cx);
@@ -97,29 +94,33 @@ impl Mods {
     }
 
     pub(super) fn draft_note(&mut self, tags: String, note: String, cx: &mut Context<Self>) {
-        if let Some(id) = self.selected_id().and_then(ModId::from_packed) {
-            self.drafts.note = Some((id, tags, note));
+        if let Some(id) = self.selected_id() {
+            self.chosen_reads.drafts.note = Some((id, tags, note));
             self.wait_for_drafts(cx);
         }
     }
 
     pub(super) fn draft_group(&mut self, name: String, cx: &mut Context<Self>) {
-        if let Some(id) = self.selected_id().and_then(ModId::from_packed) {
-            self.drafts.group = Some((id, name));
+        if let Some(id) = self.selected_id() {
+            self.chosen_reads.drafts.group = Some((id, name));
             self.wait_for_drafts(cx);
         }
     }
 
     fn wait_for_drafts(&mut self, cx: &mut Context<Self>) {
-        self.drafts
+        self.chosen_reads
+            .drafts
             .pause
             .after(PAUSE, cx, |mods, cx| mods.keep_drafts(cx));
     }
 
     /// Keeps what is waiting; says "Saved" only when something really changed.
     pub(super) fn keep_drafts(&mut self, cx: &mut Context<Self>) {
-        self.drafts.pause.cancel();
-        let (note, group) = (self.drafts.note.take(), self.drafts.group.take());
+        self.chosen_reads.drafts.pause.cancel();
+        let (note, group) = (
+            self.chosen_reads.drafts.note.take(),
+            self.chosen_reads.drafts.group.take(),
+        );
         let app = super::super::app(cx);
         let mut changed = false;
         if let Some((id, tags, note)) = note {
@@ -132,10 +133,10 @@ impl Mods {
             return;
         }
         self.order.sync(&app);
-        self.notes_saved = true;
+        self.chosen_reads.notes_saved = true;
         self.show(cx);
-        self.drafts.fade.after(SHOWN, cx, |mods, cx| {
-            mods.notes_saved = false;
+        self.chosen_reads.drafts.fade.after(SHOWN, cx, |mods, cx| {
+            mods.chosen_reads.notes_saved = false;
             mods.sync_details(cx);
         });
     }
@@ -147,7 +148,7 @@ impl Mods {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(id) = self.selected_id().and_then(ModId::from_packed) else {
+        let Some(id) = self.selected_id() else {
             return;
         };
         let chosen = self
@@ -196,22 +197,22 @@ impl Mods {
 
     /// What the Files tab and the facts read of the chosen mod, off the window's thread.
     pub(super) fn read_chosen(&mut self, cx: &mut Context<Self>) {
-        let Some(id) = self
-            .details
-            .as_ref()
-            .and(self.selected_id())
-            .and_then(ModId::from_packed)
-        else {
-            self.chosen_read.cancel();
-            self.chosen_files = None;
+        let Some(id) = self.details.as_ref().and(self.selected_id()) else {
+            self.chosen_reads.read.cancel();
+            self.chosen_reads.files = None;
             return;
         };
         self.read_commits(id, cx);
-        if self.chosen_files.as_ref().is_some_and(|(of, _)| *of == id) {
+        if self
+            .chosen_reads
+            .files
+            .as_ref()
+            .is_some_and(|(of, _)| *of == id)
+        {
             return;
         }
         let app = super::super::app(cx);
-        self.chosen_read.run(
+        self.chosen_reads.read.run(
             "files of a mod",
             cx,
             move |_| {
@@ -221,7 +222,7 @@ impl Mods {
                 (textures, files, hidden)
             },
             move |mods, read, cx| {
-                mods.chosen_files = Some((id, std::rc::Rc::new(read)));
+                mods.chosen_reads.files = Some((id, std::rc::Rc::new(read)));
                 mods.sync_details(cx);
             },
         );
@@ -235,19 +236,20 @@ impl Mods {
             .is_some_and(|d| !d.workshop && !d.repository.is_empty());
         if !git
             || self
-                .chosen_commits
+                .chosen_reads
+                .commits
                 .as_ref()
                 .is_some_and(|(of, _)| *of == id)
         {
             return;
         }
         let app = super::super::app(cx);
-        self.commits_read.run(
+        self.chosen_reads.commits_read.run(
             "commits of a mod",
             cx,
             move |_| app.commits_of(id),
             move |mods, commits, cx| {
-                mods.chosen_commits = Some((id, std::rc::Rc::new(commits)));
+                mods.chosen_reads.commits = Some((id, std::rc::Rc::new(commits)));
                 mods.sync_details(cx);
             },
         );
@@ -255,12 +257,12 @@ impl Mods {
 
     /// The chosen mod's textures set aside brought back.
     pub(super) fn unhide_chosen(&mut self, cx: &mut Context<Self>) {
-        let Some(id) = self.selected_id().and_then(ModId::from_packed) else {
+        let Some(id) = self.selected_id() else {
             return;
         };
         let app = super::super::app(cx);
-        self.unhide_problem = crate::words::why_not(&app.unhide_mod(id));
-        self.chosen_files = None;
+        self.status.unhide_problem = crate::words::why_not(&app.unhide_mod(id));
+        self.chosen_reads.files = None;
         self.read_chosen(cx);
         self.sync_details(cx);
     }

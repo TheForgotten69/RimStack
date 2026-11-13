@@ -3,6 +3,7 @@
 use super::Mods;
 use crate::workspace::load_order::Side;
 use gpui::Context;
+use rimstack_core::mods::library::ModId;
 use std::rc::Rc;
 
 impl Mods {
@@ -22,7 +23,8 @@ impl Mods {
 
     /// The last start of the game: when, and how many errors its log held.
     pub fn last_start(&self) -> Option<(u64, Option<usize>)> {
-        self.last_start
+        self.reads
+            .last_start
             .as_ref()
             .map(|said| (said.start.time, said.start.errors))
     }
@@ -36,13 +38,13 @@ impl Mods {
     }
 
     /// Chooses a mod wherever it is and brings its row into view.
-    pub fn show_mod(&mut self, mod_id: i32, cx: &mut Context<Self>) {
+    pub fn show_mod(&mut self, mod_id: ModId, cx: &mut Context<Self>) {
         for side in [Side::Active, Side::Inactive] {
             let at = self
                 .shown(side)
                 .rows
                 .iter()
-                .position(|row| row.mod_id == mod_id && !row.is_header);
+                .position(|row| row.mod_id == Some(mod_id) && !row.is_header);
             if let Some(at) = at {
                 if side == Side::Inactive && self.view.inactive_hidden {
                     self.set_hidden(false, cx);
@@ -55,7 +57,7 @@ impl Mods {
     }
 
     /// The mod chosen first, as `Mods.selectedId` gave it.
-    pub fn selected_id(&self) -> Option<i32> {
+    pub fn selected_id(&self) -> Option<ModId> {
         self.selection.first().copied()
     }
 

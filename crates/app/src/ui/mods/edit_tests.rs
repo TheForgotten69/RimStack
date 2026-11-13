@@ -118,13 +118,12 @@ fn shift_ctrl_and_invert_choose_several_mods_in_one_list() {
     let (_tmp, mut cx, mods) = opened();
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
-            let ids: Vec<i32> = mods
+            let ids: Vec<ModId> = mods
                 .order
                 .list(Side::Active)
                 .mods()
                 .iter()
                 .filter_map(|m| m.installed)
-                .map(ModId::to_packed)
                 .collect();
             mods.select(Some(ids[1]), true, cx);
             mods.select_through(ids[4], true, cx);
@@ -155,7 +154,7 @@ fn sort_is_shown_before_it_is_kept_and_save_writes_the_list() {
         })
     });
     let started = Instant::now();
-    while cx.update(|cx| mods.read(cx).saving) {
+    while cx.update(|cx| mods.read(cx).status.saving) {
         assert!(
             started.elapsed() < Duration::from_secs(20),
             "the save did not end"
@@ -165,7 +164,11 @@ fn sort_is_shown_before_it_is_kept_and_save_writes_the_list() {
     }
     cx.update(|cx| {
         let mods = mods.read(cx);
-        assert!(mods.save_problem.is_empty(), "{}", mods.save_problem);
+        assert!(
+            mods.status.save_problem.is_empty(),
+            "{}",
+            mods.status.save_problem
+        );
         assert!(!crate::ui::app(cx).session().is_dirty());
     });
     let written =

@@ -592,18 +592,15 @@ impl Mods {
             return;
         }
         let app = crate::ui::app(cx);
-        let ids: Vec<i32> = self
+        let ids: Vec<ModId> = self
             .active
             .rows
             .iter()
             .filter(|r| !r.is_header)
-            .map(|r| r.mod_id)
+            .filter_map(|r| r.mod_id)
             .collect();
         for id in ids {
-            let Some(found) = ModId::from_packed(id) else {
-                continue;
-            };
-            let details = self.order.details(&app, found);
+            let details = self.order.details(&app, id);
             if let Some(other) = details
                 .loses_to
                 .iter()

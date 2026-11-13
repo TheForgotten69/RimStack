@@ -18,7 +18,7 @@ impl Downloads {
     fn task(
         &mut self,
         doing: Sentence,
-        updating: Option<i32>,
+        updating: Option<ModId>,
         work: impl FnOnce() -> Done + Send + 'static,
         cx: &mut Context<Self>,
     ) {
@@ -135,7 +135,7 @@ impl Downloads {
                 }
                 if !running {
                     for id in checkouts {
-                        downloads.update_from_git(id.to_packed(), cx);
+                        downloads.update_from_git(id, cx);
                     }
                 }
                 cx.notify();
@@ -243,14 +243,12 @@ impl Downloads {
 
     pub fn ask_unsubscribe(
         &mut self,
-        mod_id: i32,
+        mod_id: ModId,
         name: String,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let path = ModId::from_packed(mod_id)
-            .and_then(|id| crate::ui::app(cx).mod_path(id))
-            .unwrap_or_default();
+        let path = crate::ui::app(cx).mod_path(mod_id).unwrap_or_default();
         let lines = vec![
             Line::Text(put(&say!(
                 "Steam must be running. It unsubscribes and then deletes the mod's folder:"
@@ -298,8 +296,8 @@ impl Downloads {
         }
     }
 
-    pub fn unsubscribe(&mut self, mod_id: i32, cx: &mut Context<Self>) {
-        let workshop = ModId::from_packed(mod_id).and_then(|id| crate::ui::app(cx).workshop_id(id));
+    pub fn unsubscribe(&mut self, mod_id: ModId, cx: &mut Context<Self>) {
+        let workshop = crate::ui::app(cx).workshop_id(mod_id);
         self.ask_steam(SteamAsk::Unsubscribe, workshop.into_iter().collect(), cx);
     }
 
@@ -307,10 +305,7 @@ impl Downloads {
         self.ask_steam(SteamAsk::Subscribe, vec![workshop_id], cx);
     }
 
-    pub fn redownload(&mut self, mod_id: i32, cx: &mut Context<Self>) {
-        let Some(id) = ModId::from_packed(mod_id) else {
-            return;
-        };
+    pub fn redownload(&mut self, id: ModId, cx: &mut Context<Self>) {
         let app = crate::ui::app(cx);
         self.task(
             say!("Downloading again with SteamCMD…"),
@@ -320,14 +315,11 @@ impl Downloads {
         );
     }
 
-    pub fn update_from_git(&mut self, mod_id: i32, cx: &mut Context<Self>) {
-        let Some(id) = ModId::from_packed(mod_id) else {
-            return;
-        };
+    pub fn update_from_git(&mut self, id: ModId, cx: &mut Context<Self>) {
         let app = crate::ui::app(cx);
         self.task(
             say!("Updating from Git…"),
-            Some(mod_id),
+            Some(id),
             move || app.update_checkout(id),
             cx,
         );

@@ -13,6 +13,7 @@ use crate::workspace::upkeep::Line as AskLine;
 use gpui::{AppContext, Context, Pixels, Point, Window};
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::library::ModId;
+use rimstack_core::mods::list::Category;
 use rimstack_core::{say, say_n};
 
 /// What a name typed is for.
@@ -26,9 +27,9 @@ pub enum Naming {
 /// Asked of the window: what the Downloads tab or the Workshop does for a mod.
 pub enum Wanted {
     Subscribe(String),
-    Redownload(i32),
-    Unsubscribe(i32),
-    UpdateFromGit(i32),
+    Redownload(ModId),
+    Unsubscribe(ModId),
+    UpdateFromGit(ModId),
     /// The Workshop searched for this, as a fix that names a page asks.
     Browse(String),
     /// The search for the mod that breaks the game started.
@@ -38,10 +39,7 @@ pub enum Wanted {
 impl gpui::EventEmitter<Wanted> for Mods {}
 
 impl Mods {
-    pub(super) fn open_folder(&mut self, mod_id: i32, cx: &mut Context<Self>) {
-        let Some(id) = ModId::from_packed(mod_id) else {
-            return;
-        };
+    pub(super) fn open_folder(&mut self, id: ModId, cx: &mut Context<Self>) {
         let app = crate::ui::app(cx);
         let path = self.order.details(&app, id).path;
         if !path.is_empty() {
@@ -53,29 +51,24 @@ impl Mods {
     pub(super) fn row_menu(
         &mut self,
         side: Side,
-        index: i32,
-        mod_id: i32,
+        index: Option<usize>,
+        mod_id: Option<ModId>,
         at: Point<Pixels>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Ok(index) = usize::try_from(index) else {
+        let Some(index) = index else {
             return;
         };
         if !self.is_chosen(side, mod_id) {
-            self.select(Some(mod_id), side == Side::Active, cx);
+            self.select(mod_id, side == Side::Active, cx);
         }
         let app = crate::ui::app(cx);
-        let selected: Vec<ModId> = self
-            .selection
-            .iter()
-            .filter_map(|id| ModId::from_packed(*id))
-            .collect();
         let clicked = Clicked {
             active: side == Side::Active,
             index,
-            id: ModId::from_packed(mod_id),
-            selected: &selected,
+            id: mod_id,
+            selected: &self.selection,
         };
         let entries = self.order.row_menu(&app, &clicked);
         self.open_entries(entries, at, window, cx);
@@ -96,14 +89,12 @@ impl Mods {
     /// A category's colour, among the swatches, or its own again.
     pub(super) fn category_menu(
         &mut self,
-        category: i32,
+        category: Category,
         at: Point<Pixels>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Ok(category) = usize::try_from(category) else {
-            return;
-        };
+        let category = category as usize;
         let theme = cx.global::<Theme>().clone();
         let chosen = theme.appearance.swatch_of(category).map(str::to_string);
         let own = SWATCHES.get(category).map_or("", |s| s.0);
@@ -202,13 +193,13 @@ impl Mods {
             }
             Action::Redownload { mod_id, ask } => {
                 let me = cx.entity().downgrade();
-                let id = mod_id.to_packed();
+                let id = *mod_id;
                 ask_with(ask, false, window, cx, move |cx| {
                     let _ = me.update(cx, |_, cx| cx.emit(Wanted::Redownload(id)));
                 });
             }
-            Action::Unsubscribe { mod_id } => self.ask_unsubscribe(mod_id.to_packed(), window, cx),
-            Action::UpdateFromGit { mod_id } => cx.emit(Wanted::UpdateFromGit(mod_id.to_packed())),
+            Action::Unsubscribe { mod_id } => self.ask_unsubscribe(*mod_id, window, cx),
+            Action::UpdateFromGit { mod_id } => cx.emit(Wanted::UpdateFromGit(*mod_id)),
             Action::PutInSub { mod_id, tag } => self.group(vec![*mod_id], tag, cx),
             Action::NewSub { mod_id } => self.ask_name(vec![*mod_id], Naming::NewSub, window, cx),
             Action::Trust { ids, yes } => self.trust(ids.clone(), *yes, cx),
@@ -221,7 +212,7 @@ impl Mods {
     /// A problem's fix: done here when it can be, else the Workshop asked or its page opened.
     pub(super) fn apply_fix(
         &mut self,
-        mod_id: i32,
+        mod_id: Option<ModId>,
         action: &str,
         target: &str,
         page: bool,
@@ -255,7 +246,7 @@ impl Mods {
                 }
             }
             "trust" => {
-                let ids = ModId::from_packed(mod_id).into_iter().collect();
+                let ids = mod_id.into_iter().collect();
                 self.trust(ids, true, cx);
             }
             "sort" => self.preview_sort(cx),
@@ -327,7 +318,7 @@ impl Mods {
                 copied
             },
             |mods, problem, cx| {
-                mods.upkeep_problem = problem
+                mods.status.upkeep_problem = problem
                     .map(|p| crate::words::said_of(&p))
                     .unwrap_or_default();
                 cx.notify();
@@ -408,7 +399,7 @@ impl Mods {
                     let _ = me.update(cx, |mods, cx| {
                         let app = crate::ui::app(cx);
                         let binned = app.bin_mod(id);
-                        mods.upkeep_problem = crate::words::why_not(&binned);
+                        mods.status.upkeep_problem = crate::words::why_not(&binned);
                         if binned.is_ok() {
                             app.rescan_soon();
                         }
@@ -423,13 +414,10 @@ impl Mods {
 
     pub(super) fn ask_unsubscribe(
         &mut self,
-        mod_id: i32,
+        id: ModId,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(id) = ModId::from_packed(mod_id) else {
-            return;
-        };
         let app = crate::ui::app(cx);
         let about = self.order.details(&app, id);
         let me = cx.entity().downgrade();
@@ -445,7 +433,7 @@ impl Mods {
                 label: put(&say!("Unsubscribe")),
                 danger: true,
                 run: Box::new(move |_, cx| {
-                    let _ = me.update(cx, |_, cx| cx.emit(Wanted::Unsubscribe(mod_id)));
+                    let _ = me.update(cx, |_, cx| cx.emit(Wanted::Unsubscribe(id)));
                 }),
             },
             window,

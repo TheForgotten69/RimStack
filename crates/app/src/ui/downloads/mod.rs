@@ -20,6 +20,7 @@ use crate::workspace::downloads::{Queue, Updates};
 use gpui::{AppContext, Context, Entity, EventEmitter};
 use rimstack_core::base::error::Error;
 use rimstack_core::kept::settings::Switch;
+use rimstack_core::mods::library::ModId;
 use rimstack_core::sources::downloads::Replaceable;
 use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
@@ -29,12 +30,12 @@ use std::time::Duration;
 const TICK: Duration = Duration::from_secs(60);
 
 /// Asked of the window: show this mod in the Mods tab.
-pub struct ShowMod(pub i32);
+pub struct ShowMod(pub ModId);
 
 /// A task waiting for the one before it: two would write the same SteamCMD folder.
 struct Waiting {
     doing: String,
-    updating: Option<i32>,
+    updating: Option<ModId>,
     work: Box<dyn FnOnce() -> crate::workspace::fetch::Done + Send>,
 }
 
@@ -42,8 +43,7 @@ struct Waiting {
 struct Tasks {
     running: bool,
     note: String,
-    /// The checkout being updated, by its `ModId::to_packed`.
-    updating: Option<i32>,
+    updating: Option<ModId>,
     /// The repository being cloned, by its place in what was looked up.
     cloning: Option<usize>,
     waiting: VecDeque<Waiting>,
@@ -358,8 +358,7 @@ impl Downloads {
         }
     }
 
-    pub fn ignore_replacement(&mut self, mod_id: Option<i32>, cx: &mut Context<Self>) {
-        let id = mod_id.and_then(rimstack_core::mods::library::ModId::from_packed);
+    pub fn ignore_replacement(&mut self, id: Option<ModId>, cx: &mut Context<Self>) {
         if let Err(problem) = super::app(cx).ignore_replacement(id) {
             rimstack_core::problem!("{problem}");
         }

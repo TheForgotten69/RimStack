@@ -73,11 +73,11 @@ impl Mods {
                         )
                         .when(!no_folders, |d| d.child(text(c.ink2, problem.clone())))
                         .when_some(
-                            standing.filter(|_| self.folder_problem.is_empty()),
+                            standing.filter(|_| self.status.folder_problem.is_empty()),
                             |d, said| d.child(text(c.err, said)),
                         )
-                        .when(!self.folder_problem.is_empty(), |d| {
-                            d.child(text(c.err, self.folder_problem.clone()))
+                        .when(!self.status.folder_problem.is_empty(), |d| {
+                            d.child(text(c.err, self.status.folder_problem.clone()))
                         })
                         .when(no_folders, |d| {
                             d.child(
@@ -137,7 +137,7 @@ impl Mods {
             let typed = path.to_string_lossy().into_owned();
             let verdict = crate::workspace::judge_folder("game", &typed);
             let _ = mods.update(cx, |mods, cx| {
-                mods.folder_problem = match verdict.ok {
+                mods.status.folder_problem = match verdict.ok {
                     true => crate::words::why_not(&crate::ui::app(cx).keep_setting("game", &typed)),
                     false => put(&verdict.said),
                 };

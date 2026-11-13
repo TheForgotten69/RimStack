@@ -14,6 +14,8 @@ use gpui::{
     Context, InteractiveElement, IntoElement, ParentElement, Pixels, Render,
     StatefulInteractiveElement, Styled, WeakEntity, Window, div, prelude::FluentBuilder, px,
 };
+use rimstack_core::mods::library::ModId;
+use rimstack_core::mods::list::Category;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -27,7 +29,7 @@ pub struct Shown {
     pub view: Rc<crate::workspace::ModsView>,
     pub marks: Rc<rows::Marks>,
     /// The `mod_id`s chosen in this list.
-    pub chosen: Rc<HashSet<i32>>,
+    pub chosen: Rc<HashSet<ModId>>,
     /// Whether its mods may be dragged: not while Sort is shown, nor in an order of a column.
     pub movable: bool,
     /// Whether the filter leaves it out and it is dimmed rather than hidden.
@@ -69,7 +71,7 @@ pub struct ModList {
     drawn_top: Rc<std::cell::Cell<Pixels>>,
     /// The mods sliding to the places they were moved to, and how many rows each comes from;
     /// a new slide is a new turn, which starts each row's animation again.
-    slides: Rc<std::collections::HashMap<i32, i32>>,
+    slides: Rc<std::collections::HashMap<ModId, i32>>,
     slide_turn: u64,
     slide_end: Option<gpui::Task<()>>,
 }
@@ -188,7 +190,7 @@ impl ModList {
     }
 
     /// The category whose mods are at the list's top, while its heading has scrolled away.
-    fn top_category(&self) -> Option<(i32, Pixels)> {
+    fn top_category(&self) -> Option<(Category, Pixels)> {
         let rows = &self.shown.rows;
         if !rows.first().is_some_and(|r| r.is_header) {
             return None;
@@ -200,7 +202,7 @@ impl ModList {
     }
 
     /// Each mod of `slides` comes to its row from that many rows away, unless motion is reduced.
-    pub fn slide(&mut self, slides: std::collections::HashMap<i32, i32>, cx: &mut Context<Self>) {
+    pub fn slide(&mut self, slides: std::collections::HashMap<ModId, i32>, cx: &mut Context<Self>) {
         if cx.global::<Theme>().appearance.reduce_motion || slides.is_empty() {
             return;
         }
@@ -356,7 +358,7 @@ impl Render for ModList {
                             - theme::GAP_SMALL * 2.
                     }
                 };
-                let chosen_ids: Vec<i32> = shown.chosen.iter().copied().collect();
+                let chosen_ids: Vec<ModId> = shown.chosen.iter().copied().collect();
                 let around = rows::Around {
                     pointed,
                     movable: shown.movable,
@@ -376,7 +378,7 @@ impl Render for ModList {
                 range
                     .map(|at| {
                         let row = &shown.rows[at];
-                        let chosen = row.mod_id >= 0 && shown.chosen.contains(&row.mod_id);
+                        let chosen = row.mod_id.is_some_and(|id| shown.chosen.contains(&id));
                         let drawn = rows::row(
                             window,
                             theme,
@@ -393,7 +395,7 @@ impl Render for ModList {
                             cx,
                         );
                         let shown = div().pr(room).child(drawn);
-                        match slides.get(&row.mod_id) {
+                        match row.mod_id.and_then(|id| slides.get(&id)) {
                             Some(&places) if !row.is_header => {
                                 let most = theme.sized(400.);
                                 let from = (rows::height(theme, row, side == Side::Active)
@@ -530,7 +532,7 @@ impl ModList {
     fn top_heading(
         &self,
         theme: &Theme,
-        category: i32,
+        category: Category,
         top: Pixels,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
@@ -546,15 +548,13 @@ impl ModList {
             .get(next)
             .filter(|r| r.is_header && !r.is_sub && !r.again)
             .map_or(px(0.), |_| (self.tops[next] - top - tall).min(px(0.)));
-        let colour = usize::try_from(category).map_or(c.ink3, |at| theme.category_colour(at));
-        let icon = usize::try_from(category)
-            .ok()
-            .and_then(|at| theme::CATEGORY_ICONS.get(at))
+        let colour = theme.category_colour(category as usize);
+        let icon = theme::CATEGORY_ICONS
+            .get(category as usize)
             .copied()
             .unwrap_or("package");
-        let name = usize::try_from(category)
-            .ok()
-            .and_then(|at| theme::CATEGORY_NAMES.get(at))
+        let name = theme::CATEGORY_NAMES
+            .get(category as usize)
             .map(|name| {
                 crate::words::put(&rimstack_core::base::sentence::Sentence::said(
                     name,

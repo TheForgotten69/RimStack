@@ -37,7 +37,7 @@ impl Render for Mods {
         let bulk = self.bulk_bar(&theme, cx);
         let unread = self.unread(&theme, cx);
         let is_unread = unread.is_some();
-        self.hint_anchors.forget_drawn();
+        self.hints.anchors.forget_drawn();
         let panes =
             (self.comparing.is_none() && !is_unread).then(|| self.panes(&theme, window, cx));
         let hint = match panes.is_some() {
@@ -51,7 +51,7 @@ impl Render for Mods {
             .min_h_0()
             .track_focus(&self.focus)
             .on_action(cx.listener(|mods, _: &FocusFilter, window, cx| {
-                let field = match mods.drawer_open && mods.view.inactive_hidden {
+                let field = match mods.layout.drawer_open && mods.view.inactive_hidden {
                     true => &mods.mirror,
                     false => &mods.filter,
                 };
@@ -61,9 +61,9 @@ impl Render for Mods {
                 if event.keystroke.key != "escape" || mods.comparing.is_some() {
                     return;
                 }
-                if mods.drawer_open {
+                if mods.layout.drawer_open {
                     mods.set_drawer(false, cx);
-                } else if mods.picking.is_some() {
+                } else if mods.chosen_reads.picking.is_some() {
                     mods.start_picking(None, cx);
                 } else if !mods.selection.is_empty() {
                     mods.select(None, true, cx);

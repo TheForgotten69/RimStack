@@ -26,7 +26,7 @@ pub fn stage(shell: &mut Shell, options: &Options, window: &mut Window, cx: &mut
         mods.update(cx, |mods, cx| mods.show_hint(step, cx));
     }
     if options.drawer {
-        mods.update(cx, |mods, _| mods.drawer_open = true);
+        mods.update(cx, |mods, cx| mods.set_drawer(true, cx));
     }
     let listed = |mods: &Mods| mods.count(Side::Active) > 0;
     if let Some(row) = options.pick {

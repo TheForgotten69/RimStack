@@ -38,8 +38,7 @@ pub struct SortMove {
     pub name: String,
     pub from: usize,
     pub to: usize,
-    /// -1 for a mod that is not installed.
-    pub mod_id: i32,
+    pub mod_id: Option<ModId>,
     pub why: Sentence,
 }
 
@@ -171,7 +170,7 @@ impl LoadOrder {
                         name: m.name.clone(),
                         from,
                         to: now + 1,
-                        mod_id: m.installed.map_or(-1, ModId::to_packed),
+                        mod_id: m.installed,
                         why: why.text.clone(),
                     })
                     .collect(),

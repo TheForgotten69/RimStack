@@ -221,7 +221,7 @@ impl Downloads {
     ) -> AnyElement {
         let c = &theme.colours;
         let row = shown.row;
-        let mod_id = row.mod_id.to_packed();
+        let mod_id = row.mod_id;
         let notes = crate::ui::change_notes(&row.id);
         div()
             .flex()
@@ -271,7 +271,7 @@ impl Downloads {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let c = &theme.colours;
-        let mod_id = shown.row.mod_id.to_packed();
+        let mod_id = shown.row.mod_id;
         let updating = self.tasks.updating == Some(mod_id);
         let tone = [c.ink2, c.ok, c.moved, c.err][usize::from(shown.standing).min(3)];
         let update = if updating {
@@ -501,7 +501,7 @@ impl Downloads {
             false => (Vec::new(), Pixels::ZERO),
         };
         let rows = self.replacements.iter().enumerate().map(|(at, old)| {
-            let mod_id = old.mod_id.to_packed();
+            let mod_id = old.mod_id;
             let page = crate::ui::workshop_page(&old.new_id);
             div()
                 .flex()

@@ -56,8 +56,10 @@ impl DetailsView {
                     .px(theme::GAP_SMALL)
                     .rounded(theme::CORNER)
                     .cursor_pointer()
-                    .when(Some(mod_id) == chosen, |d| d.bg(c.seg))
-                    .when(Some(mod_id) != chosen, |d| d.hover(|s| s.bg(c.chip)))
+                    .when(mod_id.is_some() && mod_id == chosen, |d| d.bg(c.seg))
+                    .when(mod_id.is_none() || mod_id != chosen, |d| {
+                        d.hover(|s| s.bg(c.chip))
+                    })
                     .child(icon(
                         if up { "arrow-up" } else { "arrow-down" },
                         theme.sized(13.),
@@ -92,7 +94,11 @@ impl DetailsView {
                         c.ink2,
                         format!("{} → {}", one.from, one.to),
                     ))
-                    .on_click(self.on_mods(move |mods, cx| mods.show_mod(mod_id, cx)));
+                    .on_click(self.on_mods(move |mods, cx| {
+                        if let Some(id) = mod_id {
+                            mods.show_mod(id, cx)
+                        }
+                    }));
                 crate::ui::tip::tipped(row, why.into()).into_any_element()
             });
             shown = shown.child(
@@ -141,7 +147,7 @@ impl DetailsView {
         }
         let c = &theme.colours;
         let rows = overview.slowest.iter().enumerate().map(|(at, slow)| {
-            let mod_id = slow.mod_id as i32;
+            let mod_id = slow.mod_id;
             div()
                 .id(("slowest", at))
                 .relative()
@@ -173,7 +179,11 @@ impl DetailsView {
                         .child(slow.name.clone()),
                 )
                 .child(label(theme, theme.small(), c.ink2, slow.took.clone()))
-                .on_click(self.on_mods(move |mods, cx| mods.show_mod(mod_id, cx)))
+                .on_click(self.on_mods(move |mods, cx| {
+                    if let Some(id) = mod_id {
+                        mods.show_mod(id, cx)
+                    }
+                }))
                 .into_any_element()
         });
         let (folded, fold) = self.fold("overview-slowest", false, cx);

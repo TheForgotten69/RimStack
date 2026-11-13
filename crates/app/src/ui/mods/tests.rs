@@ -67,7 +67,7 @@ fn a_category_heading_folds_its_mods_away(cx: &mut gpui::TestAppContext) {
         mods.toggle_category(Side::Active, first.category, cx)
     });
     let after = mods.read_with(cx, |mods, _| rows(mods));
-    assert_eq!(after, before - first.count as usize);
+    assert_eq!(after, before - first.count);
 }
 
 /// The middle of the load order's first heading, from the Theme: the inactive pane and its edge,
@@ -96,7 +96,7 @@ fn a_click_on_a_category_heading_folds_it(cx: &mut gpui::TestAppContext) {
     let at = first_heading(cx);
     cx.simulate_click(at, gpui::Modifiers::none());
     let after = mods.read_with(cx, |mods, _| mods.active.rows.len());
-    assert_eq!(after, before - first.count as usize);
+    assert_eq!(after, before - first.count);
 }
 
 #[gpui::test]

@@ -8,7 +8,7 @@ use crate::ui::button::Btn;
 use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{TextSized, elide_middle, icon, label};
 use crate::words::{count, put};
-use crate::workspace::load_order::SelectionSummary;
+use crate::workspace::load_order::{Level, SelectionSummary};
 use gpui::{
     AnyElement, Context, IntoElement, ParentElement, Pixels, Styled, Window, div,
     prelude::FluentBuilder, px,
@@ -21,10 +21,7 @@ const MOST: usize = 12;
 
 impl Mods {
     fn chosen_ids(&self) -> Vec<ModId> {
-        self.selection
-            .iter()
-            .filter_map(|id| ModId::from_packed(*id))
-            .collect()
+        self.selection.clone()
     }
 
     /// The bar under the panes while several mods are chosen.
@@ -178,12 +175,11 @@ impl DetailsView {
         };
         let count_chosen = self.shown.selected;
         let rows = summary.rows[..shown].iter().map(|one| {
-            let colour =
-                usize::try_from(one.category).map_or(c.ink3, |at| theme.category_colour(at));
+            let colour = theme.category_colour(one.category as usize);
             let mark = match one.trouble {
-                2 => Some(("circle-alert", c.err)),
-                1 => Some(("triangle-alert", c.ink3)),
-                _ => None,
+                Level::Error => Some(("circle-alert", c.err)),
+                Level::Warning => Some(("triangle-alert", c.ink3)),
+                Level::None => None,
             };
             let room = width
                 - px(7.)

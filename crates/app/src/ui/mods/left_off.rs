@@ -4,7 +4,6 @@
 use super::Mods;
 use crate::workspace::load_order::Side;
 use gpui::{Context, px};
-use rimstack_core::mods::library::ModId;
 
 /// Whether the place left is brought back and kept.
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
@@ -47,7 +46,7 @@ impl Mods {
             })
             .flatten();
         if let Some(id) = found {
-            self.show_mod(id.to_packed(), cx);
+            self.show_mod(id, cx);
             let tab = view.last_tab.min(2);
             self.details_view.update(cx, |details, cx| {
                 details.tab = tab;
@@ -71,7 +70,7 @@ impl Mods {
         }
         let app = super::super::app(cx);
         let alone = match self.selection.as_slice() {
-            [one] => ModId::from_packed(*one),
+            [one] => Some(*one),
             _ => None,
         };
         let key = alone

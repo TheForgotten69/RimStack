@@ -59,7 +59,8 @@ impl Logs {
                     .into_any_element()
             })
             .collect();
-        let (open, mod_id) = (culprit.name.clone(), culprit.mod_id);
+        let open = culprit.name.clone();
+        let mod_id = culprit.mod_id;
         Some(
             div()
                 .flex()
@@ -94,11 +95,9 @@ impl Logs {
                                     cx.listener(move |logs, _, _, cx| logs.open_culprit(&open, cx)),
                                 ),
                         )
-                        .when(mod_id >= 0, |d| {
+                        .when_some(mod_id, |d, mod_id| {
                             d.child(Btn::new("go-to-culprit", put(&say!("Go to mod"))).on_click(
-                                cx.listener(move |_, _, _, cx| {
-                                    cx.emit(super::ShowMod(mod_id as i32))
-                                }),
+                                cx.listener(move |_, _, _, cx| cx.emit(super::ShowMod(mod_id))),
                             ))
                         }),
                 )
@@ -121,7 +120,7 @@ impl Logs {
             .iter()
             .enumerate()
             .map(|(at, named)| {
-                let mod_id = named.mod_id.to_packed();
+                let mod_id = named.mod_id;
                 div()
                     .flex()
                     .items_center()

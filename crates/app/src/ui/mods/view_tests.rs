@@ -1,5 +1,6 @@
 use super::edit_tests::opened_with;
 use crate::workspace::load_order::Side;
+use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::list::SortKey;
 use std::time::{Duration, Instant};
 
@@ -75,7 +76,7 @@ fn the_inactive_mods_fold_into_the_rail_and_the_dividers_keep_their_least() {
                 cx,
             );
             assert_eq!(
-                mods.details_width,
+                mods.layout.details_width,
                 theme.sized(260.),
                 "the details keep their least width"
             );
@@ -86,7 +87,7 @@ fn the_inactive_mods_fold_into_the_rail_and_the_dividers_keep_their_least() {
                 cx,
             );
             assert_eq!(
-                mods.inactive_width,
+                mods.layout.inactive_width,
                 gpui::px(500.) - crate::ui::theme::HANDLE / 2.
             );
             mods.set_hidden(false, cx);
@@ -114,9 +115,7 @@ fn the_mod_tab_and_filter_left_come_back_and_a_new_choice_is_kept() {
                 "is:changed is not brought back"
             );
             let app = crate::ui::app(cx);
-            let chosen = mods
-                .selected_id()
-                .and_then(rimstack_core::mods::library::ModId::from_packed);
+            let chosen = mods.selected_id();
             let key = chosen.and_then(|id| mods.order.package_of(&app, id));
             assert_eq!(key.as_deref(), Some("fixture.mod010"));
             assert_eq!(mods.details_view.read(cx).tab, 2);
@@ -124,9 +123,10 @@ fn the_mod_tab_and_filter_left_come_back_and_a_new_choice_is_kept() {
                 .active
                 .rows
                 .iter()
-                .find(|r| !r.is_header && r.mod_id != chosen.unwrap().to_packed())
+                .find(|r| !r.is_header && r.mod_id != chosen)
                 .unwrap()
-                .mod_id;
+                .mod_id
+                .unwrap();
             mods.choose(Side::Active, other, cx);
             let kept = app.mods_view().last_mod;
             assert_ne!(kept, "fixture.mod010");
@@ -143,7 +143,7 @@ fn a_column_is_sized_by_its_edge_and_moved_by_its_heading() {
     cx.update(|cx| {
         let grow = f32::from(cx.global::<crate::ui::theme::Theme>().sized(1.));
         mods.update(cx, |mods, cx| {
-            mods.column_drag = Some((px(500.), px(100.)));
+            mods.layout.column_drag = Some((px(500.), px(100.)));
             mods.size_column("author", px(470.), cx);
             let wide = (130. / grow).round() as u32;
             assert_eq!(
@@ -151,13 +151,13 @@ fn a_column_is_sized_by_its_edge_and_moved_by_its_heading() {
                 format!("author={wide}"),
                 "further left is wider"
             );
-            mods.column_drag = Some((px(500.), px(100.)));
+            mods.layout.column_drag = Some((px(500.), px(100.)));
             mods.drop_column(ColumnHeld("author", 0), px(530.), cx);
             assert_eq!(
                 mods.view.columns, "author,version,load",
                 "less than half its width stays"
             );
-            mods.column_drag = Some((px(500.), px(100.)));
+            mods.layout.column_drag = Some((px(500.), px(100.)));
             mods.drop_column(ColumnHeld("author", 0), px(600.), cx);
             assert_eq!(mods.view.columns, "version,author,load");
             assert_eq!(
@@ -236,14 +236,14 @@ fn the_hints_go_one_after_the_other_and_are_not_shown_again() {
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
             mods.start_hints(cx);
-            assert_eq!(mods.hint_step, 1);
+            assert_eq!(mods.hints.step, 1);
             mods.next_hint(cx);
             mods.next_hint(cx);
-            assert_eq!(mods.hint_step, 3);
+            assert_eq!(mods.hints.step, 3);
             mods.next_hint(cx);
-            assert_eq!(mods.hint_step, 0, "Done ends them");
+            assert_eq!(mods.hints.step, 0, "Done ends them");
             mods.start_hints(cx);
-            assert_eq!(mods.hint_step, 0, "seen once, they do not start again");
+            assert_eq!(mods.hints.step, 0, "seen once, they do not start again");
         })
     });
 }
@@ -260,7 +260,8 @@ fn an_inactive_mod_shown_while_the_list_is_folded_unfolds_it() {
                 .iter()
                 .find(|r| !r.is_header)
                 .unwrap()
-                .mod_id;
+                .mod_id
+                .unwrap();
             mods.show_mod(id, cx);
             assert!(!mods.view.inactive_hidden, "the list is pinned again");
             assert_eq!(mods.selected_id(), Some(id));
@@ -275,12 +276,12 @@ fn select_all_chooses_only_the_mods_the_filter_shows() {
     cx.update(|cx| mods.update(cx, |mods, cx| mods.select_all(Side::Inactive, cx)));
     cx.update(|cx| {
         let mods = mods.read(cx);
-        let mut shown: Vec<i32> = mods
+        let mut shown: Vec<ModId> = mods
             .inactive
             .rows
             .iter()
-            .filter(|r| !r.is_header && r.mod_id >= 0)
-            .map(|r| r.mod_id)
+            .filter(|r| !r.is_header)
+            .filter_map(|r| r.mod_id)
             .collect();
         let mut chosen = mods.selection.clone();
         shown.sort_unstable();
@@ -316,14 +317,14 @@ fn a_column_and_a_divider_move_by_their_keys() {
             assert_eq!(mods.view.columns, "version,author,load");
             mods.move_column("author", -1, cx);
             assert_eq!(mods.view.columns, "author,version,load");
-            let before = mods.inactive_width;
+            let before = mods.layout.inactive_width;
             let right = gpui::KeyDownEvent {
                 keystroke: gpui::Keystroke::parse("right").unwrap(),
                 is_held: false,
                 prefer_character_input: false,
             };
             mods.nudge_grip(Grip::Inactive, &right, cx);
-            assert_eq!(mods.inactive_width, before + step);
+            assert_eq!(mods.layout.inactive_width, before + step);
         })
     });
 }
@@ -461,7 +462,7 @@ fn scrolling_the_load_order_draws_the_list_alone_again() {
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
             let chosen = mods.order.list(Side::Active).mods()[4].installed.unwrap();
-            mods.choose(Side::Active, chosen.to_packed(), cx);
+            mods.choose(Side::Active, chosen, cx);
         })
     });
     for _ in 0..3 {

@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 /// Asked of the window: show this mod in the Mods tab.
-pub struct ShowMod(pub i32);
+pub struct ShowMod(pub rimstack_core::mods::library::ModId);
 /// Asked of the window: the load order becomes these mods, unsaved.
 pub struct UseList(pub Vec<String>);
 /// Asked of the window: start the search for the broken mod.

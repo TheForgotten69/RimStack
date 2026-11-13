@@ -54,7 +54,7 @@ impl DetailsView {
                         "Reads this mod's change notes from its Workshop page. Only its Workshop id is sent."
                     )))
                     .on_click(move |_, _, cx| {
-                        let Some(id) = id.and_then(rimstack_core::mods::library::ModId::from_packed) else {
+                        let Some(id) = id else {
                             return;
                         };
                         let _ = fetching.update(cx, |downloads, cx| downloads.fetch_notes_of(id, cx));

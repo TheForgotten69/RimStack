@@ -103,24 +103,24 @@ fn upwards(theme: &Theme, window: &Window, text: String, colour: Hsla) -> AnyEle
 impl Mods {
     pub(super) fn panes_wanted(&self) -> Panes {
         Panes {
-            inactive: self.inactive_width,
-            details: self.details_width,
+            inactive: self.layout.inactive_width,
+            details: self.layout.details_width,
             hidden: self.view.inactive_hidden && self.comparing.is_none(),
         }
     }
 
     pub(super) fn set_hidden(&mut self, hidden: bool, cx: &mut Context<Self>) {
-        self.drawer_open = false;
+        self.layout.drawer_open = false;
         self.keep_view(|view| view.inactive_hidden = hidden, cx);
         self.sync_details(cx);
         cx.notify();
     }
 
-    pub(super) fn set_drawer(&mut self, open: bool, cx: &mut Context<Self>) {
-        if open && !self.drawer_open {
-            self.drawer_turn = crate::ui::motion::opening();
+    pub fn set_drawer(&mut self, open: bool, cx: &mut Context<Self>) {
+        if open && !self.layout.drawer_open {
+            self.layout.drawer_turn = crate::ui::motion::opening();
         }
-        self.drawer_open = open;
+        self.layout.drawer_open = open;
         if open {
             let text = self.filter.read(cx).text().to_string();
             self.mirror
@@ -140,10 +140,10 @@ impl Mods {
         let half = theme::HANDLE / 2.;
         match grip {
             Grip::Inactive => {
-                self.inactive_width = (at.x - area.left() - half).max(theme.sized(200.));
+                self.layout.inactive_width = (at.x - area.left() - half).max(theme.sized(200.));
             }
             Grip::Details => {
-                self.details_width = (area.right() - at.x - half).max(theme.sized(260.));
+                self.layout.details_width = (area.right() - at.x - half).max(theme.sized(260.));
             }
         }
         self.keep_widths_soon(cx);
@@ -166,9 +166,12 @@ impl Mods {
         };
         match grip {
             Grip::Inactive => {
-                self.inactive_width = (self.inactive_width + by).max(theme.sized(200.));
+                self.layout.inactive_width =
+                    (self.layout.inactive_width + by).max(theme.sized(200.));
             }
-            Grip::Details => self.details_width = (self.details_width - by).max(theme.sized(260.)),
+            Grip::Details => {
+                self.layout.details_width = (self.layout.details_width - by).max(theme.sized(260.))
+            }
         }
         cx.stop_propagation();
         self.keep_widths_soon(cx);
@@ -179,8 +182,8 @@ impl Mods {
     fn reset_width(&mut self, grip: Grip, cx: &mut Context<Self>) {
         let (inactive, details) = first_widths(cx.global::<Theme>());
         match grip {
-            Grip::Inactive => self.inactive_width = inactive,
-            Grip::Details => self.details_width = details,
+            Grip::Inactive => self.layout.inactive_width = inactive,
+            Grip::Details => self.layout.details_width = details,
         }
         self.keep_widths_soon(cx);
         self.sync_details(cx);
@@ -188,7 +191,7 @@ impl Mods {
     }
 
     fn keep_widths_soon(&mut self, cx: &mut Context<Self>) {
-        let (inactive, details) = (self.inactive_width, self.details_width);
+        let (inactive, details) = (self.layout.inactive_width, self.layout.details_width);
         self.keep_view_soon(
             |view| {
                 view.inactive = f32::from(inactive);
@@ -254,7 +257,7 @@ impl Mods {
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<gpui::Div> {
         let c = &theme.colours;
-        let open = self.drawer_open;
+        let open = self.layout.drawer_open;
         let (icon, tip) = match open {
             true => ("x", put(&say!("Close the inactive mods"))),
             false => ("plus", put(&say!("Inactive mods"))),
@@ -313,7 +316,7 @@ impl Mods {
         let rail = rail_width(theme);
         let wide = theme
             .sized(260.)
-            .max(self.inactive_width)
+            .max(self.layout.inactive_width)
             .min(room - rail - theme.sized(60.));
         let shade = linear_gradient(
             90.,
@@ -366,7 +369,7 @@ impl Mods {
                             .bg(shade),
                     ),
                 wide,
-                ("drawer-in", self.drawer_turn),
+                ("drawer-in", self.layout.drawer_turn),
             ))
             .into_any_element()
     }
@@ -382,7 +385,7 @@ impl Mods {
         let panes = self.panes_wanted();
         let (inactive_width, active_width, details_width) = pane_widths(theme, room, panes);
         let drawer =
-            (panes.hidden && self.drawer_open).then(|| self.drawer(theme, room, window, cx));
+            (panes.hidden && self.layout.drawer_open).then(|| self.drawer(theme, room, window, cx));
         div()
             .id("panes")
             .relative()

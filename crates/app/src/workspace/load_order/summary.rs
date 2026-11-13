@@ -1,22 +1,19 @@
-use super::rows::{load_time_text, trouble_level};
+use super::rows::{Level, load_time_text, trouble_level};
 use super::{LoadOrder, Side};
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::library::ModId;
-use rimstack_core::mods::list::Row;
+use rimstack_core::mods::list::{Category, Row};
 use rimstack_core::say;
-use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
-#[derive(Serialize)]
 pub struct Chosen {
     pub name: String,
-    pub category: i32,
+    pub category: Category,
     pub load: String,
-    pub trouble: i32,
+    pub trouble: Level,
 }
 
-#[derive(Serialize, Default)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct SelectionSummary {
     pub place: Sentence,
     /// Those with a row in view, in the order of their list.
@@ -60,7 +57,7 @@ impl LoadOrder {
                 let m = &list.mods()[at];
                 Chosen {
                     name: m.name.clone(),
-                    category: m.category as i32,
+                    category: m.category,
                     load: load_time_text(m),
                     trouble: trouble_level(own(at)),
                 }
@@ -76,7 +73,7 @@ impl LoadOrder {
                 say!("In the load order, between {} and {}", first + 1, last + 1)
             }
         };
-        let troubled = rows.iter().filter(|m| m.trouble > 0).count();
+        let troubled = rows.iter().filter(|m| m.trouble > Level::None).count();
         let version = self.version_warned(selected).len();
         let troubled = match (troubled, version) {
             (0, _) => Sentence::default(),

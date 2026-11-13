@@ -48,8 +48,7 @@ pub struct DetailsShown {
     pub fresh: usize,
     /// A Git checkout's last commits, read off the window's thread.
     pub commits: Option<Rc<Vec<rimstack_core::sources::changes::Note>>>,
-    /// The mod chosen alone, as `RowView::mod_id` gives it.
-    pub chosen_id: Option<i32>,
+    pub chosen_id: Option<rimstack_core::mods::library::ModId>,
     /// Two mods' shared textures being compared: the details tell what was kept.
     pub comparison: Option<Rc<crate::workspace::textures::Comparison>>,
     /// The search for the broken mod runs: it is not offered again.

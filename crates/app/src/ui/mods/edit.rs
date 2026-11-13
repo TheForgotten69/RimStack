@@ -42,10 +42,7 @@ impl Mods {
     }
 
     fn ids(&self) -> Vec<ModId> {
-        self.selection
-            .iter()
-            .filter_map(|id| ModId::from_packed(*id))
-            .collect()
+        self.selection.clone()
     }
 
     /// The mod at `from` moved to `to`, sliding there as `Mods.slide` made it.
@@ -60,7 +57,7 @@ impl Mods {
         self.order.move_mod(&app, side, from, to);
         self.changed(cx);
         if let Some(id) = moved {
-            let slides = [(id.to_packed(), from as i32 - to as i32)].into();
+            let slides = [(id, from as i32 - to as i32)].into();
             self.list(side)
                 .update(cx, |list, cx| list.slide(slides, cx));
         }
@@ -116,7 +113,7 @@ impl Mods {
 
     /// The mod chosen moved across, and the one beside it chosen, as Enter does.
     pub(super) fn activate_selected(&mut self, side: Side, cx: &mut Context<Self>) {
-        let Some(first) = self.selected_id().and_then(ModId::from_packed) else {
+        let Some(first) = self.selected_id() else {
             return;
         };
         let list = self.order.list(side);
@@ -126,14 +123,13 @@ impl Mods {
         let next = list.beside_mod(first);
         self.take(side, position, None, cx);
         if let Some(next) = next {
-            self.select(Some(next.to_packed()), side == Side::Active, cx);
+            self.select(Some(next), side == Side::Active, cx);
         }
     }
 
     /// The mod chosen moved across or back, as the row's button and a double click do.
-    pub(super) fn toggle_mod(&mut self, side: Side, mod_id: i32, cx: &mut Context<Self>) {
-        let position =
-            ModId::from_packed(mod_id).and_then(|id| self.order.list(side).position_of(id));
+    pub(super) fn toggle_mod(&mut self, side: Side, mod_id: ModId, cx: &mut Context<Self>) {
+        let position = self.order.list(side).position_of(mod_id);
         if let (Some(position), false) = (position, self.order.previewing()) {
             self.take(side, position, None, cx);
         }
@@ -169,7 +165,7 @@ impl Mods {
 
     /// The mod chosen moved `by` places, as Alt + an arrow does.
     fn nudge(&mut self, side: Side, by: isize, cx: &mut Context<Self>) {
-        let Some(first) = self.selected_id().and_then(ModId::from_packed) else {
+        let Some(first) = self.selected_id() else {
             return;
         };
         let sorted_by_column = side == Side::Active && !self.orders.active_key.is_empty();
@@ -215,14 +211,14 @@ impl Mods {
     pub fn keep_file(&mut self, take: bool, cx: &mut Context<Self>) {
         let app = super::super::app(cx);
         self.order.keep_file(&app, take);
-        self.save_problem.clear();
-        self.file_changed = false;
+        self.status.save_problem.clear();
+        self.status.file_changed = false;
         self.changed(cx);
     }
 
     /// Writes the load order to ModsConfig.xml off the window's thread; `then` runs once written.
     pub fn save(&mut self, then: Option<AfterSave>, cx: &mut Context<Self>) {
-        if self.saving || self.demo {
+        if self.status.saving || self.demo {
             return;
         }
         if self.order.previewing() {
@@ -232,14 +228,14 @@ impl Mods {
         let saving = match self.order.to_save(&app) {
             Ok(saving) => saving,
             Err(problem) => {
-                self.save_problem = crate::words::said_of(&problem);
+                self.status.save_problem = crate::words::said_of(&problem);
                 cx.notify();
                 return;
             }
         };
         let changes = app.session().changes().said();
         let before = app.session().saved().to_vec();
-        self.saving = true;
+        self.status.saving = true;
         let worker = app.clone();
         crate::jobs::run(
             "save",
@@ -254,12 +250,13 @@ impl Mods {
                 (saving.list, written)
             },
             move |mods, (list, written), cx| {
-                mods.saving = false;
+                mods.status.saving = false;
                 if written.is_ok() {
                     mods.order.saved(&app, list);
                 }
-                mods.save_problem = crate::words::why_not(&written);
-                mods.file_changed = written.as_ref().err() == Some(&modsconfig::changed_outside());
+                mods.status.save_problem = crate::words::why_not(&written);
+                mods.status.file_changed =
+                    written.as_ref().err() == Some(&modsconfig::changed_outside());
                 mods.changed(cx);
                 if let (Ok(()), Some(then)) = (written, then) {
                     then(mods, cx);
@@ -275,7 +272,7 @@ impl Mods {
         }
         let app = super::super::app(cx);
         self.order.preview_sort(&app);
-        self.closed_note.clear();
+        self.status.closed_note.clear();
         self.show(cx);
         let slides = crate::workspace::load_order::sort_slides(&self.active.rows);
         self.list(Side::Active)
@@ -304,12 +301,12 @@ impl Mods {
 
 impl Mods {
     /// One mod chosen, or none.
-    pub fn select(&mut self, mod_id: Option<i32>, in_active: bool, cx: &mut Context<Self>) {
+    pub fn select(&mut self, mod_id: Option<ModId>, in_active: bool, cx: &mut Context<Self>) {
         self.keep_selection(mod_id.into_iter().collect(), in_active, cx);
     }
 
     /// `mod_id` added to the mods chosen in its list, or taken out of them, as Ctrl + click does.
-    pub(super) fn select_also(&mut self, mod_id: i32, in_active: bool, cx: &mut Context<Self>) {
+    pub(super) fn select_also(&mut self, mod_id: ModId, in_active: bool, cx: &mut Context<Self>) {
         let first = self
             .selected_id()
             .filter(|_| self.selected_active == in_active);
@@ -328,30 +325,25 @@ impl Mods {
     }
 
     /// Every mod from the first chosen to `mod_id`, as Shift + click does.
-    pub(super) fn select_through(&mut self, mod_id: i32, in_active: bool, cx: &mut Context<Self>) {
+    pub(super) fn select_through(&mut self, to: ModId, in_active: bool, cx: &mut Context<Self>) {
         let first = self
             .selected_id()
-            .filter(|_| self.selected_active == in_active)
-            .and_then(ModId::from_packed);
-        let (Some(first), Some(to)) = (first, ModId::from_packed(mod_id)) else {
-            return self.select(Some(mod_id), in_active, cx);
+            .filter(|_| self.selected_active == in_active);
+        let Some(first) = first else {
+            return self.select(Some(to), in_active, cx);
         };
         let list = self.order.list(Side::of(in_active));
         let Some(others) = list.others_through(first, to) else {
             return;
         };
-        let ids = std::iter::once(first)
-            .chain(others)
-            .map(ModId::to_packed)
-            .collect();
+        let ids = std::iter::once(first).chain(others).collect();
         self.keep_selection(ids, in_active, cx);
     }
 
     pub(super) fn invert_selection(&mut self, in_active: bool, cx: &mut Context<Self>) {
         let (side, on) = (Side::of(in_active), Side::of(self.selected_active));
         let inverted = self.order.inverted(side, on, &self.ids());
-        let ids = inverted.ids.iter().map(|id| id.to_packed()).collect();
-        self.keep_selection(ids, in_active, cx);
+        self.keep_selection(inverted.ids, in_active, cx);
     }
 
     /// Every mod the list shows.
@@ -360,8 +352,8 @@ impl Mods {
             .shown(side)
             .rows
             .iter()
-            .filter(|r| !r.is_header && r.mod_id >= 0)
-            .map(|r| r.mod_id)
+            .filter(|r| !r.is_header)
+            .filter_map(|r| r.mod_id)
             .collect();
         self.keep_selection(ids, side == Side::Active, cx);
     }
@@ -369,13 +361,13 @@ impl Mods {
     /// The first chosen first, then the others by id, as `Selection::of` kept them.
     pub(super) fn keep_selection(
         &mut self,
-        ids: Vec<i32>,
+        ids: Vec<ModId>,
         in_active: bool,
         cx: &mut Context<Self>,
     ) {
         let mut ids = ids.into_iter();
         let first = ids.next();
-        let mut others: Vec<i32> = ids.filter(|id| Some(*id) != first).collect();
+        let mut others: Vec<ModId> = ids.filter(|id| Some(*id) != first).collect();
         others.sort();
         others.dedup();
         self.selection = first.into_iter().chain(others).collect();
@@ -387,7 +379,7 @@ impl Mods {
 
     /// The selection follows its first mod into the list it went to.
     fn follow_selection(&mut self) {
-        let Some(first) = self.selected_id().and_then(ModId::from_packed) else {
+        let Some(first) = self.selected_id() else {
             return;
         };
         let on = |side| self.order.list(side).position_of(first).is_some();
@@ -404,7 +396,10 @@ impl Mods {
             return;
         };
         let rows = self.shown(side).rows.clone();
-        if let Some(at) = rows.iter().position(|r| r.mod_id == id && !r.is_header) {
+        if let Some(at) = rows
+            .iter()
+            .position(|r| r.mod_id == Some(id) && !r.is_header)
+        {
             self.list(side).update(cx, |list, cx| match centre {
                 true => list.reveal(at, cx),
                 false => list.contain(at, cx),
@@ -436,11 +431,11 @@ impl Mods {
                     .selected_id()
                     .filter(|_| self.selected_active == (side == Side::Active));
                 let list = self.order.list(side);
-                let row = list.step_from(current.and_then(ModId::from_packed), by);
+                let row = list.step_from(current, by);
                 let id = row
                     .and_then(|row| self.shown(side).rows.get(row))
-                    .map(|r| r.mod_id);
-                if let Some(id) = id.filter(|id| *id >= 0) {
+                    .and_then(|r| r.mod_id);
+                if let Some(id) = id {
                     self.select(Some(id), side == Side::Active, cx);
                     self.reveal_selected(side, false, cx);
                 }
@@ -453,7 +448,7 @@ impl Mods {
                 self.details_view
                     .update(cx, |view, cx| view.edit_notes(tags, window, cx));
             }
-            "escape" if self.picking.is_some() => self.start_picking(None, cx),
+            "escape" if self.chosen_reads.picking.is_some() => self.start_picking(None, cx),
             "escape" if !self.selection.is_empty() => self.select(None, true, cx),
             _ => return,
         }
@@ -466,11 +461,11 @@ impl Mods {
     pub(super) fn problem_place(&self) -> Option<usize> {
         use rimstack_core::mods::list::Row;
         let list = self.order.list(Side::Active);
-        let Row::Mod { index } = *list.rows().get(self.problem_row?)? else {
+        let Row::Mod { index } = *list.rows().get(self.problem_nav.row?)? else {
             return None;
         };
         let id = list.mods().get(index)?.installed?;
-        if self.selected_id() != Some(id.to_packed()) {
+        if self.selected_id() != Some(id) {
             return None;
         }
         let marked: Vec<bool> = self
@@ -494,7 +489,7 @@ impl Mods {
             return;
         }
         let step = if forward { 1 } else { -1 };
-        let from = match self.problem_row {
+        let from = match self.problem_nav.row {
             Some(row) => row as isize,
             None if forward => -1,
             None => 0,
@@ -502,12 +497,12 @@ impl Mods {
         let found = (1..=count)
             .map(|n| (from + step * n).rem_euclid(count) as usize)
             .find(|&row| matches!(rows[row], Row::Mod { index } if troubled(index)));
-        self.problem_row = found;
+        self.problem_nav.row = found;
         let Some(row) = found else {
             return;
         };
         if let Some(id) = self.active.rows.get(row).map(|r| r.mod_id) {
-            self.select(Some(id), true, cx);
+            self.select(id, true, cx);
             self.list(Side::Active)
                 .update(cx, |list, cx| list.contain(row, cx));
         }
@@ -545,7 +540,7 @@ pub fn acting(
     said: &crate::workspace::load_order::ProblemSaid,
 ) -> crate::ui::problem::Acting {
     use crate::ui::problem::Act;
-    let (mod_id, fix) = (said.mod_id as i32, said.fix.clone());
+    let (mod_id, fix) = (said.mod_id, said.fix.clone());
     let (package_id, key) = (said.package_id.clone(), said.ignore.clone());
     std::rc::Rc::new(move |act, _, cx| {
         let (fix, package_id, key) = (fix.clone(), package_id.clone(), key.clone());
@@ -554,7 +549,9 @@ pub fn acting(
             Act::Ignore => mods.ignore_problem(package_id, key, cx),
             Act::Show => {
                 cx.emit(super::ShowSection(crate::ui::section::Section::Mods));
-                mods.show_mod(mod_id, cx)
+                if let Some(id) = mod_id {
+                    mods.show_mod(id, cx)
+                }
             }
         });
     })
@@ -679,7 +676,7 @@ impl Mods {
     }
 
     pub fn conflicts(&self) -> usize {
-        self.conflicts
+        self.reads.conflicts
     }
 
     /// The mod chosen moved to the other list.
@@ -695,16 +692,16 @@ impl Mods {
 
     /// What is under way on the load order: a change seen on disk waits for it.
     pub fn held(&self) -> bool {
-        self.order.previewing() || self.saving
+        self.order.previewing() || self.status.saving
     }
 
     pub fn open_problems(&mut self, cx: &mut Context<Self>) {
-        self.problems_open = true;
+        self.problem_nav.open = true;
         self.sync_details(cx);
     }
 
     pub(super) fn close_problems(&mut self, cx: &mut Context<Self>) {
-        self.problems_open = false;
+        self.problem_nav.open = false;
         self.sync_details(cx);
     }
 }

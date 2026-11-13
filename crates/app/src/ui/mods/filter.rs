@@ -126,7 +126,7 @@ impl Mods {
         let counted = Counted {
             errors,
             warnings,
-            conflicts: self.conflicts,
+            conflicts: self.reads.conflicts,
             updated: self.order.list(Side::Active).flagged(flag::UPDATED),
         };
         self.order

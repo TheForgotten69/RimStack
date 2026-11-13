@@ -14,6 +14,8 @@ use gpui::{
     AnyElement, Hsla, InteractiveElement, IntoElement, ParentElement, Pixels,
     StatefulInteractiveElement, Styled, WeakEntity, Window, div, prelude::FluentBuilder, px,
 };
+use rimstack_core::mods::library::ModId;
+use rimstack_core::mods::list::Category;
 use rimstack_core::say;
 
 /// What the load order shows beside a mod's name.
@@ -43,14 +45,13 @@ pub fn height(theme: &Theme, row: &RowView, columns: bool) -> Pixels {
     }
 }
 
-fn category_colour(theme: &Theme, category: i32) -> Hsla {
-    usize::try_from(category).map_or(theme.colours.ink3, |at| theme.category_colour(at))
+fn category_colour(theme: &Theme, category: Category) -> Hsla {
+    theme.category_colour(category as usize)
 }
 
-fn category_icon(category: i32) -> &'static str {
-    usize::try_from(category)
-        .ok()
-        .and_then(|at| CATEGORY_ICONS.get(at))
+fn category_icon(category: Category) -> &'static str {
+    CATEGORY_ICONS
+        .get(category as usize)
         .copied()
         .unwrap_or("package")
 }
@@ -113,7 +114,7 @@ impl gpui::Render for HeldGhost {
 pub struct Around<'a> {
     /// Whether its mods may be dragged.
     pub movable: bool,
-    pub chosen_ids: &'a [i32],
+    pub chosen_ids: &'a [ModId],
     /// The mods sharing textures with the one chosen: whether each loses them to it.
     pub marks: &'a Marks,
     /// Whether one mod alone is chosen, in either list.
@@ -189,11 +190,13 @@ fn hover_buttons(
                 )
                 .on_click(move |_, _, cx| {
                     cx.stop_propagation();
-                    let _ = across.update(cx, |mods, cx| mods.toggle_mod(side, mod_id, cx));
+                    if let Some(id) = mod_id {
+                        let _ = across.update(cx, |mods, cx| mods.toggle_mod(side, id, cx));
+                    }
                 }),
             )
         })
-        .when(pointed && mod_id >= 0, |d| {
+        .when_some(mod_id.filter(|_| pointed), |d, mod_id| {
             d.child(
                 button("row-folder", "folder-open", put(&say!("Open folder"))).on_click(
                     move |_, _, cx| {
@@ -241,7 +244,8 @@ pub fn row(
     let c = &theme.colours;
     let colour = category_colour(theme, row.category);
     let big_header = row.is_header && !row.is_sub && !row.again;
-    let mark = rimstack_core::mods::library::ModId::from_packed(row.mod_id)
+    let mark = row
+        .mod_id
         .and_then(|id| around.marks.get(&id))
         .filter(|_| columns.is_some() && !row.is_header);
     let pointed = around.pointed == Some(at);
@@ -282,7 +286,7 @@ pub fn row(
         Some(c.chosen)
     } else if mark.is_some() {
         Some(with_alpha(c.warn, 0.12))
-    } else if row.moved_from > 0 {
+    } else if row.moved_from.is_some() {
         Some(with_alpha(c.moved, 0.1))
     } else {
         None
@@ -365,7 +369,7 @@ pub fn row(
         .child(body)
         .when(
             !is_header
-                && row.mod_index >= 0
+                && row.mod_index.is_some()
                 && (pointed || chosen && around.single)
                 && around.buttons
                 && !cx.has_active_drag(),
@@ -373,7 +377,7 @@ pub fn row(
         )
         .when(!is_header, |d| {
             let landing = mods.clone();
-            let index = row.mod_index.max(0) as usize;
+            let index = row.mod_index.unwrap_or(0);
             d.child(
                 div()
                     .absolute()
@@ -402,30 +406,30 @@ pub fn row(
                 });
             })
         })
-        .when(around.movable && !is_header && row.mod_index >= 0, |d| {
-            let ids = match chosen && around.chosen_ids.len() > 1 {
-                true => around.chosen_ids.to_vec(),
-                false => vec![mod_id],
-            };
-            let name = match ids.len() > 1 {
-                true => put(&rimstack_core::say_n!(ids.len(), "{} mod", "{} mods")),
-                false => put(&row.name),
-            };
-            let held = Held {
-                side,
-                index: row.mod_index as usize,
-                ids: ids
-                    .into_iter()
-                    .filter_map(rimstack_core::mods::library::ModId::from_packed)
-                    .collect(),
-            };
-            d.on_drag(held, move |_, grabbed, _, cx| {
-                cx.new(|_| HeldGhost {
-                    name: name.clone(),
-                    grabbed,
+        .when_some(
+            row.mod_index.filter(|_| around.movable && !is_header),
+            |d, mod_index| {
+                let ids = match chosen && around.chosen_ids.len() > 1 {
+                    true => around.chosen_ids.to_vec(),
+                    false => mod_id.into_iter().collect(),
+                };
+                let name = match ids.len() > 1 {
+                    true => put(&rimstack_core::say_n!(ids.len(), "{} mod", "{} mods")),
+                    false => put(&row.name),
+                };
+                let held = Held {
+                    side,
+                    index: mod_index,
+                    ids,
+                };
+                d.on_drag(held, move |_, grabbed, _, cx| {
+                    cx.new(|_| HeldGhost {
+                        name: name.clone(),
+                        grabbed,
+                    })
                 })
-            })
-        })
+            },
+        )
         .on_click(move |event, _, cx| {
             let (modifiers, command) = (event.modifiers(), event.modifiers().secondary(cx));
             let twice = event.click_count() >= 2 && !previewing;
@@ -433,10 +437,14 @@ pub fn row(
             let _ = mods.update(cx, |mods, cx| match (is_header, is_sub) {
                 (true, true) => mods.toggle_sub(side, at, cx),
                 (true, false) => mods.toggle_category(side, category, cx),
-                (false, _) if twice => mods.toggle_mod(side, mod_id, cx),
-                (false, _) if command => mods.select_also(mod_id, active, cx),
-                (false, _) if modifiers.shift => mods.select_through(mod_id, active, cx),
-                (false, _) => mods.choose(side, mod_id, cx),
+                (false, _) => match mod_id {
+                    Some(id) if twice => mods.toggle_mod(side, id, cx),
+                    Some(id) if command => mods.select_also(id, active, cx),
+                    Some(id) if modifiers.shift => mods.select_through(id, active, cx),
+                    Some(id) => mods.choose(side, id, cx),
+                    None if twice || command => {}
+                    None => mods.select(None, active, cx),
+                },
             });
         })
         .on_mouse_down(gpui::MouseButton::Right, {

@@ -41,15 +41,15 @@ impl Mods {
 
     /// The note of a Sort applied closes by itself after a while.
     fn close_note_later(&mut self, note: String, cx: &mut Context<Self>) {
-        if self.note_timer == note {
+        if self.status.note_timer == note {
             return;
         }
-        self.note_timer = note.clone();
+        self.status.note_timer = note.clone();
         cx.spawn(async move |mods, cx| {
             cx.background_executor().timer(NOTE_STAYS).await;
             let _ = mods.update(cx, |mods, cx| {
                 if mods.sort_note().is_some_and(|(shown, _)| shown == note) {
-                    mods.closed_note = note;
+                    mods.status.closed_note = note;
                     cx.notify();
                 }
             });
@@ -129,11 +129,11 @@ impl Mods {
                     .into_any_element(),
             );
         }
-        let problem = match self.save_problem.is_empty() {
-            true => self.upkeep_problem.clone(),
+        let problem = match self.status.save_problem.is_empty() {
+            true => self.status.upkeep_problem.clone(),
             false => put(&say!(
                 "The list was not saved. {}",
-                self.save_problem.clone()
+                self.status.save_problem.clone()
             )),
         };
         if !problem.is_empty() {
@@ -148,7 +148,7 @@ impl Mods {
                     .into_any_element(),
             );
         }
-        if self.file_changed {
+        if self.status.file_changed {
             shown.push(
                 div()
                     .flex()
@@ -175,7 +175,7 @@ impl Mods {
         }
         if let Some((note, more)) = self
             .sort_note()
-            .filter(|(note, _)| *note != self.closed_note)
+            .filter(|(note, _)| *note != self.status.closed_note)
         {
             if !previewing {
                 self.close_note_later(note.clone(), cx);
@@ -235,7 +235,7 @@ impl Mods {
                             .when(!previewing, |d| {
                                 d.child(Btn::new("close-sort-note", put(&say!("OK"))).on_click(
                                     cx.listener(move |m, _, _, cx| {
-                                        m.closed_note = note.clone();
+                                        m.status.closed_note = note.clone();
                                         cx.notify();
                                     }),
                                 ))

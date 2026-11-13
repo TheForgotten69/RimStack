@@ -13,6 +13,7 @@ use gpui::{
     AnyElement, Context, InteractiveElement, IntoElement, ParentElement, Pixels,
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder,
 };
+use rimstack_core::mods::library::ModId;
 use rimstack_core::{say, say_n};
 
 /// The changed mods shown before "more".
@@ -30,7 +31,7 @@ impl Downloads {
     ) -> AnyElement {
         let c = &theme.colours;
         let row = shown.row;
-        let mod_id = row.mod_id.to_packed();
+        let mod_id = row.mod_id;
         let now = row.now.unwrap_or_default();
         let when = match shown.same_day {
             true => format!("{} → {}", clock(row.was), clock(now)),
@@ -182,13 +183,13 @@ impl Downloads {
                 self.changed_row(theme, at, shown, &today, reached, cx)
             })
             .collect();
-        let shown: Vec<(i32, Option<String>)> = since
+        let shown: Vec<(ModId, Option<String>)> = since
             .rows
             .iter()
             .take(most)
             .map(|shown| {
                 let row = shown.row;
-                (row.mod_id.to_packed(), (!row.git).then(|| row.id.clone()))
+                (row.mod_id, (!row.git).then(|| row.id.clone()))
             })
             .collect();
         let mut body = vec![
@@ -285,7 +286,7 @@ impl Downloads {
     /// Enter shows the mod, N opens its change notes.
     fn changed_key(
         &mut self,
-        shown: &[(i32, Option<String>)],
+        shown: &[(ModId, Option<String>)],
         event: &gpui::KeyDownEvent,
         cx: &mut Context<Self>,
     ) {

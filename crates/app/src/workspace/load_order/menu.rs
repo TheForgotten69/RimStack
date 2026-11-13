@@ -31,7 +31,7 @@ pub enum Action {
         value: String,
     },
     ApplyFix {
-        mod_id: i32,
+        mod_id: Option<ModId>,
         fix: FixSaid,
     },
     Subscribe {
@@ -328,7 +328,7 @@ impl LoadOrder {
         let mut group = Vec::new();
         for fix in &subject.fixes {
             let action = Action::ApplyFix {
-                mod_id: at.id.map_or(-1, ModId::to_packed),
+                mod_id: at.id,
                 fix: fix.clone(),
             };
             group.push(Entry::item(
