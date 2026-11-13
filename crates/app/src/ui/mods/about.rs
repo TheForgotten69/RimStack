@@ -115,7 +115,7 @@ impl DetailsView {
                 )),
                 Btn::new("trust-again", put(&say!("Warn again"))).on_click(self.on_mods(
                     |mods, cx| {
-                        let ids = mods.selected_id().into_iter().collect();
+                        let ids = mods.selected_id(cx).into_iter().collect();
                         mods.trust(ids, false, cx)
                     },
                 )),
@@ -281,7 +281,7 @@ impl DetailsView {
                                 let mods = self.mods.clone();
                                 move |_, window, cx| {
                                     let _ = mods.update(cx, |mods, cx| {
-                                        if let Some(id) = mods.selected_id() {
+                                        if let Some(id) = mods.selected_id(cx) {
                                             mods.ask_unsubscribe(id, window, cx)
                                         }
                                     });
@@ -606,7 +606,7 @@ impl DetailsView {
                     .on_click(
                         ("tag-chip", at),
                         self.on_mods(move |mods, cx| {
-                            let ids = mods.selected_id().into_iter().collect();
+                            let ids = mods.selected_id(cx).into_iter().collect();
                             mods.group(ids, &tag, cx)
                         }),
                     )

@@ -47,7 +47,7 @@ fn the_arrows_turn_without_drawing_the_window_again() {
     cx.update(|cx| {
         let mods = shell.read(cx).unwrap().sections.mods.clone();
         mods.update(cx, |mods, cx| {
-            mods.rescanning = true;
+            mods.edit_list(cx, |list, _| list.rescanning = true);
             cx.notify();
         });
     });

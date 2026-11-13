@@ -238,15 +238,16 @@ impl Mods {
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let c = &theme.colours;
-        let (errors, warnings) = self.order.errors_and_warnings();
-        let problems = self
+        let list = self.list.read(cx);
+        let (errors, warnings) = list.order.errors_and_warnings();
+        let problems = list
             .order
             .troubles()
             .iter()
             .filter(|t| !t.is_empty())
             .count();
-        let previewing = self.order.previewing();
-        let (version_only, other_warnings) = self
+        let previewing = list.order.previewing();
+        let (version_only, other_warnings) = list
             .overview
             .as_ref()
             .map_or((0, 0), |o| (o.version_only, o.other_warnings));
@@ -261,10 +262,11 @@ impl Mods {
             can_undo,
             can_redo,
             ..
-        } = self.standing.clone();
+        } = list.standing.clone();
         let title = put(&say!("Active"));
-        let counted = count(self.count(Side::Active));
-        let sort = match (self.files_read, self.sort_pending) {
+        let counted = count(list.count(Side::Active));
+        let files_read = list.files_read;
+        let sort = match (files_read, list.sort_pending) {
             (false, _) => put(&say!("Reading files…")),
             (true, 0) => put(&say!("Sort")),
             (true, n) => put(&say_n!(n, "Sort · {} move", "Sort · {} moves")),
@@ -301,7 +303,7 @@ impl Mods {
                 count(errors)
             )),
         };
-        let stepping = self.problem_place();
+        let stepping = self.problem_place(cx);
         let problems_said = match stepping {
             Some(place) => put(&say!("Problem {} of {}", place, count(problems))),
             None => problems_said,
@@ -451,7 +453,7 @@ impl Mods {
                         .icon("arrow-up-down")
                         .tone(c.moved)
                         .tip(put(&say!("Shows the order the rules ask for, to keep or discard. Nothing is written before Save.")))
-                        .enabled(!previewing && self.files_read)
+                        .enabled(!previewing && files_read)
                         .on_click(cx.listener(|m, _, _, cx| m.preview_sort(cx))),
                     &self.hints.anchors,
                     self.hints.anchors.sort.clone(),
@@ -506,9 +508,10 @@ impl Mods {
         if self.demo {
             return shown;
         }
-        let version_only = self.overview.as_ref().map_or(0, |o| o.version_only);
-        if version_only >= 3 && !self.order.previewing() {
-            let version = self.game_version();
+        let list = self.list.read(cx);
+        let version_only = list.overview.as_ref().map_or(0, |o| o.version_only);
+        if version_only >= 3 && !list.order.previewing() {
+            let version = list.game_version();
             let said = put(&say_n!(
                 version_only,
                 "{} mod does not list RimWorld {}",
@@ -540,7 +543,7 @@ impl Mods {
                     Btn::new("ignore-version", ignore)
                         .tip(put(&say!("No warning about the game version while RimWorld stays on this version. The switch is in Settings, Sorting.")))
                         .on_click(cx.listener(move |m, _, _, cx| {
-                            let version = m.game_version();
+                            let version = m.list.read(cx).game_version();
                             m.set_version_aside(version, cx)
                         })),
                 );
@@ -592,6 +595,8 @@ impl Mods {
         };
         let mut entries: Vec<Entry> = Vec::new();
         let problems = self
+            .list
+            .read(cx)
             .order
             .troubles()
             .iter()
@@ -620,13 +625,14 @@ impl Mods {
                     .into(),
             );
         }
-        let (version_only, other) = self
+        let list = self.list.read(cx);
+        let (version_only, other) = list
             .overview
             .as_ref()
             .map_or((0, 0), |o| (o.version_only, o.other_warnings));
-        let warnings = match version_only >= 3 && !self.order.previewing() && !self.demo {
+        let warnings = match version_only >= 3 && !list.order.previewing() && !self.demo {
             true => other,
-            false => self.order.errors_and_warnings().1,
+            false => list.order.errors_and_warnings().1,
         };
         if warnings > 0 {
             entries.push(
@@ -672,8 +678,9 @@ impl Mods {
         if !entries.is_empty() {
             entries.push(Entry::Line);
         }
-        let (can_undo, can_redo) = (self.standing.can_undo, self.standing.can_redo);
-        let previewing = self.order.previewing();
+        let list = self.list.read(cx);
+        let (can_undo, can_redo) = (list.standing.can_undo, list.standing.can_redo);
+        let previewing = list.order.previewing();
         entries.push(
             Entry::item(put(&say!("Undo (Ctrl + Z)")), run(|m, cx| m.undo(cx)))
                 .icon("undo-2")

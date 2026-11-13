@@ -262,7 +262,10 @@ impl Mods {
             true => ("x", put(&say!("Close the inactive mods"))),
             false => ("plus", put(&say!("Inactive mods"))),
         };
-        let said = put(&say!("Inactive {}", count(self.count(Side::Inactive))));
+        let said = put(&say!(
+            "Inactive {}",
+            count(self.list.read(cx).count(Side::Inactive))
+        ));
         let focus = c.focus;
         div()
             .id("rail")
@@ -295,7 +298,7 @@ impl Mods {
             .child(upwards(theme, window, said, c.ink3))
             .drag_over::<Held>(move |s, _, _, _| s.border_2().border_color(focus))
             .on_drop(cx.listener(|mods, held: &Held, _, cx| {
-                let end = mods.count(Side::Inactive);
+                let end = mods.list.read(cx).count(Side::Inactive);
                 mods.drop_on(
                     (held.side, held.index, held.ids.clone()),
                     (Side::Inactive, end),

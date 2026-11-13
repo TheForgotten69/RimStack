@@ -3,7 +3,7 @@
 //! them changes, never while drawn; the bars read it while drawn, so they are drawn again only
 //! when what they show changed.
 
-use super::mods::Mods;
+use super::mods::ListState;
 use gpui::{App as Cx, AppContext, Entity, Global};
 
 #[derive(Default, Clone, PartialEq, Debug)]
@@ -62,11 +62,11 @@ pub fn change(cx: &mut Cx, change: impl FnOnce(&mut Around)) {
 }
 
 /// What the Mods tab shows the window, read again after it changed.
-pub fn from_mods(mods: &Entity<Mods>, cx: &mut Cx) {
-    let mods = mods.read(cx);
-    let (errors, sort_pending, dirty, unsaved) = mods.standing();
-    let in_the_way = mods.in_the_way_said(errors, sort_pending, dirty);
-    let work = mods.work_said();
+pub fn from_list(list: &Entity<ListState>, cx: &mut Cx) {
+    let list = list.read(cx);
+    let (errors, sort_pending, dirty, unsaved) = list.standing();
+    let in_the_way = list.in_the_way_said(errors, sort_pending, dirty);
+    let work = list.work_said();
     change(cx, |around| {
         around.in_the_way = in_the_way;
         around.errors = errors;

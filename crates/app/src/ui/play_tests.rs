@@ -36,7 +36,15 @@ fn active(cx: &mut HeadlessAppContext, shell: WindowHandle<Shell>) -> usize {
     cx.update(|cx| {
         shell
             .read(cx)
-            .map(|shell| shell.sections.mods.read(cx).count(Side::Active))
+            .map(|shell| {
+                shell
+                    .sections
+                    .mods
+                    .read(cx)
+                    .list
+                    .read(cx)
+                    .count(Side::Active)
+            })
             .unwrap()
     })
 }
@@ -104,7 +112,7 @@ fn ctrl_k_finds_a_command_by_its_words_and_runs_it() {
         let shell = shell.read(cx).unwrap();
         (
             shell.commands.is_none(),
-            shell.sections.mods.read(cx).previewing(),
+            shell.sections.mods.read(cx).list.read(cx).previewing(),
         )
     });
     assert!(closed && previewing, "Sort was run");

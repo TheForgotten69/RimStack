@@ -27,8 +27,11 @@ fn typing_in_the_filter_narrows_both_lists_and_clearing_it_shows_all(
 ) {
     let _root = demo(cx);
     let (mods, cx) = cx.add_window_view(|_, cx| Mods::new(true, cx));
-    let all = mods.read_with(cx, |mods, _| {
-        (mods.matching(Side::Active), mods.matching(Side::Inactive))
+    let all = mods.read_with(cx, |mods, cx| {
+        (
+            mods.list.read(cx).matching(Side::Active),
+            mods.list.read(cx).matching(Side::Inactive),
+        )
     });
     cx.update(|window, cx| {
         let focus = mods.read(cx).focus.clone();
@@ -39,7 +42,10 @@ fn typing_in_the_filter_narrows_both_lists_and_clearing_it_shows_all(
     assert!(focused, "Ctrl+F gives the filter the keys");
     cx.simulate_input("Weapons 1");
     let (typed, narrowed) = mods.read_with(cx, |mods, cx| {
-        (mods.filter_text(cx), mods.matching(Side::Active))
+        (
+            mods.filter_text(cx),
+            mods.list.read(cx).matching(Side::Active),
+        )
     });
     assert_eq!(typed, "Weapons 1");
     assert!(narrowed > 0 && narrowed < all.0, "{narrowed} of {}", all.0);
@@ -49,8 +55,11 @@ fn typing_in_the_filter_narrows_both_lists_and_clearing_it_shows_all(
         "Weapons"
     );
     cx.simulate_keystrokes("escape");
-    let back = mods.read_with(cx, |mods, _| {
-        (mods.matching(Side::Active), mods.matching(Side::Inactive))
+    let back = mods.read_with(cx, |mods, cx| {
+        (
+            mods.list.read(cx).matching(Side::Active),
+            mods.list.read(cx).matching(Side::Inactive),
+        )
     });
     assert_eq!(back, all);
 }

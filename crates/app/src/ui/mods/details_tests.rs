@@ -52,7 +52,11 @@ fn picking_a_mod_while_asked_adds_a_rule_of_your_own() {
                 mods.chosen_reads.picking.is_none(),
                 "a pick ends the picking"
             );
-            assert_eq!(mods.selected_id(), Some(id), "the mod chosen stays chosen");
+            assert_eq!(
+                mods.selected_id(cx),
+                Some(id),
+                "the mod chosen stays chosen"
+            );
             let rules = &mods.details.as_ref().unwrap().your_rules;
             assert_eq!(rules.len(), 1);
             assert_eq!((rules[0].first, rules[0].then), (other, id));

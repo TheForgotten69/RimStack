@@ -169,7 +169,7 @@ impl Mods {
     }
 
     pub(super) fn filter_changed(&mut self, composed: String, cx: &mut Context<Self>) {
-        self.order.set_filter(&composed);
+        self.edit_list(cx, |list, _| list.order.set_filter(&composed));
         self.show(cx);
         self.keep_left_filter(composed, cx);
     }
@@ -185,15 +185,15 @@ impl Mods {
     ) -> rimstack_core::mods::list::offers::Offers {
         let typed = field.read(cx).text().to_string();
         let partial = typed.rsplit(' ').next().unwrap_or_default().to_string();
-        let (errors, warnings) = self.order.errors_and_warnings();
+        let order = &self.list.read(cx).order;
+        let (errors, warnings) = order.errors_and_warnings();
         let counted = Counted {
             errors,
             warnings,
             conflicts: self.reads.conflicts,
-            updated: self.order.list(Side::Active).flagged(flag::UPDATED),
+            updated: order.list(Side::Active).flagged(flag::UPDATED),
         };
-        self.order
-            .filter_offers(&partial, &self.filter_text(cx), &counted)
+        order.filter_offers(&partial, &self.filter_text(cx), &counted)
     }
 
     /// The filter as `ModsFilter` drew it, `room` wide: chips, what is typed, what it found, and
@@ -214,7 +214,7 @@ impl Mods {
         let filtering = self.filtering.read(cx);
         let (terms, offers_shut) = (filtering.terms().to_vec(), filtering.offers_shut());
         let empty = typed.is_empty() && terms.is_empty();
-        let found = (!empty).then(|| put(&self.order.filter_summary()));
+        let found = (!empty).then(|| put(&self.list.read(cx).order.filter_summary()));
         let keys = put(&say!("Ctrl + F"));
         let placeholder = put(&say!("Filter active and inactive mods"));
         if field.read(cx).spoken() != placeholder.as_str() {

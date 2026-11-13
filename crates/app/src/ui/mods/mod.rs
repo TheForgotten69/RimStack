@@ -17,6 +17,7 @@ mod inactive;
 mod latest;
 mod left_off;
 mod list;
+mod list_state;
 mod menus;
 mod notes;
 mod panes;
@@ -32,7 +33,7 @@ use super::text_field::TextField;
 use super::theme::Theme;
 use crate::changes::Changes;
 use crate::jobs::Lane;
-use crate::workspace::load_order::{Details, LoadOrder, Orders, Overview, RowView, Side};
+use crate::workspace::load_order::{Details, LoadOrder, Orders, RowView, Side};
 use gpui::{AppContext, Context, Entity, Pixels, px};
 use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::list::Category;
@@ -50,6 +51,7 @@ gpui::actions!(mods, [FocusFilter, Undo, Redo, Save]);
 
 pub use columns::Menu;
 pub use edit::acting;
+pub use list_state::ListState;
 
 /// glibc keeps what a thread freed in that thread's heap; after the scan's threads that was
 /// 100 MB (measured 2026-11-12). Capping the heaps instead made the scan wait on their locks.
@@ -96,8 +98,8 @@ pub struct Standing {
 }
 
 pub struct Mods {
-    order: LoadOrder,
-    standing: Standing,
+    /// The load order and what is chosen in it: what the other sections follow.
+    pub(crate) list: Entity<ListState>,
     active: Shown,
     inactive: Shown,
     orders: Orders,
@@ -121,12 +123,8 @@ pub struct Mods {
     settings_read: Vec<String>,
     facts_quiet: Lane,
     focus: gpui::FocusHandle,
-    overview: Option<Rc<Overview>>,
     details: Option<Rc<Details>>,
     details_view: Entity<chosen::DetailsView>,
-    /// `RowView::mod_id`s, the first chosen first.
-    selection: Vec<ModId>,
-    selected_active: bool,
     demo: bool,
     loading: Lane,
     counting: Lane,
@@ -134,12 +132,8 @@ pub struct Mods {
     /// Whether no mod folder was found, and what is wrong with the game folder chosen, while the
     /// mods could not be read.
     why_unread: Option<(bool, Option<rimstack_core::base::sentence::Sentence>)>,
-    files_read: bool,
-    sort_pending: usize,
     /// Told by the window while the search for the broken mod runs.
     hunting: bool,
-    /// The mod folders being read again.
-    pub rescanning: bool,
     /// The shared textures of two mods, shown in place of the lists.
     comparing: Option<Entity<compare::CompareView>>,
     /// What the comparison shows, as it last told.
@@ -185,6 +179,8 @@ impl Mods {
         };
         let thumbs = super::thumbs::Shared::default();
         let orders = Rc::new(order.orders());
+        let order_orders = order.orders();
+        let list = cx.new(|_| ListState::new(order, demo));
         let lists = [Side::Active, Side::Inactive].map(|side| {
             let shown = list::Shown {
                 rows: Rc::default(),
@@ -217,7 +213,7 @@ impl Mods {
         )
         .detach();
         let mut mods = Self {
-            standing: Standing::default(),
+            list,
             thumbs,
             status: Default::default(),
             layout: state::Layout::new(inactive_width, details_width),
@@ -232,26 +228,19 @@ impl Mods {
             filter,
             active_list,
             inactive_list,
-            orders: order.orders(),
-            overview: None,
+            orders: order_orders,
             details: None,
             details_view,
-            order,
             active: Shown::default(),
             inactive: Shown::default(),
-            selection: Vec::new(),
-            selected_active: true,
             demo,
             loading: Lane::default(),
             counting: Lane::default(),
             files_reading: Default::default(),
             why_unread: None,
-            files_read: false,
-            sort_pending: 0,
             hunting: false,
             focus_wanted: false,
             keys: Default::default(),
-            rescanning: false,
             comparing: None,
             compared: None,
             view,
@@ -289,8 +278,11 @@ impl Mods {
         if changes == Changes::FACTS {
             self.facts_quiet.after(FACTS_QUIET, cx, |mods, cx| {
                 let app = super::app(cx);
-                mods.order.facts_read(&app);
-                if mods.order.needs_facts() {
+                let needs = mods.edit_list(cx, |list, _| {
+                    list.order.facts_read(&app);
+                    list.order.needs_facts()
+                });
+                if needs {
                     mods.show(cx);
                 }
             });
@@ -307,27 +299,31 @@ impl Mods {
         if changes.contains(Changes::LIBRARY | Changes::LANGUAGE) {
             return self.load(changes.contains(Changes::LIBRARY), cx);
         }
-        let order = &mut self.order;
-        if changes.contains(Changes::NOTES) {
-            order.sync(&app);
-        }
-        if changes.contains(Changes::SETTINGS) {
-            order.follow_left_out(&app);
-        }
-        if changes.contains(Changes::PROBLEMS | Changes::COMMUNITY) {
-            order.recheck(&app);
-        }
-        if changes.contains(Changes::COMMUNITY | Changes::FILES_READ) {
-            order.refile(&app);
-        }
-        if changes.contains(Changes::UPDATES | Changes::LAUNCHES | Changes::FIND) {
-            order.settle(&app);
-        }
-        if changes.contains(Changes::FACTS) {
-            order.facts_read(&app);
-        }
+        self.edit_list(cx, |list, _| {
+            let order = &mut list.order;
+            if changes.contains(Changes::NOTES) {
+                order.sync(&app);
+            }
+            if changes.contains(Changes::SETTINGS) {
+                order.follow_left_out(&app);
+            }
+            if changes.contains(Changes::PROBLEMS | Changes::COMMUNITY) {
+                order.recheck(&app);
+            }
+            if changes.contains(Changes::COMMUNITY | Changes::FILES_READ) {
+                order.refile(&app);
+            }
+            if changes.contains(Changes::UPDATES | Changes::LAUNCHES | Changes::FIND) {
+                order.settle(&app);
+            }
+            if changes.contains(Changes::FACTS) {
+                order.facts_read(&app);
+            }
+            if changes.contains(Changes::FILES_READ) {
+                list.files_read = true;
+            }
+        });
         if changes.contains(Changes::FILES_READ) {
-            self.files_read = true;
             cx.emit(Progress::FilesRead);
         }
         if changes.contains(Changes::TEXTURES) {
@@ -341,11 +337,17 @@ impl Mods {
 
     fn read_files(&mut self, cx: &mut Context<Self>) {
         let app = super::app(cx);
-        let Some(members) = self.order.files_to_read(&app) else {
-            self.files_read = self.order.is_installed();
+        let members = self.edit_list(cx, |list, _| {
+            let members = list.order.files_to_read(&app);
+            list.files_read = match members {
+                Some(_) => false,
+                None => list.order.is_installed(),
+            };
+            members
+        });
+        let Some(members) = members else {
             return;
         };
-        self.files_read = false;
         app.outdate_files_read();
         self.files_reading
             .ask("active files", members, move |members| {
@@ -356,9 +358,11 @@ impl Mods {
     /// How many mods Sort would move, counted off the window's thread once the list is quiet.
     fn count_sort_moves(&mut self, cx: &mut Context<Self>) {
         const QUIET: std::time::Duration = std::time::Duration::from_millis(400);
-        let Some(count) = self.order.sort_count().filter(|_| self.files_read) else {
+        let list = self.list.read(cx);
+        let count = list.order.sort_count().filter(|_| list.files_read);
+        let Some(count) = count else {
             self.counting.cancel();
-            self.sort_pending = 0;
+            self.edit_list(cx, |list, _| list.sort_pending = 0);
             return;
         };
         let app = super::app(cx);
@@ -368,7 +372,7 @@ impl Mods {
             cx,
             move |_| count.moves(&app),
             |mods, moves, cx| {
-                mods.sort_pending = moves;
+                mods.edit_list(cx, |list, _| list.sort_pending = moves);
                 cx.notify();
             },
         );
@@ -376,25 +380,26 @@ impl Mods {
 
     /// Hands the details pane what it shows.
     fn sync_details(&mut self, cx: &mut Context<Self>) {
-        let (dirty, unsaved) = (self.standing.dirty, self.standing.unsaved.clone());
+        let list = self.list.read(cx);
+        let (dirty, unsaved) = (list.standing.dirty, list.standing.unsaved.clone());
         let shown = chosen::DetailsShown {
             demo: self.demo,
-            active: self.count(Side::Active),
-            inactive: self.count(Side::Inactive),
-            game_version: self.game_version(),
-            overview: self.overview.clone(),
+            active: list.count(Side::Active),
+            inactive: list.count(Side::Inactive),
+            game_version: list.game_version(),
+            overview: list.overview.clone(),
             details: self.details.clone(),
-            warnings: self.order.errors_and_warnings().1,
-            troubled: self.order.troubles().iter().any(|t| !t.is_empty()),
+            warnings: list.order.errors_and_warnings().1,
+            troubled: list.order.troubles().iter().any(|t| !t.is_empty()),
             dirty,
             unsaved,
             conflicts: self.reads.conflicts,
-            selected_active: self.selected_active,
+            selected_active: list.selected_active,
             panes: self.panes_wanted(),
             problems_open: self.problem_nav.open,
-            position: self
+            position: list
                 .selected_id()
-                .and_then(|id| self.order.list(Side::Active).position_of(id))
+                .and_then(|id| list.order.list(Side::Active).position_of(id))
                 .map_or(0, |at| at + 1),
             picking: self.chosen_reads.picking,
             notes_saved: self.chosen_reads.notes_saved,
@@ -402,15 +407,15 @@ impl Mods {
                 .chosen_reads
                 .files
                 .as_ref()
-                .filter(|(of, _)| self.selected_id() == Some(*of))
+                .filter(|(of, _)| list.selected_id() == Some(*of))
                 .map(|(_, read)| read.clone()),
             unhide_problem: self.status.unhide_problem.clone(),
             comparison: self.compared.clone(),
-            sort_moves: self
+            sort_moves: list
                 .order
                 .previewing()
-                .then(|| Rc::new(self.order.sort_moves())),
-            chosen_id: self.selected_id(),
+                .then(|| Rc::new(list.order.sort_moves())),
+            chosen_id: list.selected_id(),
             fresh: self.reads.fresh,
             community_problem: match self.demo {
                 true => String::new(),
@@ -423,12 +428,12 @@ impl Mods {
                 .chosen_reads
                 .commits
                 .as_ref()
-                .filter(|(of, _)| self.selected_id() == Some(*of))
+                .filter(|(of, _)| list.selected_id() == Some(*of))
                 .map(|(_, read)| read.clone()),
             hunting: self.hunting,
-            previewing: self.order.previewing(),
-            selected: self.selection.len(),
-            selection: self.selection_summary(),
+            previewing: list.order.previewing(),
+            selected: list.selection.len(),
+            selection: self.selection_summary(cx),
         };
         if self.details_view.read(cx).shown != shown {
             self.details_view
@@ -443,8 +448,8 @@ impl Mods {
             self.view.headings,
             rimstack_core::mods::columns::from_kept(&self.view.inactive_order),
         );
-        let active_by = self.order.order_of(Side::Active);
-        self.rescanning = true;
+        let active_by = self.list.read(cx).order.order_of(Side::Active);
+        self.edit_list(cx, |list, _| list.rescanning = true);
         self.loading.run(
             "load order",
             cx,
@@ -454,16 +459,18 @@ impl Mods {
                 order
             },
             move |mods, mut order, cx| {
-                mods.rescanning = false;
                 let text = mods.filter_text(cx);
                 order.set_filter(&text);
-                if anew {
-                    let same = mods.order.same_mods_in(&order);
-                    let kept = mods.order.carried(&same, &mods.selection);
-                    mods.selection = kept.ids;
-                    mods.selected_active = kept.active;
-                }
-                mods.order = order;
+                mods.edit_list(cx, |list, _| {
+                    list.rescanning = false;
+                    if anew {
+                        let same = list.order.same_mods_in(&order);
+                        let kept = list.order.carried(&same, &list.selection);
+                        list.selection = kept.ids;
+                        list.selected_active = kept.active;
+                    }
+                    list.order = order;
+                });
                 if anew {
                     super::thumbs::renew(&mods.thumbs, cx);
                 }
@@ -483,40 +490,43 @@ impl Mods {
 
     fn show(&mut self, cx: &mut Context<Self>) {
         let app = super::app(cx);
-        self.standing = match self.demo {
-            true => Standing::default(),
-            false => app
-                .session_if_read()
-                .map_or_else(Standing::default, |session| Standing {
-                    dirty: session.is_dirty(),
-                    unsaved: crate::words::put(&session.changes().said()),
-                    can_undo: session.can_undo(),
-                    can_redo: session.can_redo(),
-                }),
-        };
-        for side in [Side::Active, Side::Inactive] {
-            let rows = self.order.rows(&app, side);
+        let demo = self.demo;
+        let (rows, orders, fresh, conflicts) = self.edit_list(cx, |list, _| {
+            list.standing = match demo {
+                true => Standing::default(),
+                false => app
+                    .session_if_read()
+                    .map_or_else(Standing::default, |session| Standing {
+                        dirty: session.is_dirty(),
+                        unsaved: crate::words::put(&session.changes().said()),
+                        can_undo: session.can_undo(),
+                        can_redo: session.can_redo(),
+                    }),
+            };
+            let order = &list.order;
+            let rows = [Side::Active, Side::Inactive].map(|side| order.rows(&app, side));
+            list.overview = (!demo && order.is_installed()).then(|| Rc::new(order.overview(&app)));
+            let (fresh, conflicts) = match demo {
+                true => (0, 0),
+                false => (
+                    order.fresh(&app, Side::Inactive).len(),
+                    order.in_conflict(&app).len(),
+                ),
+            };
+            (rows, order.orders(), fresh, conflicts)
+        });
+        for (side, rows) in [Side::Active, Side::Inactive].into_iter().zip(rows) {
             if *self.shown(side).rows != rows {
                 self.shown_mut(side).rows = Rc::new(rows);
             }
         }
-        self.orders = self.order.orders();
+        self.orders = orders;
         self.sync_lists(cx);
         if self.details.is_some() {
             self.describe(cx);
         }
-        self.overview =
-            (!self.demo && self.order.is_installed()).then(|| Rc::new(self.order.overview(&app)));
-        self.reads.fresh = if self.demo {
-            0
-        } else {
-            self.order.fresh(&app, Side::Inactive).len()
-        };
-        self.reads.conflicts = if self.demo {
-            0
-        } else {
-            self.order.in_conflict(&app).len()
-        };
+        self.reads.fresh = fresh;
+        self.reads.conflicts = conflicts;
         if !self.demo {
             self.count_sort_moves(cx);
         }
@@ -531,29 +541,40 @@ impl Mods {
         }
     }
 
-    pub fn session_standing(&self) -> &Standing {
-        &self.standing
+    pub fn selected_id(&self, cx: &gpui::App) -> Option<ModId> {
+        self.list.read(cx).selected_id()
     }
 
-    pub fn count(&self, side: Side) -> usize {
-        self.order.list(side).mods().len()
+    /// Edits the list state, which tells those who follow it.
+    pub(super) fn edit_list<R>(
+        &self,
+        cx: &mut Context<Self>,
+        edit: impl FnOnce(&mut ListState, &mut Context<ListState>) -> R,
+    ) -> R {
+        self.list.update(cx, |list, cx| {
+            let done = edit(list, cx);
+            cx.notify();
+            done
+        })
     }
 
     pub fn toggle_category(&mut self, side: Side, category: Category, cx: &mut Context<Self>) {
         let app = super::app(cx);
-        self.order.toggle_category(&app, side, category);
+        self.edit_list(cx, |list, _| {
+            list.order.toggle_category(&app, side, category)
+        });
         self.show(cx);
     }
 
     pub fn toggle_sub(&mut self, side: Side, row: usize, cx: &mut Context<Self>) {
         let app = super::app(cx);
-        self.order.toggle_sub(&app, side, row);
+        self.edit_list(cx, |list, _| list.order.toggle_sub(&app, side, row));
         self.show(cx);
     }
 
     pub fn choose(&mut self, side: Side, mod_id: ModId, cx: &mut Context<Self>) {
         let picks = self.chosen_reads.picking.is_some() && side == Side::Active;
-        if picks && Some(mod_id) != self.selected_id() {
+        if picks && Some(mod_id) != self.list.read(cx).selected_id() {
             return self.pick(mod_id, cx);
         }
         self.select(Some(mod_id), side == Side::Active, cx);
@@ -562,19 +583,22 @@ impl Mods {
     /// What the details show of the mod chosen, when one alone is.
     fn describe(&mut self, cx: &mut Context<Self>) {
         let app = super::app(cx);
-        let alone = match self.selection.as_slice() {
-            [one] => Some(*one),
-            _ => None,
-        };
         let marks_before = self.details.as_ref().map(|d| d.conflict_marks.clone());
-        self.details = alone.filter(|_| self.order.is_installed()).map(|id| {
-            let mut details = self.order.details(&app, id);
-            if let Some((of, page)) = &self.chosen_reads.repository
-                && *of == id
-            {
-                details.repository = page.clone();
-            }
-            Rc::new(details)
+        let repository = self.chosen_reads.repository.clone();
+        self.details = self.list.update(cx, |list, _| {
+            let alone = match list.selection.as_slice() {
+                [one] => Some(*one),
+                _ => None,
+            };
+            alone.filter(|_| list.order.is_installed()).map(|id| {
+                let mut details = list.order.details(&app, id);
+                if let Some((of, page)) = &repository
+                    && *of == id
+                {
+                    details.repository = page.clone();
+                }
+                Rc::new(details)
+            })
         });
         if self.details.as_ref().map(|d| d.conflict_marks.clone()) != marks_before {
             self.sync_lists(cx);
@@ -605,17 +629,19 @@ impl Mods {
 
     /// Hands each list its rows and what is chosen in it.
     fn sync_lists(&mut self, cx: &mut Context<Self>) {
-        let orders = Rc::new(self.order.orders());
+        let state = self.list.read(cx);
+        let orders = Rc::new(state.order.orders());
         let marks: Rc<rows::Marks> = Rc::new(
             self.details
                 .as_ref()
                 .map(|d| d.conflict_marks.clone())
                 .unwrap_or_default(),
         );
+        let mut next = Vec::new();
         for side in [Side::Active, Side::Inactive] {
-            let on_side = self.selected_active == (side == Side::Active);
+            let on_side = state.selected_active == (side == Side::Active);
             let chosen = match on_side {
-                true => self.selection.iter().copied().collect(),
+                true => state.selection.iter().copied().collect(),
                 false => std::collections::HashSet::new(),
             };
             let in_order = side == Side::Inactive || orders.active_key.is_empty();
@@ -628,14 +654,17 @@ impl Mods {
                     Side::Inactive => Rc::default(),
                 },
                 chosen: Rc::new(chosen),
-                movable: in_order && !self.order.previewing() && !self.demo,
-                dimmed: self.order.list(side).left_out()
+                movable: in_order && !state.order.previewing() && !self.demo,
+                dimmed: state.order.list(side).left_out()
                     == Some(rimstack_core::mods::list::LeftOut::Dimmed),
-                single: self.selection.len() == 1,
-                previewing: self.order.previewing(),
+                single: state.selection.len() == 1,
+                previewing: state.order.previewing(),
                 picking: self.chosen_reads.picking.is_some(),
-                count: self.order.list(side).mods().len(),
+                count: state.count(side),
             };
+            next.push((side, shown));
+        }
+        for (side, shown) in next {
             if *self.list(side).read(cx).shown() != shown {
                 self.list(side).update(cx, |list, cx| list.show(shown, cx));
             }
@@ -654,12 +683,6 @@ impl Mods {
             Side::Active => &self.active_list,
             Side::Inactive => &self.inactive_list,
         }
-    }
-
-    pub fn is_chosen(&self, side: Side, mod_id: Option<ModId>) -> bool {
-        mod_id.is_some_and(|id| {
-            self.selected_active == (side == Side::Active) && self.selection.contains(&id)
-        })
     }
 
     /// Four mods of the load order chosen, as `--several` asks.
@@ -685,7 +708,7 @@ impl Mods {
             return;
         };
         let mut ids = match also {
-            true => self.selection.clone(),
+            true => self.list.read(cx).selection.clone(),
             false => Vec::new(),
         };
         ids.push(id);
@@ -703,6 +726,9 @@ mod edit_tests;
 
 #[cfg(all(test, target_os = "linux"))]
 mod details_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+mod list_state_tests;
 
 #[cfg(all(test, target_os = "linux"))]
 mod view_tests;

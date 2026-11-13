@@ -65,7 +65,7 @@ impl Render for Mods {
                     mods.set_drawer(false, cx);
                 } else if mods.chosen_reads.picking.is_some() {
                     mods.start_picking(None, cx);
-                } else if !mods.selection.is_empty() {
+                } else if !mods.list.read(cx).selection.is_empty() {
                     mods.select(None, true, cx);
                 } else {
                     return;
@@ -75,7 +75,7 @@ impl Render for Mods {
             .on_action(cx.listener(|mods, _: &Undo, _, cx| mods.undo(cx)))
             .on_action(cx.listener(|mods, _: &Redo, _, cx| mods.redo(cx)))
             .on_action(cx.listener(|mods, _: &Save, _, cx| {
-                if mods.standing.dirty {
+                if mods.list.read(cx).standing.dirty {
                     mods.save(None, cx);
                 }
             }))

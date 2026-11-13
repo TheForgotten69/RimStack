@@ -128,8 +128,9 @@ impl Downloads {
             |downloads, _, _: &super::text_field::Entered, cx| downloads.look_up(cx),
         )
         .detach();
-        cx.observe(&mods, |downloads, mods, cx| {
-            let needed = mods.read(cx).to_get();
+        let list = mods.read(cx).list.clone();
+        cx.observe(&list, |downloads, list, cx| {
+            let needed = list.read(cx).to_get();
             if *downloads.needed != needed {
                 downloads.needed = Rc::new(needed);
                 cx.notify();
@@ -139,7 +140,7 @@ impl Downloads {
         let reduce = theme.appearance.reduce_motion;
         let mut downloads = Self {
             demo,
-            needed: Rc::new(mods.read(cx).to_get()),
+            needed: Rc::new(list.read(cx).to_get()),
             report: Rc::default(),
             updates: Updates::default(),
             updates_busy: false,

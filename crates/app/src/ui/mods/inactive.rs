@@ -19,7 +19,7 @@ impl Mods {
     ) -> gpui::Div {
         let c = &theme.colours;
         let title = put(&say!("Inactive"));
-        let counted = count(self.count(Side::Inactive));
+        let counted = count(self.list.read(cx).count(Side::Inactive));
         let order = put(&self.orders.inactive_said);
         let hide = match drawer {
             true => put(&say!("Pin")),
@@ -89,7 +89,7 @@ impl Mods {
                         put(&say!("Activate all {}", count(self.reads.fresh))),
                     )
                     .primary()
-                    .enabled(!self.order.previewing())
+                    .enabled(!self.list.read(cx).previewing())
                     .tip(put(&say!(
                         "Each goes where its rules put it in the load order. One Undo takes them all back."
                     )))

@@ -25,7 +25,10 @@ impl Mods {
     /// The filter, the mod and its tab, and the scroll as they were left; "is:changed" is left
     /// out, as nothing is unsaved at the start.
     pub(super) fn restore_left_off(&mut self, cx: &mut Context<Self>) {
-        if self.left_off != LeftOff::Waiting || self.demo || self.count(Side::Active) == 0 {
+        if self.left_off != LeftOff::Waiting
+            || self.demo
+            || self.list.read(cx).count(Side::Active) == 0
+        {
             return;
         }
         let view = self.view.clone();
@@ -40,9 +43,12 @@ impl Mods {
         let app = super::super::app(cx);
         let found = (!view.last_mod.is_empty())
             .then(|| {
-                [Side::Active, Side::Inactive]
-                    .into_iter()
-                    .find_map(|side| self.order.with_package(&app, side, &view.last_mod))
+                [Side::Active, Side::Inactive].into_iter().find_map(|side| {
+                    self.list
+                        .read(cx)
+                        .order
+                        .with_package(&app, side, &view.last_mod)
+                })
             })
             .flatten();
         if let Some(id) = found {
@@ -69,12 +75,13 @@ impl Mods {
             return;
         }
         let app = super::super::app(cx);
-        let alone = match self.selection.as_slice() {
+        let list = self.list.read(cx);
+        let alone = match list.selection.as_slice() {
             [one] => Some(*one),
             _ => None,
         };
         let key = alone
-            .and_then(|id| self.order.package_of(&app, id))
+            .and_then(|id| list.order.package_of(&app, id))
             .unwrap_or_default();
         self.keep_view(|view| view.last_mod = key, cx);
     }

@@ -15,7 +15,8 @@ impl Mods {
     /// What `unread` shows beside the problem, read when the mods fail to be read or the
     /// settings change: it looks at the disk.
     pub(super) fn judge_unread(&mut self, cx: &mut Context<Self>) {
-        if self.demo || self.order.problem.is_empty() || self.order.is_installed() {
+        let order = &self.list.read(cx).order;
+        if self.demo || order.problem.is_empty() || order.is_installed() {
             self.why_unread = None;
             return;
         }
@@ -31,11 +32,12 @@ impl Mods {
 
     /// Why nothing could be read; `None` while the mods are read or were.
     pub(super) fn unread(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<gpui::Div> {
-        if self.demo || self.order.problem.is_empty() || self.order.is_installed() {
+        let order = &self.list.read(cx).order;
+        if self.demo || order.problem.is_empty() || order.is_installed() {
             return None;
         }
         let c = &theme.colours;
-        let problem = put(&self.order.problem);
+        let problem = put(&order.problem);
         let (no_folders, standing) = self.why_unread.clone()?;
         let standing = standing.map(|said| put(&said));
         let text = |colour, said: String| {

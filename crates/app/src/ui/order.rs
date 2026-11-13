@@ -2,7 +2,7 @@
 //! changes, never while drawn, and told only when it changed. A section reads it while drawn, or
 //! observes it, and needs no handle on the Mods tab.
 
-use super::mods::Mods;
+use super::mods::ListState;
 use crate::workspace::load_order::Overview;
 use gpui::{App as Cx, AppContext, Entity, Global};
 use rimstack_core::mods::library::ModId;
@@ -34,13 +34,13 @@ pub fn read(cx: &Cx) -> Order {
     order(cx).read(cx).clone()
 }
 
-/// What the Mods tab shows the other sections, read again after it changed.
-pub fn from_mods(mods: &Entity<Mods>, cx: &mut Cx) {
-    let mods = mods.read(cx);
+/// What the load order shows the other sections, read again after it changed.
+pub fn from_list(list: &Entity<ListState>, cx: &mut Cx) {
+    let list = list.read(cx);
     let fresh = Order {
-        overview: mods.overview(),
-        selected: mods.selected_id(),
-        active: Rc::new(mods.active_installed()),
+        overview: list.overview(),
+        selected: list.selected_id(),
+        active: Rc::new(list.active_installed()),
     };
     order(cx).update(cx, |order, cx| {
         if *order != fresh {

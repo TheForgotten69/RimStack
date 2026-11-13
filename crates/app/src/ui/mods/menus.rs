@@ -27,7 +27,9 @@ pub enum Naming {
 impl Mods {
     pub(super) fn open_folder(&mut self, id: ModId, cx: &mut Context<Self>) {
         let app = crate::ui::app(cx);
-        let path = self.order.details(&app, id).path;
+        let path = self
+            .list
+            .update(cx, |list, _| list.order.details(&app, id).path);
         if !path.is_empty() {
             cx.open_with_system(std::path::Path::new(&path));
         }
@@ -46,17 +48,19 @@ impl Mods {
         let Some(index) = index else {
             return;
         };
-        if !self.is_chosen(side, mod_id) {
+        if !self.list.read(cx).is_chosen(side, mod_id) {
             self.select(mod_id, side == Side::Active, cx);
         }
         let app = crate::ui::app(cx);
-        let clicked = Clicked {
-            active: side == Side::Active,
-            index,
-            id: mod_id,
-            selected: &self.selection,
-        };
-        let entries = self.order.row_menu(&app, &clicked);
+        let entries = self.list.update(cx, |list, _| {
+            let clicked = Clicked {
+                active: side == Side::Active,
+                index,
+                id: mod_id,
+                selected: &list.selection,
+            };
+            list.order.row_menu(&app, &clicked)
+        });
         self.open_entries(entries, at, window, cx);
     }
 
@@ -68,7 +72,9 @@ impl Mods {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let entries = self.order.sub_menu(side == Side::Active, row);
+        let entries = self
+            .list
+            .update(cx, |list, _| list.order.sub_menu(side == Side::Active, row));
         self.open_entries(entries, at, window, cx);
     }
 
@@ -207,7 +213,7 @@ impl Mods {
         page: bool,
         cx: &mut Context<Self>,
     ) {
-        if self.order.previewing() {
+        if self.list.read(cx).previewing() {
             return;
         }
         let app = crate::ui::app(cx);
@@ -215,7 +221,7 @@ impl Mods {
             "activate" => {
                 let loaded = app.library();
                 let found = loaded.as_ref().as_ref().ok().and_then(|(library, _)| {
-                    let list = self.order.list(Side::Inactive);
+                    let list = self.list.read(cx).order.list(Side::Inactive);
                     let id = list.mods().iter().filter_map(|m| m.installed).find(|id| {
                         library
                             .get(*id)
@@ -271,14 +277,14 @@ impl Mods {
     pub(super) fn group(&mut self, ids: Vec<ModId>, name: &str, cx: &mut Context<Self>) {
         let app = crate::ui::app(cx);
         app.set_group(&ids, name);
-        self.order.sync(&app);
+        self.edit_list(cx, |list, _| list.order.sync(&app));
         self.show(cx);
     }
 
     pub(super) fn add_tag(&mut self, ids: Vec<ModId>, tag: &str, cx: &mut Context<Self>) {
         let app = crate::ui::app(cx);
         app.add_tag(&ids, tag);
-        self.order.sync(&app);
+        self.edit_list(cx, |list, _| list.order.sync(&app));
         self.show(cx);
         let said = say_n!(
             ids.len(),
@@ -290,12 +296,15 @@ impl Mods {
     }
 
     pub(super) fn remove_sub(&mut self, side: Side, row: usize, cx: &mut Context<Self>) {
-        let Some((tag, ids)) = self.order.group_on(side, row) else {
+        let grouped = self
+            .list
+            .update(cx, |list, _| list.order.group_on(side, row));
+        let Some((tag, ids)) = grouped else {
             return;
         };
         let app = crate::ui::app(cx);
         app.remove_tag(&ids, &tag);
-        self.order.sync(&app);
+        self.edit_list(cx, |list, _| list.order.sync(&app));
         self.show(cx);
     }
 
@@ -411,7 +420,7 @@ impl Mods {
         cx: &mut Context<Self>,
     ) {
         let app = crate::ui::app(cx);
-        let about = self.order.details(&app, id);
+        let about = self.list.update(cx, |list, _| list.order.details(&app, id));
         prompt::ask(
             Question {
                 title: put(&say!("Unsubscribe from {}", about.name.clone())),

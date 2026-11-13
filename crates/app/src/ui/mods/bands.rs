@@ -33,8 +33,8 @@ impl Mods {
         self.filter_by(&text, cx);
     }
 
-    fn sort_note(&self) -> Option<(String, String)> {
-        let (first, rest) = self.order.sort_note.split_first()?;
+    fn sort_note(&self, cx: &gpui::App) -> Option<(String, String)> {
+        let (first, rest) = self.list.read(cx).order.sort_note.split_first()?;
         let more = put(&Sentence::joined(" ", rest.to_vec()));
         Some((put(first), more))
     }
@@ -48,7 +48,7 @@ impl Mods {
         cx.spawn(async move |mods, cx| {
             cx.background_executor().timer(NOTE_STAYS).await;
             let _ = mods.update(cx, |mods, cx| {
-                if mods.sort_note().is_some_and(|(shown, _)| shown == note) {
+                if mods.sort_note(cx).is_some_and(|(shown, _)| shown == note) {
                     mods.status.closed_note = note;
                     cx.notify();
                 }
@@ -63,9 +63,10 @@ impl Mods {
         if self.demo {
             return shown;
         }
-        let previewing = self.order.previewing();
-        let dirty = self.standing.dirty && self.order.is_installed();
-        let unsaved = self.standing.unsaved.clone();
+        let list = self.list.read(cx);
+        let previewing = list.order.previewing();
+        let dirty = list.standing.dirty && list.order.is_installed();
+        let unsaved = list.standing.unsaved.clone();
         let band = |tone| {
             div()
                 .flex_none()
@@ -166,7 +167,7 @@ impl Mods {
             );
         }
         if let Some((note, more)) = self
-            .sort_note()
+            .sort_note(cx)
             .filter(|(note, _)| *note != self.status.closed_note)
         {
             if !previewing {

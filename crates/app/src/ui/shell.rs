@@ -68,12 +68,12 @@ impl Shell {
             shell.follow(to, cx)
         })
         .detach();
-        let held_by = mods.downgrade();
+        let held_by = mods.read(cx).list.downgrade();
         let game = cx.new(|cx| {
             super::game::Game::new(
                 demo,
                 options.still,
-                move |cx| held_by.upgrade().is_some_and(|mods| mods.read(cx).held()),
+                move |cx| held_by.upgrade().is_some_and(|list| list.read(cx).held()),
                 cx,
             )
         });
@@ -442,11 +442,12 @@ impl Shell {
             },
         )
         .detach();
-        cx.observe(&self.sections.mods, |shell, mods, cx| {
+        let list = self.sections.mods.read(cx).list.clone();
+        cx.observe(&list, |shell, list, cx| {
             let Some(first) = shell.first_run.clone() else {
                 return;
             };
-            let (active, inactive, problem) = mods.read(cx).read_as();
+            let (active, inactive, problem) = list.read(cx).read_as();
             first.update(cx, |first, cx| {
                 first.set_mods(active, inactive, problem, cx)
             });
@@ -464,7 +465,7 @@ impl Shell {
         if let Err(problem) = app.keep_setting("setupDone", "yes") {
             notices::say(crate::words::said_of(&problem), notices::Tone::Err, cx);
         }
-        let overview = self.sections.mods.read(cx).overview();
+        let overview = self.sections.mods.read(cx).list.read(cx).overview();
         let missing = overview.is_none_or(|o| o.community_mods.is_none() || o.works_on == 0);
         if with_data && missing {
             let fetching = app.clone();

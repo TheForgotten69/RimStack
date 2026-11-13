@@ -37,13 +37,14 @@ pub struct Sections {
 impl Sections {
     pub fn new(demo: bool, part: usize, view: usize, cx: &mut Cx) -> Self {
         let mods = cx.new(|cx| Mods::new(demo, cx));
-        cx.observe(&mods, |mods, cx| {
-            super::around::from_mods(&mods, cx);
-            super::order::from_mods(&mods, cx);
+        let list = mods.read(cx).list.clone();
+        cx.observe(&list, |list, cx| {
+            super::around::from_list(&list, cx);
+            super::order::from_list(&list, cx);
         })
         .detach();
-        super::around::from_mods(&mods, cx);
-        super::order::from_mods(&mods, cx);
+        super::around::from_list(&list, cx);
+        super::order::from_list(&list, cx);
         let mut sections = Self {
             demo,
             shown: Section::Mods,

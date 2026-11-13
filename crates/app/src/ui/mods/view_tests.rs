@@ -10,10 +10,13 @@ fn the_view_chosen_is_kept_and_read_again_with_the_mods() {
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
             mods.set_headings(false, cx);
-            assert!(!mods.order.headings());
+            assert!(!mods.list.read(cx).order.headings());
             mods.toggle_column("updated", cx);
             mods.order_inactive("name down", cx);
-            assert_eq!(mods.order.inactive_by(), Some((SortKey::Name, true)));
+            assert_eq!(
+                mods.list.read(cx).order.inactive_by(),
+                Some((SortKey::Name, true))
+            );
             mods.heading_pressed("name", cx);
             assert_eq!(mods.orders.active_key, "name");
             let kept = crate::ui::app(cx).mods_view();
@@ -21,11 +24,13 @@ fn the_view_chosen_is_kept_and_read_again_with_the_mods() {
             assert_eq!(kept.columns, "author,version,load,updated");
             assert_eq!(kept.inactive_order, "name down");
             mods.load(true, cx);
-            mods.order = crate::workspace::load_order::LoadOrder::demo(0, 0);
+            mods.edit_list(cx, |list, _| {
+                list.order = crate::workspace::load_order::LoadOrder::demo(0, 0)
+            });
         })
     });
     let started = Instant::now();
-    while cx.update(|cx| mods.read(cx).count(Side::Active) == 0) {
+    while cx.update(|cx| mods.read(cx).list.read(cx).count(Side::Active) == 0) {
         assert!(
             started.elapsed() < Duration::from_secs(20),
             "the mods were not read again"
@@ -34,10 +39,20 @@ fn the_view_chosen_is_kept_and_read_again_with_the_mods() {
     }
     cx.update(|cx| {
         let mods = mods.read(cx);
-        assert!(!mods.order.headings(), "a reread keeps one numbered list");
-        assert_eq!(mods.order.inactive_by(), Some((SortKey::Name, true)));
+        assert!(
+            !mods.list.read(cx).order.headings(),
+            "a reread keeps one numbered list"
+        );
         assert_eq!(
-            mods.order.order_of(Side::Active).map(|(key, _)| key),
+            mods.list.read(cx).order.inactive_by(),
+            Some((SortKey::Name, true))
+        );
+        assert_eq!(
+            mods.list
+                .read(cx)
+                .order
+                .order_of(Side::Active)
+                .map(|(key, _)| key),
             Some(SortKey::Name),
             "a reread keeps the column the load order is shown by"
         );
@@ -114,8 +129,8 @@ fn the_mod_tab_and_filter_left_come_back_and_a_new_choice_is_kept() {
                 "is:changed is not brought back"
             );
             let app = crate::ui::app(cx);
-            let chosen = mods.selected_id();
-            let key = chosen.and_then(|id| mods.order.package_of(&app, id));
+            let chosen = mods.selected_id(cx);
+            let key = chosen.and_then(|id| mods.list.read(cx).order.package_of(&app, id));
             assert_eq!(key.as_deref(), Some("fixture.mod010"));
             assert_eq!(mods.details_view.read(cx).tab, 2);
             let other = mods
@@ -212,18 +227,23 @@ fn a_term_toggled_and_a_reread_keep_the_chips() {
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
             mods.load(true, cx);
-            mods.order = crate::workspace::load_order::LoadOrder::demo(0, 0);
+            mods.edit_list(cx, |list, _| {
+                list.order = crate::workspace::load_order::LoadOrder::demo(0, 0)
+            });
         })
     });
     let started = Instant::now();
-    while cx.update(|cx| mods.read(cx).count(Side::Active) == 0) {
+    while cx.update(|cx| mods.read(cx).list.read(cx).count(Side::Active) == 0) {
         assert!(started.elapsed() < Duration::from_secs(20));
         crate::ui::made_up::step(&cx);
     }
-    let shown = cx.update(|cx| mods.read(cx).order.filter_summary());
+    let shown = cx.update(|cx| mods.read(cx).list.read(cx).order.filter_summary());
     let whole = cx.update(|cx| {
         let mods = mods.read(cx);
-        (mods.count(Side::Active), mods.matching(Side::Active))
+        (
+            mods.list.read(cx).count(Side::Active),
+            mods.list.read(cx).matching(Side::Active),
+        )
     });
     assert!(
         whole.1 < whole.0,
@@ -265,7 +285,7 @@ fn an_inactive_mod_shown_while_the_list_is_folded_unfolds_it() {
                 .unwrap();
             mods.show_mod(id, cx);
             assert!(!mods.view.inactive_hidden, "the list is pinned again");
-            assert_eq!(mods.selected_id(), Some(id));
+            assert_eq!(mods.selected_id(cx), Some(id));
         })
     });
 }
@@ -284,12 +304,12 @@ fn select_all_chooses_only_the_mods_the_filter_shows() {
             .filter(|r| !r.is_header)
             .filter_map(|r| r.mod_id)
             .collect();
-        let mut chosen = mods.selection.clone();
+        let mut chosen = mods.list.read(cx).selection.clone();
         shown.sort_unstable();
         chosen.sort_unstable();
         assert!(!shown.is_empty());
         assert_eq!(chosen, shown);
-        assert!(chosen.len() < mods.count(Side::Inactive));
+        assert!(chosen.len() < mods.list.read(cx).count(Side::Inactive));
     });
 }
 
@@ -298,10 +318,10 @@ fn a_mod_dropped_below_the_last_row_goes_to_the_end_of_the_load_order() {
     let (_tmp, mut cx, mods) = opened_with(|_| {});
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
-            let list = mods.order.list(Side::Active).mods();
+            let list = mods.list.read(cx).order.list(Side::Active).mods();
             let (first, count) = (list[3].installed.unwrap(), list.len());
             mods.drop_on((Side::Active, 3, vec![first]), (Side::Active, count), cx);
-            let list = mods.order.list(Side::Active).mods();
+            let list = mods.list.read(cx).order.list(Side::Active).mods();
             assert_eq!(list.last().and_then(|m| m.installed), Some(first));
         })
     });
@@ -366,7 +386,7 @@ fn enter_on_a_heading_holding_the_keys_orders_the_list_once() {
     draw(&mut cx);
     cx.update(|cx| {
         assert_eq!(
-            mods.read(cx).order.order_of(Side::Active),
+            mods.read(cx).list.read(cx).order.order_of(Side::Active),
             rimstack_core::mods::columns::from_kept(&wanted),
             "one press, one step"
         );
@@ -420,7 +440,7 @@ fn a_mod_moved_slides_from_where_it_was() {
     draw(&mut cx);
     let (name, from, to) = cx.update(|cx| {
         let mods = mods.read(cx);
-        let list = mods.order.list(Side::Active).mods();
+        let list = mods.list.read(cx).order.list(Side::Active).mods();
         (list[5].name.clone(), 5, 6)
     });
     let top_of = |cx: &mut gpui::HeadlessAppContext| {
@@ -457,14 +477,16 @@ fn the_other_sections_read_the_chosen_mod_and_the_active_list_from_the_order_sto
     cx.run_until_parked();
     let chosen = cx.update(|cx| {
         mods.update(cx, |mods, cx| {
-            let chosen = mods.order.list(Side::Active).mods()[2].installed.unwrap();
+            let chosen = mods.list.read(cx).order.list(Side::Active).mods()[2]
+                .installed
+                .unwrap();
             mods.choose(Side::Active, chosen, cx);
             chosen
         })
     });
     cx.run_until_parked();
     let (order, active) = cx.update(|cx| {
-        let active = mods.read(cx).active_installed();
+        let active = mods.read(cx).list.read(cx).active_installed();
         (crate::ui::order::read(cx), active)
     });
     assert_eq!(order.selected, Some(chosen));
@@ -485,7 +507,9 @@ fn a_change_that_leaves_the_rows_and_details_as_they_were_draws_neither_again() 
     };
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
-            let chosen = mods.order.list(Side::Active).mods()[4].installed.unwrap();
+            let chosen = mods.list.read(cx).order.list(Side::Active).mods()[4]
+                .installed
+                .unwrap();
             mods.choose(Side::Active, chosen, cx);
         })
     });
@@ -523,7 +547,9 @@ fn scrolling_the_load_order_draws_the_list_alone_again() {
     };
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
-            let chosen = mods.order.list(Side::Active).mods()[4].installed.unwrap();
+            let chosen = mods.list.read(cx).order.list(Side::Active).mods()[4]
+                .installed
+                .unwrap();
             mods.choose(Side::Active, chosen, cx);
         })
     });
@@ -567,7 +593,9 @@ fn the_window_around_the_mods_tab_is_not_drawn_again_for_what_it_does_not_show()
     for at in 0..5 {
         cx.update(|cx| {
             mods.update(cx, |mods, cx| {
-                let chosen = mods.order.list(Side::Active).mods()[at].installed.unwrap();
+                let chosen = mods.list.read(cx).order.list(Side::Active).mods()[at]
+                    .installed
+                    .unwrap();
                 mods.choose(Side::Active, chosen, cx);
             })
         });
@@ -596,7 +624,7 @@ fn what_the_window_shows_of_the_list_follows_an_edit_its_save_and_its_undo() {
     assert!(!around(&mut cx).dirty);
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
-            let last = mods.count(Side::Active) - 1;
+            let last = mods.list.read(cx).count(Side::Active) - 1;
             mods.take(Side::Active, last, None, cx);
         })
     });
@@ -607,7 +635,7 @@ fn what_the_window_shows_of_the_list_follows_an_edit_its_save_and_its_undo() {
     );
     cx.update(|cx| mods.update(cx, |mods, cx| mods.save(None, cx)));
     let started = Instant::now();
-    while cx.update(|cx| mods.read(cx).status.saving) {
+    while cx.update(|cx| mods.read(cx).list.read(cx).saving) {
         assert!(
             started.elapsed() < Duration::from_secs(20),
             "the save did not end"
@@ -665,7 +693,7 @@ fn a_control_pointed_at_and_an_edit_draw_the_bars_again() {
     RENDERS.with(|renders| renders.set(0));
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
-            let last = mods.count(Side::Active) - 1;
+            let last = mods.list.read(cx).count(Side::Active) - 1;
             mods.take(Side::Active, last, None, cx);
         })
     });

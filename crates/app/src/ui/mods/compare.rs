@@ -566,7 +566,11 @@ impl Render for CompareView {
 
 impl Mods {
     pub(super) fn open_compare(&mut self, earlier: ModId, later: ModId, cx: &mut Context<Self>) {
-        let list = self.order.list(crate::workspace::load_order::Side::Active);
+        let list = self
+            .list
+            .read(cx)
+            .order
+            .list(crate::workspace::load_order::Side::Active);
         let place = |id| list.position_of(id).map_or(0, |at| at + 1);
         let places = (place(earlier), place(later));
         let view = cx.new(|cx| CompareView::new((earlier, later), places, cx));
@@ -591,7 +595,7 @@ impl Mods {
 
     /// The first active mod that shares textures with another, compared with it.
     pub fn compare_first(&mut self, cx: &mut Context<Self>) {
-        if !self.files_read {
+        if !self.list.read(cx).files_read {
             return;
         }
         let app = crate::ui::app(cx);
@@ -603,7 +607,7 @@ impl Mods {
             .filter_map(|r| r.mod_id)
             .collect();
         for id in ids {
-            let details = self.order.details(&app, id);
+            let details = self.list.update(cx, |list, _| list.order.details(&app, id));
             if let Some(other) = details
                 .loses_to
                 .iter()

@@ -20,8 +20,8 @@ use rimstack_core::{say, say_n};
 const MOST: usize = 12;
 
 impl Mods {
-    fn chosen_ids(&self) -> Vec<ModId> {
-        self.selection.clone()
+    fn chosen_ids(&self, cx: &gpui::App) -> Vec<ModId> {
+        self.list.read(cx).selection.clone()
     }
 
     /// The bar under the panes while several mods are chosen.
@@ -47,12 +47,13 @@ impl Mods {
     }
 
     fn bulk_actions(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if self.selection.len() < 2 || self.order.previewing() || self.comparing.is_some() {
+        let list = self.list.read(cx);
+        if list.selection.len() < 2 || list.order.previewing() || self.comparing.is_some() {
             return None;
         }
         let c = &theme.colours;
-        let active = self.selected_active;
-        let warned = self.order.version_warned(&self.chosen_ids()).len();
+        let active = list.selected_active;
+        let warned = list.order.version_warned(&list.selection).len();
         let in_order = active && self.orders.active_key.is_empty();
         let ask = |naming: Naming| {
             cx.listener(
@@ -60,7 +61,7 @@ impl Mods {
                       _: &gpui::ClickEvent,
                       window: &mut Window,
                       cx: &mut Context<Self>| {
-                    let ids = mods.chosen_ids();
+                    let ids = mods.chosen_ids(cx);
                     mods.ask_name(ids, naming, window, cx)
                 },
             )
@@ -81,7 +82,7 @@ impl Mods {
                         .items_center()
                         .gap(theme::GAP_SMALL)
                         .child(
-                            label(theme, theme.body(), c.ink, put(&say!("{} selected", self.selection.len())))
+                            label(theme, theme.body(), c.ink, put(&say!("{} selected", list.selection.len())))
                                 .font_weight(theme.semibold)
                                 .mr(px(6.)),
                         )
@@ -111,7 +112,7 @@ impl Mods {
                                     .icon("eye-off")
                                     .tip(put(&say!("No warning about the game version for the selected mods that have one")))
                                     .on_click(cx.listener(|m, _, _, cx| {
-                                        let ids = m.order.version_warned(&m.chosen_ids());
+                                        let ids = m.list.read(cx).order.version_warned(&m.chosen_ids(cx));
                                         m.trust(ids, true, cx)
                                     })),
                             )
@@ -148,11 +149,15 @@ impl Mods {
     }
 
     /// What the details show of the mods chosen, when there are several.
-    pub(super) fn selection_summary(&self) -> Option<std::rc::Rc<SelectionSummary>> {
-        (self.selection.len() > 1).then(|| {
+    pub(super) fn selection_summary(
+        &self,
+        cx: &gpui::App,
+    ) -> Option<std::rc::Rc<SelectionSummary>> {
+        let list = self.list.read(cx);
+        (list.selection.len() > 1).then(|| {
             std::rc::Rc::new(
-                self.order
-                    .selection_summary(self.selected_active, &self.chosen_ids()),
+                list.order
+                    .selection_summary(list.selected_active, &list.selection),
             )
         })
     }

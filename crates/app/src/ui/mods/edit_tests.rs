@@ -39,7 +39,7 @@ pub(super) fn opened_with(
     let started = Instant::now();
     while cx.update(|cx| {
         let mods = mods.read(cx);
-        mods.count(Side::Active) == 0 || !mods.files_read
+        mods.list.read(cx).count(Side::Active) == 0 || !mods.list.read(cx).files_read
     }) {
         assert!(
             started.elapsed() < Duration::from_secs(20),
@@ -50,8 +50,10 @@ pub(super) fn opened_with(
     (tmp, cx, mods)
 }
 
-fn names(mods: &Mods, side: Side) -> Vec<String> {
-    mods.order
+fn names(mods: &Mods, side: Side, cx: &gpui::App) -> Vec<String> {
+    mods.list
+        .read(cx)
+        .order
         .list(side)
         .mods()
         .iter()
@@ -64,20 +66,23 @@ fn a_mod_moved_across_comes_back_with_undo_and_goes_again_with_redo() {
     let (_tmp, mut cx, mods) = opened();
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
-            let (active, inactive) = (names(mods, Side::Active), names(mods, Side::Inactive));
+            let (active, inactive) = (
+                names(mods, Side::Active, cx),
+                names(mods, Side::Inactive, cx),
+            );
             let last = active.len() - 1;
             let name = active[last].clone();
             mods.take(Side::Active, last, None, cx);
-            assert!(!names(mods, Side::Active).contains(&name));
-            assert!(names(mods, Side::Inactive).contains(&name));
+            assert!(!names(mods, Side::Active, cx).contains(&name));
+            assert!(names(mods, Side::Inactive, cx).contains(&name));
             assert!(crate::ui::app(cx).session().is_dirty());
             mods.undo(cx);
-            assert_eq!(names(mods, Side::Active), active);
-            assert_eq!(names(mods, Side::Inactive), inactive);
+            assert_eq!(names(mods, Side::Active, cx), active);
+            assert_eq!(names(mods, Side::Inactive, cx), inactive);
             mods.redo(cx);
-            assert!(names(mods, Side::Inactive).contains(&name));
+            assert!(names(mods, Side::Inactive, cx).contains(&name));
             mods.discard_changes(cx);
-            assert_eq!(names(mods, Side::Active), active);
+            assert_eq!(names(mods, Side::Active, cx), active);
         })
     });
 }
@@ -87,17 +92,19 @@ fn a_drop_moves_one_mod_or_the_mods_chosen_together() {
     let (_tmp, mut cx, mods) = opened();
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
-            let before = names(mods, Side::Active);
+            let before = names(mods, Side::Active, cx);
             let count = before.len();
             mods.drop_on(
                 (Side::Active, count - 1, Vec::new()),
                 (Side::Active, count - 3),
                 cx,
             );
-            let after = names(mods, Side::Active);
+            let after = names(mods, Side::Active, cx);
             assert_eq!(after[count - 3], before[count - 1]);
             mods.undo(cx);
             let ids: Vec<ModId> = mods
+                .list
+                .read(cx)
                 .order
                 .list(Side::Inactive)
                 .mods()
@@ -107,7 +114,7 @@ fn a_drop_moves_one_mod_or_the_mods_chosen_together() {
                 .collect();
             assert_eq!(ids.len(), 2, "two inactive mods to take along");
             mods.drop_on((Side::Inactive, 0, ids), (Side::Active, count), cx);
-            assert_eq!(names(mods, Side::Active).len(), count + 2);
+            assert_eq!(names(mods, Side::Active, cx).len(), count + 2);
         })
     });
 }
@@ -118,6 +125,8 @@ fn shift_ctrl_and_invert_choose_several_mods_in_one_list() {
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
             let ids: Vec<ModId> = mods
+                .list
+                .read(cx)
                 .order
                 .list(Side::Active)
                 .mods()
@@ -126,12 +135,12 @@ fn shift_ctrl_and_invert_choose_several_mods_in_one_list() {
                 .collect();
             mods.select(Some(ids[1]), true, cx);
             mods.select_through(ids[4], true, cx);
-            assert_eq!(mods.selection.len(), 4);
+            assert_eq!(mods.list.read(cx).selection.len(), 4);
             mods.select_also(ids[2], true, cx);
-            assert_eq!(mods.selection.len(), 3);
-            assert_eq!(mods.selected_id(), Some(ids[1]));
+            assert_eq!(mods.list.read(cx).selection.len(), 3);
+            assert_eq!(mods.selected_id(cx), Some(ids[1]));
             mods.invert_selection(true, cx);
-            assert_eq!(mods.selection.len(), ids.len() - 3);
+            assert_eq!(mods.list.read(cx).selection.len(), ids.len() - 3);
         })
     });
 }
@@ -141,19 +150,19 @@ fn sort_is_shown_before_it_is_kept_and_save_writes_the_list() {
     let (tmp, mut cx, mods) = opened();
     cx.update(|cx| {
         mods.update(cx, |mods, cx| {
-            let before = names(mods, Side::Active);
+            let before = names(mods, Side::Active, cx);
             mods.preview_sort(cx);
-            assert!(mods.order.previewing());
+            assert!(mods.list.read(cx).order.previewing());
             mods.end_sort(false, cx);
-            assert!(!mods.order.previewing());
-            assert_eq!(names(mods, Side::Active), before);
+            assert!(!mods.list.read(cx).order.previewing());
+            assert_eq!(names(mods, Side::Active, cx), before);
             let last = before.len() - 1;
             mods.take(Side::Active, last, None, cx);
             mods.save(None, cx);
         })
     });
     let started = Instant::now();
-    while cx.update(|cx| mods.read(cx).status.saving) {
+    while cx.update(|cx| mods.read(cx).list.read(cx).saving) {
         assert!(
             started.elapsed() < Duration::from_secs(20),
             "the save did not end"
@@ -171,7 +180,7 @@ fn sort_is_shown_before_it_is_kept_and_save_writes_the_list() {
     });
     let written =
         std::fs::read_to_string(tmp.path().join("fx/config/Config/ModsConfig.xml")).unwrap();
-    let count = cx.update(|cx| mods.read(cx).count(Side::Active));
+    let count = cx.update(|cx| mods.read(cx).list.read(cx).count(Side::Active));
     assert_eq!(
         written.matches("<li>").count() - known_expansions(&written),
         count
@@ -191,7 +200,7 @@ fn known_expansions(written: &str) -> usize {
 fn sort_counts_the_moves_it_would_make_once_the_files_are_read() {
     let (_tmp, mut cx, mods) = opened();
     let started = Instant::now();
-    while cx.update(|cx| mods.read(cx).sort_pending == 0) {
+    while cx.update(|cx| mods.read(cx).list.read(cx).sort_pending == 0) {
         assert!(
             started.elapsed() < Duration::from_secs(10),
             "Sort never counted its moves"

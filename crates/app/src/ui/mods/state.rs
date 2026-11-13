@@ -9,7 +9,6 @@ use std::rc::Rc;
 /// What Save, upkeep and the folder chosen last ran into, and Sort's note.
 #[derive(Default)]
 pub struct Status {
-    pub saving: bool,
     pub save_problem: String,
     /// Why a mod was not binned or copied to the game's folder.
     pub upkeep_problem: String,

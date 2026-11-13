@@ -2,7 +2,7 @@
 //! is done once what it needs is read, through the views' own methods.
 
 use super::Options;
-use super::mods::{Menu, Mods, Progress};
+use super::mods::{ListState, Menu, Mods, Progress};
 use super::shell::Shell;
 use crate::workspace::load_order::Side;
 use gpui::{Context, Entity, Subscription, Window};
@@ -28,7 +28,7 @@ pub fn stage(shell: &mut Shell, options: &Options, window: &mut Window, cx: &mut
     if options.drawer {
         mods.update(cx, |mods, cx| mods.set_drawer(true, cx));
     }
-    let listed = |mods: &Mods| mods.count(Side::Active) > 0;
+    let listed = |list: &ListState| list.count(Side::Active) > 0;
     if let Some(row) = options.pick {
         let tab = options.tab;
         once(
@@ -44,7 +44,7 @@ pub fn stage(shell: &mut Shell, options: &Options, window: &mut Window, cx: &mut
     if options.comparing {
         once(
             &mods,
-            Mods::files_read,
+            ListState::files_read,
             |mods, cx| mods.compare_first(cx),
             cx,
         );
@@ -52,13 +52,13 @@ pub fn stage(shell: &mut Shell, options: &Options, window: &mut Window, cx: &mut
     if options.sorting {
         once(
             &mods,
-            Mods::files_read,
+            ListState::files_read,
             |mods, cx| mods.preview_sort(cx),
             cx,
         );
     }
     if options.bench {
-        let ready = |mods: &Mods| mods.count(Side::Active) > 0 && !mods.reading_files();
+        let ready = |list: &ListState| list.count(Side::Active) > 0 && !list.reading_files();
         once(&mods, ready, |mods, cx| mods.start_bench(cx), cx);
     }
     if let Some(asked) = &options.browse {
@@ -78,11 +78,11 @@ pub fn stage(shell: &mut Shell, options: &Options, window: &mut Window, cx: &mut
 /// `act` on the mods once `ready`, now if they are.
 fn once(
     mods: &Entity<Mods>,
-    ready: impl Fn(&Mods) -> bool + 'static,
+    ready: impl Fn(&ListState) -> bool + 'static,
     act: impl FnOnce(&mut Mods, &mut Context<Mods>) + 'static,
     cx: &mut Context<Shell>,
 ) {
-    if ready(mods.read(cx)) {
+    if ready(mods.read(cx).list.read(cx)) {
         mods.update(cx, act);
         return;
     }
@@ -90,7 +90,7 @@ fn once(
     let kept = held.clone();
     let mut act = Some(act);
     let heard = cx.subscribe(mods, move |_, mods, _: &Progress, cx| {
-        if !ready(mods.read(cx)) {
+        if !ready(mods.read(cx).list.read(cx)) {
             return;
         }
         if let Some(act) = act.take() {
@@ -135,7 +135,7 @@ fn open(shell: &mut Shell, open: Option<&str>, window: &mut Window, cx: &mut Con
 
 /// The menu once the list is read and its button drawn.
 fn open_menu(mods: &Entity<Mods>, menu: Menu, cx: &mut Context<Shell>) {
-    let listed = |mods: &Mods| mods.count(Side::Active) > 0;
+    let listed = |list: &ListState| list.count(Side::Active) > 0;
     once(
         mods,
         listed,

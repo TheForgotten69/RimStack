@@ -4,17 +4,8 @@ use super::Mods;
 use crate::workspace::load_order::Side;
 use gpui::Context;
 use rimstack_core::mods::library::ModId;
-use std::rc::Rc;
 
 impl Mods {
-    /// The mods the load order's rules ask for that are not installed.
-    pub fn to_get(&self) -> Vec<crate::workspace::load_order::ProblemSaid> {
-        self.overview
-            .as_ref()
-            .map(|o| o.to_get.clone())
-            .unwrap_or_default()
-    }
-
     /// Chooses a mod wherever it is and brings its row into view.
     pub fn show_mod(&mut self, mod_id: ModId, cx: &mut Context<Self>) {
         for side in [Side::Active, Side::Inactive] {
@@ -34,29 +25,8 @@ impl Mods {
         }
     }
 
-    /// The mod chosen first, as `Mods.selectedId` gave it.
-    pub fn selected_id(&self) -> Option<ModId> {
-        self.selection.first().copied()
-    }
-
-    pub fn game_version(&self) -> String {
-        self.overview
-            .as_ref()
-            .map(|o| o.game_version.clone())
-            .unwrap_or_default()
-    }
-
-    /// How many mods of a list the filter lets through.
-    pub fn matching(&self, side: Side) -> usize {
-        self.order.list(side).matching()
-    }
-
     pub fn start_bench(&mut self, cx: &mut Context<Self>) {
         self.active_list.update(cx, |list, cx| list.start_bench(cx));
-    }
-
-    pub fn overview(&self) -> Option<Rc<crate::workspace::load_order::Overview>> {
-        self.overview.clone()
     }
 
     /// Marks the mods as working on this game version, or takes the mark off.
@@ -68,7 +38,7 @@ impl Mods {
     ) {
         let app = crate::ui::app(cx);
         app.set_version_ok(&ids, yes);
-        self.order.recheck(&app);
+        self.edit_list(cx, |list, _| list.order.recheck(&app));
         self.show(cx);
     }
 
@@ -77,7 +47,7 @@ impl Mods {
         let app = crate::ui::app(cx);
         let before = app.snapshot("@list", app.session().current());
         let count = ids.len();
-        self.order.use_list(&app, ids);
+        self.edit_list(cx, |list, _| list.order.use_list(&app, ids));
         self.changed(cx);
         if !self.demo {
             use rimstack_core::say_n;
@@ -92,26 +62,6 @@ impl Mods {
         }
     }
 
-    /// The load order as read, for the first run: its active and inactive mods, or why it was not.
-    pub fn read_as(&self) -> (usize, usize, String) {
-        (
-            self.count(Side::Active),
-            self.count(Side::Inactive),
-            crate::words::put(&self.order.problem),
-        )
-    }
-
-    /// Whether the active mods' files are still being read.
-    pub fn reading_files(&self) -> bool {
-        !self.files_read && self.count(Side::Active) > 0 && !self.demo
-    }
-
-    /// The active mods installed, in their order.
-    pub fn active_installed(&self) -> Vec<ModId> {
-        let mods = self.order.list(Side::Active).mods().iter();
-        mods.filter_map(|m| m.installed).collect()
-    }
-
     /// Whether the search for the broken mod runs, as the window tells it.
     pub fn set_hunting(&mut self, hunting: bool, cx: &mut Context<Self>) {
         self.hunting = hunting;
@@ -121,7 +71,7 @@ impl Mods {
     /// The load order becomes `ids`, unsaved, nothing kept nor said: a round of the search.
     pub fn use_list_quietly(&mut self, ids: Vec<String>, cx: &mut Context<Self>) {
         let app = crate::ui::app(cx);
-        self.order.use_list(&app, ids);
+        self.edit_list(cx, |list, _| list.order.use_list(&app, ids));
         self.changed(cx);
     }
 
@@ -171,10 +121,6 @@ impl Mods {
                 cx.notify();
             }
         });
-    }
-
-    pub fn files_read(&self) -> bool {
-        self.files_read
     }
 
     /// Downloads, where a mod's change notes are fetched: the details redraw as it changes.

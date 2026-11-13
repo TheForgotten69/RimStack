@@ -113,7 +113,8 @@ impl Mods {
         }
         let step = self.hints.step;
         if !self.hints.anchors.drawn.get()[usize::from(step - 1)] {
-            if self.files_read && self.overview.is_some() {
+            let list = self.list.read(cx);
+            if list.files_read && list.overview.is_some() {
                 cx.defer_in(window, move |mods, _, cx| {
                     if mods.hints.step == step {
                         mods.next_hint(cx);

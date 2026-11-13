@@ -54,7 +54,13 @@ impl Shell {
 
     /// The mods `text` names, to show one.
     pub(crate) fn found_mods(&self, text: &str, cx: &gpui::App) -> Vec<Command> {
-        let found = self.sections.mods.read(cx).found(text, 12, cx);
+        let found = self
+            .sections
+            .mods
+            .read(cx)
+            .list
+            .read(cx)
+            .found(text, 12, cx);
         found
             .into_iter()
             .map(|found| {
@@ -84,6 +90,7 @@ impl Shell {
         let app = super::app(cx);
         let folders = (!demo).then(|| app.settings_report());
         let mods = self.sections.mods.read(cx);
+        let list = mods.list.read(cx);
         let mut all = Vec::new();
         let setting = say!("Setting");
         let settings: [(Sentence, usize); 27] = [
@@ -136,8 +143,8 @@ impl Shell {
             can_undo,
             can_redo,
             ..
-        } = mods.session_standing().clone();
-        let (errors, warnings) = mods.problems();
+        } = list.session_standing().clone();
+        let (errors, warnings) = list.problems();
         let mut push = |when: bool, name: Sentence, group: &Sentence, keys: Sentence, run: Run| {
             if when {
                 all.push(command(put(&name), group, put(&keys), run));
@@ -281,14 +288,14 @@ impl Shell {
                 }
             }),
         );
-        if let Some(about) = mods.chosen_details().filter(|_| mods.selected_count() == 1) {
+        if let Some(about) = mods.chosen_details().filter(|_| list.selected_count() == 1) {
             let name = about.name.clone();
-            let toggle = match mods.selected_on_active() {
+            let toggle = match list.selected_on_active() {
                 true => say!("Deactivate {}", name.clone()),
                 false => say!("Activate {}", name.clone()),
             };
             push(
-                !mods.previewing(),
+                !list.previewing(),
                 toggle,
                 &chosen,
                 none.clone(),
@@ -327,7 +334,7 @@ impl Shell {
             );
         }
         push(
-            mods.selected_id().is_some(),
+            list.selected_id().is_some(),
             say!("Clear selection"),
             &chosen,
             say!("Esc"),

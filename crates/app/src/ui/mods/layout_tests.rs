@@ -43,7 +43,9 @@ fn drawn(
     let started = Instant::now();
     while cx.update(|cx| {
         let mods = mods.read(cx);
-        mods.count(Side::Active) == 0 || !mods.files_read || mods.overview.is_none()
+        mods.list.read(cx).count(Side::Active) == 0
+            || !mods.list.read(cx).files_read
+            || mods.list.read(cx).overview.is_none()
     }) {
         assert!(
             started.elapsed() < Duration::from_secs(20),

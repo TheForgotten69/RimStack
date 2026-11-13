@@ -60,6 +60,8 @@ impl Shell {
                     .sections
                     .mods
                     .read(cx)
+                    .list
+                    .read(cx)
                     .count(crate::workspace::load_order::Side::Active);
                 let said = say_n!(
                     ids.len(),

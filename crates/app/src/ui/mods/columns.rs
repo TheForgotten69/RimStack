@@ -294,13 +294,15 @@ impl Mods {
     pub(super) fn set_headings(&mut self, headings: bool, cx: &mut Context<Self>) {
         self.keep_view(|view| view.headings = headings, cx);
         let app = super::super::app(cx);
-        self.order.set_headings(&app, headings);
+        self.edit_list(cx, |list, _| list.order.set_headings(&app, headings));
         self.show(cx);
     }
 
     /// The load order shown by a column, as `then` keeps it; "" for the load order itself.
     pub(super) fn order_active(&mut self, then: &str, cx: &mut Context<Self>) {
-        self.order.set_active_by(kept::from_kept(then));
+        self.edit_list(cx, |list, _| {
+            list.order.set_active_by(kept::from_kept(then))
+        });
         self.show(cx);
     }
 
@@ -309,7 +311,7 @@ impl Mods {
         let order = kept::from_kept(&then);
         self.keep_view(|view| view.inactive_order = then, cx);
         let app = super::super::app(cx);
-        self.order.set_inactive_by(&app, order);
+        self.edit_list(cx, |list, _| list.order.set_inactive_by(&app, order));
         self.show(cx);
     }
 
@@ -395,7 +397,7 @@ impl Mods {
     fn column_entries(&self, noted: bool, cx: &Context<Self>) -> Vec<Entry> {
         let me = cx.entity().downgrade();
         let chosen = kept::chosen(&self.view.columns);
-        let how = self.load_times_how();
+        let how = self.load_times_how(cx);
         let mut named: Vec<(&'static str, String)> = ALL
             .into_iter()
             .map(|column| (column, put(&column_name(column))))
@@ -423,8 +425,10 @@ impl Mods {
     }
 
     /// How load times are had, while there are none.
-    fn load_times_how(&self) -> Option<String> {
-        self.overview
+    fn load_times_how(&self, cx: &gpui::App) -> Option<String> {
+        self.list
+            .read(cx)
+            .overview
             .as_ref()
             .filter(|o| !o.load_times)
             .map(|o| put(&o.load_times_how))
@@ -455,7 +459,7 @@ impl Mods {
         entries.extend(self.order_entries(&self.orders.active, Mods::order_active, cx));
         entries.push(Entry::Title(put(&say!("Columns")).into()));
         entries.extend(self.column_entries(false, cx));
-        if let Some(how) = self.load_times_how() {
+        if let Some(how) = self.load_times_how(cx) {
             entries.push(Entry::Note(how.into()));
         }
         entries.push(Entry::Note(
@@ -490,11 +494,14 @@ impl Mods {
     /// Every mod installed since the game last started from RimStack, activated, as one change.
     pub(super) fn activate_fresh(&mut self, cx: &mut Context<Self>) {
         let app = super::super::app(cx);
-        let fresh: Vec<ModId> = self.order.fresh(&app, Side::Inactive);
-        if fresh.is_empty() || self.order.previewing() {
+        let list = self.list.read(cx);
+        let fresh: Vec<ModId> = list.order.fresh(&app, Side::Inactive);
+        if fresh.is_empty() || list.order.previewing() {
             return;
         }
-        self.order.take_all(&app, Side::Inactive, &fresh, None);
+        self.edit_list(cx, |list, _| {
+            list.order.take_all(&app, Side::Inactive, &fresh, None)
+        });
         self.changed(cx);
         self.done_said(
             say_n!(fresh.len(), "Activated {} new mod", "Activated {} new mods"),

@@ -18,7 +18,7 @@ pub type AfterSave = Box<dyn FnOnce(&mut Mods, &mut Context<Mods>)>;
 impl Mods {
     /// The lists shown again and the other screens told, after the load order changed.
     pub(super) fn changed(&mut self, cx: &mut Context<Self>) {
-        self.follow_selection();
+        self.follow_selection(cx);
         self.show(cx);
         if !self.demo {
             super::super::app(cx).publish(Changes::LOAD_ORDER);
@@ -41,20 +41,22 @@ impl Mods {
         );
     }
 
-    fn ids(&self) -> Vec<ModId> {
-        self.selection.clone()
+    fn ids(&self, cx: &gpui::App) -> Vec<ModId> {
+        self.list.read(cx).selection.clone()
     }
 
     /// The mod at `from` moved to `to`, sliding there as `Mods.slide` made it.
     pub(super) fn move_mod(&mut self, side: Side, from: usize, to: usize, cx: &mut Context<Self>) {
         let app = super::super::app(cx);
         let moved = self
+            .list
+            .read(cx)
             .order
             .list(side)
             .mods()
             .get(from)
             .and_then(|m| m.installed);
-        self.order.move_mod(&app, side, from, to);
+        self.edit_list(cx, |list, _| list.order.move_mod(&app, side, from, to));
         self.changed(cx);
         if let Some(id) = moved {
             let slides = [(id, from as i32 - to as i32)].into();
@@ -72,6 +74,8 @@ impl Mods {
         cx: &mut Context<Self>,
     ) {
         let Some(name) = self
+            .list
+            .read(cx)
             .order
             .list(from)
             .mods()
@@ -81,7 +85,7 @@ impl Mods {
             return;
         };
         let app = super::super::app(cx);
-        self.order.take(&app, from, index, to);
+        self.edit_list(cx, |list, _| list.order.take(&app, from, index, to));
         self.changed(cx);
         let said = match from {
             Side::Inactive => say!("Activated {}", name),
@@ -95,7 +99,7 @@ impl Mods {
             return;
         }
         let app = super::super::app(cx);
-        self.order.take_all(&app, from, ids, to);
+        self.edit_list(cx, |list, _| list.order.take_all(&app, from, ids, to));
         self.changed(cx);
         let said = match from {
             Side::Inactive => say_n!(ids.len(), "Activated {} mod", "Activated {} mods"),
@@ -106,18 +110,19 @@ impl Mods {
 
     /// The mods chosen moved to the other list, and nothing chosen then.
     pub fn move_selected(&mut self, cx: &mut Context<Self>) {
-        let (from, ids) = (Side::of(self.selected_active), self.ids());
+        let (from, ids) = (Side::of(self.list.read(cx).selected_active), self.ids(cx));
         self.take_ids(from, &ids, None, cx);
         self.select(None, true, cx);
     }
 
     /// The mod chosen moved across, and the one beside it chosen, as Enter does.
     pub(super) fn activate_selected(&mut self, side: Side, cx: &mut Context<Self>) {
-        let Some(first) = self.selected_id() else {
+        let Some(first) = self.selected_id(cx) else {
             return;
         };
-        let list = self.order.list(side);
-        let (Some(position), false) = (list.position_of(first), self.order.previewing()) else {
+        let state = self.list.read(cx);
+        let list = state.order.list(side);
+        let (Some(position), false) = (list.position_of(first), state.order.previewing()) else {
             return;
         };
         let next = list.beside_mod(first);
@@ -129,8 +134,9 @@ impl Mods {
 
     /// The mod chosen moved across or back, as the row's button and a double click do.
     pub(super) fn toggle_mod(&mut self, side: Side, mod_id: ModId, cx: &mut Context<Self>) {
-        let position = self.order.list(side).position_of(mod_id);
-        if let (Some(position), false) = (position, self.order.previewing()) {
+        let state = self.list.read(cx);
+        let position = state.order.list(side).position_of(mod_id);
+        if let (Some(position), false) = (position, state.order.previewing()) {
             self.take(side, position, None, cx);
         }
     }
@@ -146,14 +152,14 @@ impl Mods {
         match (held.len() > 1, from == into) {
             (true, true) => {
                 let app = super::super::app(cx);
-                if self.order.move_mods(&app, from, &held, to) {
+                if self.edit_list(cx, |list, _| list.order.move_mods(&app, from, &held, to)) {
                     self.changed(cx);
                     self.done_said(say_n!(held.len(), "Moved {} mod", "Moved {} mods"), cx);
                 }
             }
             (true, false) => self.take_ids(from, &held, Some(to), cx),
             (false, true) => {
-                let last = self.order.list(from).mods().len().saturating_sub(1);
+                let last = self.list.read(cx).count(from).saturating_sub(1);
                 let place = to.min(last);
                 if index != place {
                     self.move_mod(from, index, place, cx);
@@ -165,44 +171,44 @@ impl Mods {
 
     /// The mod chosen moved `by` places, as Alt + an arrow does.
     fn nudge(&mut self, side: Side, by: isize, cx: &mut Context<Self>) {
-        let Some(first) = self.selected_id() else {
+        let Some(first) = self.selected_id(cx) else {
             return;
         };
         let sorted_by_column = side == Side::Active && !self.orders.active_key.is_empty();
-        if self.order.previewing() || sorted_by_column {
+        if self.list.read(cx).order.previewing() || sorted_by_column {
             return;
         }
-        if let Some((from, to)) = self.order.list(side).nudged(first, by) {
+        if let Some((from, to)) = self.list.read(cx).order.list(side).nudged(first, by) {
             self.move_mod(side, from, to, cx);
             self.reveal_selected(side, false, cx);
         }
     }
 
     pub fn to_edge(&mut self, top: bool, cx: &mut Context<Self>) {
-        let ids = self.ids();
+        let ids = self.ids(cx);
         let app = super::super::app(cx);
-        self.order.to_edge(&app, &ids, top);
+        self.edit_list(cx, |list, _| list.order.to_edge(&app, &ids, top));
         self.changed(cx);
         self.done_said(say_n!(ids.len(), "Moved {} mod", "Moved {} mods"), cx);
     }
 
     pub fn undo(&mut self, cx: &mut Context<Self>) {
         let app = super::super::app(cx);
-        if !self.order.previewing() && self.order.undo(&app) {
+        if !self.list.read(cx).previewing() && self.edit_list(cx, |list, _| list.order.undo(&app)) {
             self.changed(cx);
         }
     }
 
     pub fn redo(&mut self, cx: &mut Context<Self>) {
         let app = super::super::app(cx);
-        if !self.order.previewing() && self.order.redo(&app) {
+        if !self.list.read(cx).previewing() && self.edit_list(cx, |list, _| list.order.redo(&app)) {
             self.changed(cx);
         }
     }
 
     pub(super) fn discard_changes(&mut self, cx: &mut Context<Self>) {
         let app = super::super::app(cx);
-        self.order.discard_changes(&app);
+        self.edit_list(cx, |list, _| list.order.discard_changes(&app));
         self.changed(cx);
         self.done_said(say!("Back to the saved list"), cx);
     }
@@ -210,7 +216,7 @@ impl Mods {
     /// The list on disk taken in place of this one, or this one kept to overwrite it.
     pub fn keep_file(&mut self, take: bool, cx: &mut Context<Self>) {
         let app = super::super::app(cx);
-        self.order.keep_file(&app, take);
+        self.edit_list(cx, |list, _| list.order.keep_file(&app, take));
         self.status.save_problem.clear();
         self.status.file_changed = false;
         self.changed(cx);
@@ -218,14 +224,14 @@ impl Mods {
 
     /// Writes the load order to ModsConfig.xml off the window's thread; `then` runs once written.
     pub fn save(&mut self, then: Option<AfterSave>, cx: &mut Context<Self>) {
-        if self.status.saving || self.demo {
+        if self.list.read(cx).saving || self.demo {
             return;
         }
-        if self.order.previewing() {
+        if self.list.read(cx).previewing() {
             self.end_sort(true, cx);
         }
         let app = super::super::app(cx);
-        let saving = match self.order.to_save(&app) {
+        let saving = match self.list.update(cx, |list, _| list.order.to_save(&app)) {
             Ok(saving) => saving,
             Err(problem) => {
                 self.status.save_problem = crate::words::said_of(&problem);
@@ -235,7 +241,7 @@ impl Mods {
         };
         let changes = app.session().changes().said();
         let before = app.session().saved().to_vec();
-        self.status.saving = true;
+        self.edit_list(cx, |list, _| list.saving = true);
         let worker = app.clone();
         crate::jobs::run(
             "save",
@@ -250,10 +256,12 @@ impl Mods {
                 (saving.list, written)
             },
             move |mods, (list, written), cx| {
-                mods.status.saving = false;
-                if written.is_ok() {
-                    mods.order.saved(&app, list);
-                }
+                mods.edit_list(cx, |state, _| {
+                    state.saving = false;
+                    if written.is_ok() {
+                        state.order.saved(&app, list);
+                    }
+                });
                 mods.status.save_problem = crate::words::why_not(&written);
                 mods.status.file_changed =
                     written.as_ref().err() == Some(&modsconfig::changed_outside());
@@ -267,18 +275,20 @@ impl Mods {
     }
 
     pub fn preview_sort(&mut self, cx: &mut Context<Self>) {
-        if self.order.previewing() || !self.files_read || self.demo {
+        let state = self.list.read(cx);
+        if state.previewing() || !state.files_read || self.demo {
             return;
         }
         let app = super::super::app(cx);
-        self.order.preview_sort(&app);
+        self.edit_list(cx, |list, _| list.order.preview_sort(&app));
         self.status.closed_note.clear();
         self.show(cx);
         let slides = crate::workspace::load_order::sort_slides(&self.active.rows);
         self.list(Side::Active)
             .update(cx, |list, cx| list.slide(slides, cx));
-        if let Some(position) = self.order.first_moved()
-            && let Some(row) = self.order.list(Side::Active).row_of(position)
+        let order = &self.list.read(cx).order;
+        if let Some(position) = order.first_moved()
+            && let Some(row) = order.list(Side::Active).row_of(position)
         {
             self.list(Side::Active)
                 .update(cx, |list, cx| list.reveal(row, cx));
@@ -288,10 +298,10 @@ impl Mods {
     pub(super) fn end_sort(&mut self, keep: bool, cx: &mut Context<Self>) {
         let app = super::super::app(cx);
         if !keep {
-            self.order.drop_sort(&app);
+            self.edit_list(cx, |list, _| list.order.drop_sort(&app));
             return self.show(cx);
         }
-        let Some(sorted) = self.order.keep_sort_noted(&app) else {
+        let Some(sorted) = self.edit_list(cx, |list, _| list.order.keep_sort_noted(&app)) else {
             return;
         };
         self.changed(cx);
@@ -308,15 +318,15 @@ impl Mods {
     /// `mod_id` added to the mods chosen in its list, or taken out of them, as Ctrl + click does.
     pub(super) fn select_also(&mut self, mod_id: ModId, in_active: bool, cx: &mut Context<Self>) {
         let first = self
-            .selected_id()
-            .filter(|_| self.selected_active == in_active);
+            .selected_id(cx)
+            .filter(|_| self.list.read(cx).selected_active == in_active);
         let Some(first) = first else {
             return self.select(Some(mod_id), in_active, cx);
         };
         if mod_id == first {
             return;
         }
-        let mut ids = self.selection.clone();
+        let mut ids = self.ids(cx);
         match ids.iter().position(|held| *held == mod_id) {
             Some(at) => drop(ids.remove(at)),
             None => ids.push(mod_id),
@@ -327,12 +337,12 @@ impl Mods {
     /// Every mod from the first chosen to `mod_id`, as Shift + click does.
     pub(super) fn select_through(&mut self, to: ModId, in_active: bool, cx: &mut Context<Self>) {
         let first = self
-            .selected_id()
-            .filter(|_| self.selected_active == in_active);
+            .selected_id(cx)
+            .filter(|_| self.list.read(cx).selected_active == in_active);
         let Some(first) = first else {
             return self.select(Some(to), in_active, cx);
         };
-        let list = self.order.list(Side::of(in_active));
+        let list = self.list.read(cx).order.list(Side::of(in_active));
         let Some(others) = list.others_through(first, to) else {
             return;
         };
@@ -341,8 +351,9 @@ impl Mods {
     }
 
     pub(super) fn invert_selection(&mut self, in_active: bool, cx: &mut Context<Self>) {
-        let (side, on) = (Side::of(in_active), Side::of(self.selected_active));
-        let inverted = self.order.inverted(side, on, &self.ids());
+        let state = self.list.read(cx);
+        let (side, on) = (Side::of(in_active), Side::of(state.selected_active));
+        let inverted = state.order.inverted(side, on, &state.selection);
         self.keep_selection(inverted.ids, in_active, cx);
     }
 
@@ -370,29 +381,33 @@ impl Mods {
         let mut others: Vec<ModId> = ids.filter(|id| Some(*id) != first).collect();
         others.sort();
         others.dedup();
-        self.selection = first.into_iter().chain(others).collect();
-        self.selected_active = in_active;
+        self.edit_list(cx, |list, _| {
+            list.selection = first.into_iter().chain(others).collect();
+            list.selected_active = in_active;
+        });
         self.describe(cx);
         self.sync_lists(cx);
         cx.notify();
     }
 
     /// The selection follows its first mod into the list it went to.
-    fn follow_selection(&mut self) {
-        let Some(first) = self.selected_id() else {
+    fn follow_selection(&mut self, cx: &mut Context<Self>) {
+        let state = self.list.read(cx);
+        let Some(first) = state.selected_id() else {
             return;
         };
-        let on = |side| self.order.list(side).position_of(first).is_some();
-        match (on(Side::Active), on(Side::Inactive)) {
-            (true, _) => self.selected_active = true,
-            (_, true) => self.selected_active = false,
-            _ => {}
-        }
+        let on = |side| state.order.list(side).position_of(first).is_some();
+        let active = match (on(Side::Active), on(Side::Inactive)) {
+            (true, _) => true,
+            (_, true) => false,
+            _ => return,
+        };
+        self.edit_list(cx, |list, _| list.selected_active = active);
     }
 
     /// The chosen mod's row brought into view, in the middle when `centre`.
     pub(super) fn reveal_selected(&mut self, side: Side, centre: bool, cx: &mut Context<Self>) {
-        let Some(id) = self.selected_id() else {
+        let Some(id) = self.selected_id(cx) else {
             return;
         };
         let rows = self.shown(side).rows.clone();
@@ -428,10 +443,9 @@ impl Mods {
             "up" | "down" if alt => self.nudge(side, by, cx),
             "up" | "down" => {
                 let current = self
-                    .selected_id()
-                    .filter(|_| self.selected_active == (side == Side::Active));
-                let list = self.order.list(side);
-                let row = list.step_from(current, by);
+                    .selected_id(cx)
+                    .filter(|_| self.list.read(cx).selected_active == (side == Side::Active));
+                let row = self.list.read(cx).order.list(side).step_from(current, by);
                 let id = row
                     .and_then(|row| self.shown(side).rows.get(row))
                     .and_then(|r| r.mod_id);
@@ -449,7 +463,7 @@ impl Mods {
                     .update(cx, |view, cx| view.edit_notes(tags, window, cx));
             }
             "escape" if self.chosen_reads.picking.is_some() => self.start_picking(None, cx),
-            "escape" if !self.selection.is_empty() => self.select(None, true, cx),
+            "escape" if !self.list.read(cx).selection.is_empty() => self.select(None, true, cx),
             _ => return,
         }
         cx.stop_propagation();
@@ -458,17 +472,18 @@ impl Mods {
 
 impl Mods {
     /// Which of the mods with a problem the arrows last chose, from 1, while it stays chosen.
-    pub(super) fn problem_place(&self) -> Option<usize> {
+    pub(super) fn problem_place(&self, cx: &gpui::App) -> Option<usize> {
         use rimstack_core::mods::list::Row;
-        let list = self.order.list(Side::Active);
+        let state = self.list.read(cx);
+        let list = state.order.list(Side::Active);
         let Row::Mod { index } = *list.rows().get(self.problem_nav.row?)? else {
             return None;
         };
         let id = list.mods().get(index)?.installed?;
-        if self.selected_id() != Some(id) {
+        if state.selected_id() != Some(id) {
             return None;
         }
-        let marked: Vec<bool> = self
+        let marked: Vec<bool> = state
             .order
             .troubles()
             .iter()
@@ -480,9 +495,10 @@ impl Mods {
     /// The next mod with a problem chosen and shown, or the one before.
     pub(super) fn show_problem(&mut self, forward: bool, cx: &mut Context<Self>) {
         use rimstack_core::mods::list::Row;
-        let list = self.order.list(Side::Active);
+        let state = self.list.read(cx);
+        let list = state.order.list(Side::Active);
         let rows = list.rows();
-        let troubles = self.order.troubles();
+        let troubles = state.order.troubles();
         let troubled = |index: usize| troubles.get(index).is_some_and(|t| !t.is_empty());
         let count = rows.len() as isize;
         if count == 0 {
@@ -580,113 +596,38 @@ impl Mods {
     fn set_ignored(&mut self, package_id: &str, key: &str, yes: bool, cx: &mut Context<Self>) {
         let app = super::super::app(cx);
         app.ignore_problem(package_id, key, yes);
-        self.order.recheck(&app);
+        self.edit_list(cx, |list, _| list.order.recheck(&app));
         self.show(cx);
-    }
-
-    /// The sentences Play shows of what stands in its way, given `standing`'s answers.
-    pub fn in_the_way_said(&self, errors: bool, sort_pending: bool, dirty: bool) -> Vec<String> {
-        let errors_count = self.order.errors_and_warnings().0;
-        let mut said = Vec::new();
-        if errors {
-            said.push(put(&say_n!(
-                errors_count,
-                "{} mod has a problem that will cause errors in the game",
-                "{} mods have problems that will cause errors in the game"
-            )));
-        }
-        if sort_pending {
-            said.push(put(&say_n!(
-                self.sort_pending,
-                "Sorting would move {} mod",
-                "Sorting would move {} mods"
-            )));
-        }
-        if dirty {
-            said.push(put(&say!(
-                "The list has unsaved changes; the game would start with the saved one"
-            )));
-        }
-        said
-    }
-
-    /// Whether a mod has errors, Sort would move mods, and the list is not saved, with its
-    /// changes in words, as last shown.
-    pub fn standing(&self) -> (bool, bool, bool, Option<String>) {
-        let unsaved = (self.standing.dirty && self.order.is_installed())
-            .then(|| self.standing.unsaved.clone());
-        (
-            self.order.errors_and_warnings().0 > 0,
-            self.sort_pending > 0,
-            unsaved.is_some(),
-            unsaved,
-        )
-    }
-
-    /// The work under way the window lists for the Mods tab.
-    pub fn work_said(&self) -> Vec<String> {
-        let mut said = Vec::new();
-        if self.rescanning && !self.demo {
-            said.push(put(&say!("Reading the mod folders…")));
-        }
-        if self.reading_files() {
-            said.push(put(&say!("Reading the active mods' files…")));
-        }
-        said
     }
 
     /// Every needed mod that is installed activated, each where its rules put it.
     pub(super) fn fix_all(&mut self, cx: &mut Context<Self>) {
-        if self.order.previewing() {
+        if self.list.read(cx).previewing() {
             return;
         }
         let app = super::super::app(cx);
-        let needed = self.order.needed();
+        let needed = self.list.read(cx).order.needed();
         let ids = {
             let loaded = app.library();
             let Ok((library, _)) = &*loaded else {
                 return;
             };
             let key_of = |id: ModId| library.get(id)?.key();
-            self.order.list(Side::Inactive).with_keys(&needed, &key_of)
+            self.list
+                .read(cx)
+                .order
+                .list(Side::Inactive)
+                .with_keys(&needed, &key_of)
         };
-        self.order.take_all(&app, Side::Inactive, &ids, None);
+        self.edit_list(cx, |list, _| {
+            list.order.take_all(&app, Side::Inactive, &ids, None)
+        });
         self.changed(cx);
         self.done_said(say!("Activated the needed mods"), cx);
     }
 
-    /// The mods `text` names, at most `most`, as Ctrl + K finds them.
-    pub fn found(
-        &self,
-        text: &str,
-        most: usize,
-        cx: &gpui::App,
-    ) -> Vec<crate::workspace::load_order::FoundMod> {
-        self.order.found(&super::super::app(cx), text, most)
-    }
-
-    /// How many mods have errors, and how many warnings.
-    pub fn problems(&self) -> (usize, usize) {
-        match self.demo {
-            true => (0, 0),
-            false => self.order.errors_and_warnings(),
-        }
-    }
-
     pub fn chosen_details(&self) -> Option<std::rc::Rc<crate::workspace::load_order::Details>> {
         self.details.clone()
-    }
-
-    pub fn selected_count(&self) -> usize {
-        self.selection.len()
-    }
-
-    pub fn selected_on_active(&self) -> bool {
-        self.selected_active
-    }
-
-    pub fn previewing(&self) -> bool {
-        self.order.previewing()
     }
 
     pub fn conflicts(&self) -> usize {
@@ -695,18 +636,14 @@ impl Mods {
 
     /// The mod chosen moved to the other list.
     pub fn toggle_selected(&mut self, cx: &mut Context<Self>) {
-        if let Some(id) = self.selected_id() {
-            self.toggle_mod(Side::of(self.selected_active), id, cx);
+        let state = self.list.read(cx);
+        if let Some(id) = state.selected_id() {
+            self.toggle_mod(Side::of(state.selected_active), id, cx);
         }
     }
 
     pub fn next_problem(&mut self, cx: &mut Context<Self>) {
         self.show_problem(true, cx);
-    }
-
-    /// What is under way on the load order: a change seen on disk waits for it.
-    pub fn held(&self) -> bool {
-        self.order.previewing() || self.status.saving
     }
 
     pub fn open_problems(&mut self, cx: &mut Context<Self>) {
