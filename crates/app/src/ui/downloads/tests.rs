@@ -26,7 +26,7 @@ fn demo(cx: &mut gpui::TestAppContext) -> (tempfile::TempDir, Options) {
     );
     let options = Options {
         demo: true,
-        section: 1,
+        section: crate::ui::section::Section::Downloads,
         ..Options::default()
     };
     cx.update(|cx| install(Arc::new(app), &options, cx));
@@ -118,10 +118,16 @@ fn the_download_list_asks_before_steamcmd_writes_the_mods_folder(cx: &mut gpui::
 fn showing_a_mod_from_downloads_goes_to_the_mods_tab(cx: &mut gpui::TestAppContext) {
     let (_root, options) = demo(cx);
     let (shell, cx) = cx.add_window_view(|window, cx| Shell::new(&options, window, cx));
-    assert_eq!(shell.read_with(cx, |shell, _| shell.section()), 1);
+    assert_eq!(
+        shell.read_with(cx, |shell, _| shell.section()),
+        crate::ui::section::Section::Downloads
+    );
     let downloads = shell.update(cx, |shell, cx| shell.downloads(cx));
     downloads.update(cx, |_, cx| cx.emit(ShowMod(3)));
-    assert_eq!(shell.read_with(cx, |shell, _| shell.section()), 0);
+    assert_eq!(
+        shell.read_with(cx, |shell, _| shell.section()),
+        crate::ui::section::Section::Mods
+    );
 }
 
 #[cfg(target_os = "linux")]
@@ -141,7 +147,7 @@ fn opened(
     let text = crate::ui::made_up::text_system();
     let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(crate::ui::assets::Assets));
     let options = Options {
-        section: 1,
+        section: crate::ui::section::Section::Downloads,
         text_scale: Some(text_scale),
         ..Options::default()
     };

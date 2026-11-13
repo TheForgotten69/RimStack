@@ -553,7 +553,7 @@ pub fn acting(
             Act::Fix => mods.apply_fix(mod_id, fix.action, &fix.target, fix.page.is_some(), cx),
             Act::Ignore => mods.ignore_problem(package_id, key, cx),
             Act::Show => {
-                cx.emit(super::ShowSection(0));
+                cx.emit(super::ShowSection(crate::ui::section::Section::Mods));
                 mods.show_mod(mod_id, cx)
             }
         });

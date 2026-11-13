@@ -71,7 +71,7 @@ pub type FilesRead = (
 
 /// What the details ask of the Mods tab.
 pub enum Asked {
-    Section(usize),
+    Section(crate::ui::section::Section),
     Filter(&'static str),
     /// The tab shown changed.
     Tab(usize),

@@ -24,7 +24,7 @@ fn settings(
     );
     let options = Options {
         demo: true,
-        section: 7,
+        section: crate::ui::section::Section::Settings,
         part,
         ..Options::default()
     };
@@ -112,7 +112,7 @@ fn drawn_with(
             HeadlessAppContext::with_asset_source(text, Arc::new(crate::ui::assets::Assets));
         let options = Options {
             demo: true,
-            section: 7,
+            section: crate::ui::section::Section::Settings,
             part,
             text_scale: Some(text_scale),
             ..Options::default()

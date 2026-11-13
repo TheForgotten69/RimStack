@@ -50,6 +50,7 @@ struct Said {
 }
 
 pub struct Settings {
+    unseen: crate::ui::section::Unseen,
     demo: bool,
     report: Rc<SettingsReport>,
     /// The folder boxes and the launch arguments take the report's text once, when it comes.
@@ -129,6 +130,7 @@ impl Settings {
         cx.observe(&mods, |_, _, cx| cx.notify()).detach();
         let reduce = theme.appearance.reduce_motion;
         let mut settings = Self {
+            unseen: Default::default(),
             demo,
             report: Rc::default(),
             filled: false,
@@ -175,6 +177,9 @@ impl Settings {
 
     /// What Settings shows, read off the window's thread; the demo reads it in place.
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
+        let Some(changes) = self.unseen.pass(changes) else {
+            return;
+        };
         let app = super::app(cx);
         // A read asked for while another runs takes its place, so it reads what both asked.
         self.unread |= changes;
@@ -520,6 +525,14 @@ impl Settings {
             super::notices::Tone::Plain,
             cx,
         );
+    }
+}
+
+impl crate::ui::section::Shown for Settings {
+    fn set_shown(&mut self, shown: bool, cx: &mut Context<Self>) {
+        if let Some(missed) = self.unseen.shown(shown) {
+            self.heard(missed, cx);
+        }
     }
 }
 

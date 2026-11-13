@@ -59,7 +59,7 @@ fn give_back_freed() {
 }
 
 /// Asked of the window: show this section.
-pub struct ShowSection(pub usize);
+pub struct ShowSection(pub crate::ui::section::Section);
 
 impl gpui::EventEmitter<ShowSection> for Mods {}
 

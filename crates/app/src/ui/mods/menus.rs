@@ -279,7 +279,7 @@ impl Mods {
             }
             _ if page => {
                 cx.emit(Wanted::Browse(target.to_string()));
-                cx.emit(super::ShowSection(3));
+                cx.emit(super::ShowSection(crate::ui::section::Section::Workshop));
             }
             _ => cx.open_url(&crate::ui::workshop_page(target)),
         }

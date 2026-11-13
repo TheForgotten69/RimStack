@@ -29,6 +29,7 @@ pub mod prompt;
 pub mod rich;
 pub mod rows;
 pub mod saves;
+pub mod section;
 pub mod settings;
 pub mod shell;
 pub mod status_bar;
@@ -60,7 +61,7 @@ pub fn app(cx: &Cx) -> Arc<App> {
 #[derive(Clone, Debug, Default)]
 pub struct Options {
     pub demo: bool,
-    pub section: usize,
+    pub section: section::Section,
     pub theme: Option<ThemeName>,
     pub text_scale: Option<f32>,
     /// Four mods of the load order chosen, as `--several` asks.
@@ -111,7 +112,7 @@ impl Options {
                 "--demo" => options.demo = true,
                 "--selftest" => (options.demo, options.bench) = (true, true),
                 "--bench" => options.bench = true,
-                "--section" => options.section = value.parse().unwrap_or(0),
+                "--section" => options.section = section::Section::at(value.parse().unwrap_or(0)),
                 "--theme" => options.theme = ThemeName::named(value),
                 "--text-scale" => options.text_scale = value.parse().ok(),
                 "--several" => options.several = true,

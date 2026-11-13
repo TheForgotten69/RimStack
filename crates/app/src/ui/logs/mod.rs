@@ -31,6 +31,7 @@ pub enum View {
 }
 
 pub struct Logs {
+    unseen: crate::ui::section::Unseen,
     demo: bool,
     report: Option<Rc<LogsReport>>,
     problem: Option<String>,
@@ -99,6 +100,7 @@ impl Logs {
             scroll
         };
         let mut logs = Self {
+            unseen: Default::default(),
             demo,
             report: None,
             problem: None,
@@ -162,6 +164,9 @@ impl Logs {
     }
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
+        let Some(changes) = self.unseen.pass(changes) else {
+            return;
+        };
         if changes.contains(Changes::LOAD_ORDER) {
             self.hunting = super::app(cx).hunt().active;
         }
@@ -324,3 +329,11 @@ impl gpui::Render for Logs {
 
 #[cfg(all(test, target_os = "linux"))]
 mod tests;
+
+impl crate::ui::section::Shown for Logs {
+    fn set_shown(&mut self, shown: bool, cx: &mut Context<Self>) {
+        if let Some(missed) = self.unseen.shown(shown) {
+            self.heard(missed, cx);
+        }
+    }
+}

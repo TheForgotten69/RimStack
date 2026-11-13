@@ -53,6 +53,7 @@ struct Viewing {
 }
 
 pub struct Find {
+    unseen: crate::ui::section::Unseen,
     selected: Option<ModId>,
     request: Request,
     search: Entity<TextField>,
@@ -142,6 +143,7 @@ impl Find {
         };
         let selected = mods.read(cx).selected_id().and_then(ModId::from_packed);
         let mut find = Self {
+            unseen: Default::default(),
             selected,
             request: Request::default(),
             search,
@@ -207,6 +209,9 @@ impl Find {
     }
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
+        let Some(changes) = self.unseen.pass(changes) else {
+            return;
+        };
         if changes.contains(Changes::LIBRARY | Changes::LOAD_ORDER) {
             self.count_extensions(cx);
         }
@@ -687,3 +692,11 @@ fn said_inside(text: &str, found: usize, at: Option<usize>) -> Option<Sentence> 
 
 #[cfg(all(test, target_os = "linux"))]
 mod tests;
+
+impl crate::ui::section::Shown for Find {
+    fn set_shown(&mut self, shown: bool, cx: &mut Context<Self>) {
+        if let Some(missed) = self.unseen.shown(shown) {
+            self.heard(missed, cx);
+        }
+    }
+}

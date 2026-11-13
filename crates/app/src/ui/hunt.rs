@@ -30,7 +30,7 @@ impl Shell {
         }
         self.before_play = false;
         self.hunt = super::app(cx).start_hunt(true);
-        self.go(0, cx);
+        self.go(crate::ui::section::Section::Mods, cx);
         self.try_round(cx);
     }
 

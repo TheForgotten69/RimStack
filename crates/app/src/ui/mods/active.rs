@@ -418,7 +418,7 @@ impl Mods {
                             "{} active Workshop mod is older than its Workshop version",
                             "{} active Workshop mods are older than their Workshop version"
                         )))
-                        .on_click(cx.listener(|_, _, _, cx| cx.emit(super::ShowSection(1)))),
+                        .on_click(cx.listener(|_, _, _, cx| cx.emit(super::ShowSection(crate::ui::section::Section::Downloads)))),
                 )
             })
             .when(!self.demo && !tight, |d| {
@@ -650,7 +650,9 @@ impl Mods {
             entries.push(
                 Entry::item(
                     put(&say_n!(self.behind, "{} update", "{} updates")),
-                    run(|_, cx| cx.emit(super::ShowSection(1))),
+                    run(|_, cx| {
+                        cx.emit(super::ShowSection(crate::ui::section::Section::Downloads))
+                    }),
                 )
                 .icon("download")
                 .into(),

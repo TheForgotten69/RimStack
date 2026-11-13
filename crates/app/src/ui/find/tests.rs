@@ -27,7 +27,7 @@ fn opened(text_scale: f32, window: Shape<'_>, text: Option<&str>) -> Opened {
     let mut cx =
         HeadlessAppContext::with_asset_source(gpu_text, Arc::new(crate::ui::assets::Assets));
     let options = Options {
-        section: 6,
+        section: crate::ui::section::Section::Find,
         text_scale: Some(text_scale),
         find: text.map(str::to_string),
         ..Options::default()
@@ -136,7 +136,10 @@ fn showing_the_mods_with_matches_goes_to_mods_filtered_by_the_search() {
             })
         })
         .unwrap();
-    assert_eq!((section, filter.as_str()), (0, "in:search"));
+    assert_eq!(
+        (section, filter.as_str()),
+        (crate::ui::section::Section::Mods, "in:search")
+    );
 }
 
 #[test]

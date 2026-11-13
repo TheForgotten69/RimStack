@@ -49,6 +49,7 @@ struct Opened {
 }
 
 pub struct Workshop {
+    unseen: crate::ui::section::Unseen,
     demo: bool,
     downloads: Entity<Downloads>,
     field: Entity<TextField>,
@@ -112,6 +113,7 @@ impl Workshop {
         let scroll = Scrolling::default();
         scroll.borrow_mut().set_reduce_motion(reduce);
         let mut workshop = Self {
+            unseen: Default::default(),
             demo,
             downloads,
             field,
@@ -169,6 +171,9 @@ impl Workshop {
     }
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
+        let Some(changes) = self.unseen.pass(changes) else {
+            return;
+        };
         if changes.contains(Changes::COMMUNITY | Changes::SOURCE | Changes::KEY) {
             self.read_defaults(cx);
         }
@@ -587,3 +592,11 @@ fn related_said(which: Related, id: &str, title: &str) -> Sentence {
 
 #[cfg(all(test, target_os = "linux"))]
 mod tests;
+
+impl crate::ui::section::Shown for Workshop {
+    fn set_shown(&mut self, shown: bool, cx: &mut Context<Self>) {
+        if let Some(missed) = self.unseen.shown(shown) {
+            self.heard(missed, cx);
+        }
+    }
+}

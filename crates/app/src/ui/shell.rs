@@ -3,6 +3,7 @@
 use super::Options;
 use super::downloads::{BehindActive, Downloads, ShowMod};
 use super::mods::{Mods, ShowSection};
+use super::section::Section;
 use super::theme::Theme;
 use super::top_bar::top_bar;
 use crate::workspace::load_order::Side;
@@ -11,16 +12,8 @@ use gpui::{
     Styled, Window, div,
 };
 
-/// The sections made on their first visit, as `Theme.sections` numbers them.
-const TEXTURES: usize = 2;
-const WORKSHOP: usize = 3;
-pub(crate) const SAVES: usize = 4;
-pub(crate) const LOGS: usize = 5;
-const FIND: usize = 6;
-const SETTINGS: usize = 7;
-
 pub struct Shell {
-    section: usize,
+    section: Section,
     /// The keys' handles of the sections and of the search box.
     bar_keys: [gpui::FocusHandle; 2],
     pub(crate) demo: bool,
@@ -177,7 +170,7 @@ impl Shell {
             cx.new(|cx| super::lists::Lists::new(demo, mods, cx))
         };
         let mut shell = Self {
-            section: 0,
+            section: Section::Mods,
             demo,
             mods,
             downloads: None,
@@ -303,7 +296,7 @@ impl Shell {
         let (demo, mods) = (self.demo, self.mods.clone());
         let downloads = cx.new(|cx| Downloads::new(demo, mods, cx));
         cx.subscribe(&downloads, |shell, _, ShowMod(mod_id), cx| {
-            shell.go(0, cx);
+            shell.go(Section::Mods, cx);
             let mod_id = *mod_id;
             shell.mods.update(cx, |mods, cx| mods.show_mod(mod_id, cx));
         })
@@ -328,6 +321,9 @@ impl Shell {
         let (demo, downloads) = (self.demo, self.downloads(cx));
         let workshop = cx.new(|cx| super::workshop::Workshop::new(demo, downloads, cx));
         self.workshop = Some(workshop.clone());
+        if self.section != Section::Workshop {
+            self.tell_shown(Section::Workshop, false, cx);
+        }
         workshop
     }
 
@@ -341,48 +337,52 @@ impl Shell {
             shell
                 .mods
                 .update(cx, |mods, cx| mods.filter_by("in:search", cx));
-            shell.go(0, cx);
+            shell.go(Section::Mods, cx);
         })
         .detach();
         self.find = Some(find.clone());
+        if self.section != Section::Find {
+            self.tell_shown(Section::Find, false, cx);
+        }
         find
     }
 
-    pub fn go(&mut self, section: usize, cx: &mut Context<Self>) {
+    pub fn go(&mut self, section: Section, cx: &mut Context<Self>) {
         if section != self.section {
             self.shown_turn = super::motion::opening();
+            self.tell_shown(self.section, false, cx);
         }
         self.section = section;
-        if section == WORKSHOP {
+        if section == Section::Workshop {
             self.workshop(cx);
         }
-        if section == FIND {
+        if section == Section::Find {
             self.find(cx);
         }
-        if section == 1 {
+        if section == Section::Downloads {
             self.downloads(cx);
         }
-        if section == SAVES && self.saves.is_none() {
+        if section == Section::Saves && self.saves.is_none() {
             let demo = self.demo;
             let saves = cx.new(|cx| super::saves::Saves::new(demo, cx));
             cx.subscribe(&saves, |shell, _, super::saves::UseList(ids), cx| {
                 let ids = ids.clone();
                 shell.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
-                shell.go(0, cx);
+                shell.go(Section::Mods, cx);
             })
             .detach();
             self.saves = Some(saves);
         }
-        if section == TEXTURES && self.textures.is_none() {
+        if section == Section::Textures && self.textures.is_none() {
             let demo = self.demo;
             self.textures = Some(cx.new(|cx| super::textures::Textures::new(demo, cx)));
         }
-        if section == LOGS && self.logs.is_none() {
+        if section == Section::Logs && self.logs.is_none() {
             let (demo, view) = (self.demo, self.view);
             let logs = cx.new(|cx| super::logs::Logs::new(demo, view, cx));
             cx.subscribe(&logs, |shell, _, super::logs::ShowMod(mod_id), cx| {
                 let mod_id = *mod_id;
-                shell.go(0, cx);
+                shell.go(Section::Mods, cx);
                 shell.mods.update(cx, |mods, cx| mods.show_mod(mod_id, cx));
             })
             .detach();
@@ -393,23 +393,42 @@ impl Shell {
             cx.subscribe(&logs, |shell, _, super::logs::UseList(ids), cx| {
                 let ids = ids.clone();
                 shell.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
-                shell.go(0, cx);
+                shell.go(Section::Mods, cx);
             })
             .detach();
             self.logs = Some(logs);
         }
-        if section == SETTINGS && self.settings.is_none() {
+        if section == Section::Settings && self.settings.is_none() {
             let (demo, part, mods) = (self.demo, self.part, self.mods.clone());
             let settings = cx.new(|cx| super::settings::Settings::new(demo, part, mods, cx));
             cx.subscribe(&settings, |shell, _, super::settings::UseList(ids), cx| {
                 let ids = ids.clone();
                 shell.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
-                shell.go(0, cx);
+                shell.go(Section::Mods, cx);
             })
             .detach();
             self.settings = Some(settings);
         }
+        self.tell_shown(section, true, cx);
         cx.notify();
+    }
+
+    fn tell_shown(&self, section: Section, shown: bool, cx: &mut Context<Self>) {
+        use super::section::Shown;
+        fn tell<V: Shown + 'static>(view: &Option<Entity<V>>, shown: bool, cx: &mut gpui::App) {
+            if let Some(view) = view {
+                view.update(cx, |view, cx| view.set_shown(shown, cx));
+            }
+        }
+        match section {
+            Section::Mods | Section::Downloads => {}
+            Section::Textures => tell(&self.textures, shown, cx),
+            Section::Workshop => tell(&self.workshop, shown, cx),
+            Section::Saves => tell(&self.saves, shown, cx),
+            Section::Logs => tell(&self.logs, shown, cx),
+            Section::Find => tell(&self.find, shown, cx),
+            Section::Settings => tell(&self.settings, shown, cx),
+        }
     }
 }
 
@@ -464,17 +483,33 @@ impl Render for Shell {
                     shell.open_commands(window, cx)
                 }),
             )
-            .on_action(cx.listener(|shell, _: &super::keys::Section1, _, cx| shell.go(0, cx)))
-            .on_action(cx.listener(|shell, _: &super::keys::Section2, _, cx| shell.go(1, cx)))
-            .on_action(cx.listener(|shell, _: &super::keys::Section3, _, cx| shell.go(2, cx)))
-            .on_action(cx.listener(|shell, _: &super::keys::Section4, _, cx| shell.go(3, cx)))
-            .on_action(cx.listener(|shell, _: &super::keys::Section5, _, cx| shell.go(4, cx)))
-            .on_action(cx.listener(|shell, _: &super::keys::Section6, _, cx| shell.go(5, cx)))
-            .on_action(cx.listener(|shell, _: &super::keys::Section7, _, cx| shell.go(6, cx)))
-            .on_action(cx.listener(|shell, _: &super::keys::Section8, _, cx| shell.go(7, cx)))
+            .on_action(
+                cx.listener(|shell, _: &super::keys::Section1, _, cx| shell.go(Section::Mods, cx)),
+            )
+            .on_action(cx.listener(|shell, _: &super::keys::Section2, _, cx| {
+                shell.go(Section::Downloads, cx)
+            }))
+            .on_action(cx.listener(|shell, _: &super::keys::Section3, _, cx| {
+                shell.go(Section::Textures, cx)
+            }))
+            .on_action(cx.listener(|shell, _: &super::keys::Section4, _, cx| {
+                shell.go(Section::Workshop, cx)
+            }))
+            .on_action(
+                cx.listener(|shell, _: &super::keys::Section5, _, cx| shell.go(Section::Saves, cx)),
+            )
+            .on_action(
+                cx.listener(|shell, _: &super::keys::Section6, _, cx| shell.go(Section::Logs, cx)),
+            )
+            .on_action(
+                cx.listener(|shell, _: &super::keys::Section7, _, cx| shell.go(Section::Find, cx)),
+            )
+            .on_action(cx.listener(|shell, _: &super::keys::Section8, _, cx| {
+                shell.go(Section::Settings, cx)
+            }))
             .on_action(
                 cx.listener(|shell, _: &super::find::FocusSearch, window, cx| {
-                    shell.go(FIND, cx);
+                    shell.go(Section::Find, cx);
                     let find = shell.find(cx);
                     find.update(cx, |find, cx| find.focus_search(window, cx));
                 }),
@@ -538,15 +573,14 @@ impl Shell {
     /// The view of the section shown, once it is made.
     fn shown(&self) -> Option<gpui::AnyView> {
         match self.section {
-            0 => Some(self.mods.clone().into()),
-            1 => self.downloads.clone().map(Into::into),
-            TEXTURES => self.textures.clone().map(Into::into),
-            SAVES => self.saves.clone().map(Into::into),
-            LOGS => self.logs.clone().map(Into::into),
-            FIND => self.find.clone().map(Into::into),
-            WORKSHOP => self.workshop.clone().map(Into::into),
-            SETTINGS => self.settings.clone().map(Into::into),
-            _ => None,
+            Section::Mods => Some(self.mods.clone().into()),
+            Section::Downloads => self.downloads.clone().map(Into::into),
+            Section::Textures => self.textures.clone().map(Into::into),
+            Section::Saves => self.saves.clone().map(Into::into),
+            Section::Logs => self.logs.clone().map(Into::into),
+            Section::Find => self.find.clone().map(Into::into),
+            Section::Workshop => self.workshop.clone().map(Into::into),
+            Section::Settings => self.settings.clone().map(Into::into),
         }
     }
 }
@@ -559,7 +593,7 @@ thread_local! {
 
 #[cfg(test)]
 impl Shell {
-    pub(crate) fn section(&self) -> usize {
+    pub(crate) fn section(&self) -> Section {
         self.section
     }
 

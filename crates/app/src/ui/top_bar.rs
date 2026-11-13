@@ -1,5 +1,6 @@
 //! The app's name, the sections, Search and Play.
 
+use super::section::Section;
 use super::shell::Shell;
 use super::theme::{self, Theme};
 use super::widgets::{
@@ -53,7 +54,7 @@ fn pick_section(
         .map(|(at, name)| {
             let me = me.clone();
             super::menu::Entry::item(name, move |_, cx| {
-                let _ = me.update(cx, |shell, cx| shell.go(at, cx));
+                let _ = me.update(cx, |shell, cx| shell.go(Section::at(at), cx));
             })
             .off(at == section)
             .into()
@@ -64,11 +65,11 @@ fn pick_section(
 
 /// `in_the_way`: what Play warns of, as `Mods::in_the_way` counts it.
 /// The section whose tab counts the active mods with a newer Workshop version.
-const DOWNLOADS: usize = 1;
+const DOWNLOADS: usize = Section::Downloads as usize;
 
 /// What the top bar shows of the window's state.
 pub struct TopState {
-    pub section: usize,
+    pub section: super::section::Section,
     pub demo: bool,
     pub in_the_way: (usize, bool),
     pub behind: usize,
@@ -88,6 +89,7 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
         lists_view,
         keys,
     } = state;
+    let section = section.index();
     let theme = cx.global::<Theme>().clone();
     let c = theme.colours;
     let width = window.viewport_size().width;
@@ -304,7 +306,7 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
             )
             .on_click(cx.listener(move |shell, _, window, cx| match folded {
                 true => pick_section(kept.get(), section, window, cx),
-                false => shell.go(at, cx),
+                false => shell.go(Section::at(at), cx),
             }));
         super::tip::tipped(tab, tip.into())
     });
@@ -390,8 +392,8 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
                                 return;
                             }
                             match keys.key.as_str() {
-                                "left" => shell.go(section.saturating_sub(1), cx),
-                                "right" => shell.go((section + 1).min(sections().len() - 1), cx),
+                                "left" => shell.go(Section::at(section).before(), cx),
+                                "right" => shell.go(Section::at(section).after(), cx),
                                 "enter" | "space" if folded => {
                                     pick_section(placed_box.get(), section, window, cx)
                                 }

@@ -222,10 +222,11 @@ impl DetailsView {
                             .child(put(&start.line)),
                     )
                     .when(logged, |d| {
-                        d.child(
-                            Btn::new("open-log", put(&say!("Open log")))
-                                .on_click(self.on_mods(|_, cx| cx.emit(super::ShowSection(5)))),
-                        )
+                        d.child(Btn::new("open-log", put(&say!("Open log"))).on_click(
+                            self.on_mods(|_, cx| {
+                                cx.emit(super::ShowSection(crate::ui::section::Section::Logs))
+                            }),
+                        ))
                     })
                     .into_any_element(),
             );
@@ -305,7 +306,9 @@ impl DetailsView {
                 "{} mod changed since the game was last started",
                 "{} mods changed since the game was last started"
             ));
-            body.push(line("review-changed", said, || Asked::Section(1)));
+            body.push(line("review-changed", said, || {
+                Asked::Section(crate::ui::section::Section::Downloads)
+            }));
         }
         if self.shown.behind > 0 {
             let said = put(&say_n!(
@@ -313,7 +316,9 @@ impl DetailsView {
                 "{} update available",
                 "{} updates available"
             ));
-            body.push(line("review-updates", said, || Asked::Section(1)));
+            body.push(line("review-updates", said, || {
+                Asked::Section(crate::ui::section::Section::Downloads)
+            }));
         }
         if replacements > 0 {
             let said = put(&say_n!(
@@ -321,7 +326,9 @@ impl DetailsView {
                 "{} mod has a replacement",
                 "{} mods have a replacement"
             ));
-            body.push(line("review-replaced", said, || Asked::Section(1)));
+            body.push(line("review-replaced", said, || {
+                Asked::Section(crate::ui::section::Section::Downloads)
+            }));
         }
         if body.is_empty() {
             return None;

@@ -181,7 +181,9 @@ impl Shell {
                                 d.child(label(&theme, theme.small(), tone, said))
                             })
                             .child(icon("chevron-right", theme.sized(11.), c.ink3))
-                            .on_click(cx.listener(|shell, _, _, cx| shell.go(5, cx)));
+                            .on_click(cx.listener(|shell, _, _, cx| {
+                                shell.go(crate::ui::section::Section::Logs, cx)
+                            }));
                         d.child(super::tip::tipped(last, tip.into()))
                     }),
             )

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct Textures {
+    unseen: crate::ui::section::Unseen,
     demo: bool,
     rows: Rc<Vec<Row>>,
     busy: bool,
@@ -41,6 +42,7 @@ impl Textures {
             .borrow_mut()
             .set_reduce_motion(theme.appearance.reduce_motion);
         let mut textures = Self {
+            unseen: Default::default(),
             demo,
             rows: Rc::default(),
             busy: false,
@@ -67,6 +69,9 @@ impl Textures {
     }
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
+        let Some(changes) = self.unseen.pass(changes) else {
+            return;
+        };
         if changes.contains(Changes::LIBRARY | Changes::TEXTURES | Changes::LOAD_ORDER) {
             self.stale = true;
             self.count(cx);
@@ -225,3 +230,11 @@ fn megabytes(n: f64) -> String {
 
 #[cfg(all(test, target_os = "linux"))]
 mod tests;
+
+impl crate::ui::section::Shown for Textures {
+    fn set_shown(&mut self, shown: bool, cx: &mut Context<Self>) {
+        if let Some(missed) = self.unseen.shown(shown) {
+            self.heard(missed, cx);
+        }
+    }
+}

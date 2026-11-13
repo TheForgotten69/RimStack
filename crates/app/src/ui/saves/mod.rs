@@ -16,6 +16,7 @@ use std::rc::Rc;
 pub struct UseList(pub Vec<String>);
 
 pub struct Saves {
+    unseen: crate::ui::section::Unseen,
     demo: bool,
     report: Rc<SavesReport>,
     busy: bool,
@@ -57,6 +58,7 @@ impl Saves {
             .borrow_mut()
             .set_reduce_motion(theme.appearance.reduce_motion);
         let mut saves = Self {
+            unseen: Default::default(),
             demo,
             report: Rc::default(),
             busy: false,
@@ -87,6 +89,9 @@ impl Saves {
     }
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
+        let Some(changes) = self.unseen.pass(changes) else {
+            return;
+        };
         if changes.contains(Changes::LIBRARY | Changes::LOAD_ORDER | Changes::SAVES) {
             self.stale = true;
             self.read(cx);
@@ -159,3 +164,11 @@ impl Saves {
 
 #[cfg(all(test, target_os = "linux"))]
 mod tests;
+
+impl crate::ui::section::Shown for Saves {
+    fn set_shown(&mut self, shown: bool, cx: &mut Context<Self>) {
+        if let Some(missed) = self.unseen.shown(shown) {
+            self.heard(missed, cx);
+        }
+    }
+}

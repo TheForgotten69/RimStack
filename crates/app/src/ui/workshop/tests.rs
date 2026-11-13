@@ -27,7 +27,7 @@ fn opened(text_scale: f32, window: Shape<'_>, browse: Option<&str>) -> Opened {
     let text = crate::ui::made_up::text_system();
     let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(crate::ui::assets::Assets));
     let options = Options {
-        section: 3,
+        section: crate::ui::section::Section::Workshop,
         text_scale: Some(text_scale),
         browse: browse.map(str::to_string),
         ..Options::default()

@@ -163,7 +163,7 @@ impl Shell {
                         .tip(put(&say!("Shows the order the rules ask for, to keep or discard. Nothing is written before Save.")))
                         .on_click(cx.listener(|shell, _, _, cx| {
                             shell.before_play = false;
-                            shell.go(0, cx);
+                            shell.go(crate::ui::section::Section::Mods, cx);
                             shell.mods.update(cx, |mods, cx| mods.preview_sort(cx));
                         })),
                 )
@@ -174,7 +174,7 @@ impl Shell {
                         .fill()
                         .on_click(cx.listener(|shell, _, _, cx| {
                             shell.before_play = false;
-                            shell.go(0, cx);
+                            shell.go(crate::ui::section::Section::Mods, cx);
                             shell.mods.update(cx, |mods, cx| mods.open_problems(cx));
                         })),
                 )

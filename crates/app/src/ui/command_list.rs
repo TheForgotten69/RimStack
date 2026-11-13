@@ -68,7 +68,7 @@ impl Shell {
                     &group,
                     String::new(),
                     Rc::new(move |shell, _, cx| {
-                        shell.go(0, cx);
+                        shell.go(crate::ui::section::Section::Mods, cx);
                         shell.mods.update(cx, |mods, cx| mods.show_mod(id, cx));
                     }),
                 )
@@ -154,7 +154,7 @@ impl Shell {
             none.clone(),
             Rc::new(|shell, _, cx| {
                 super::keep_appearance("hintsSeen", "false", cx);
-                shell.go(0, cx);
+                shell.go(crate::ui::section::Section::Mods, cx);
                 shell.mods.update(cx, |mods, cx| mods.start_hints(cx));
             }),
         );
@@ -178,7 +178,7 @@ impl Shell {
             &order,
             none.clone(),
             Rc::new(|shell, _, cx| {
-                shell.go(0, cx);
+                shell.go(crate::ui::section::Section::Mods, cx);
                 shell.mods.update(cx, |mods, cx| mods.open_problems(cx));
             }),
         );
@@ -195,7 +195,7 @@ impl Shell {
             &order,
             none.clone(),
             Rc::new(|shell, _, cx| {
-                shell.go(0, cx);
+                shell.go(crate::ui::section::Section::Mods, cx);
                 shell.mods.update(cx, |mods, cx| mods.preview_sort(cx));
             }),
         );
@@ -233,7 +233,7 @@ impl Shell {
             &order,
             none.clone(),
             Rc::new(|shell, _, cx| {
-                shell.go(0, cx);
+                shell.go(crate::ui::section::Section::Mods, cx);
                 shell.mods.update(cx, |mods, cx| mods.next_problem(cx));
             }),
         );
@@ -252,7 +252,7 @@ impl Shell {
             none.clone(),
             Rc::new(|shell, _, cx| {
                 if let Some(ids) = super::app(cx).original_list() {
-                    shell.go(0, cx);
+                    shell.go(crate::ui::section::Section::Mods, cx);
                     shell.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
                 }
             }),
@@ -327,7 +327,7 @@ impl Shell {
         );
         let filtered = |text: &'static str| -> Run {
             Rc::new(move |shell, _, cx| {
-                shell.go(0, cx);
+                shell.go(crate::ui::section::Section::Mods, cx);
                 shell.mods.update(cx, |mods, cx| mods.filter_by(text, cx));
             })
         };
@@ -418,7 +418,7 @@ impl Shell {
             &say!("Saves"),
             none.clone(),
             Rc::new(|shell, _, cx| {
-                shell.go(super::shell::SAVES, cx);
+                shell.go(crate::ui::section::Section::Saves, cx);
                 if let Some(saves) = shell.saves.clone() {
                     saves.update(cx, |saves, cx| saves.reread(cx));
                 }
@@ -430,7 +430,7 @@ impl Shell {
             &say!("Logs"),
             none.clone(),
             Rc::new(|shell, _, cx| {
-                shell.go(super::shell::LOGS, cx);
+                shell.go(crate::ui::section::Section::Logs, cx);
                 if let Some(logs) = shell.logs.clone() {
                     logs.update(cx, |logs, cx| logs.reread(cx));
                 }
@@ -456,7 +456,7 @@ impl Shell {
             &say!("Downloads"),
             none.clone(),
             Rc::new(|shell, _, cx| {
-                shell.go(1, cx);
+                shell.go(crate::ui::section::Section::Downloads, cx);
                 let downloads = shell.downloads(cx);
                 downloads.update(cx, |downloads, cx| downloads.check_updates(cx));
             }),
@@ -466,37 +466,45 @@ impl Shell {
             say!("Browse the Workshop"),
             &go_to,
             none.clone(),
-            Rc::new(|shell, _, cx| shell.go(3, cx)),
+            Rc::new(|shell, _, cx| shell.go(crate::ui::section::Section::Workshop, cx)),
         );
-        let section = |at: usize| -> Run { Rc::new(move |shell, _, cx| shell.go(at, cx)) };
-        push(true, say!("Mods"), &go_to, say!("Ctrl + {}", 1), section(0));
+        let section = |at: crate::ui::section::Section| -> Run {
+            Rc::new(move |shell, _, cx| shell.go(at, cx))
+        };
+        push(
+            true,
+            say!("Mods"),
+            &go_to,
+            say!("Ctrl + {}", 1),
+            section(crate::ui::section::Section::Mods),
+        );
         push(
             true,
             say!("Workshop"),
             &go_to,
             say!("Ctrl + {}", 4),
-            section(3),
+            section(crate::ui::section::Section::Workshop),
         );
         push(
             true,
             say!("Downloads"),
             &go_to,
             say!("Ctrl + {}", 2),
-            section(1),
+            section(crate::ui::section::Section::Downloads),
         );
         push(
             true,
             say!("Textures"),
             &go_to,
             say!("Ctrl + {}", 3),
-            section(2),
+            section(crate::ui::section::Section::Textures),
         );
         push(
             true,
             say!("Saves"),
             &go_to,
             say!("Ctrl + {}", 5),
-            section(4),
+            section(crate::ui::section::Section::Saves),
         );
         push(
             true,
@@ -504,7 +512,7 @@ impl Shell {
             &go_to,
             say!("Ctrl + Shift + F"),
             Rc::new(|shell, window, cx| {
-                shell.go(6, cx);
+                shell.go(crate::ui::section::Section::Find, cx);
                 let find = shell.find(cx);
                 find.update(cx, |find, cx| find.focus_search(window, cx));
             }),
@@ -655,7 +663,7 @@ impl Shell {
 
     pub(crate) fn show_settings(&mut self, part: usize, cx: &mut Context<Self>) {
         self.part = part;
-        self.go(7, cx);
+        self.go(crate::ui::section::Section::Settings, cx);
         if let Some(settings) = &self.settings {
             settings.update(cx, |settings, cx| settings.show_part(part, cx));
         }
@@ -663,7 +671,7 @@ impl Shell {
 
     pub(crate) fn show_logs(&mut self, view: usize, cx: &mut Context<Self>) {
         self.view = view;
-        self.go(5, cx);
+        self.go(crate::ui::section::Section::Logs, cx);
         if let Some(logs) = &self.logs {
             logs.update(cx, |logs, cx| logs.show_view(view, cx));
         }

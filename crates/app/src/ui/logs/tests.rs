@@ -27,7 +27,7 @@ fn opened(
     let text = crate::ui::made_up::text_system();
     let mut cx = HeadlessAppContext::with_asset_source(text, Arc::new(crate::ui::assets::Assets));
     let options = Options {
-        section: 5,
+        section: crate::ui::section::Section::Logs,
         view,
         text_scale: Some(text_scale),
         ..Options::default()

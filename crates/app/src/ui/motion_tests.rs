@@ -74,7 +74,13 @@ fn the_arrows_turn_without_drawing_the_window_again() {
 fn a_section_and_ctrl_k_come_to_rest_and_ask_for_no_more_frames() {
     let (_tmp, mut cx, shell) = opened();
     settled(&mut cx, shell, 60);
-    cx.update(|cx| shell.update(cx, |shell, _, cx| shell.go(7, cx)).unwrap());
+    cx.update(|cx| {
+        shell
+            .update(cx, |shell, _, cx| {
+                shell.go(crate::ui::section::Section::Settings, cx)
+            })
+            .unwrap()
+    });
     assert!(settled(&mut cx, shell, 60) > 5, "the section faded in");
     cx.update(|cx| {
         shell
