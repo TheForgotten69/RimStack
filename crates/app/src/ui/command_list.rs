@@ -128,11 +128,12 @@ impl Shell {
         let open = say!("Open");
         let filter = say!("Filter");
         let chosen = say!("Selected mod");
-        let session = (!demo).then(|| {
-            let session = app.session();
-            (session.is_dirty(), session.can_undo(), session.can_redo())
-        });
-        let (dirty, can_undo, can_redo) = session.unwrap_or_default();
+        let super::mods::Standing {
+            dirty,
+            can_undo,
+            can_redo,
+            ..
+        } = mods.session_standing().clone();
         let (errors, warnings) = mods.problems();
         let mut push = |when: bool, name: Sentence, group: &Sentence, keys: Sentence, run: Run| {
             if when {

@@ -13,12 +13,19 @@ use gpui::{
 };
 use rimstack_core::{say, say_n};
 
+#[cfg(test)]
+thread_local! {
+    pub(crate) static DRAWN: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 pub struct StatusNote {
     pub demo: bool,
 }
 
 impl Render for StatusNote {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(test)]
+        DRAWN.with(|drawn| drawn.set(drawn.get() + 1));
         let theme = cx.global::<Theme>().clone();
         let c = theme.colours;
         let demo = self.demo;

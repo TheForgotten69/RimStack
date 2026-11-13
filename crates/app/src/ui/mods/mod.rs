@@ -526,6 +526,10 @@ impl Mods {
         }
     }
 
+    pub fn session_standing(&self) -> &Standing {
+        &self.standing
+    }
+
     pub fn count(&self, side: Side) -> usize {
         self.order.list(side).mods().len()
     }

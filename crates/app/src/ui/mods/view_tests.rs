@@ -561,3 +561,56 @@ fn what_the_window_shows_of_the_list_follows_an_edit_its_save_and_its_undo() {
         "an undo after a save leaves the list unsaved"
     );
 }
+
+#[test]
+fn a_control_pointed_at_and_an_edit_draw_the_bars_again() {
+    use crate::ui::shell::RENDERS;
+    use crate::ui::status_note::DRAWN;
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    let window = cx.update(|cx| cx.windows()[0]);
+    let draw = |cx: &mut gpui::HeadlessAppContext| {
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+    };
+    for _ in 0..3 {
+        draw(&mut cx);
+    }
+    let (strip, room) = cx.update(|cx| {
+        let theme = cx.global::<crate::ui::theme::Theme>();
+        (theme.strip(), theme.sized(30.))
+    });
+    let history = gpui::point(crate::ui::WINDOW.0 - room, crate::ui::WINDOW.1 - strip / 2.);
+    DRAWN.with(|drawn| drawn.set(0));
+    cx.update_window(window, |_, window, cx| {
+        window.dispatch_event(
+            gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                position: history,
+                ..Default::default()
+            }),
+            cx,
+        );
+    })
+    .unwrap();
+    draw(&mut cx);
+    assert!(
+        !cx.update(|cx| crate::ui::tip::hint(cx)).is_empty(),
+        "History has a hint"
+    );
+    assert!(
+        DRAWN.with(|drawn| drawn.get()) > 0,
+        "the hint was not drawn"
+    );
+    RENDERS.with(|renders| renders.set(0));
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            let last = mods.count(Side::Active) - 1;
+            mods.take(Side::Active, last, None, cx);
+        })
+    });
+    draw(&mut cx);
+    assert!(
+        RENDERS.with(|renders| renders.get()) > 0,
+        "the bars did not show the list unsaved"
+    );
+}
