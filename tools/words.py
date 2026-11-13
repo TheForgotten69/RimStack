@@ -36,8 +36,6 @@ words.add("@locale")
 out = os.path.join(root, "assets", "words.json")
 words.update(json.load(open(out, encoding="utf-8")) if os.path.exists(out) else {})
 json.dump({w: "" for w in sorted(words)}, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-# English is a language like the others: each text beside itself, unless
-# its file already words it differently.
 english = os.path.join(root, "assets", "languages", "English.json")
 kept = json.load(open(english, encoding="utf-8")) if os.path.exists(english) else {}
 said = {w: kept.get(w) or ("en" if w == "@locale" else w) for w in sorted(words)}
