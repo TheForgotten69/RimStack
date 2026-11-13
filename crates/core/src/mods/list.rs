@@ -497,6 +497,12 @@ impl GroupedList {
         self.rebuild();
     }
 
+    pub fn keep_folds_of(&mut self, earlier: &GroupedList) {
+        self.collapsed.clone_from(&earlier.collapsed);
+        self.collapsed_subs.clone_from(&earlier.collapsed_subs);
+        self.rebuild();
+    }
+
     pub fn move_mod(&mut self, from: usize, to: usize) {
         if from >= self.mods.len() || to >= self.mods.len() || from == to {
             return;

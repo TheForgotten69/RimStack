@@ -461,6 +461,7 @@ impl Mods {
                         list.selection = kept.ids;
                         list.selected_active = kept.active;
                     }
+                    order.keep_folds_of(&list.order);
                     list.order = order;
                 });
                 if anew {

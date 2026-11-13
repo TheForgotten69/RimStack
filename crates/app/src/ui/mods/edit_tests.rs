@@ -216,3 +216,50 @@ fn sort_counts_the_moves_it_would_make_once_the_files_are_read() {
         crate::ui::made_up::step(&cx);
     }
 }
+
+#[test]
+fn a_category_folded_stays_folded_when_a_mod_leaves_the_folders() {
+    let (_tmp, mut cx, mods) = opened();
+    let (folded, gone) = cx.update(|cx| {
+        let inactive = mods
+            .read(cx)
+            .list
+            .read(cx)
+            .order
+            .list(Side::Inactive)
+            .mods();
+        let gone = inactive.last().and_then(|m| m.installed).unwrap();
+        let loaded = crate::ui::app(cx).library();
+        let (library, _) = loaded.as_ref().as_ref().unwrap();
+        (
+            inactive[0].category,
+            library.get(gone).unwrap().path.clone(),
+        )
+    });
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            mods.toggle_category(Side::Inactive, folded, cx)
+        })
+    });
+    let before = cx.update(|cx| mods.read(cx).list.read(cx).count(Side::Inactive));
+    std::fs::remove_dir_all(gone).unwrap();
+    cx.update(|cx| crate::ui::app(cx).rescan_soon());
+    let started = Instant::now();
+    while cx.update(|cx| mods.read(cx).list.read(cx).count(Side::Inactive) == before) {
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "the mods were not read again"
+        );
+        crate::ui::made_up::step(&cx);
+    }
+    let heading = cx.update(|cx| {
+        let rows = mods.read(cx).inactive.rows.clone();
+        rows.iter()
+            .find(|r| r.is_header && r.category == folded)
+            .cloned()
+    });
+    assert!(
+        heading.is_some_and(|h| h.collapsed),
+        "{folded:?} was unfolded"
+    );
+}

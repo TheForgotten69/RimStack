@@ -93,6 +93,16 @@ fn replacing_the_mods_keeps_the_filter() {
 }
 
 #[test]
+fn a_list_read_again_folds_what_the_earlier_one_folded() {
+    let mut earlier = sample();
+    earlier.toggle(Category::Game);
+    let mut list = sample();
+    list.keep_folds_of(&earlier);
+    assert_eq!(list.rows()[2], header(Category::Game, 2, true));
+    assert_eq!(list.rows()[3], header(Category::Libraries, 1, false));
+}
+
+#[test]
 fn neighbours_in_a_sub_category_of_yours_sit_under_its_row() {
     let mut mods = vec![
         m("A", "", Category::Content),

@@ -170,6 +170,11 @@ impl LoadOrder {
         self.settle(app);
     }
 
+    pub fn keep_folds_of(&mut self, earlier: &LoadOrder) {
+        self.active.keep_folds_of(&earlier.active);
+        self.inactive.keep_folds_of(&earlier.inactive);
+    }
+
     fn sub_on(&self, side: Side, row: usize) -> Option<usize> {
         match self.list(side).rows().get(row)? {
             Row::Sub { first, .. } => Some(*first),
