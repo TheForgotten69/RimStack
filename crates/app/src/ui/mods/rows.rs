@@ -232,7 +232,8 @@ pub fn tile_size(window: &Window, theme: &Theme) -> (u32, u32) {
     (device(64.).round() as u32, device(40.).round() as u32)
 }
 
-/// The previews of the rows a page above and below `range`, decoded before they are scrolled to.
+/// The previews of the rows a page and a half above and below `range`, decoded before they are
+/// scrolled to: a page of headings holds more rows than one of mods.
 pub fn ahead(
     window: &Window,
     theme: &Theme,
@@ -241,7 +242,7 @@ pub fn ahead(
     thumbs: &thumbs::Shared,
     cx: &mut gpui::App,
 ) {
-    let page = range.len().max(1);
+    let page = range.len().max(1) * 3 / 2;
     let size = tile_size(window, theme);
     let above = range.start.saturating_sub(page)..range.start;
     let below = range.end.min(rows.len())..(range.end + page).min(rows.len());

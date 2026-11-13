@@ -614,3 +614,44 @@ fn a_control_pointed_at_and_an_edit_draw_the_bars_again() {
         "the bars did not show the list unsaved"
     );
 }
+
+#[test]
+fn the_pictures_of_the_next_page_are_decoded_before_it_is_scrolled_to() {
+    let (_tmp, mut cx, mods) = opened_with(|root| {
+        let preview = root.join("fx/game/Data/Core/About/Preview.png");
+        for entry in std::fs::read_dir(root.join("fx/game/Mods")).unwrap() {
+            let about = entry.unwrap().path().join("About");
+            std::fs::copy(&preview, about.join("Preview.png")).unwrap();
+        }
+    });
+    let window = cx.update(|cx| cx.windows()[0]);
+    let draw = |cx: &mut gpui::HeadlessAppContext| {
+        cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+    };
+    for _ in 0..5 {
+        cx.run_until_parked();
+        draw(&mut cx);
+    }
+    let thumbs = cx.update(|cx| mods.read(cx).thumbs.clone());
+    assert_eq!(thumbs.borrow().awaited_in_view(), 0);
+    let shown_first = thumbs.borrow().decoded();
+    let list = cx.update(|cx| mods.read(cx).list(Side::Active).clone());
+    cx.update(|cx| {
+        list.update(cx, |list, cx| {
+            let (top, page) = {
+                let scroll = list.scroll().borrow();
+                (scroll.top(), scroll.shown())
+            };
+            list.scroll().borrow_mut().set_top(top + page);
+            cx.notify();
+        })
+    });
+    draw(&mut cx);
+    assert!(shown_first > 0, "no picture was decoded");
+    assert_eq!(
+        thumbs.borrow().awaited_in_view(),
+        0,
+        "a row scrolled to by a page drew without its picture"
+    );
+}

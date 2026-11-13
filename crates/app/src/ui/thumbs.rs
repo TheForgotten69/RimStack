@@ -12,8 +12,9 @@ use std::sync::Arc;
 const MOST_BYTES: usize = 48 << 20;
 /// Decodes running at once.
 const DECODING: usize = 4;
-/// Pictures waiting to be decoded; past it the oldest asked, scrolled by, are dropped.
-const WAITING: usize = 64;
+/// Pictures waiting to be decoded, the rows in view and three pages ahead of them; past it the
+/// oldest asked, scrolled by, are dropped.
+const WAITING: usize = 128;
 
 type Size = (u32, u32);
 type Key = (Size, String);
@@ -114,6 +115,18 @@ impl Thumbs {
         self.asked.insert(key.clone(), None);
         self.waiting.insert(0, key);
         true
+    }
+}
+
+#[cfg(test)]
+impl Thumbs {
+    /// Pictures asked for rows in view and not decoded yet.
+    pub(crate) fn awaited_in_view(&self) -> usize {
+        self.asked.values().filter(|shows| shows.is_some()).count()
+    }
+
+    pub(crate) fn decoded(&self) -> usize {
+        self.shown.len()
     }
 }
 
