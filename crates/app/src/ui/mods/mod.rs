@@ -88,6 +88,8 @@ pub struct Mods {
     /// The active mods with a newer Workshop version, as Downloads counts them.
     behind: usize,
     since_reading: Lane,
+    summary_reading: Lane,
+    last_start_reading: Lane,
     conflicts: usize,
     /// Inactive mods installed since the game was last started from RimStack.
     fresh: usize,
@@ -256,6 +258,8 @@ impl Mods {
             changed_since: 0,
             behind: 0,
             since_reading: Lane::default(),
+            summary_reading: Lane::default(),
+            last_start_reading: Lane::default(),
             conflicts: 0,
             fresh: 0,
             order,
@@ -425,12 +429,30 @@ impl Mods {
             | Changes::COMMUNITY
             | Changes::LANGUAGE;
         if changes.contains(counted) {
-            self.summary = Some(Rc::new(app.summary()));
+            let app = app.clone();
+            self.summary_reading.run(
+                "summary",
+                cx,
+                move |_| app.summary(),
+                |mods, summary, cx| {
+                    mods.summary = Some(Rc::new(summary));
+                    mods.sync_details(cx);
+                },
+            );
         }
         if changes
             .contains(Changes::LAUNCHES | Changes::LOGS | Changes::FOLDERS | Changes::LANGUAGE)
         {
-            self.last_start = app.last_start_said().map(Rc::new);
+            let app = app.clone();
+            self.last_start_reading.run(
+                "last start",
+                cx,
+                move |_| app.last_start_said(),
+                |mods, said, cx| {
+                    mods.last_start = said.map(Rc::new);
+                    mods.sync_details(cx);
+                },
+            );
         }
         if changes.contains(Changes::LIBRARY | Changes::UPDATES | Changes::LAUNCHES) {
             self.since_reading.run(

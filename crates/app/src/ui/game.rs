@@ -121,10 +121,17 @@ impl Game {
             app.publish(changes);
         }
         // Never taken unasked: the game empties the file when it first starts on a new version.
-        if noticed.mods_config
-            && let Some(ids) = app.mods_config_list()
-        {
-            cx.emit(Told::WrittenOutside(ids));
+        if noticed.mods_config {
+            crate::jobs::run(
+                "mods config",
+                cx,
+                move || app.mods_config_list(),
+                |_, ids, cx| {
+                    if let Some(ids) = ids {
+                        cx.emit(Told::WrittenOutside(ids));
+                    }
+                },
+            );
         }
     }
 
