@@ -1,4 +1,4 @@
-//! `StatusBar.qml`: what is not saved, the last start of the game, the work under way, the keys
+//! What is not saved, the last start of the game, the work under way, the keys
 //! and the history.
 
 use super::button::Btn;
@@ -16,7 +16,7 @@ use gpui::{
 use rimstack_core::{say, say_n};
 
 impl Shell {
-    /// The work under way across the window, as `Main.qml`'s `tasks`, each with how it is
+    /// The work under way across the window, each with how it is
     /// stopped when it can be.
     fn tasks(&self, cx: &gpui::App) -> Vec<(String, Option<Stop>)> {
         let mut tasks: Vec<(String, Option<Stop>)> = self
@@ -305,7 +305,7 @@ impl Shell {
     }
 }
 
-/// `StatusBar.qml`'s `RotationAnimation`: a turn in 1.4 s while work is under way.
+/// A turn in 1.4 s while work is under way.
 pub(crate) struct Spinner;
 
 impl gpui::Render for Spinner {

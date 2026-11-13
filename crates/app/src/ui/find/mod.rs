@@ -1,4 +1,4 @@
-//! `FindScreen.qml`: the text of the mods' files searched, the matches by mod and file, where and
+//! The text of the mods' files searched, the matches by mod and file, where and
 //! what is searched beside them, and the file of the match chosen.
 
 mod layout;
@@ -14,8 +14,7 @@ use crate::changes::Changes;
 use crate::jobs::Lane;
 use crate::words::why_not;
 use crate::workspace::find::{
-    Folded, FoundMods, Op, Options, Prepared, PreviewShown, Recent, Request, RowRef, TypeOffer,
-    type_offers,
+    FoundMods, Op, Options, Prepared, PreviewShown, Recent, Request, RowRef, TypeOffer, type_offers,
 };
 use gpui::{AppContext, Context, Entity, EventEmitter, FocusHandle, Pixels, Window};
 use rimstack_core::base::sentence::Sentence;
@@ -514,33 +513,7 @@ impl Find {
         let Some(folded) = app.find_change(|results| results.toggle(at)) else {
             return;
         };
-        match folded {
-            Folded::Hid => {
-                let inside = |other: &&RowRef| match at.is_mod() {
-                    true => other.same_mod(at),
-                    false => other.same_file(at),
-                };
-                let below = self.rows[row + 1..].iter().take_while(inside).count();
-                if let Some(current) = self.current
-                    && current > row
-                {
-                    self.current = match current > row + below {
-                        true => Some(current - below),
-                        false => None,
-                    };
-                }
-                self.rows.drain(row + 1..row + 1 + below);
-            }
-            Folded::Showed(rows) => {
-                let coming = rows.len();
-                self.rows.splice(row + 1..row + 1, rows);
-                if let Some(current) = self.current.as_mut()
-                    && *current > row
-                {
-                    *current += coming;
-                }
-            }
-        }
+        self.current = folded.apply(&mut self.rows, row, self.current);
         self.tops = None;
         cx.notify();
     }

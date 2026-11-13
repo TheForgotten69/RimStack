@@ -1,4 +1,4 @@
-//! The load order changed from the Mods tab, as `Mods.qml` and the `ModsData` commands did:
+//! The load order changed from the Mods tab:
 //! activating and moving mods, Undo and Redo, Save, Sort, and choosing several mods.
 
 use super::Mods;
@@ -277,13 +277,7 @@ impl Mods {
         self.order.preview_sort(&app);
         self.closed_note.clear();
         self.show(cx);
-        let slides = self
-            .active
-            .rows
-            .iter()
-            .filter(|r| !r.is_header && r.moved_from > 0)
-            .map(|r| (r.mod_id, r.moved_from - r.number))
-            .collect();
+        let slides = crate::workspace::load_order::sort_slides(&self.active.rows);
         self.list(Side::Active)
             .update(cx, |list, cx| list.slide(slides, cx));
         if let Some(position) = self.order.first_moved()
@@ -300,15 +294,10 @@ impl Mods {
             self.order.drop_sort(&app);
             return self.show(cx);
         }
-        if !self.order.previewing() {
+        let Some(sorted) = self.order.keep_sort_noted(&app) else {
             return;
-        }
-        let moves = self.order.sort_move_count();
-        let before = app.snapshot("@sorting", app.session().current());
-        self.order.keep_sort(&app);
+        };
         self.changed(cx);
-        let sorted = say_n!(moves, "Sorted: {} mod moved", "Sorted: {} mods moved");
-        app.note_change(sorted.clone(), before.as_deref());
         self.done_said(sorted, cx);
     }
 }
@@ -365,7 +354,7 @@ impl Mods {
         self.keep_selection(ids, in_active, cx);
     }
 
-    /// Every mod the list shows, as `ModList.qml` chose from its first to its last.
+    /// Every mod the list shows.
     pub(super) fn select_all(&mut self, side: Side, cx: &mut Context<Self>) {
         let ids = self
             .shown(side)
@@ -595,7 +584,7 @@ impl Mods {
         self.show(cx);
     }
 
-    /// The sentences Play shows of what stands in its way, as `Main.qml`'s `inTheWay`.
+    /// The sentences Play shows of what stands in its way.
     pub fn in_the_way_said(&self, cx: &gpui::App) -> Vec<String> {
         let (errors, sort_pending, dirty) = self.what_is_in_the_way(cx);
         let errors_count = self.order.errors_and_warnings().0;

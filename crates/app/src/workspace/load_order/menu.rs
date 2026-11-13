@@ -8,7 +8,7 @@ use rimstack_core::mods::list::Row;
 use rimstack_core::{say, say_n};
 use serde::Serialize;
 
-/// The window keeps one handler for each kind (`RowMenu.qml`, `doers`).
+/// The window keeps one handler for each kind (`doers`).
 #[derive(Serialize)]
 #[serde(
     tag = "action",

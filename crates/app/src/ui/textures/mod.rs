@@ -1,4 +1,4 @@
-//! `TexturesScreen.qml`: how many textures have a DDS beside them, per mod; converting, removing
+//! How many textures have a DDS beside them, per mod; converting, removing
 //! and skipping; and the DDS files of every mod the game would refuse.
 
 mod screen;

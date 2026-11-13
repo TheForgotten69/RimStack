@@ -1,4 +1,4 @@
-//! `FindSidebar.qml` and `FindPick.qml`: where and what is searched, the file types offered as
+//! Where and what is searched, the file types offered as
 //! they are typed, and the mods with matches to keep one of.
 
 use super::Find;
@@ -21,7 +21,7 @@ use std::rc::Rc;
 
 type Picked = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// `FindPick.qml`: a check box, or a round one of a group, with its words and a count.
+/// A check box, or a round one of a group, with its words and a count.
 #[derive(IntoElement)]
 struct Pick {
     id: ElementId,

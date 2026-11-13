@@ -1,4 +1,4 @@
-//! `TopBar.qml`: the app's name, the sections, Search and Play.
+//! The app's name, the sections, Search and Play.
 
 use super::shell::Shell;
 use super::theme::{self, Theme};
@@ -126,7 +126,10 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
         true => put(&say!("Lists")),
         false => put(&say!("List: {}", list_name)),
     };
-    let dirty = !demo && super::app(cx).session().is_dirty();
+    let dirty = !demo
+        && super::app(cx)
+            .session_if_read()
+            .is_some_and(|session| session.is_dirty());
     let play = match running {
         true => put(&say!("Running")),
         false => put(&say!("Play")),

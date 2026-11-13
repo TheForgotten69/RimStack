@@ -1,4 +1,4 @@
-//! `SettingsScreen.qml`: the game's folders, the appearance, how Sort decides, the Steam key and
+//! The game's folders, the appearance, how Sort decides, the Steam key and
 //! RimStack itself, one part at a time or every setting a search finds.
 
 mod line;

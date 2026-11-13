@@ -1,4 +1,4 @@
-//! `ModsScreen.qml`'s frame: the three panes and the dividers dragged between them, the rail the
+//! The frame: the three panes and the dividers dragged between them, the rail the
 //! inactive mods fold into, and the drawer it opens over the load order.
 
 use super::Mods;
@@ -151,7 +151,7 @@ impl Mods {
         cx.notify();
     }
 
-    /// A divider holding the keys moved by Left or Right, as `ModsScreen.qml` moved it.
+    /// A divider holding the keys moved by Left or Right.
     pub(super) fn nudge_grip(
         &mut self,
         grip: Grip,

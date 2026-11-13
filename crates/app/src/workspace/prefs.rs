@@ -130,7 +130,7 @@ impl App {
     }
 
     /// The interface size of RimStack before 0.6 (`interfaceScale` in the settings) carried into
-    /// the text size once, as `Main.qml` carried it, and forgotten.
+    /// the text size once, and forgotten.
     pub fn carry_interface_scale(&self) -> Result<(), Error> {
         let size = self
             .settings()

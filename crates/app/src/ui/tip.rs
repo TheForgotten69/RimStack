@@ -1,4 +1,4 @@
-//! `Tip.qml` and the window's `ToolTip`: words about a control, shown when the pointer has
+//! Words about a control, shown when the pointer has
 //! rested on it.
 
 use super::theme::{self, Theme};
@@ -9,7 +9,7 @@ use gpui::{
 };
 use std::time::Duration;
 
-/// Main.qml's timer before a tip shows.
+/// The timer before a tip shows.
 const DELAY: Duration = Duration::from_millis(600);
 
 struct Tip(SharedString);

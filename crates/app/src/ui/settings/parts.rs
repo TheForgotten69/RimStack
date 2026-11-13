@@ -1,4 +1,4 @@
-//! The first two parts of `SettingsScreen.qml`: the game and its folders, and the appearance.
+//! The first two parts of the settings screen: the game and its folders, and the appearance.
 
 use super::Settings;
 use super::line::{Line, Row, path, words};

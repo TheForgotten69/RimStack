@@ -260,6 +260,8 @@ pub struct GroupedList {
     shown_by: Option<(SortKey, bool)>,
     rows: Vec<Row>,
     facts: Arc<HashMap<ModId, Arc<Facts>>>,
+    /// While held, the rows are made again only once, when let go.
+    held: bool,
 }
 
 fn haystack(m: &Mod) -> String {
@@ -323,9 +325,20 @@ impl GroupedList {
             shown_by: None,
             rows: Vec::new(),
             facts: Arc::default(),
+            held: false,
         };
         list.rebuild();
         list
+    }
+
+    /// Many edits in a row: the rows stay as they were until `let_go`.
+    pub fn hold(&mut self) {
+        self.held = true;
+    }
+
+    pub fn let_go(&mut self) {
+        self.held = false;
+        self.rebuild();
     }
 
     pub fn flat(mods: Vec<Mod>) -> Self {
@@ -579,6 +592,9 @@ impl GroupedList {
     }
 
     fn rebuild(&mut self) {
+        if self.held {
+            return;
+        }
         self.unmatched = !self.filter.is_empty() && !(0..self.mods.len()).any(|i| self.matches(i));
         if let Some((key, descending)) = self.shown_by {
             let shown: Vec<usize> = (0..self.mods.len()).filter(|&i| self.shows(i)).collect();

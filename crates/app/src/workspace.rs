@@ -38,7 +38,7 @@ pub mod upkeep;
 mod window;
 pub use key::KeyState;
 pub use prefs::ModsView;
-pub use settings::{judge_folder, newest_release, short_contrast};
+pub use settings::{font_choices, fonts_matching, judge_folder, newest_release, short_contrast};
 
 pub static STARTED: OnceLock<Instant> = OnceLock::new();
 
@@ -351,6 +351,11 @@ impl App {
         self.conflicts_generation.load(Ordering::Relaxed)
     }
 
+    /// `None` until the mods are first read, rather than waiting for them: for what is drawn.
+    pub fn session_if_read(&self) -> Option<MutexGuard<'_, Session>> {
+        self.session.get().map(|session| session.held())
+    }
+
     pub fn session(&self) -> MutexGuard<'_, Session> {
         self.session
             .get_or_init(|| Mutex::new(Session::new(self.install().on_disk())))
@@ -370,13 +375,13 @@ impl App {
         self.install().texture_count(mod_root)
     }
 
-    /// Whoever still shows the earlier reading holds it until done.
     /// `rescan` off the caller's thread; asked again while one runs, it reads once more after.
     pub fn rescan_soon(self: &Arc<Self>) {
         let app = self.clone();
         self.rescans.ask("rescan", (), move |()| app.rescan());
     }
 
+    /// Whoever still shows the earlier reading holds it until done.
     pub fn rescan(&self) {
         let fresh = install::Install::of(self.paths()).read_all();
         self.install.put(fresh);

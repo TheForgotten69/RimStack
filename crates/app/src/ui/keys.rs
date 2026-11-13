@@ -1,4 +1,4 @@
-//! `KeysSheet.qml` and `KeyCap.qml`, and the keys the window answers wherever the keys are.
+//! The keys sheet and the key caps, and the keys the window answers wherever the keys are.
 
 use super::button::Btn;
 use super::shell::Shell;
@@ -107,7 +107,7 @@ fn groups() -> Vec<(Sentence, Vec<(Sentence, Sentence)>)> {
     ]
 }
 
-/// `KeyCap.qml`'s width for its text.
+/// The key cap's width for its text.
 fn cap_width(window: &Window, theme: &Theme, text: &str) -> Pixels {
     let size = theme.sized(20.);
     size.max(measure(window, theme, text, theme.caption(), theme.medium) + theme::GAP_MEDIUM)

@@ -98,6 +98,18 @@ impl LoadOrder {
         }
     }
 
+    /// Sort's preview kept as the load order, in the history with the list before it: what to
+    /// tell, `None` with no preview.
+    pub fn keep_sort_noted(&mut self, app: &App) -> Option<Sentence> {
+        self.preview.as_ref()?;
+        let moves = self.sort_move_count();
+        let before = app.snapshot("@sorting", app.session().current());
+        self.keep_sort(app);
+        let sorted = say_n!(moves, "Sorted: {} mod moved", "Sorted: {} mods moved");
+        app.note_change(sorted.clone(), before.as_deref());
+        Some(sorted)
+    }
+
     pub fn drop_sort(&mut self, app: &App) {
         if let Some(preview) = self.preview.take() {
             self.active.set_grouped(preview.grouped_before);

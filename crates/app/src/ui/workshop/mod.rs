@@ -1,4 +1,4 @@
-//! `BrowseView.qml`: the Workshop's mods searched in the community database, or through Steam
+//! The Workshop's mods searched in the community database, or through Steam
 //! with a key; filters beside them, and the chosen one's details or the download list.
 
 mod details;

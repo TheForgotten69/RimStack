@@ -1,4 +1,4 @@
-//! `activeFocusOnTab` and `FocusRing.qml`: a control Tab reaches, and the ring drawn around it
+//! A control Tab reaches, and the ring drawn around it
 //! while it holds the keys. A click does not give it the keys, as in Qt: the text being typed
 //! keeps them.
 
@@ -45,7 +45,7 @@ pub fn reachable(
         .when(shown, |d| d.child(ring(theme, corner, on_accent)))
 }
 
-/// `FocusRing.qml`: 2 wide, 4 outside, in the focus colour with its halo.
+/// 2 wide, 4 outside, in the focus colour with its halo.
 fn ring(theme: &Theme, corner: Pixels, on_accent: bool) -> AnyElement {
     let c = &theme.colours;
     let tone = if on_accent { c.on_selected } else { c.focus };

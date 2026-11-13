@@ -1,4 +1,4 @@
-//! How `SavesScreen.qml` is laid out: the heading with the RimSaves folders, the saves with their
+//! How the saves screen is laid out: the heading with the RimSaves folders, the saves with their
 //! verdicts, and the chosen save beside them.
 
 mod row;

@@ -1,5 +1,5 @@
-//! `--selftest`: the load order scrolled from top to bottom in ten seconds, as `ModsChecks.qml`
-//! did. Each frame moves the list and draws it again, as a wheel's glide does.
+//! `--selftest`: the load order scrolled from top to bottom in ten seconds.
+//! Each frame moves the list and draws it again, as a wheel's glide does.
 
 use super::list::ModList;
 use gpui::{Context, Window};

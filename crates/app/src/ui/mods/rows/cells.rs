@@ -1,4 +1,4 @@
-//! `ModRow.qml`'s cells: a mod's name and what is said beside it, and the load order's columns.
+//! The row's cells: a mod's name and what is said beside it, and the load order's columns.
 
 use super::headings::tipped_label;
 use super::{Around, Columns, category_icon};
@@ -48,7 +48,7 @@ pub(super) struct Shown<'a> {
     pub mark: Option<&'a Mark>,
 }
 
-/// As `ModRow.qml` fits a name: what is beside it takes its room first, the tags only while
+/// How a name fits the row: what is beside it takes its room first, the tags only while
 /// they leave the name its whole width.
 pub(super) fn fit(
     window: &Window,

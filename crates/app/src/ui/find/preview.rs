@@ -1,4 +1,4 @@
-//! `FindPreview.qml`: the file of the match chosen around it, what opens and copies it, and a
+//! The file of the match chosen around it, what opens and copies it, and a
 //! search inside it.
 
 use super::Find;

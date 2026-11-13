@@ -1,4 +1,4 @@
-//! The pieces `SettingsScreen.qml` lays each setting out with: `Line` (its name, what sets it,
+//! The pieces the settings screen lays each setting out with: `Line` (its name, what sets it,
 //! the way back to the default, the words under it), `Folder`, `GroupTitle` and `PathText`.
 
 use super::Settings;

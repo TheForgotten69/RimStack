@@ -373,3 +373,11 @@ impl LoadOrder {
         }
     }
 }
+
+/// How far each mod Sort's preview moved slides to its place, by its id: rows from where it was.
+pub fn sort_slides(rows: &[RowView]) -> std::collections::HashMap<i32, i32> {
+    rows.iter()
+        .filter(|r| !r.is_header && r.moved_from > 0)
+        .map(|r| (r.mod_id, r.moved_from - r.number))
+        .collect()
+}

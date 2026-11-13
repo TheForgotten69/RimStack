@@ -1,4 +1,4 @@
-//! `ModRow.qml`: a category heading, a group under a tag, or a mod.
+//! A category heading, a group under a tag, or a mod.
 
 mod cells;
 mod headings;
@@ -16,7 +16,7 @@ use gpui::{
 };
 use rimstack_core::say;
 
-/// What the load order shows beside a mod's name, as `ModList.qml` fits it to its width.
+/// What the load order shows beside a mod's name.
 pub struct Columns {
     pub number: Pixels,
     /// The room a mod's name has before it is cut in the middle.
@@ -73,7 +73,7 @@ impl gpui::Render for Ghost {
     }
 }
 
-/// What follows the pointer while mods are dragged, as `ModsScreen.qml`'s ghost: what is held,
+/// What follows the pointer while mods are dragged: what is held,
 /// beside the pointer. `grabbed` is where the row was taken, from the row's corner, which GPUI
 /// draws this at.
 pub struct HeldGhost {

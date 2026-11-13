@@ -1,4 +1,4 @@
-//! `SavesScreen.qml`: the game's saves, newest first, each against the load order now; the chosen
+//! The game's saves, newest first, each against the load order now; the chosen
 //! one's colony, what it lacks, and its list to use or keep.
 
 mod screen;

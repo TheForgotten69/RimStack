@@ -477,7 +477,6 @@ impl Appearance {
     }
 }
 
-/// `Theme.qml` in Rust: the same colours and the same sizes, rounded the same way.
 #[derive(Clone, Debug)]
 pub struct Theme {
     pub appearance: Appearance,

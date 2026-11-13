@@ -1,4 +1,4 @@
-//! `ListsMenu.qml` and `HistoryMenu.qml`: the load orders kept under a name, the ones from before
+//! The load orders kept under a name, the ones from before
 //! a change, the list on the clipboard or at Rentry.co; and what RimStack changed, to take back.
 
 use super::button::Btn;
@@ -45,6 +45,7 @@ pub struct Lists {
     fading: Option<(Which, Bounds<Pixels>)>,
     focus: FocusHandle,
     before: Option<FocusHandle>,
+    reading: crate::jobs::Lane,
 }
 
 impl Lists {
@@ -68,6 +69,7 @@ impl Lists {
             fading: None,
             focus: cx.focus_handle(),
             before: None,
+            reading: Default::default(),
         };
         if !demo {
             lists.hear(cx);
@@ -84,12 +86,18 @@ impl Lists {
         });
     }
 
+    /// Every kept list's file is read and parsed: off the window's thread.
     fn read(&mut self, cx: &mut Context<Self>) {
         let app = super::app(cx);
-        self.saved = app.saved_lists();
-        self.snapshots = app.recent_snapshots();
-        self.history = app.history();
-        cx.notify();
+        self.reading.run(
+            "lists",
+            cx,
+            move |_| (app.saved_lists(), app.recent_snapshots(), app.history()),
+            |lists, (saved, snapshots, history), cx| {
+                (lists.saved, lists.snapshots, lists.history) = (saved, snapshots, history);
+                cx.notify();
+            },
+        );
     }
 
     /// Opens a popup from the button at `below`, or closes it when it was open.

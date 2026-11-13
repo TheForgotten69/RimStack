@@ -1,4 +1,4 @@
-//! `Btn.qml` and `Chip.qml`: what is pressed, and the small tags beside a name. Both are reached
+//! What is pressed, and the small tags beside a name. Both are reached
 //! by Tab when they can be pressed, tell a screen reader what they are, and show their tip.
 
 use super::focus;
@@ -15,7 +15,6 @@ use std::rc::Rc;
 
 type Click = Box<dyn Fn(&ClickEvent, &mut Window, &mut Cx)>;
 
-/// `Btn.qml`.
 #[derive(IntoElement)]
 pub struct Btn {
     id: ElementId,
@@ -268,7 +267,6 @@ impl RenderOnce for Btn {
     }
 }
 
-/// `Chip.qml`.
 #[derive(IntoElement)]
 pub struct Chip {
     id: Option<ElementId>,

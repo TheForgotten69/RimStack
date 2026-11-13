@@ -1,4 +1,4 @@
-//! The Mods tab when the mods could not be read, as `ActivePane.qml` said it: why, and the game
+//! The Mods tab when the mods could not be read: why, and the game
 //! folder to choose when none was found.
 
 use super::Mods;
@@ -12,6 +12,23 @@ use gpui::{
 use rimstack_core::say;
 
 impl Mods {
+    /// What `unread` shows beside the problem, read when the mods fail to be read or the
+    /// settings change: it looks at the disk.
+    pub(super) fn judge_unread(&mut self, cx: &mut Context<Self>) {
+        if self.demo || self.order.problem.is_empty() || self.order.is_installed() {
+            self.why_unread = None;
+            return;
+        }
+        let app = crate::ui::app(cx);
+        let no_folders = app.settings_report().no_mod_folders;
+        let chosen = app.settings().get("game").unwrap_or_default().to_string();
+        let standing = (!chosen.is_empty())
+            .then(|| crate::workspace::judge_folder("game", &chosen))
+            .filter(|verdict| !verdict.ok)
+            .map(|verdict| verdict.said);
+        self.why_unread = Some((no_folders, standing));
+    }
+
     /// Why nothing could be read; `None` while the mods are read or were.
     pub(super) fn unread(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<gpui::Div> {
         if self.demo || self.order.problem.is_empty() || self.order.is_installed() {
@@ -19,13 +36,8 @@ impl Mods {
         }
         let c = &theme.colours;
         let problem = put(&self.order.problem);
-        let app = crate::ui::app(cx);
-        let no_folders = app.settings_report().no_mod_folders;
-        let chosen = app.settings().get("game").unwrap_or_default().to_string();
-        let standing = (!chosen.is_empty())
-            .then(|| crate::workspace::judge_folder("game", &chosen))
-            .filter(|verdict| !verdict.ok)
-            .map(|verdict| put(&verdict.said));
+        let (no_folders, standing) = self.why_unread.clone()?;
+        let standing = standing.map(|said| put(&said));
         let text = |colour, said: String| {
             div()
                 .w_full()

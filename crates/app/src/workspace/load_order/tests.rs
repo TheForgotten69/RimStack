@@ -668,3 +668,102 @@ fn a_drag_takes_the_selection_along_only_when_it_starts_on_part_of_it() {
     );
     assert!(Holding::of(None, "Gone", &[core, roads]).ids.is_empty());
 }
+
+#[cfg(unix)]
+#[test]
+fn mods_activated_together_each_load_after_what_they_follow() {
+    let (_tmp, app) = crate::ui::made_up::made_up();
+    let mut order = LoadOrder::read(&app, true, None);
+    let id_of = |order: &LoadOrder, side: Side, package: &str| {
+        let mods = order.list(side).mods();
+        mods.iter()
+            .find(|m| m.id == package)
+            .and_then(|m| m.installed)
+    };
+    let inactive: Vec<ModId> = order
+        .list(Side::Inactive)
+        .mods()
+        .iter()
+        .filter_map(|m| m.installed)
+        .collect();
+    assert!(id_of(&order, Side::Inactive, "fixture.mod042").is_some());
+    order.take_all(&app, Side::Inactive, &inactive, None);
+    let place = |package: &str| {
+        let id = id_of(&order, Side::Active, package).unwrap();
+        order.list(Side::Active).position_of(id).unwrap()
+    };
+    for n in (42..=98).step_by(7) {
+        let (then, first) = (
+            format!("fixture.mod{n:03}"),
+            format!("fixture.mod{:03}", n - 1),
+        );
+        assert!(place(&then) > place(&first), "{then} loads after {first}");
+    }
+    assert!(order.list(Side::Inactive).mods().is_empty());
+}
+
+#[test]
+#[ignore = "reads this machine's own install; RIMSTACK_TIME_HOME names a scratch folder"]
+fn times_the_mods_tab_on_this_machines_install() {
+    let Ok(scratch) = std::env::var("RIMSTACK_TIME_HOME") else {
+        return;
+    };
+    let scratch = std::path::PathBuf::from(scratch);
+    let home = std::path::PathBuf::from(std::env::var("HOME").unwrap());
+    let app = App::new(
+        home,
+        &scratch.join("settings"),
+        &scratch.join("data"),
+        Default::default(),
+    );
+    let time = |what: &str, f: &mut dyn FnMut()| {
+        let runs = 5;
+        let started = std::time::Instant::now();
+        for _ in 0..runs {
+            f();
+        }
+        eprintln!("{what}: {:?}", started.elapsed() / runs);
+    };
+    let started = std::time::Instant::now();
+    let mut order = LoadOrder::read(&app, true, None);
+    eprintln!("read: {:?}", started.elapsed());
+    eprintln!(
+        "mods: {} active, {} inactive",
+        order.rows(&app, Side::Active).len(),
+        order.rows(&app, Side::Inactive).len()
+    );
+    if std::env::var("RIMSTACK_TIME_ALL").is_ok() {
+        let ids: Vec<ModId> = order
+            .rows(&app, Side::Inactive)
+            .iter()
+            .filter(|r| !r.is_header)
+            .filter_map(|r| ModId::from_packed(r.mod_id))
+            .collect();
+        let started = std::time::Instant::now();
+        order.take_all(&app, Side::Inactive, &ids, None);
+        eprintln!("take_all {}: {:?}", ids.len(), started.elapsed());
+        eprintln!("now {} active", order.rows(&app, Side::Active).len());
+    }
+    time("recheck", &mut || order.recheck(&app));
+    time("refile", &mut || order.refile(&app));
+    time("settle", &mut || order.settle(&app));
+    time("rows both", &mut || {
+        let _ = order.rows(&app, Side::Active);
+        let _ = order.rows(&app, Side::Inactive);
+    });
+    time("overview", &mut || {
+        let _ = order.overview(&app);
+    });
+    time("fresh", &mut || {
+        let _ = order.fresh(&app, Side::Inactive);
+    });
+    time("in_conflict", &mut || {
+        let _ = order.in_conflict(&app);
+    });
+    time("orders", &mut || {
+        let _ = order.orders();
+    });
+    time("set_filter a", &mut || order.set_filter("a"));
+    time("set_filter ''", &mut || order.set_filter(""));
+    time("sync", &mut || order.sync(&app));
+}

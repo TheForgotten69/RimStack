@@ -1,5 +1,5 @@
-//! What `BrowseView.qml` lays out: the search row, the related banner, the filters, the results
-//! as `ResultCard.qml`s in a grid, and the details or the download list beside them.
+//! What the Workshop screen lays out: the search row, the related banner, the filters, the results
+//! as result cards in a grid, and the details or the download list beside them.
 
 use super::details::fill_text;
 use super::{Workshop, related_said};
@@ -526,7 +526,6 @@ impl Workshop {
     }
 }
 
-/// `ResultCard.qml`.
 #[derive(IntoElement)]
 struct Card {
     at: usize,

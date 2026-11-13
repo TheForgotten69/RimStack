@@ -1,4 +1,4 @@
-//! `Columns.qml` and the View menu: the load order's columns, their widths and order, the
+//! The View menu: the load order's columns, their widths and order, the
 //! headings, and how each list is ordered, as `[Mods]` keeps them.
 
 use super::Mods;
@@ -514,7 +514,7 @@ impl Mods {
             .clone()
     }
 
-    /// A heading's keys, as `ActivePane.qml` took them: the menu key opens the columns' menu,
+    /// A heading's keys: the menu key opens the columns' menu,
     /// Ctrl + Alt + Left or Right moves the column. Enter and Space press it, as GPUI presses a
     /// control that holds the keys.
     pub(super) fn heading_key(

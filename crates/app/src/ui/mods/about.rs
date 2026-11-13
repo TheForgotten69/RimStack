@@ -1,4 +1,4 @@
-//! `AboutTab.qml`: what stands before playing a mod, its description, the textures it shares,
+//! What stands before playing a mod, its description, the textures it shares,
 //! what replaces it, its facts, and its tags and note.
 
 use super::chosen::{DetailsView, defined};

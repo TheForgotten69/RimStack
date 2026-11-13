@@ -1,4 +1,4 @@
-//! The Latest changes card of `AboutTab.qml`: a Workshop mod's change notes, fetched when asked,
+//! The Latest changes card of the about tab: a Workshop mod's change notes, fetched when asked,
 //! or a Git checkout's last commits.
 
 use super::chosen::DetailsView;

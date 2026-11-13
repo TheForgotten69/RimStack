@@ -1,4 +1,4 @@
-//! `DownloadsScreen.qml`: what is newer, what changed since the game last started, what Steam or
+//! What is newer, what changed since the game last started, what Steam or
 //! Git should fetch, and the download list beside it.
 
 mod changed;

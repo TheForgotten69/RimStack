@@ -1,5 +1,5 @@
-//! What `FindScreen.qml` lays out: the heading, the search row, and the matches between the
-//! options and the preview; `FindRow.qml` and `FindKeys.qml` for the matches.
+//! What the find screen lays out: the heading, the search row, and the matches between the
+//! options and the preview.
 
 use super::Find;
 use super::layout::Layout;
@@ -354,7 +354,7 @@ impl Find {
     }
 }
 
-/// `EmptyState.qml`, in the middle of what holds it.
+/// In the middle of what holds it.
 fn empty_state(theme: &Theme, width: Pixels, title: String, hint: String) -> AnyElement {
     div()
         .absolute()
@@ -368,7 +368,7 @@ fn empty_state(theme: &Theme, width: Pixels, title: String, hint: String) -> Any
         .into_any_element()
 }
 
-/// A row of the matches, as `FindRow.qml` draws a mod, a file or a line.
+/// A row of the matches.
 struct Row {
     at: usize,
     current: bool,

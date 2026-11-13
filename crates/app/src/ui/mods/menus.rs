@@ -1,4 +1,4 @@
-//! `RowMenu.qml` and the menus of a row's right click: a mod's, a tag group's, a category's;
+//! The menus of a row's right click: a mod's, a tag group's, a category's;
 //! each entry the load order gives runs here, or is asked of the window.
 
 use super::Mods;
@@ -179,7 +179,7 @@ impl Mods {
         menu::open_at(at, shown, window, cx);
     }
 
-    /// What an entry of the load order's menus does, as `RowMenu.qml`'s `doers` did.
+    /// What an entry of the load order's menus does.
     fn run(&mut self, action: &Action, window: &mut Window, cx: &mut Context<Self>) {
         match action {
             Action::MoveSelected => self.move_selected(cx),

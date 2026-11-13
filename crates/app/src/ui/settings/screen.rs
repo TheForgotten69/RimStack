@@ -1,4 +1,4 @@
-//! How `SettingsScreen.qml` is laid out: the parts at the left with a search over every setting,
+//! How the settings screen is laid out: the parts at the left with a search over every setting,
 //! the page in the middle at most `sized(860)` wide, and the font picker under its button.
 
 use super::Settings;
@@ -157,12 +157,9 @@ impl Settings {
                 .on_click(cx.listener(|s, _, window, cx| {
                     s.fonts_open = !s.fonts_open;
                     if s.fonts_open {
-                        let mut names = window.text_system().all_font_names();
-                        names.sort_by_key(|name| name.to_lowercase());
-                        names.dedup();
-                        let mut fonts: Vec<SharedString> = vec![SharedString::default()];
-                        fonts.extend(names.into_iter().map(SharedString::from));
-                        s.fonts = Rc::new(fonts);
+                        let names = window.text_system().all_font_names();
+                        let fonts = crate::workspace::font_choices(names);
+                        s.fonts = Rc::new(fonts.into_iter().map(SharedString::from).collect());
                         s.fields
                             .fonts
                             .update(cx, |field, cx| field.set_text("", cx));
@@ -176,18 +173,9 @@ impl Settings {
             let wanted = self.fields.fonts.read(cx).text().to_lowercase();
             let system = put(&say!("System font"));
             let shown: Rc<Vec<SharedString>> = Rc::new(
-                self.fonts
-                    .iter()
-                    .filter(|name| {
-                        if name.is_empty() {
-                            &system
-                        } else {
-                            name.as_ref()
-                        }
-                        .to_lowercase()
-                        .contains(&wanted)
-                    })
-                    .cloned()
+                crate::workspace::fonts_matching(&self.fonts, &wanted, &system)
+                    .into_iter()
+                    .map(|at| self.fonts[at].clone())
                     .collect(),
             );
             let height = theme.sized(30.);

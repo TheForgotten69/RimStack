@@ -1,4 +1,4 @@
-//! `ChangedCard.qml`: the mods changed since the game last started, by day, with their notes.
+//! The mods changed since the game last started, by day, with their notes.
 
 use super::screen::text_fill;
 use super::{Downloads, ShowMod};
@@ -281,7 +281,7 @@ impl Downloads {
         Some(card.render(theme, Some((width, window))).into_any_element())
     }
 
-    /// The changed list's keys, as `ChangedCard.qml` took them: the arrows go from row to row,
+    /// The changed list's keys: the arrows go from row to row,
     /// Enter shows the mod, N opens its change notes.
     fn changed_key(
         &mut self,
@@ -318,7 +318,7 @@ impl Downloads {
         cx.stop_propagation();
     }
 
-    /// `AskSteam.qml`: what the notes button says while Steam is asked, or waited for.
+    /// What the notes button says while Steam is asked, or waited for.
     pub fn ask_steam_label(&self) -> String {
         let Some(state) = self.notes_state.as_ref().filter(|_| self.notes_busy) else {
             return match self.notes_busy {

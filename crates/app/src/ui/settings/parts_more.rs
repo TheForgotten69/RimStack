@@ -1,4 +1,4 @@
-//! The last three parts of `SettingsScreen.qml`: how Sort decides, the Steam key, and RimStack.
+//! The last three parts of the settings screen: how Sort decides, the Steam key, and RimStack.
 
 use super::Settings;
 use super::line::{Line, Row, group, path, under, words};

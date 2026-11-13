@@ -1,5 +1,5 @@
 //! A list whose rows' heights are known before they are drawn: only the rows in view are made,
-//! each at its exact place, and the wheel glides as `Wheel.qml` made it glide.
+//! each at its exact place, and the wheel glides and the wheel glides.
 
 use super::theme::{self, Theme};
 use super::widgets::with_alpha;
@@ -14,7 +14,7 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-/// How long a wheel notch takes to land, as `Wheel.qml` eased it.
+/// How long a wheel notch takes to land.
 const GLIDE: Duration = Duration::from_millis(200);
 
 /// Where a list is scrolled, and where a wheel notch is taking it.
@@ -274,7 +274,7 @@ pub fn bar_room(theme: &Theme) -> Pixels {
     theme::GAP_HAIR + theme.sized(9.) + theme::GAP_LINE + px(2.) + theme::GAP_HAIR
 }
 
-/// `Scroller.qml`: the bar at a scrolled area's right, its thumb held to scroll; `view` is drawn
+/// The bar at a scrolled area's right, its thumb held to scroll; `view` is drawn
 /// again as the thumb moves.
 pub fn bar(theme: &Theme, scroll: Scrolling, view: EntityId) -> impl IntoElement {
     let (colour, strong) = (with_alpha(theme.colours.ink3, 0.6), theme.colours.ink2);

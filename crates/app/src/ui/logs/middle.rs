@@ -1,4 +1,4 @@
-//! The middle of `LogsScreen.qml`: the log's heading and its controls, what changed since the
+//! The middle of the logs screen: the log's heading and its controls, what changed since the
 //! last clean launch, the filter, and the errors, the mods they point at, or the log's lines.
 
 mod errors;

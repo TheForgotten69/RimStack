@@ -1,4 +1,4 @@
-//! `SortMoves.qml` and the slowest mods of `ListSummary.qml`: what Sort's preview moves and why,
+//! What Sort's preview moves and why,
 //! and the mods that took longest at the game's last start.
 
 use super::chosen::DetailsView;

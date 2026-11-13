@@ -1,4 +1,4 @@
-//! The bands of `ActivePane.qml` under its title: what is not saved, why a save failed, the
+//! The bands under the load order's title: what is not saved, why a save failed, the
 //! list changed on disk, and what Sort would do.
 
 use super::Mods;
@@ -66,11 +66,13 @@ impl Mods {
         let previewing = self.order.previewing();
         let (dirty, unsaved) = {
             let app = crate::ui::app(cx);
-            let session = app.session();
-            (
-                session.is_dirty() && self.order.is_installed(),
-                put(&session.changes().said()),
-            )
+            match app.session_if_read() {
+                Some(session) => (
+                    session.is_dirty() && self.order.is_installed(),
+                    put(&session.changes().said()),
+                ),
+                None => (false, String::new()),
+            }
         };
         let band = |tone| {
             div()

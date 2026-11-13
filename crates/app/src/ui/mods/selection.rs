@@ -1,4 +1,4 @@
-//! `BulkBar.qml` and `SelectionSummary.qml`: what is done to several mods chosen at once, and
+//! What is done to several mods chosen at once, and
 //! what the details show of them.
 
 use super::Mods;
@@ -28,7 +28,7 @@ impl Mods {
     }
 
     /// The bar under the panes while several mods are chosen.
-    /// `BulkBar.qml`: the actions on the mods selected, growing in as a second one is selected
+    /// The actions on the mods selected, growing in as a second one is selected
     /// and shrinking away as the selection goes below two.
     pub(super) fn bulk_bar(&self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
         use gpui::AnimationExt;
@@ -162,7 +162,7 @@ impl Mods {
 }
 
 impl DetailsView {
-    /// `SelectionSummary.qml`, `width` wide.
+    /// The summary, `width` wide.
     pub(super) fn selection_pane(
         &self,
         theme: &Theme,

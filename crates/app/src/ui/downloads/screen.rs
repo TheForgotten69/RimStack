@@ -1,4 +1,4 @@
-//! The page `DownloadsScreen.qml` drew: the paste row, the update status, the cards.
+//! The downloads page: the paste row, the update status, the cards.
 
 use super::{Downloads, ShowMod};
 use crate::ui::card::Card;

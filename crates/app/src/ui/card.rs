@@ -1,4 +1,4 @@
-//! `Card.qml`: a titled part of a page, with a note beside its title, actions at its right (on a
+//! A titled part of a page, with a note beside its title, actions at its right (on a
 //! line of their own when the title row is too narrow), and an arrow when it folds.
 
 use super::theme::{self, Theme};
@@ -14,12 +14,11 @@ use rimstack_core::base::sentence::Sentence;
 
 pub type Fold = Box<dyn Fn(&ClickEvent, &mut Window, &mut Cx)>;
 
-/// `Card.qml`'s `Behavior on shown`.
 const UNFOLDING: std::time::Duration = super::motion::QUICK;
 
 thread_local! {
     /// The cards unfolded by a press, and when: only those fade their body in, not a card shown
-    /// with its page, as a QML `Behavior` runs on a change alone.
+    /// with its page.
     static UNFOLDED: std::cell::RefCell<std::collections::HashMap<ElementId, std::time::Instant>> =
         Default::default();
 }
@@ -119,7 +118,7 @@ impl Card {
         self
     }
 
-    /// As tall a head as one with actions: `Card.qml` counted an action not shown yet.
+    /// As tall a head as one with actions: an action not shown yet counts.
     pub fn tall(mut self) -> Self {
         self.tall = true;
         self

@@ -1,4 +1,4 @@
-//! The right of `LogsScreen.qml`: the chosen error, its mods, what it logged and its stack trace;
+//! The right of the logs screen: the chosen error, its mods, what it logged and its stack trace;
 //! or, in the Mods view, the chosen mod and its errors.
 
 use super::{Logs, View};

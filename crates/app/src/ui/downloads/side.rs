@@ -1,4 +1,4 @@
-//! `AddMods.qml`: what a look-up found, the download list, and SteamCMD; beside the page when
+//! What a look-up found, the download list, and SteamCMD; beside the page when
 //! the window is wide enough, at its top otherwise.
 
 use super::Downloads;
@@ -220,7 +220,7 @@ impl Downloads {
         )
     }
 
-    /// `ListPane.qml`: the list, and what can be done with it. In a `pane` of its own, as the
+    /// The list, and what can be done with it. In a `pane` of its own, as the
     /// Workshop shows it, the rows fill the pane and SteamCMD's install is offered with it.
     pub(crate) fn download_list(
         &self,

@@ -42,7 +42,7 @@ pub struct CheckoutShown<'a> {
     pub row: &'a Checkout,
     pub said: Sentence,
     pub due: bool,
-    /// The colour QML gives it, by index: 0 not checked, 1 up to date, 2 behind, 3 failed.
+    /// The colour shown for it, by index: 0 not checked, 1 up to date, 2 behind, 3 failed.
     pub standing: u8,
     pub updatable: bool,
 }

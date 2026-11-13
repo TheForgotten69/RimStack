@@ -1,4 +1,4 @@
-//! `Prompt.qml` as `Notices.ask` raised it: a question over the window, its lines, Cancel and
+//! A question over the window, its lines, Cancel and
 //! the answer that does it. Any view asks through [`ask`]; the shell draws it over everything.
 
 use super::theme::{self, Theme};

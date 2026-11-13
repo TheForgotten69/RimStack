@@ -1,4 +1,4 @@
-//! `FilterSidebar.qml`, `FacetRow.qml` and `Tick.qml`: the categories, versions and expansions
+//! The categories, versions and expansions
 //! to keep or leave out, and the two switches under them.
 
 use super::Workshop;
@@ -18,7 +18,7 @@ use std::rc::Rc;
 
 type Pressed = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// `Tick.qml`: a square that keeps or leaves out, in `tone` while on.
+/// A square that keeps or leaves out, in `tone` while on.
 #[derive(IntoElement)]
 struct Tick {
     id: ElementId,
@@ -78,7 +78,7 @@ impl Workshop {
         })
     }
 
-    /// `FacetRow.qml`; `dlc` for an expansion, a tag otherwise.
+    /// `dlc` for an expansion, a tag otherwise.
     fn facet(&self, theme: &Theme, facet: &Facet, dlc: bool, cx: &Context<Self>) -> AnyElement {
         let c = &theme.colours;
         let name = put(&facet.label);

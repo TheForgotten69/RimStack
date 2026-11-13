@@ -1,4 +1,4 @@
-//! `ModHeader.qml`, `Choice.qml` and the tabs under it: the mod chosen in a list.
+//! The mod chosen in a list, its header and the tabs under it.
 
 use crate::ui::card::Fold;
 use crate::ui::theme::{self, Theme};
@@ -82,7 +82,7 @@ impl gpui::EventEmitter<Asked> for DetailsView {}
 /// The details pane, a view of its own: choosing a mod or a tab draws nothing else.
 pub struct DetailsView {
     /// What the pane showed last (a comparison, the problems, Sort's moves, a selection, a mod or
-    /// the list), and the turn of its last change, which fades the pane in as `Appear.qml` did.
+    /// the list), and the turn of its last change, which fades the pane in.
     view_shown: Option<u8>,
     view_turn: usize,
     /// The description's words selected.
@@ -205,7 +205,7 @@ impl DetailsView {
         (folded, Box::new(fold))
     }
 
-    /// `CopyText.qml`: `text` that can be selected and copied, drawn at `size`.
+    /// `text` that can be selected and copied, drawn at `size`.
     pub(super) fn copyable(
         &self,
         key: &'static str,
@@ -292,7 +292,7 @@ fn tabs() -> [String; 3] {
     ]
 }
 
-/// `Defined.qml`: a term of the details, underlined with dots and its meaning shown when
+/// A term of the details, underlined with dots and its meaning shown when
 /// pointed at, when it has one.
 pub(super) fn defined(theme: &Theme, term: String) -> gpui::Stateful<gpui::Div> {
     let meaning = crate::ui::card::meaning(&term).unwrap_or_default();

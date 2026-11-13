@@ -1,4 +1,4 @@
-//! `HuntBar.qml`: the search for the mod that breaks the game, by halves. A round's list is only
+//! The search for the mod that breaks the game, by halves. A round's list is only
 //! put on the Mods tab; the game gets it on Save.
 
 use super::button::Btn;

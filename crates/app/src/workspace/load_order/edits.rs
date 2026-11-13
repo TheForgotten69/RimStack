@@ -3,6 +3,8 @@ use crate::App;
 use rimstack_core::base::error::Error;
 use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::list::{Category, Mod, Row, edge_of_run};
+use rimstack_core::mods::rules::Rule;
+use std::collections::HashMap;
 
 impl LoadOrder {
     pub fn move_mod(&mut self, app: &App, side: Side, from: usize, to: usize) {
@@ -61,18 +63,77 @@ impl LoadOrder {
         self.end_preview();
         let mut ids: Vec<ModId> = ids.to_vec();
         ids.sort_by_key(|&id| self.list(from).position_of(id));
+        let into = from.other();
         self.batching = true;
+        self.list_mut(from).hold();
+        self.list_mut(into).hold();
+        let mut placed = Vec::new();
         let mut put = 0;
         for id in ids {
-            if let Some(at) = self.list(from).position_of(id)
-                && let Some(m) = self.list_mut(from).remove(at)
-            {
-                self.put(app, from.other(), m, to.map(|to| to + put));
-                put += 1;
+            let Some(at) = self.list(from).position_of(id) else {
+                continue;
+            };
+            let Some(m) = self.list_mut(from).remove(at) else {
+                continue;
+            };
+            match (into, to) {
+                (Side::Active, None) => {
+                    self.active.insert_in_category(m);
+                    placed.push(id);
+                }
+                _ => self.put(app, into, m, to.map(|to| to + put)),
             }
+            put += 1;
         }
+        self.settle_all(app, &placed);
+        self.list_mut(from).let_go();
+        self.list_mut(into).let_go();
         self.batching = false;
         self.settle(app);
+    }
+
+    /// Each of `placed`, in turn, where the rules put it: the rules are found once, for the
+    /// whole list, which a mod at a time took 1 s for 1,862 mods (2026-11-13).
+    fn settle_all(&mut self, app: &App, placed: &[ModId]) {
+        let loaded = self.reading(app);
+        let Ok((library, _)) = &*loaded else {
+            return;
+        };
+        let mods = self.active.mods();
+        let found = rules::all_rules(app, &mut self.detected, library, mods);
+        let mut partners: HashMap<ModId, Vec<(ModId, bool, Rule)>> = HashMap::new();
+        for rule in found {
+            let (Some(first), Some(then)) = (mods[rule.first].installed, mods[rule.then].installed)
+            else {
+                continue;
+            };
+            partners.entry(first).or_default().push((then, true, rule));
+            partners.entry(then).or_default().push((first, false, rule));
+        }
+        for &id in placed {
+            let Some(at) = self.active.position_of(id) else {
+                continue;
+            };
+            let rules: Vec<Rule> = partners
+                .get(&id)
+                .into_iter()
+                .flatten()
+                .filter_map(|(other, mine_first, rule)| {
+                    let other = self.active.position_of(*other)?;
+                    let (first, then) = match mine_first {
+                        true => (at, other),
+                        false => (other, at),
+                    };
+                    Some(Rule {
+                        first,
+                        then,
+                        ..*rule
+                    })
+                })
+                .collect();
+            let to = rimstack_core::mods::ordering::place(&rules, at, self.active.mods().len());
+            self.active.move_mod(at, to);
+        }
     }
 
     /// Whether the order changed.

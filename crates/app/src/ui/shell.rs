@@ -1,4 +1,4 @@
-//! `Main.qml`: the top bar, the section shown, the status bar.
+//! The top bar, the section shown, the status bar.
 
 use super::Options;
 use super::downloads::{BehindActive, Downloads, ShowMod};
@@ -249,7 +249,7 @@ impl Shell {
         shell
     }
 
-    /// What `--notices` and `--open=` ask to be shown, as `Main.qml` showed them for pictures.
+    /// What `--notices` and `--open=` ask to be shown.
     fn show_asked(&mut self, options: &Options, window: &mut Window, cx: &mut Context<Self>) {
         use super::notices::{self, Tone};
         use super::prompt::{self, Line, Question};

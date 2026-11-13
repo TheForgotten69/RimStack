@@ -1,4 +1,4 @@
-//! `FilterField.qml`: a one-line field with an icon, a placeholder, the keys that reach it, a
+//! A one-line field with an icon, a placeholder, the keys that reach it, a
 //! count of what it found, and a cross that empties it.
 
 use super::text_field::TextField;
@@ -105,7 +105,7 @@ impl Field<'_> {
             })
     }
 
-    /// `TextArea.qml`: the field of several lines, its placeholder at the top.
+    /// The field of several lines, its placeholder at the top.
     pub fn area(self, theme: &Theme, window: &Window, cx: &Cx) -> gpui::Stateful<gpui::Div> {
         let c = &theme.colours;
         let field = self.text.read(cx);
@@ -140,7 +140,7 @@ impl Field<'_> {
     }
 }
 
-/// `FilterField.qml`'s `Behavior on border.color`: the focus colour drawn over the border, fading
+/// The focus colour drawn over the border, fading
 /// in and out.
 fn focus_line(theme: &Theme, focused: bool) -> impl IntoElement {
     let edge = -px(1.);

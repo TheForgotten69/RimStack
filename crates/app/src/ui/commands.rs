@@ -1,4 +1,4 @@
-//! `Commands.qml`: Ctrl + K, a field that finds commands, settings and mods, and runs the one
+//! Ctrl + K, a field that finds commands, settings and mods, and runs the one
 //! chosen.
 
 use super::field::Field;

@@ -1,4 +1,4 @@
-//! `Toggle.qml`, `Slide.qml` and `Choice.qml`: a switch, a slider and a row of segments. Each is
+//! A switch, a slider and a row of segments. Each is
 //! reached by Tab, moved by its keys, and tells a screen reader its state.
 
 use super::focus;
@@ -20,7 +20,7 @@ type Flip = Box<dyn Fn(bool, &mut Window, &mut App)>;
 type Moved = Rc<dyn Fn(f32, &mut Window, &mut App)>;
 type Picked = Rc<dyn Fn(usize, &mut Window, &mut App)>;
 
-/// `Toggle.qml`: a switch, and "On" or "Off" beside it unless `silent`.
+/// A switch, and "On" or "Off" beside it unless `silent`.
 #[derive(IntoElement)]
 pub struct Toggle {
     id: ElementId,
@@ -156,7 +156,7 @@ impl RenderOnce for Toggle {
     }
 }
 
-/// `Slide.qml`: a value between two ends, in steps, set by a click, a drag or the arrow keys.
+/// A value between two ends, in steps, set by a click, a drag or the arrow keys.
 #[derive(IntoElement)]
 pub struct Slide {
     id: ElementId,
@@ -320,7 +320,7 @@ impl RenderOnce for Slide {
     }
 }
 
-/// `Choice.qml`: one of a few, side by side; `stretch` to a width, stacked when it is too narrow;
+/// One of a few, side by side; `stretch` to a width, stacked when it is too narrow;
 /// `within` a room, squeezed into it or stacked only when its words do not fit side by side.
 #[derive(IntoElement)]
 pub struct Choice {

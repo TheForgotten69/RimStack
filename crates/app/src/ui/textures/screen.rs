@@ -1,4 +1,4 @@
-//! How `TexturesScreen.qml` is laid out: the summary and its actions, the mods with textures in
+//! How the textures screen is laid out: the summary and its actions, the mods with textures in
 //! columns, and the chosen mod or the refused DDS files beside them.
 
 use super::{Textures, megabytes};

@@ -1,4 +1,4 @@
-//! `ModList.qml` and `Scroller.qml`: one list of rows, a view of its own so that scrolling it draws
+//! One list of rows, a view of its own so that scrolling it draws
 //! nothing else, with its bar always shown and its thumb held to scroll.
 
 use super::Mods;
@@ -74,12 +74,12 @@ pub struct ModList {
     slide_end: Option<gpui::Task<()>>,
 }
 
-/// `ModRow.qml`'s slide: `Theme.quick`, eased out; `Mods.qml` let the rows slide for 400 ms
+/// The row's slide: `Theme.quick`, eased out; the rows slide for 400 ms
 /// before a row drawn anew stops starting one.
 const SLIDE: std::time::Duration = std::time::Duration::from_millis(140);
 const SLIDES_FOR: std::time::Duration = std::time::Duration::from_millis(400);
 
-/// How often and how far a drag held at the list's edge scrolls it, as `ModList.qml`'s timer.
+/// How often and how far a drag held at the list's edge scrolls it.
 const PULL_EVERY: std::time::Duration = std::time::Duration::from_millis(16);
 
 pub use crate::ui::rows::bar_room;
@@ -483,7 +483,7 @@ impl Render for ModList {
 }
 
 impl ModList {
-    /// `ModList.qml`'s footer: below the last row, where a drop puts the mods at the list's end.
+    /// The list's footer: below the last row, where a drop puts the mods at the list's end.
     fn footer(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
         let (_, below) = spacer(theme, self.side);
         let end = *self.tops.last()? - below;

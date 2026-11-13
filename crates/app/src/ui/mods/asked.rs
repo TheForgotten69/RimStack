@@ -12,7 +12,9 @@ impl Mods {
             return (0, false);
         }
         let (errors, _) = self.order.errors_and_warnings();
-        let dirty = crate::ui::app(cx).session().is_dirty();
+        let dirty = crate::ui::app(cx)
+            .session_if_read()
+            .is_some_and(|session| session.is_dirty());
         let ways =
             usize::from(errors > 0) + usize::from(self.sort_pending > 0) + usize::from(dirty);
         (ways, errors > 0)

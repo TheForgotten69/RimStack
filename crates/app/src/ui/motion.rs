@@ -1,4 +1,4 @@
-//! `Theme.quick` and `Theme.calm`, and the motions `PopIn.qml`, `PopOut.qml` and `Appear.qml`
+//! `Theme.quick` and `Theme.calm`, and the motions `PopIn`, `PopOut` and `Appear`
 //! give: what is opened fades in, what closes fades out, a section shown fades in. gpui-fast
 //! scales no `div`, so `PopIn`'s growth from 0.97 is left out. Reduce motion stills them all
 //! (`AnimationExt` reads `App::reduce_motion`).
@@ -158,7 +158,7 @@ pub fn over(ground: gpui::Hsla, wanted: gpui::Hsla) -> gpui::Hsla {
     }
 }
 
-/// `ModsScreen.qml`'s drawer: slid in from its own width to the left, in `CALM`.
+/// The drawer: slid in from its own width to the left, in `CALM`.
 pub fn slid_in<E: Styled + IntoElement + 'static>(
     element: E,
     width: gpui::Pixels,

@@ -1,4 +1,4 @@
-//! `Picture.qml` and the slider of `CompareView.qml`: a texture in its box, zoomed and panned
+//! The picture and the slider of the comparison: a texture in its box, zoomed and panned
 //! with the other side, and the two cut where the handle is dragged.
 
 use super::{CompareView, Cutting};

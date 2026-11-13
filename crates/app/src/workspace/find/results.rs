@@ -475,9 +475,66 @@ impl Results {
     }
 }
 
+impl Folded {
+    /// The rows shown after the fold at `row`, and where the row chosen went: none once hidden.
+    pub fn apply(
+        self,
+        rows: &mut Vec<RowRef>,
+        row: usize,
+        current: Option<usize>,
+    ) -> Option<usize> {
+        let at = rows[row];
+        match self {
+            Folded::Hid => {
+                let inside = |other: &&RowRef| match at.is_mod() {
+                    true => other.same_mod(at),
+                    false => other.same_file(at),
+                };
+                let below = rows[row + 1..].iter().take_while(inside).count();
+                rows.drain(row + 1..row + 1 + below);
+                match current {
+                    Some(current) if current > row + below => Some(current - below),
+                    Some(current) if current > row => None,
+                    current => current,
+                }
+            }
+            Folded::Showed(coming) => {
+                let count = coming.len();
+                rows.splice(row + 1..row + 1, coming);
+                current.map(|current| {
+                    if current > row {
+                        current + count
+                    } else {
+                        current
+                    }
+                })
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_folded_file_takes_its_lines_and_the_row_chosen_among_them() {
+        let mut rows = vec![
+            RowRef::of_mod(0),
+            RowRef::of_file(0, 0),
+            RowRef::of_hit(0, 0, 0),
+            RowRef::of_hit(0, 0, 1),
+            RowRef::of_file(0, 1),
+        ];
+        let lines = rows[2..4].to_vec();
+        assert_eq!(Folded::Hid.apply(&mut rows, 1, Some(3)), None);
+        assert_eq!(rows.len(), 3);
+        assert_eq!(Folded::Showed(lines).apply(&mut rows, 1, Some(2)), Some(4));
+        assert_eq!(rows.len(), 5);
+        assert_eq!(Folded::Hid.apply(&mut rows, 1, Some(4)), Some(2));
+        assert_eq!(Folded::Hid.apply(&mut rows, 0, Some(0)), Some(0));
+        assert_eq!(rows.len(), 1);
+    }
 
     fn hit(line: usize, text: &str, word: &str) -> Hit {
         let from = text.find(word).unwrap();

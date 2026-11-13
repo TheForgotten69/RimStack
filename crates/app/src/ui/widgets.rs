@@ -46,7 +46,7 @@ pub fn with_alpha(colour: Hsla, alpha: f32) -> Hsla {
     }
 }
 
-/// `Halo.qml`: rings of the tone, fading outwards, around something to press.
+/// Rings of the tone, fading outwards, around something to press.
 pub fn halo(tone: Hsla, corner: Pixels) -> impl Iterator<Item = AnyElement> {
     const RINGS: usize = 4;
     const STEP: f32 = 1.5;
@@ -80,7 +80,7 @@ pub fn breakable(text: &str) -> String {
     out
 }
 
-/// `Notice.qml`: a band in a tone, with a bar at its left.
+/// A band in a tone, with a bar at its left.
 pub fn notice(tone: Hsla) -> gpui::Div {
     div()
         .relative()
@@ -299,7 +299,7 @@ pub fn caps(theme: &Theme, text: &str) -> gpui::Div {
     )
 }
 
-/// `EmptyState.qml`: an icon, a title and a hint under it, `width` wide and centred.
+/// An icon, a title and a hint under it, `width` wide and centred.
 pub fn empty_state(
     theme: &Theme,
     width: Pixels,
@@ -338,7 +338,7 @@ pub fn empty_state(
         })
 }
 
-/// The width `Chip.qml` takes: its icon, its text and the room around them.
+/// The width a chip takes: its icon, its text and the room around them.
 pub fn chip_width(window: &Window, theme: &Theme, text: &str, icon: bool) -> Pixels {
     let shown = if icon {
         theme.sized(11.) + theme::GAP_TINY
@@ -348,7 +348,7 @@ pub fn chip_width(window: &Window, theme: &Theme, text: &str, icon: bool) -> Pix
     shown + measure(window, theme, text, theme.caption(), theme.medium) + theme::GAP_CARD
 }
 
-/// The width `Btn.qml` takes: its icon, its text, its menu arrow and the room around them.
+/// The width a button takes: its icon, its text, its menu arrow and the room around them.
 pub fn btn_width(window: &Window, theme: &Theme, text: &str, icon: bool, menu: bool) -> Pixels {
     btn_width_of(window, theme, text, icon, menu, false)
 }

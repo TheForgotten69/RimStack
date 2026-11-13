@@ -1,4 +1,4 @@
-//! Play as `Main.qml` pressed it, and the `beforePlay` popup of `TopBar.qml`: what stands in the
+//! Play, and the `beforePlay` popup: what stands in the
 //! way, and what can be done about it before the game starts.
 
 use super::button::Btn;

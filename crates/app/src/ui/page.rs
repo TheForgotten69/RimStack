@@ -1,4 +1,4 @@
-//! A page taller than its place, as `Scrolled.qml` and a `Flickable` held one: its wheel glides
+//! A page taller than its place: its wheel glides
 //! as the lists' does and its bar's thumb is held to scroll.
 
 use super::rows::{Scrolling, bar};
@@ -31,7 +31,7 @@ impl Paging {
     }
 }
 
-/// `Scrolled.qml` keeps its bar's width free at the right of what it holds.
+/// The bar's width kept free at the right of what it holds.
 pub fn room(theme: &Theme) -> gpui::Pixels {
     theme.sized(9.) + super::theme::GAP_HAIR * 2.
 }

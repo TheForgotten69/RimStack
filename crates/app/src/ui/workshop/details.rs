@@ -1,4 +1,4 @@
-//! `BrowseDetails.qml`: the chosen item's picture, words, requirements and figures, and the
+//! The chosen item's picture, words, requirements and figures, and the
 //! files fetched for them: its preview, its screenshots, the pictures of its description.
 
 use super::{SCREENSHOTS, Workshop};

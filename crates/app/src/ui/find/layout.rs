@@ -1,4 +1,4 @@
-//! Where `FindScreen.qml` puts the options, the matches and the preview at the window's width.
+//! Where the find screen puts the options, the matches and the preview at the window's width.
 
 use super::Find;
 use crate::ui::theme::{self, Theme};

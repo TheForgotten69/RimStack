@@ -1,4 +1,4 @@
-//! `FirstRun.qml`: the first start's five steps; nothing changes until Start but what is chosen
+//! The first start's five steps; nothing changes until Start but what is chosen
 //! here, which is kept as it is chosen.
 
 mod parts;

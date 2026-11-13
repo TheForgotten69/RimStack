@@ -1,4 +1,4 @@
-//! The text of `DescriptionView.qml`: a Workshop description's blocks drawn with their styles,
+//! A Workshop description's blocks drawn with their styles,
 //! as Qt's rich text drew the HTML they came from; a link pressed is handed to `link`.
 
 use super::theme::{self, Theme};

@@ -1,4 +1,4 @@
-//! `InactivePane.qml`: the mods not in the load order.
+//! The mods not in the load order.
 
 use super::Mods;
 use crate::ui::theme::{self, Theme};

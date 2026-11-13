@@ -1,4 +1,4 @@
-//! `LoadOrderTab.qml` and `FilesTab.qml`: where the mod loads and why, and what it holds.
+//! Where the mod loads and why, and what it holds.
 
 use super::chosen::DetailsView;
 use super::notes::Picking;
@@ -17,7 +17,7 @@ use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::details::Named;
 use rimstack_core::{say, say_n};
 
-/// `NameList.qml`: a title, a line before the names, and the names with their notes.
+/// A title, a line before the names, and the names with their notes.
 fn names(theme: &Theme, title: String, lead: String, named: &[Named]) -> Vec<AnyElement> {
     let c = &theme.colours;
     if named.is_empty() && lead.is_empty() {

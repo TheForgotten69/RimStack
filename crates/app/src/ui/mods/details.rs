@@ -1,4 +1,4 @@
-//! `DetailsPane.qml` and `ListSummary.qml`: the list as a whole when no mod is chosen.
+//! The list as a whole when no mod is chosen.
 
 use super::chosen::DetailsView;
 use crate::ui::card::Card;

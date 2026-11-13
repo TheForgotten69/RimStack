@@ -1,4 +1,4 @@
-//! `ModsFilter.qml` and `FilterField.qml` with its chips: the filter of the Mods tab, its terms as
+//! The filter of the Mods tab, with its chips: its terms as
 //! chips inside it, and the terms offered while one is typed.
 
 use super::Mods;

@@ -15,7 +15,7 @@ use gpui::{
 use rimstack_core::rimworld::saves::Verdict;
 use rimstack_core::say;
 
-/// The chips a save's row shows, as `SavesScreen.qml` lists them, each with its tone: 0 the
+/// The chips a save's row shows, each with its tone: 0 the
 /// error colour, 1 the good one, 2 the warning, 3 the other game's, 4 the plain one.
 pub(super) fn chips_of<'a>(save: &'a SaveShown<'_>) -> impl Iterator<Item = (Chip, usize)> + 'a {
     let row = save.row;

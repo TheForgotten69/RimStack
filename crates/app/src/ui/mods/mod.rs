@@ -1,4 +1,4 @@
-//! `ModsScreen.qml`: the inactive mods, the load order and the details, side by side.
+//! The inactive mods, the load order and the details, side by side.
 
 mod about;
 mod active;
@@ -97,6 +97,9 @@ pub struct Mods {
     loading: Lane,
     counting: Lane,
     files_reading: crate::jobs::Single<Vec<ModId>>,
+    /// Whether no mod folder was found, and what is wrong with the game folder chosen, while the
+    /// mods could not be read.
+    why_unread: Option<(bool, Option<rimstack_core::base::sentence::Sentence>)>,
     files_read: bool,
     sort_pending: usize,
     inactive_width: Pixels,
@@ -255,6 +258,7 @@ impl Mods {
             loading: Lane::default(),
             counting: Lane::default(),
             files_reading: Default::default(),
+            why_unread: None,
             files_read: false,
             sort_pending: 0,
             inactive_width,
@@ -355,6 +359,9 @@ impl Mods {
         }
         if changes.contains(Changes::TEXTURES) {
             self.read_files(cx);
+        }
+        if changes.contains(Changes::SETTINGS | Changes::FOLDERS) {
+            self.judge_unread(cx);
         }
         self.show(cx);
     }
@@ -535,6 +542,7 @@ impl Mods {
                     mods.selected_active = kept.active;
                 }
                 mods.order = order;
+                mods.judge_unread(cx);
                 mods.show(cx);
                 mods.describe(cx);
                 give_back_freed();

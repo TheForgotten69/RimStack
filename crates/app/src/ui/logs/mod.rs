@@ -1,4 +1,4 @@
-//! `LogsScreen.qml`: the game's last logs and the launches RimStack recorded; a log's errors,
+//! The game's last logs and the launches RimStack recorded; a log's errors,
 //! the mods they point at, or its lines; and what an error says, beside them.
 
 mod left;

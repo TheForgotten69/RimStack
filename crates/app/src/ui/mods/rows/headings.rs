@@ -1,4 +1,4 @@
-//! `ModRow.qml`'s headings: a category, a group under a tag, a category met again.
+//! The row's headings: a category, a group under a tag, a category met again.
 
 use super::super::Mods;
 use super::category_icon;

@@ -1,4 +1,4 @@
-//! What Ctrl + K offers, as `Main.qml` listed it: the settings, the sections, the load order's
+//! What Ctrl + K offers: the settings, the sections, the load order's
 //! commands, the chosen mod's, filters and folders; and the mods the text names.
 
 use super::commands::{Command, Commands, Run};

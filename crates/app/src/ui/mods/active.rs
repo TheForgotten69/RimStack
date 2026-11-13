@@ -1,4 +1,4 @@
-//! `ActivePane.qml` and `Columns.qml`: the load order, its filter and its column headings.
+//! The load order, its filter and its column headings.
 
 use super::Mods;
 use super::list::bar_room;
@@ -258,10 +258,11 @@ impl Mods {
         };
         let (dirty, can_undo, can_redo) = match self.demo {
             true => (false, false, false),
-            false => {
-                let session = app.session();
-                (session.is_dirty(), session.can_undo(), session.can_redo())
-            }
+            false => app
+                .session_if_read()
+                .map_or((false, false, false), |session| {
+                    (session.is_dirty(), session.can_undo(), session.can_redo())
+                }),
         };
         let title = put(&say!("Active"));
         let counted = count(self.count(Side::Active));

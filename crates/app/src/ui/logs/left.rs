@@ -1,4 +1,4 @@
-//! The launches at the left of `LogsScreen.qml`, each an `Entry`, and `LaunchRecord.qml`: a
+//! The launches at the left of the logs screen, each an `Entry`, and a launch record: a
 //! recorded launch whose log the game no longer keeps.
 
 use super::Logs;
@@ -313,7 +313,7 @@ impl Logs {
             .into_any_element()
     }
 
-    /// `LaunchRecord.qml`: the launch at `at`, its load order and the way to use it again.
+    /// The launch at `at`, its load order and the way to use it again.
     pub(super) fn launch_record(
         &self,
         at: usize,

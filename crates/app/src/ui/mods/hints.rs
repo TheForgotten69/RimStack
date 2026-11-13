@@ -1,4 +1,4 @@
-//! `Hint.qml`: the three first-run notes on the Mods tab, under the problems button, Sort and
+//! The three first-run notes on the Mods tab, under the problems button, Sort and
 //! Save, one after the other.
 
 use super::Mods;

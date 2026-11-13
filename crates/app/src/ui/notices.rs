@@ -1,4 +1,4 @@
-//! `Notices.qml` and `Toasts.qml`: what was just done, said at the window's bottom left for a few
+//! What was just done, said at the window's bottom left for a few
 //! seconds, with a way to undo it when there is one. The last ones are kept for the history.
 
 use super::theme::{self, Theme};

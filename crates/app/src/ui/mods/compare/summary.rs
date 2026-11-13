@@ -1,4 +1,4 @@
-//! `CompareSummary.qml`: what the details show while two mods' textures are compared.
+//! What the details show while two mods' textures are compared.
 
 use super::super::Mods;
 use super::super::chosen::DetailsView;
@@ -12,7 +12,7 @@ use gpui::{AnyElement, Context, InteractiveElement, IntoElement, ParentElement, 
 use rimstack_core::{say, say_n};
 
 impl DetailsView {
-    /// `CompareSummary.qml`: what was kept so far, and keeping all from one side.
+    /// What was kept so far, and keeping all from one side.
     pub(in crate::ui::mods) fn compare_summary(
         &self,
         theme: &Theme,

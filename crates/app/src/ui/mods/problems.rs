@@ -1,4 +1,4 @@
-//! `ProblemsPanel.qml`: every problem of the load order, by kind, each with its fix.
+//! Every problem of the load order, by kind, each with its fix.
 
 use super::chosen::DetailsView;
 use super::edit::acting;

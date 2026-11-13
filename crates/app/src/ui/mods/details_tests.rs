@@ -91,6 +91,7 @@ fn keeping_all_textures_from_the_earlier_mod_sets_the_later_ones_aside() {
     let comparison = cx.update(|cx| view.read(cx).comparison()).unwrap();
     assert_eq!((comparison.total, comparison.kept_earlier), (2, 0));
     cx.update(|cx| mods.update(cx, |mods, cx| mods.keep_all_compared(true, cx)));
+    cx.run_until_parked();
     let comparison = cx.update(|cx| view.read(cx).comparison()).unwrap();
     assert_eq!(comparison.kept_earlier, 2);
     let told = cx.update(|cx| mods.read(cx).compared.clone()).unwrap();

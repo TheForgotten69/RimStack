@@ -1,4 +1,4 @@
-//! `ProblemLine.qml`: the mod in bold, what is wrong, and its fix, on the line's right when there
+//! The mod in bold, what is wrong, and its fix, on the line's right when there
 //! is room for twenty characters beside it, under it otherwise.
 
 use super::theme::{self, Theme};

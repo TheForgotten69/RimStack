@@ -1,4 +1,4 @@
-//! `PopMenu.qml`: a list of what can be done, opened under the control that asks for it, closed
+//! A list of what can be done, opened under the control that asks for it, closed
 //! by a choice, Escape or a click beside it. Any view opens one through [`open`]; the shell draws
 //! it over everything.
 
