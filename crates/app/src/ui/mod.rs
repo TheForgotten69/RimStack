@@ -228,6 +228,8 @@ pub fn hear<V: 'static>(
     heard: impl Fn(&mut V, crate::changes::Changes, &mut gpui::Context<V>) + 'static,
 ) {
     let (tell, mut told) = futures::channel::mpsc::unbounded();
+    let closing = tell.clone();
+    cx.on_release(move |_, _| closing.close_channel()).detach();
     app(cx).listen_while(move |changes| match changes.and(reads) {
         read if read.is_empty() => !tell.is_closed(),
         read => tell.unbounded_send(read).is_ok(),
@@ -526,6 +528,8 @@ pub fn run(app: Arc<App>, options: Options) {
         });
 }
 
+#[cfg(test)]
+mod fork_tests;
 #[cfg(test)]
 mod gates;
 #[cfg(test)]

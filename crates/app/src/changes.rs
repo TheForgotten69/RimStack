@@ -90,6 +90,11 @@ impl Bus {
         self.listeners.held().push(Arc::new(listener));
     }
 
+    #[cfg(test)]
+    pub fn listening(&self) -> usize {
+        self.listeners.held().len()
+    }
+
     /// Listeners are called outside the lock: one may listen, or publish, in turn.
     pub fn publish(&self, changes: Changes) {
         if changes.is_empty() {

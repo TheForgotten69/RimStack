@@ -206,6 +206,8 @@ fn pause(wait: Duration, cx: &AsyncApp) -> Task<()> {
 #[derive(Default)]
 pub struct Lane {
     asked: Arc<AtomicU64>,
+    /// The wait for the newest answer: replacing it drops the one before, and its wait with it.
+    waiting: std::cell::RefCell<Option<Task<()>>>,
 }
 
 #[derive(Clone)]
@@ -230,6 +232,11 @@ impl Lane {
 
     pub fn cancel(&self) {
         self.asked.fetch_add(1, Ordering::SeqCst);
+        drop(self.waiting.take());
+    }
+
+    fn keep(&self, task: Task<()>) {
+        drop(self.waiting.replace(Some(task)));
     }
 
     /// `done` is not called once the lane was asked again; `work` may stop early.
@@ -255,21 +262,22 @@ impl Lane {
     ) {
         let turn = self.next();
         let name = name.to_string();
-        cx.spawn(async move |view: WeakEntity<V>, cx: &mut AsyncApp| {
-            pause(wait, cx).await;
-            if !turn.current() {
-                return;
-            }
-            let mine = turn.clone();
-            let Ok(found) = off_thread_as(&name, true, move || work(&mine)).await else {
-                return;
-            };
-            // Checked on the window's thread: another run may be asked for meanwhile.
-            if turn.current() {
-                let _ = view.update(cx, |view, cx| done(view, found, cx));
-            }
-        })
-        .detach();
+        self.keep(
+            cx.spawn(async move |view: WeakEntity<V>, cx: &mut AsyncApp| {
+                pause(wait, cx).await;
+                if !turn.current() {
+                    return;
+                }
+                let mine = turn.clone();
+                let Ok(found) = off_thread_as(&name, true, move || work(&mine)).await else {
+                    return;
+                };
+                // Checked on the window's thread: another run may be asked for meanwhile.
+                if turn.current() {
+                    let _ = view.update(cx, |view, cx| done(view, found, cx));
+                }
+            }),
+        );
     }
 
     /// `done` on the window's thread once `wait` has passed with nothing newer asked.
@@ -280,13 +288,14 @@ impl Lane {
         done: impl FnOnce(&mut V, &mut Context<V>) + 'static,
     ) {
         let turn = self.next();
-        cx.spawn(async move |view: WeakEntity<V>, cx: &mut AsyncApp| {
-            pause(wait, cx).await;
-            if turn.current() {
-                let _ = view.update(cx, |view, cx| done(view, cx));
-            }
-        })
-        .detach();
+        self.keep(
+            cx.spawn(async move |view: WeakEntity<V>, cx: &mut AsyncApp| {
+                pause(wait, cx).await;
+                if turn.current() {
+                    let _ = view.update(cx, |view, cx| done(view, cx));
+                }
+            }),
+        );
     }
 }
 

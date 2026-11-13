@@ -300,3 +300,30 @@ fn a_view_hears_only_what_it_reads(cx: &mut TestAppContext) {
     publish(Changes::FACTS | Changes::LOGS, cx);
     assert_eq!(hearer.read_with(cx, |h, _| h.0.clone()), [Changes::LOGS]);
 }
+
+struct Hearing;
+
+impl Render for Hearing {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+    }
+}
+
+#[gpui::test]
+fn a_view_released_stops_hearing_at_the_next_change_whatever_it_is(cx: &mut TestAppContext) {
+    let (_root, _bench, cx) = bench(cx);
+    let app = cx.update(|_, cx| super::app(cx));
+    let before = app.listening();
+    let hearing = cx.update(|_, cx| {
+        cx.new(|cx| {
+            super::hear(cx, crate::changes::Changes::NOTES, |_, _, _| {});
+            Hearing
+        })
+    });
+    assert_eq!(app.listening(), before + 1);
+    drop(hearing);
+    cx.update(|_, _| {});
+    cx.run_until_parked();
+    app.publish(crate::changes::Changes::RULES);
+    assert_eq!(app.listening(), before);
+}

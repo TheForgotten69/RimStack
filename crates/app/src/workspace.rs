@@ -215,6 +215,11 @@ impl App {
         self.bus.listen(listener);
     }
 
+    #[cfg(test)]
+    pub(crate) fn listening(&self) -> usize {
+        self.bus.listening()
+    }
+
     pub fn listen_while(
         &self,
         listener: impl Fn(crate::changes::Changes) -> bool + Send + Sync + 'static,
