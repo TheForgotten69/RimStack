@@ -43,7 +43,7 @@ fn opened(
         .update(|cx| {
             shell
                 .read(cx)
-                .map(|shell| shell.sections.logs.clone().unwrap())
+                .map(|shell| shell.sections.made::<crate::ui::logs::Logs>().unwrap())
         })
         .unwrap();
     let started = Instant::now();

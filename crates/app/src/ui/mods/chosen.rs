@@ -102,8 +102,6 @@ pub struct DetailsView {
     copyable: std::cell::RefCell<
         std::collections::HashMap<&'static str, gpui::Entity<crate::ui::text_field::TextField>>,
     >,
-    /// Where a Workshop mod's change notes are fetched and kept.
-    pub(super) downloads: Option<gpui::WeakEntity<crate::ui::downloads::Downloads>>,
 }
 
 impl DetailsView {
@@ -141,7 +139,6 @@ impl DetailsView {
             note,
             small_picture: false,
             pictures: Default::default(),
-            downloads: None,
             copyable: Default::default(),
             paging: crate::ui::page::Paging::new(cx.global::<Theme>().appearance.reduce_motion),
             view_shown: None,

@@ -41,7 +41,7 @@ fn opened(
         .update(|cx| {
             shell
                 .read(cx)
-                .map(|shell| shell.sections.saves.clone().unwrap())
+                .map(|shell| shell.sections.made::<crate::ui::saves::Saves>().unwrap())
         })
         .unwrap();
     let started = Instant::now();

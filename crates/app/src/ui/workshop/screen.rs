@@ -93,7 +93,7 @@ impl Workshop {
             field.render(theme, window, cx).h(theme.sized(30.)),
             put(&say!("Words match titles, authors and package ids. w:<id> one item, t:<tag>, d:<expansion app id>, m:<id> mods that need that mod, a:<author>. A pasted Workshop or collection link works too.")).into(),
         );
-        let count = self.downloads.read(cx).listed().count;
+        let count = crate::ui::listed::read(cx).list.count;
         div()
             .flex()
             .items_center()
@@ -456,15 +456,12 @@ impl Workshop {
         let content = match self.opened() {
             true => self.details_pane(theme, inner, window, cx),
             false => {
-                let downloads = self.downloads.clone();
-                let size = downloads
-                    .read(cx)
-                    .listed()
+                let size = crate::ui::listed::read(cx)
+                    .list
                     .size_said
                     .as_ref()
                     .map(put)
                     .unwrap_or_default();
-                let list = downloads.update(cx, |d, cx| d.download_list(theme, true, cx));
                 div()
                     .flex()
                     .flex_col()
@@ -481,7 +478,7 @@ impl Workshop {
                             )
                             .child(fill_text(theme, theme.small(), c.ink3, size)),
                     )
-                    .children(list)
+                    .child(self.list_view.clone())
                     .into_any_element()
             }
         };

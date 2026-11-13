@@ -40,9 +40,12 @@ fn opened(
         .unwrap();
     let textures = cx
         .update(|cx| {
-            shell
-                .read(cx)
-                .map(|shell| shell.sections.textures.clone().unwrap())
+            shell.read(cx).map(|shell| {
+                shell
+                    .sections
+                    .made::<crate::ui::textures::Textures>()
+                    .unwrap()
+            })
         })
         .unwrap();
     let started = Instant::now();

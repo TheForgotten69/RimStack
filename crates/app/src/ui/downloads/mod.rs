@@ -2,6 +2,7 @@
 //! Git should fetch, and the download list beside it.
 
 mod changed;
+pub mod list;
 mod screen;
 mod side;
 mod tasks;
@@ -77,7 +78,7 @@ pub struct Downloads {
     queue_busy: bool,
     pasted: Entity<TextField>,
     changed: SinceLaunch,
-    fetched: ChangeNotes,
+    fetched: Rc<ChangeNotes>,
     since_only: Only,
     since_reading: Lane,
     reading: Lane,
@@ -85,7 +86,9 @@ pub struct Downloads {
     notes_state: Option<NotesState>,
     replacements: Vec<Replaceable>,
     steamcmd: bool,
-    list: ListShown,
+    list: Rc<ListShown>,
+    /// The list as the side pane shows it.
+    list_view: Entity<list::DownloadList>,
     tasks: Tasks,
     /// Open parts: the inactive mods' updates, all the changed mods, the mods already installed.
     inactive_open: bool,
@@ -95,8 +98,6 @@ pub struct Downloads {
     folded: HashSet<&'static str>,
     paging: Paging,
     side_paging: Paging,
-    list_paging: Paging,
-    mods: Entity<super::mods::Mods>,
     /// The changed mods' list, reached by Tab: the row its arrows are on, and where each row was
     /// last drawn, to scroll the one reached into view.
     changed_keys: gpui::FocusHandle,
@@ -104,22 +105,33 @@ pub struct Downloads {
     changed_drawn: Rc<std::cell::RefCell<Vec<gpui::Bounds<gpui::Pixels>>>>,
 }
 
-impl Downloads {
-    /// A Workshop mod's change notes, once fetched.
-    pub fn fetched_notes(
-        &self,
-        workshop_id: &str,
-    ) -> Option<&Vec<rimstack_core::sources::changes::Note>> {
-        self.fetched.get(workshop_id)
-    }
+/// The load order's mods its rules ask for that are not installed.
+fn to_get(
+    overview: &Option<Rc<crate::workspace::load_order::Overview>>,
+) -> Vec<crate::workspace::load_order::ProblemSaid> {
+    overview
+        .as_ref()
+        .map(|o| o.to_get.clone())
+        .unwrap_or_default()
+}
 
-    pub fn notes_busy(&self) -> bool {
-        self.notes_busy
+impl Downloads {
+    /// What the other sections show of Downloads, told as it changes.
+    fn tell_listed(&self, cx: &mut Context<Self>) {
+        let fresh = super::listed::Listed {
+            list: self.list.clone(),
+            local_mods: self.report.local_mods.clone().unwrap_or_default(),
+            steamcmd: self.steamcmd,
+            notes: self.fetched.clone(),
+            notes_busy: self.notes_busy,
+            notes_label: self.ask_steam_label(),
+        };
+        super::listed::change(cx, fresh);
     }
 }
 
 impl Downloads {
-    pub fn new(demo: bool, mods: Entity<super::mods::Mods>, cx: &mut Context<Self>) -> Self {
+    pub fn new(demo: bool, cx: &mut Context<Self>) -> Self {
         let theme = cx.global::<Theme>().clone();
         let pasted = cx.new(|cx| TextField::new(theme.body(), cx));
         cx.observe(&pasted, |_, _, cx| cx.notify()).detach();
@@ -128,19 +140,21 @@ impl Downloads {
             |downloads, _, _: &super::text_field::Entered, cx| downloads.look_up(cx),
         )
         .detach();
-        let list = mods.read(cx).list.clone();
-        cx.observe(&list, |downloads, list, cx| {
-            let needed = list.read(cx).to_get();
+        let order = super::order::order(cx);
+        cx.observe(&order, |downloads, order, cx| {
+            let needed = to_get(&order.read(cx).overview);
             if *downloads.needed != needed {
                 downloads.needed = Rc::new(needed);
                 cx.notify();
             }
         })
         .detach();
+        cx.observe_self(|downloads, cx| downloads.tell_listed(cx))
+            .detach();
         let reduce = theme.appearance.reduce_motion;
         let mut downloads = Self {
             demo,
-            needed: Rc::new(list.read(cx).to_get()),
+            needed: Rc::new(to_get(&super::order::read(cx).overview)),
             report: Rc::default(),
             updates: Updates::default(),
             updates_busy: false,
@@ -151,14 +165,15 @@ impl Downloads {
             queue_busy: false,
             pasted,
             changed: SinceLaunch::default(),
-            fetched: ChangeNotes::new(),
+            fetched: Rc::default(),
             since_only: Only::All,
             since_reading: Lane::default(),
             notes_busy: false,
             notes_state: None,
             replacements: Vec::new(),
             steamcmd: false,
-            list: ListShown::default(),
+            list: Rc::default(),
+            list_view: cx.new(|cx| list::DownloadList::new(false, cx)),
             reading: Lane::default(),
             tasks: Tasks::default(),
             inactive_open: false,
@@ -167,8 +182,6 @@ impl Downloads {
             folded: HashSet::new(),
             paging: Paging::new(reduce),
             side_paging: Paging::new(reduce),
-            list_paging: Paging::new(reduce),
-            mods,
             changed_keys: cx.focus_handle().tab_stop(true),
             changed_at: 0,
             changed_drawn: Rc::default(),
@@ -205,7 +218,7 @@ impl Downloads {
                 downloads.report = Rc::new(read.report);
                 downloads.replacements = read.replacements;
                 downloads.steamcmd = read.steamcmd;
-                downloads.list = read.list;
+                downloads.list = Rc::new(read.list);
                 cx.notify();
             },
         );

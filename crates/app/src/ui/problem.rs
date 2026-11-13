@@ -12,7 +12,7 @@ use gpui::{
 use rimstack_core::base::sentence::Sentence;
 
 /// What a problem's line is pressed for: its fix, ignoring it, or its mod shown.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Act {
     Fix,
     Ignore,

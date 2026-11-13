@@ -1,6 +1,6 @@
 //! The window's sections: Mods and Downloads made with the window, the others the first time
-//! they are asked for; each told when it is shown or hidden, and what the bars show of it put in
-//! `around` as it changes.
+//! they are asked for; each told when it is shown or hidden, and one made while another shows
+//! is told it is hidden. A section needs none of the others to be made.
 
 use super::downloads::Downloads;
 use super::find::Find;
@@ -11,56 +11,52 @@ use super::section::{Section, Shown};
 use super::settings::Settings;
 use super::textures::Textures;
 use super::workshop::Workshop;
-use gpui::{App as Cx, AppContext, Entity};
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use gpui::{AnyView, App as Cx, AppContext, Context, Entity};
+
+/// What the command line opens the sections on.
+pub struct Start {
+    pub demo: bool,
+    /// The part Settings opens on.
+    pub part: usize,
+    /// The view Logs opens on.
+    pub view: usize,
+}
+
+/// A view shown as one of the window's sections.
+pub trait SectionView: gpui::Render + Shown + Sized {
+    const AT: Section;
+    fn made(start: &Start, cx: &mut Context<Self>) -> Self;
+}
+
+struct Made {
+    view: AnyView,
+    tell: fn(&AnyView, bool, &mut Cx),
+}
+
+fn tell<V: SectionView>(view: &AnyView, shown: bool, cx: &mut Cx) {
+    if let Ok(view) = view.clone().downcast::<V>() {
+        view.update(cx, |view, cx| view.set_shown(shown, cx));
+    }
+}
 
 pub struct Sections {
-    demo: bool,
+    pub(crate) start: Start,
     shown: Section,
     pub(crate) mods: Entity<Mods>,
-    pub(crate) downloads: Option<Entity<Downloads>>,
-    pub(crate) settings: Option<Entity<Settings>>,
-    /// The part Settings opens on.
-    pub(crate) part: usize,
-    pub(crate) logs: Option<Entity<Logs>>,
-    /// The view Logs opens on.
-    pub(crate) view: usize,
-    pub(crate) saves: Option<Entity<Saves>>,
-    pub(crate) workshop: Option<Entity<Workshop>>,
-    pub(crate) find: Option<Entity<Find>>,
-    pub(crate) textures: Option<Entity<Textures>>,
-    /// How the textures' work under way is stopped.
-    pub(crate) textures_stop: Option<Arc<AtomicBool>>,
+    made: [Option<Made>; Section::ALL.len()],
 }
 
 impl Sections {
-    pub fn new(demo: bool, part: usize, view: usize, cx: &mut Cx) -> Self {
-        let mods = cx.new(|cx| Mods::new(demo, cx));
-        let list = mods.read(cx).list.clone();
-        cx.observe(&list, |list, cx| {
-            super::around::from_list(&list, cx);
-            super::order::from_list(&list, cx);
-        })
-        .detach();
-        super::around::from_list(&list, cx);
-        super::order::from_list(&list, cx);
+    pub fn new(start: Start, cx: &mut Cx) -> Self {
         let mut sections = Self {
-            demo,
+            mods: cx.new(|cx| Mods::made(&start, cx)),
+            start,
             shown: Section::Mods,
-            mods,
-            downloads: None,
-            settings: None,
-            part,
-            logs: None,
-            view,
-            saves: None,
-            workshop: None,
-            find: None,
-            textures: None,
-            textures_stop: None,
+            made: Default::default(),
         };
-        sections.downloads(cx);
+        let mods = sections.mods.clone();
+        sections.keep(mods);
+        sections.get::<Downloads>(cx);
         sections
     }
 
@@ -69,17 +65,35 @@ impl Sections {
     }
 
     /// The view of the section shown, once it is made.
-    pub fn view_shown(&self) -> Option<gpui::AnyView> {
-        match self.shown {
-            Section::Mods => Some(self.mods.clone().into()),
-            Section::Downloads => self.downloads.clone().map(Into::into),
-            Section::Textures => self.textures.clone().map(Into::into),
-            Section::Saves => self.saves.clone().map(Into::into),
-            Section::Logs => self.logs.clone().map(Into::into),
-            Section::Find => self.find.clone().map(Into::into),
-            Section::Workshop => self.workshop.clone().map(Into::into),
-            Section::Settings => self.settings.clone().map(Into::into),
+    pub fn view_shown(&self) -> Option<AnyView> {
+        let made = self.made[self.shown.index()].as_ref()?;
+        Some(made.view.clone())
+    }
+
+    /// The section's view, made if it was not.
+    pub fn get<V: SectionView>(&mut self, cx: &mut Cx) -> Entity<V> {
+        if let Some(view) = self.made::<V>() {
+            return view;
         }
+        let view = cx.new(|cx| V::made(&self.start, cx));
+        self.keep(view.clone());
+        if V::AT != self.shown {
+            view.update(cx, |view, cx| view.set_shown(false, cx));
+        }
+        view
+    }
+
+    /// The section's view, if it was made.
+    pub fn made<V: SectionView>(&self) -> Option<Entity<V>> {
+        let made = self.made[V::AT.index()].as_ref()?;
+        made.view.clone().downcast::<V>().ok()
+    }
+
+    fn keep<V: SectionView>(&mut self, view: Entity<V>) {
+        self.made[V::AT.index()] = Some(Made {
+            view: view.into(),
+            tell: tell::<V>,
+        });
     }
 
     /// `section` shown, made if it was not, and the one shown before told it is hidden.
@@ -88,113 +102,110 @@ impl Sections {
             self.tell_shown(self.shown, false, cx);
         }
         self.shown = section;
-        self.make(section, cx);
+        match section {
+            Section::Mods => {}
+            Section::Downloads => drop(self.get::<Downloads>(cx)),
+            Section::Textures => drop(self.get::<Textures>(cx)),
+            Section::Workshop => drop(self.get::<Workshop>(cx)),
+            Section::Saves => drop(self.get::<Saves>(cx)),
+            Section::Logs => drop(self.get::<Logs>(cx)),
+            Section::Find => drop(self.get::<Find>(cx)),
+            Section::Settings => drop(self.get::<Settings>(cx)),
+        }
         self.tell_shown(section, true, cx);
     }
 
-    fn make(&mut self, section: Section, cx: &mut Cx) {
-        let demo = self.demo;
-        match section {
-            Section::Mods => {}
-            Section::Downloads => {
-                self.downloads(cx);
-            }
-            Section::Workshop => {
-                self.workshop(cx);
-            }
-            Section::Find => {
-                self.find(cx);
-            }
-            Section::Saves if self.saves.is_none() => {
-                self.saves = Some(cx.new(|cx| Saves::new(demo, cx)));
-            }
-            Section::Textures if self.textures.is_none() => {
-                let textures = cx.new(|cx| Textures::new(demo, cx));
-                cx.observe(&textures, |textures, cx| {
-                    let work = textures.read(cx).task_said();
-                    super::around::change(cx, |around| around.textures_work = work);
-                })
-                .detach();
-                self.textures_stop = Some(textures.read(cx).stop.clone());
-                self.textures = Some(textures);
-            }
-            Section::Logs if self.logs.is_none() => {
-                let view = self.view;
-                self.logs = Some(cx.new(|cx| Logs::new(demo, view, cx)));
-            }
-            Section::Settings if self.settings.is_none() => {
-                let part = self.part;
-                let settings = cx.new(|cx| Settings::new(demo, part, cx));
-                cx.observe(&settings, |settings, cx| {
-                    let busy = settings.read(cx).community_busy();
-                    super::around::change(cx, |around| around.community_busy = busy);
-                })
-                .detach();
-                self.settings = Some(settings);
-            }
-            Section::Saves | Section::Textures | Section::Logs | Section::Settings => {}
+    fn tell_shown(&self, section: Section, shown: bool, cx: &mut Cx) {
+        if let Some(made) = &self.made[section.index()] {
+            (made.tell)(&made.view, shown, cx);
         }
     }
+}
 
-    pub fn downloads(&mut self, cx: &mut Cx) -> Entity<Downloads> {
-        if let Some(downloads) = &self.downloads {
-            return downloads.clone();
-        }
-        let (demo, mods) = (self.demo, self.mods.clone());
-        let downloads = cx.new(|cx| Downloads::new(demo, mods, cx));
-        cx.observe(&downloads, |downloads, cx| {
-            let work = downloads.read(cx).tasks_said();
+impl Shown for Mods {
+    fn set_shown(&mut self, _: bool, _: &mut Context<Self>) {}
+}
+
+impl Shown for Downloads {
+    fn set_shown(&mut self, _: bool, _: &mut Context<Self>) {}
+}
+
+impl SectionView for Mods {
+    const AT: Section = Section::Mods;
+    fn made(start: &Start, cx: &mut Context<Self>) -> Self {
+        let mods = Mods::new(start.demo, cx);
+        let list = mods.list.clone();
+        cx.observe(&list, |_, list, cx| {
+            super::around::from_list(&list, cx);
+            super::order::from_list(&list, cx);
+        })
+        .detach();
+        super::around::from_list(&list, cx);
+        super::order::from_list(&list, cx);
+        mods
+    }
+}
+
+impl SectionView for Downloads {
+    const AT: Section = Section::Downloads;
+    fn made(start: &Start, cx: &mut Context<Self>) -> Self {
+        cx.observe_self(|downloads, cx| {
+            let work = downloads.tasks_said();
             super::around::change(cx, |around| around.downloads_work = work);
         })
         .detach();
-        self.mods
-            .update(cx, |mods, cx| mods.set_downloads(&downloads, cx));
-        self.downloads = Some(downloads.clone());
-        downloads
+        Downloads::new(start.demo, cx)
     }
+}
 
-    /// Workshop, made hidden when it is not the section shown.
-    pub fn workshop(&mut self, cx: &mut Cx) -> Entity<Workshop> {
-        if let Some(workshop) = &self.workshop {
-            return workshop.clone();
-        }
-        let (demo, downloads) = (self.demo, self.downloads(cx));
-        let workshop = cx.new(|cx| Workshop::new(demo, downloads, cx));
-        self.workshop = Some(workshop.clone());
-        if self.shown != Section::Workshop {
-            self.tell_shown(Section::Workshop, false, cx);
-        }
-        workshop
+impl SectionView for Textures {
+    const AT: Section = Section::Textures;
+    fn made(start: &Start, cx: &mut Context<Self>) -> Self {
+        cx.observe_self(|textures, cx| {
+            let work = textures.task_said();
+            super::around::change(cx, |around| around.textures_work = work);
+        })
+        .detach();
+        Textures::new(start.demo, cx)
     }
+}
 
-    /// Search, made hidden when it is not the section shown.
-    pub fn find(&mut self, cx: &mut Cx) -> Entity<Find> {
-        if let Some(find) = &self.find {
-            return find.clone();
-        }
-        let demo = self.demo;
-        let find = cx.new(|cx| Find::new(demo, cx));
-        self.find = Some(find.clone());
-        if self.shown != Section::Find {
-            self.tell_shown(Section::Find, false, cx);
-        }
-        find
+impl SectionView for Workshop {
+    const AT: Section = Section::Workshop;
+    fn made(start: &Start, cx: &mut Context<Self>) -> Self {
+        Workshop::new(start.demo, cx)
     }
+}
 
-    fn tell_shown(&self, section: Section, shown: bool, cx: &mut Cx) {
-        fn tell<V: Shown + 'static>(view: &Option<Entity<V>>, shown: bool, cx: &mut Cx) {
-            if let Some(view) = view {
-                view.update(cx, |view, cx| view.set_shown(shown, cx));
-            }
-        }
-        match section {
-            Section::Mods | Section::Downloads => {}
-            Section::Textures => tell(&self.textures, shown, cx),
-            Section::Workshop => tell(&self.workshop, shown, cx),
-            Section::Saves => tell(&self.saves, shown, cx),
-            Section::Logs => tell(&self.logs, shown, cx),
-            Section::Find => tell(&self.find, shown, cx),
-            Section::Settings => tell(&self.settings, shown, cx),
-        }
+impl SectionView for Saves {
+    const AT: Section = Section::Saves;
+    fn made(start: &Start, cx: &mut Context<Self>) -> Self {
+        Saves::new(start.demo, cx)
+    }
+}
+
+impl SectionView for Logs {
+    const AT: Section = Section::Logs;
+    fn made(start: &Start, cx: &mut Context<Self>) -> Self {
+        Logs::new(start.demo, start.view, cx)
+    }
+}
+
+impl SectionView for Find {
+    const AT: Section = Section::Find;
+    fn made(start: &Start, cx: &mut Context<Self>) -> Self {
+        Find::new(start.demo, cx)
+    }
+}
+
+impl SectionView for Settings {
+    const AT: Section = Section::Settings;
+    fn made(start: &Start, cx: &mut Context<Self>) -> Self {
+        cx.observe_self(|settings, cx| {
+            let busy = settings.community_busy();
+            super::around::change(cx, |around| around.community_busy = busy);
+        })
+        .detach();
+        Settings::new(start.demo, start.part, cx)
     }
 }

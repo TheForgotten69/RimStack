@@ -41,9 +41,12 @@ fn opened(text_scale: f32, window: Shape<'_>, browse: Option<&str>) -> Opened {
         .unwrap();
     let workshop = cx
         .update(|cx| {
-            shell
-                .read(cx)
-                .map(|shell| shell.sections.workshop.clone().unwrap())
+            shell.read(cx).map(|shell| {
+                shell
+                    .sections
+                    .made::<crate::ui::workshop::Workshop>()
+                    .unwrap()
+            })
         })
         .unwrap();
     wait(&mut cx, &workshop, "the first results", |w| {
@@ -133,8 +136,11 @@ fn drawn_with(browse: Option<&'static str>) -> impl Fn(f32, Shape<'_>) -> Vec<Se
         let (_tmp, mut cx, shell, workshop) = opened(text_scale, window, browse);
         watch::start();
         cx.update(|cx| workshop.update(cx, |_, cx| cx.notify()));
-        cx.update_window(shell.into(), |_, window, cx| window.draw(cx).clear(cx))
-            .unwrap();
+        cx.update_window(shell.into(), |_, window, cx| {
+            window.refresh();
+            window.draw(cx).clear(cx)
+        })
+        .unwrap();
         watch::take()
     }
 }

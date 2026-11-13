@@ -5,7 +5,6 @@ mod details;
 mod screen;
 mod side;
 
-use super::downloads::Downloads;
 use super::notices::{self, Tone};
 use super::rows::Scrolling;
 use super::text_field::{Entered, TextField};
@@ -60,7 +59,8 @@ const READS: Changes = Changes::COMMUNITY
 pub struct Workshop {
     unseen: crate::ui::section::Unseen,
     demo: bool,
-    downloads: Entity<Downloads>,
+    /// The download list, in a pane of its own.
+    list_view: Entity<super::downloads::list::DownloadList>,
     field: Entity<TextField>,
     total: usize,
     more: bool,
@@ -114,7 +114,7 @@ pub struct Workshop {
 }
 
 impl Workshop {
-    pub fn new(demo: bool, downloads: Entity<Downloads>, cx: &mut Context<Self>) -> Self {
+    pub fn new(demo: bool, cx: &mut Context<Self>) -> Self {
         let theme = cx.global::<Theme>().clone();
         let reduce = theme.appearance.reduce_motion;
         let field = cx.new(|cx| TextField::new(theme.body(), cx));
@@ -123,13 +123,12 @@ impl Workshop {
             workshop.search(text, cx);
         })
         .detach();
-        cx.observe(&downloads, |_, _, cx| cx.notify()).detach();
         let scroll = Scrolling::default();
         scroll.borrow_mut().set_reduce_motion(reduce);
         let mut workshop = Self {
             unseen: Default::default(),
             demo,
-            downloads,
+            list_view: cx.new(|cx| super::downloads::list::DownloadList::new(true, cx)),
             field,
             total: 0,
             more: false,

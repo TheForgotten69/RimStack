@@ -337,7 +337,7 @@ impl Downloads {
                 .iter()
                 .enumerate()
                 .map(|(at, said)| {
-                    let act = crate::ui::mods::acting(self.mods.downgrade(), said);
+                    let act = crate::ui::mods::acting_from_afar(said);
                     problem(theme, at, said, Some((width, window)), Some(act))
                 })
                 .collect();

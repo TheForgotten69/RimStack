@@ -134,6 +134,54 @@ fn no_view_draws_a_file_that_is_never_let_go() {
 }
 
 #[test]
+fn no_section_holds_another_sections_view() {
+    const SECTIONS: [(&str, &str); 8] = [
+        ("mods", "Mods"),
+        ("downloads", "Downloads"),
+        ("textures", "Textures"),
+        ("workshop", "Workshop"),
+        ("saves", "Saves"),
+        ("logs", "Logs"),
+        ("find", "Find"),
+        ("settings", "Settings"),
+    ];
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui");
+    let mut files = Vec::new();
+    views(&root, &mut files);
+    let mut found = Vec::new();
+    for file in files {
+        let within = file.strip_prefix(&root).unwrap();
+        let first = within.iter().next().unwrap().to_string_lossy();
+        let Some((own, _)) = SECTIONS
+            .iter()
+            .find(|(module, _)| first.trim_end_matches(".rs") == *module)
+        else {
+            continue;
+        };
+        let text = std::fs::read_to_string(&file).unwrap();
+        for (n, line) in text.lines().enumerate() {
+            let held = SECTIONS
+                .iter()
+                .filter(|(module, _)| module != own)
+                .any(|(_, view)| {
+                    line.match_indices("Entity<").any(|(at, _)| {
+                        let inside = line[at + 7..].split(['>', ',']).next().unwrap_or_default();
+                        inside.rsplit("::").next() == Some(*view)
+                    })
+                });
+            if held {
+                found.push(format!("{}:{}: {}", within.display(), n + 1, line.trim()));
+            }
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "a section holds another's view; read its store and ask through `navigate::go`:\n{}",
+        found.join("\n")
+    );
+}
+
+#[test]
 fn the_check_sees_a_fixed_size() {
     assert_eq!(pixels("div().w(px(120.)).h(px(2.))"), ["120", "2"]);
     assert_eq!(pixels(".top(px(-12.))"), ["12"]);

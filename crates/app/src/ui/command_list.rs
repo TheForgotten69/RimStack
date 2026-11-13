@@ -459,7 +459,7 @@ impl Shell {
             none.clone(),
             Rc::new(|shell, _, cx| {
                 shell.go(crate::ui::section::Section::Saves, cx);
-                if let Some(saves) = shell.sections.saves.clone() {
+                if let Some(saves) = shell.sections.made::<crate::ui::saves::Saves>() {
                     saves.update(cx, |saves, cx| saves.reread(cx));
                 }
             }),
@@ -471,7 +471,7 @@ impl Shell {
             none.clone(),
             Rc::new(|shell, _, cx| {
                 shell.go(crate::ui::section::Section::Logs, cx);
-                if let Some(logs) = shell.sections.logs.clone() {
+                if let Some(logs) = shell.sections.made::<crate::ui::logs::Logs>() {
                     logs.update(cx, |logs, cx| logs.reread(cx));
                 }
             }),
@@ -708,17 +708,17 @@ impl Shell {
     }
 
     pub(crate) fn show_settings(&mut self, part: usize, cx: &mut Context<Self>) {
-        self.sections.part = part;
+        self.sections.start.part = part;
         self.go(crate::ui::section::Section::Settings, cx);
-        if let Some(settings) = &self.sections.settings {
+        if let Some(settings) = self.sections.made::<crate::ui::settings::Settings>() {
             settings.update(cx, |settings, cx| settings.show_part(part, cx));
         }
     }
 
     pub(crate) fn show_logs(&mut self, view: usize, cx: &mut Context<Self>) {
-        self.sections.view = view;
+        self.sections.start.view = view;
         self.go(crate::ui::section::Section::Logs, cx);
-        if let Some(logs) = &self.sections.logs {
+        if let Some(logs) = self.sections.made::<crate::ui::logs::Logs>() {
             logs.update(cx, |logs, cx| logs.show_view(view, cx));
         }
     }

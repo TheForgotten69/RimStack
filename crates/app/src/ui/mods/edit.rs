@@ -555,25 +555,48 @@ pub fn acting(
     mods: gpui::WeakEntity<Mods>,
     said: &crate::workspace::load_order::ProblemSaid,
 ) -> crate::ui::problem::Acting {
-    use crate::ui::problem::Act;
-    let (mod_id, fix) = (said.mod_id, said.fix.clone());
-    let (package_id, key) = (said.package_id.clone(), said.ignore.clone());
+    let said = said.clone();
     std::rc::Rc::new(move |act, _, cx| {
-        let (fix, package_id, key) = (fix.clone(), package_id.clone(), key.clone());
-        let _ = mods.update(cx, |mods, cx| match act {
-            Act::Fix => mods.apply_fix(mod_id, fix.action, &fix.target, fix.page.is_some(), cx),
-            Act::Ignore => mods.ignore_problem(package_id, key, cx),
+        let _ = mods.update(cx, |mods, cx| mods.act_on(act, &said, cx));
+    })
+}
+
+/// As `acting`, from another section: asked of the Mods tab through the window's router.
+pub fn acting_from_afar(
+    said: &crate::workspace::load_order::ProblemSaid,
+) -> crate::ui::problem::Acting {
+    let said = Box::new(said.clone());
+    std::rc::Rc::new(move |act, _, cx| {
+        crate::ui::navigate::go(crate::ui::navigate::Go::Problem(act, said.clone()), cx)
+    })
+}
+
+impl Mods {
+    /// What a problem's line was pressed for.
+    pub(crate) fn act_on(
+        &mut self,
+        act: crate::ui::problem::Act,
+        said: &crate::workspace::load_order::ProblemSaid,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::ui::problem::Act;
+        let fix = &said.fix;
+        match act {
+            Act::Fix => {
+                self.apply_fix(said.mod_id, fix.action, &fix.target, fix.page.is_some(), cx)
+            }
+            Act::Ignore => self.ignore_problem(said.package_id.clone(), said.ignore.clone(), cx),
             Act::Show => {
                 crate::ui::navigate::go(
                     crate::ui::navigate::Go::Section(crate::ui::section::Section::Mods),
                     cx,
                 );
-                if let Some(id) = mod_id {
-                    mods.show_mod(id, cx)
+                if let Some(id) = said.mod_id {
+                    self.show_mod(id, cx)
                 }
             }
-        });
-    })
+        }
+    }
 }
 
 impl Mods {

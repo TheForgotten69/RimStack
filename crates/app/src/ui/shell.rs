@@ -60,13 +60,20 @@ pub struct Shell {
 impl Shell {
     pub fn new(options: &Options, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let demo = options.demo;
-        let sections = super::sections::Sections::new(demo, options.part, options.view, cx);
+        let start = super::sections::Start {
+            demo,
+            part: options.part,
+            view: options.view,
+        };
+        let sections = super::sections::Sections::new(start, cx);
         let mods = sections.mods.clone();
         let focus = mods.read(cx).focus_handle(cx);
         window.focus(&focus, cx);
-        cx.subscribe(&super::navigate::router(cx), |shell, _, to: &Go, cx| {
-            shell.follow(to, cx)
-        })
+        cx.subscribe_in(
+            &super::navigate::router(cx),
+            window,
+            |shell, _, to: &Go, window, cx| shell.follow(to, window, cx),
+        )
         .detach();
         let held_by = mods.read(cx).list.downgrade();
         let game = cx.new(|cx| {
@@ -143,20 +150,36 @@ impl Shell {
     }
 
     pub(crate) fn downloads(&mut self, cx: &mut Context<Self>) -> Entity<Downloads> {
-        self.sections.downloads(cx)
+        self.sections.get(cx)
     }
 
     pub(crate) fn workshop(&mut self, cx: &mut Context<Self>) -> Entity<super::workshop::Workshop> {
-        self.sections.workshop(cx)
+        self.sections.get(cx)
     }
 
     pub(crate) fn find(&mut self, cx: &mut Context<Self>) -> Entity<super::find::Find> {
-        self.sections.find(cx)
+        self.sections.get(cx)
     }
 
     /// Where a view asked the window to go.
-    fn follow(&mut self, to: &Go, cx: &mut Context<Self>) {
+    fn follow(&mut self, to: &Go, window: &mut Window, cx: &mut Context<Self>) {
         match to {
+            Go::Problem(act, said) => {
+                let act = *act;
+                self.sections
+                    .mods
+                    .update(cx, |mods, cx| mods.act_on(act, said, cx));
+            }
+            Go::DownloadListed | Go::SubscribeListed | Go::InstallSteamcmd | Go::FetchNotes(_) => {
+                let downloads = self.downloads(cx);
+                downloads.update(cx, |downloads, cx| match to {
+                    Go::DownloadListed => downloads.ask_download(window, cx),
+                    Go::SubscribeListed => downloads.subscribe_wanted(cx),
+                    Go::InstallSteamcmd => downloads.ask_install_steamcmd(window, cx),
+                    Go::FetchNotes(id) => downloads.fetch_notes_of(*id, cx),
+                    _ => {}
+                });
+            }
             Go::Section(section) => self.go(*section, cx),
             Go::ShowMod(mod_id) => {
                 let mod_id = *mod_id;

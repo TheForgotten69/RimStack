@@ -16,7 +16,7 @@ const MOST_PATCHES: usize = 200;
 
 const FIRST_ERRORS: usize = 4;
 
-#[derive(Serialize, Clone, PartialEq)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct FixSaid {
     pub action: &'static str,
     pub target: String,
@@ -35,7 +35,7 @@ impl FixSaid {
     }
 }
 
-#[derive(Serialize, Clone, PartialEq)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProblemSaid {
     pub mod_id: Option<ModId>,

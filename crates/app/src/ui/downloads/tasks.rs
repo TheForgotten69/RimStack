@@ -430,7 +430,7 @@ impl Downloads {
                             );
                         }
                         Some(Fetching::Fetched { id, notes }) => {
-                            downloads.fetched.insert(id, notes);
+                            std::rc::Rc::make_mut(&mut downloads.fetched).insert(id, notes);
                         }
                         None => downloads.notes_busy = false,
                     }

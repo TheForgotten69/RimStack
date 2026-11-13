@@ -43,7 +43,7 @@ fn opened(text_scale: f32, window: Shape<'_>, text: Option<&str>) -> Opened {
         .update(|cx| {
             shell
                 .read(cx)
-                .map(|shell| shell.sections.find.clone().unwrap())
+                .map(|shell| shell.sections.made::<crate::ui::find::Find>().unwrap())
         })
         .unwrap();
     if text.is_some() {

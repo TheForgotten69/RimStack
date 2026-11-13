@@ -50,7 +50,7 @@ pub struct Shown {
 gpui::actions!(mods, [FocusFilter, Undo, Redo, Save]);
 
 pub use columns::Menu;
-pub use edit::acting;
+pub use edit::{acting, acting_from_afar};
 pub use list_state::ListState;
 
 /// glibc keeps what a thread freed in that thread's heap; after the scan's threads that was

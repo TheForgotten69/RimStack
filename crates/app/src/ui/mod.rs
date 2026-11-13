@@ -16,6 +16,7 @@ pub mod focus;
 pub mod game;
 pub mod hunt;
 pub mod keys;
+pub mod listed;
 pub mod lists;
 pub mod logs;
 pub mod menu;
@@ -422,6 +423,7 @@ fn install_with(app: Arc<App>, options: &Options, fonts: Fonts, cx: &mut Cx) {
     navigate::install(cx);
     around::install(cx);
     order::install(cx);
+    listed::install(cx);
     tip::install(cx);
     outside::install(options.demo, cx);
     text_field::bind_keys(cx);

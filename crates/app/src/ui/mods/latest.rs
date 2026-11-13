@@ -26,25 +26,25 @@ impl DetailsView {
         if self.shown.demo || !(workshop || git) {
             return None;
         }
-        let downloads = self.downloads.as_ref().and_then(|d| d.upgrade());
+        let listed = crate::ui::listed::read(cx);
         let notes: Vec<Note> = match workshop {
-            true => downloads
-                .as_ref()
-                .and_then(|d| d.read(cx).fetched_notes(&details.folder).cloned())
+            true => listed
+                .notes
+                .get(&details.folder)
+                .cloned()
                 .unwrap_or_default(),
             false => self.shown.commits.as_deref().cloned().unwrap_or_default(),
         };
         let mut actions = Vec::new();
         let mut actions_width = gpui::px(0.);
-        if let (true, Some(downloads)) = (workshop, downloads) {
-            let busy = downloads.read(cx).notes_busy();
+        if workshop {
+            let busy = listed.notes_busy;
             let said = match (busy, notes.is_empty()) {
-                (true, _) => downloads.read(cx).ask_steam_label(),
+                (true, _) => listed.notes_label.clone(),
                 (false, true) => put(&say!("Fetch")),
                 (false, false) => put(&say!("Fetch again")),
             };
             actions_width += btn_width(window, theme, &said, true, false) + theme::GAP_SMALL;
-            let fetching = downloads.downgrade();
             let id = self.shown.chosen_id;
             actions.push(
                 Btn::new("fetch-latest", said)
@@ -57,7 +57,7 @@ impl DetailsView {
                         let Some(id) = id else {
                             return;
                         };
-                        let _ = fetching.update(cx, |downloads, cx| downloads.fetch_notes_of(id, cx));
+                        crate::ui::navigate::go(crate::ui::navigate::Go::FetchNotes(id), cx);
                     })
                     .into_any_element(),
             );

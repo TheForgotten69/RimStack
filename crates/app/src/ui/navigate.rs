@@ -29,6 +29,18 @@ pub enum Go {
     Redownload(ModId),
     Unsubscribe(ModId),
     UpdateFromGit(ModId),
+    /// A problem's line pressed outside the Mods tab, done there.
+    Problem(
+        super::problem::Act,
+        Box<crate::workspace::load_order::ProblemSaid>,
+    ),
+    /// The download list downloaded, subscribed to, or SteamCMD installed for it, each asked
+    /// first.
+    DownloadListed,
+    SubscribeListed,
+    InstallSteamcmd,
+    /// A Workshop mod's change notes fetched.
+    FetchNotes(ModId),
 }
 
 pub struct Router;

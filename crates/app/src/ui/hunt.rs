@@ -92,7 +92,7 @@ impl Shell {
         self.sections
             .mods
             .update(cx, |mods, cx| mods.set_hunting(active, cx));
-        if let Some(logs) = &self.sections.logs {
+        if let Some(logs) = self.sections.made::<super::logs::Logs>() {
             logs.update(cx, |logs, cx| logs.set_hunting(active, cx));
         }
     }

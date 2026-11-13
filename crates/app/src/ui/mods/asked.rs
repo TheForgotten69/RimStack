@@ -122,18 +122,4 @@ impl Mods {
             }
         });
     }
-
-    /// Downloads, where a mod's change notes are fetched: the details redraw as it changes.
-    pub fn set_downloads(
-        &mut self,
-        downloads: &gpui::Entity<crate::ui::downloads::Downloads>,
-        cx: &mut Context<Self>,
-    ) {
-        let weak = downloads.downgrade();
-        let observed = downloads.clone();
-        self.details_view.update(cx, |view, cx| {
-            view.downloads = Some(weak);
-            cx.observe(&observed, |_, _, cx| cx.notify()).detach();
-        });
-    }
 }

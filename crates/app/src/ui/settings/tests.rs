@@ -30,7 +30,12 @@ fn settings(
     };
     cx.update(|cx| install(Arc::new(app), &options, cx));
     let (shell, cx) = cx.add_window_view(|window, cx| Shell::new(&options, window, cx));
-    let settings = shell.read_with(cx, |shell, _| shell.sections.settings.clone().unwrap());
+    let settings = shell.read_with(cx, |shell, _| {
+        shell
+            .sections
+            .made::<crate::ui::settings::Settings>()
+            .unwrap()
+    });
     cx.run_until_parked();
     (root, settings, cx)
 }
@@ -126,8 +131,7 @@ fn drawn_with(
                     let shell = Shell::new(&options, window, cx);
                     if let Some(settings) = shell
                         .sections
-                        .settings
-                        .as_ref()
+                        .made::<crate::ui::settings::Settings>()
                         .filter(|_| !finding.is_empty())
                     {
                         settings.update(cx, |s, _| s.finding = finding.into());
