@@ -30,6 +30,7 @@ pub mod prompt;
 pub mod rich;
 pub mod rows;
 pub mod saves;
+pub mod scenes;
 pub mod section;
 pub mod settings;
 pub mod shell;

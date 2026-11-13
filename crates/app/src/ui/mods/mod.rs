@@ -45,6 +45,7 @@ pub struct Shown {
 
 gpui::actions!(mods, [FocusFilter, Undo, Redo, Save]);
 
+pub use columns::Menu;
 pub use edit::acting;
 pub use menus::Wanted;
 
@@ -57,6 +58,17 @@ fn give_back_freed() {
         libc::malloc_trim(0);
     }
 }
+
+type AfterDrawn = Box<dyn FnMut(&mut Mods, &mut gpui::Window, &mut Context<Mods>) -> bool>;
+
+/// How far the mods are read, for what waits on them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Progress {
+    ListRead,
+    FilesRead,
+}
+
+impl gpui::EventEmitter<Progress> for Mods {}
 
 /// Asked of the window: show this section.
 pub struct ShowSection(pub crate::ui::section::Section);
@@ -74,13 +86,13 @@ pub struct Mods {
     focus_wanted: bool,
     keys: columns::Reachable,
     inactive_list: Entity<list::ModList>,
+    /// Asked to be done once the view is drawn; each answers whether it was done.
+    when_drawn: Vec<AfterDrawn>,
     thumbs: super::thumbs::Shared,
     focus: gpui::FocusHandle,
     overview: Option<Rc<Overview>>,
     details: Option<Rc<Details>>,
     details_view: Entity<chosen::DetailsView>,
-    /// A row to choose once the list is read: its place and the tab to show.
-    wanted: Option<(usize, usize)>,
     summary: Option<Rc<crate::reports::Summary>>,
     last_start: Option<Rc<crate::workspace::logs::LastStartSaid>>,
     summary_reading: Lane,
@@ -113,8 +125,6 @@ pub struct Mods {
     note_timer: String,
     /// The row of the problem last shown by the arrows beside the problems.
     problem_row: Option<usize>,
-    /// Four mods to choose once the list is read, as `--several` asks.
-    several: bool,
     problems_open: bool,
     /// Told by the window while the search for the broken mod runs.
     hunting: bool,
@@ -141,16 +151,10 @@ pub struct Mods {
     comparing: Option<Entity<compare::CompareView>>,
     /// What the comparison shows, as it last told.
     compared: Option<Rc<crate::workspace::textures::Comparison>>,
-    /// Two mods to compare once their files are read, as `--comparing` asks.
-    compare_wanted: bool,
-    /// Sort's preview to show once the files are read, as `--sorting` asks.
-    sort_wanted: bool,
     /// How the tab is shown, as `[Mods]` keeps it.
     view: Rc<crate::workspace::ModsView>,
     /// Where the View and the inactive order buttons were drawn, for `--open=`.
     menu_buttons: columns::Placed,
-    /// A menu to open once its button is drawn, as `--open=view` or `--open=order` asks.
-    pub menu_wanted: Option<&'static str>,
     /// The inactive mods shown over the load order, from the rail.
     pub drawer_open: bool,
     /// The turn of the drawer's last opening, which slides it in.
@@ -239,6 +243,7 @@ impl Mods {
         .detach();
         let mut mods = Self {
             thumbs,
+            when_drawn: Vec::new(),
             focus: cx.focus_handle(),
             filter,
             active_list,
@@ -247,7 +252,6 @@ impl Mods {
             overview: None,
             details: None,
             details_view,
-            wanted: None,
             summary: None,
             last_start: None,
             summary_reading: Lane::default(),
@@ -275,7 +279,6 @@ impl Mods {
             closed_note: String::new(),
             note_timer: String::new(),
             problem_row: None,
-            several: false,
             problems_open: false,
             hunting: false,
             picking: None,
@@ -294,11 +297,8 @@ impl Mods {
             unhide_problem: String::new(),
             comparing: None,
             compared: None,
-            compare_wanted: false,
-            sort_wanted: false,
             view,
             menu_buttons: Default::default(),
-            menu_wanted: None,
             drawer_open: false,
             drawer_turn: 0,
             mirror,
@@ -355,12 +355,7 @@ impl Mods {
         }
         if changes.contains(Changes::FILES_READ) {
             self.files_read = true;
-            if std::mem::take(&mut self.compare_wanted) {
-                self.compare_first(cx);
-            }
-            if std::mem::take(&mut self.sort_wanted) {
-                self.preview_sort(cx);
-            }
+            cx.emit(Progress::FilesRead);
         }
         if changes.contains(Changes::TEXTURES) {
             self.read_files(cx);
@@ -561,12 +556,7 @@ impl Mods {
                 give_back_freed();
                 mods.read_files(cx);
                 mods.restore_left_off(cx);
-                if let Some((row, tab)) = mods.wanted.take() {
-                    mods.pick_row(Side::Active, row, tab, cx);
-                }
-                if std::mem::take(&mut mods.several) {
-                    mods.choose_several(cx);
-                }
+                cx.emit(Progress::ListRead);
                 if let Some(started) = crate::STARTED.get() {
                     rimstack_core::note!("mods_shown_ms={}", started.elapsed().as_millis());
                 }
@@ -670,8 +660,7 @@ impl Mods {
                 self.choose(side, found.mod_id, cx);
                 self.reveal_selected(side, false, cx);
             }
-            Some(_) => {}
-            None => self.wanted = Some((row, tab)),
+            _ => {}
         }
     }
 
@@ -737,12 +726,8 @@ impl Mods {
             && self.selection.contains(&mod_id)
     }
 
-    /// Four mods of the load order chosen, as `--several` asks: once the list is read.
+    /// Four mods of the load order chosen, as `--several` asks.
     pub fn choose_several(&mut self, cx: &mut Context<Self>) {
-        if self.active.rows.is_empty() {
-            self.several = true;
-            return;
-        }
         self.choose_nth(Side::Active, 14, false, cx);
         for at in [15, 16, 19] {
             self.choose_nth(Side::Active, at, true, cx);

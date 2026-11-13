@@ -196,12 +196,31 @@ impl Mods {
         self.order_inactive(then, cx);
     }
 
-    /// Sort's preview, now or once the files are read.
-    pub fn sort_when_read(&mut self, cx: &mut Context<Self>) {
-        match self.files_read {
-            true => self.preview_sort(cx),
-            false => self.sort_wanted = true,
+    /// `act` after the next draw, and after each one until it answers that it was done.
+    pub fn when_drawn(&mut self, act: super::AfterDrawn, cx: &mut Context<Self>) {
+        self.when_drawn.push(act);
+        cx.notify();
+    }
+
+    pub(super) fn run_when_drawn(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        if self.when_drawn.is_empty() {
+            return;
         }
+        let waiting = std::mem::take(&mut self.when_drawn);
+        cx.defer_in(window, move |mods, window, cx| {
+            for mut act in waiting {
+                if !act(mods, window, cx) {
+                    mods.when_drawn.push(act);
+                }
+            }
+            if !mods.when_drawn.is_empty() {
+                cx.notify();
+            }
+        });
+    }
+
+    pub fn files_read(&self) -> bool {
+        self.files_read
     }
 
     /// Downloads, where a mod's change notes are fetched: the details redraw as it changes.

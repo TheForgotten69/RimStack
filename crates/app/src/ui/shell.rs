@@ -6,7 +6,6 @@ use super::mods::{Mods, ShowSection};
 use super::section::Section;
 use super::theme::Theme;
 use super::top_bar::top_bar;
-use crate::workspace::load_order::Side;
 use gpui::{
     AppContext, Context, Entity, Focusable, InteractiveElement, IntoElement, ParentElement, Render,
     Styled, Window, div,
@@ -77,54 +76,6 @@ impl Shell {
         let mods = cx.new(|cx| Mods::new(demo, cx));
         let focus = mods.read(cx).focus_handle(cx);
         window.focus(&focus, cx);
-        if let Some(text) = &options.filter {
-            mods.update(cx, |mods, cx| mods.filter_by(text, cx));
-        }
-        if let Some(text) = &options.typing {
-            let field = mods.read(cx).filter.clone();
-            field.update(cx, |field, cx| field.set_text(text, cx));
-            window.focus(&gpui::Focusable::focus_handle(field.read(cx), cx), cx);
-        }
-        if let Some(row) = options.pick {
-            let tab = options.tab;
-            mods.update(cx, |mods, cx| mods.pick_row(Side::Active, row, tab, cx));
-        }
-        if options.bench {
-            let mods = mods.clone();
-            cx.spawn_in(window, async move |_, cx| {
-                let wait = std::time::Duration::from_millis(300);
-                loop {
-                    cx.background_executor().timer(wait).await;
-                    let read = cx.update(|_, cx| {
-                        let mods = mods.read(cx);
-                        mods.count(Side::Active) > 0 && !mods.reading_files()
-                    });
-                    if read.unwrap_or(true) {
-                        break;
-                    }
-                }
-                let _ = cx.update(|_, cx| mods.update(cx, |mods, cx| mods.start_bench(cx)));
-            })
-            .detach();
-        }
-        if options.several {
-            mods.update(cx, |mods, cx| mods.choose_several(cx));
-        }
-        if options.still {
-            mods.update(cx, |mods, _| mods.leave_off());
-        }
-        if let Some(step) = options.hints {
-            mods.update(cx, |mods, cx| mods.show_hint(step, cx));
-        }
-        if options.sorting {
-            mods.update(cx, |mods, cx| mods.sort_when_read(cx));
-        }
-        if options.drawer {
-            mods.update(cx, |mods, _| mods.drawer_open = true);
-        }
-        if options.comparing {
-            mods.update(cx, |mods, cx| mods.compare_first(cx));
-        }
         cx.subscribe(&mods, |shell, _, ShowSection(section), cx| {
             shell.go(*section, cx)
         })
@@ -227,63 +178,8 @@ impl Shell {
             });
             check_release(cx);
         }
-        if let Some(asked) = &options.browse {
-            let workshop = shell.workshop(cx);
-            workshop.update(cx, |workshop, cx| workshop.show_asked(asked, cx));
-        }
-        if let Some(text) = &options.find {
-            let find = shell.find(cx);
-            find.update(cx, |find, cx| find.search_for(text, Some(2), cx));
-        }
-        shell.show_asked(options, window, cx);
+        super::scenes::stage(&mut shell, options, window, cx);
         shell
-    }
-
-    /// What `--notices` and `--open=` ask to be shown.
-    fn show_asked(&mut self, options: &Options, window: &mut Window, cx: &mut Context<Self>) {
-        use super::notices::{self, Tone};
-        use super::prompt::{self, Line, Question};
-        use crate::words::put;
-        use rimstack_core::{say, say_n};
-        if options.notices {
-            notices::say(put(&say!("Saved")), Tone::Ok, cx);
-            notices::offer(
-                put(&say_n!(3, "Deactivated {} mod", "Deactivated {} mods")),
-                put(&say!("Undo")),
-                |_, _| {},
-                cx,
-            );
-        }
-        match options.open.as_deref() {
-            Some("play") => self.before_play = true,
-            Some("problems") => self.mods.update(cx, |mods, cx| mods.open_problems(cx)),
-            Some("keys") => self.open_keys(window, cx),
-            Some("commands") => self.open_commands(window, cx),
-            Some("lists") => self.open_popup(super::lists::Which::Lists, window, cx),
-            Some("history") => self.open_popup(super::lists::Which::History, window, cx),
-            Some("tray") => self.tray_open = true,
-            Some("view") => self
-                .mods
-                .update(cx, |mods, _| mods.menu_wanted = Some("view")),
-            Some("order") => self
-                .mods
-                .update(cx, |mods, _| mods.menu_wanted = Some("order")),
-            _ => {}
-        }
-        if options.open.as_deref() == Some("ask") {
-            let question = Question {
-                title: put(&say!("Set the mods' settings aside")),
-                lines: vec![
-                    Line::Text(put(&say!("Every Mod_*.xml is moved out of"))),
-                    Line::Path("/home/example/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios/Config".into()),
-                    Line::Text(put(&say!("Mods start from their defaults. Moving the files back restores them."))),
-                ],
-                label: put(&say!("Set aside")),
-                danger: false,
-                run: Box::new(|_, _| {}),
-            };
-            prompt::ask(question, window, cx);
-        }
     }
 
     pub(crate) fn downloads(&mut self, cx: &mut Context<Self>) -> Entity<Downloads> {

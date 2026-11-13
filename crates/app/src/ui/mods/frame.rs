@@ -18,6 +18,7 @@ impl Render for Mods {
         #[cfg(test)]
         RENDERS.with(|renders| renders.set(renders.get() + 1));
         let theme = cx.global::<Theme>().clone();
+        self.run_when_drawn(window, cx);
         if std::mem::take(&mut self.focus_wanted) {
             let focus = self.active_list.read(cx).focus_handle();
             window.focus(&focus, cx);
@@ -43,7 +44,6 @@ impl Render for Mods {
             true => self.hint(&theme, window, cx),
             false => None,
         };
-        self.open_wanted_menu(window, cx);
         div()
             .flex()
             .flex_col()

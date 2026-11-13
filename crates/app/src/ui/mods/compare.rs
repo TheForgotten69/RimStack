@@ -589,7 +589,6 @@ impl Mods {
     /// The first active mod that shares textures with another, compared with it.
     pub fn compare_first(&mut self, cx: &mut Context<Self>) {
         if !self.files_read {
-            self.compare_wanted = true;
             return;
         }
         let app = crate::ui::app(cx);

@@ -239,28 +239,27 @@ pub(super) fn columns(
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Menu {
+    View,
+    InactiveOrder,
+}
+
 impl Mods {
-    /// The menu `--open=` asks for, once its button has been drawn.
-    pub(super) fn open_wanted_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(which) = self.menu_wanted else {
-            return;
+    /// The menu under its button; false while the button is not drawn yet.
+    pub fn open_menu(&mut self, menu: Menu, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let at = match menu {
+            Menu::View => self.menu_buttons.view.get(),
+            Menu::InactiveOrder => self.menu_buttons.order.get(),
         };
-        let at = match which {
-            "view" => self.menu_buttons.view.get(),
-            _ => self.menu_buttons.order.get(),
-        };
-        if self.count(Side::Active) == 0 {
-            return;
-        }
         if at.size.width <= px(0.) {
-            crate::ui::redraw_after(cx.entity_id(), cx);
-            return;
+            return false;
         }
-        self.menu_wanted = None;
-        cx.defer_in(window, move |mods, window, cx| match which {
-            "view" => mods.view_menu(at, window, cx),
-            _ => mods.inactive_order_menu(at, window, cx),
-        });
+        match menu {
+            Menu::View => self.view_menu(at, window, cx),
+            Menu::InactiveOrder => self.inactive_order_menu(at, window, cx),
+        }
+        true
     }
 
     /// The view changed by `change` and kept, as `ModsPrefs` kept each change.
