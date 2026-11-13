@@ -1,4 +1,5 @@
 use super::types::FileTypes;
+use crate::base::locks::Held;
 use crate::base::stamp::FolderStamp;
 use crate::base::walk;
 use std::collections::HashMap;
@@ -77,13 +78,13 @@ impl FileLists {
                 settings.git,
             ],
         );
-        if let Some((kept, list)) = self.kept.lock().unwrap().get(&key)
+        if let Some((kept, list)) = self.kept.held().get(&key)
             && *kept == stamp
         {
             return list.clone();
         }
         let list = Arc::new(settings.walk(folder));
-        self.kept.lock().unwrap().insert(key, (stamp, list.clone()));
+        self.kept.held().insert(key, (stamp, list.clone()));
         list
     }
 

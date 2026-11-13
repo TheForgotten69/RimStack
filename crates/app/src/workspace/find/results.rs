@@ -3,6 +3,7 @@ use rimstack_core::mods::find::{FileHits, Hit, Line, lines_of};
 use rimstack_core::mods::library::ModId;
 use rimstack_core::say;
 use serde::Serialize;
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -160,13 +161,13 @@ pub struct FoundMods {
 /// What a row shows: a mod, a file of it, or a line of that file.
 pub enum Shown<'a> {
     Mod {
-        name: &'a Sentence,
+        name: Cow<'a, Sentence>,
         matches: usize,
         files: usize,
         collapsed: bool,
     },
     File {
-        path: &'a str,
+        path: Cow<'a, str>,
         matches: usize,
         collapsed: bool,
     },
@@ -175,8 +176,49 @@ pub enum Shown<'a> {
         number: usize,
         matched: bool,
         gap: bool,
-        parts: Vec<(&'a str, bool)>,
+        parts: Vec<(Cow<'a, str>, bool)>,
     },
+}
+
+impl Shown<'_> {
+    pub fn into_owned(self) -> Shown<'static> {
+        match self {
+            Shown::Mod {
+                name,
+                matches,
+                files,
+                collapsed,
+            } => Shown::Mod {
+                name: Cow::Owned(name.into_owned()),
+                matches,
+                files,
+                collapsed,
+            },
+            Shown::File {
+                path,
+                matches,
+                collapsed,
+            } => Shown::File {
+                path: Cow::Owned(path.into_owned()),
+                matches,
+                collapsed,
+            },
+            Shown::Line {
+                number,
+                matched,
+                gap,
+                parts,
+            } => Shown::Line {
+                number,
+                matched,
+                gap,
+                parts: parts
+                    .into_iter()
+                    .map(|(text, mark)| (Cow::Owned(text.into_owned()), mark))
+                    .collect(),
+            },
+        }
+    }
 }
 
 pub struct Located {
@@ -433,7 +475,7 @@ impl Results {
         let group = self.groups.get(at.group as usize)?;
         if at.is_mod() {
             return Some(Shown::Mod {
-                name: &group.name,
+                name: Cow::Borrowed(&group.name),
                 matches: group.matches,
                 files: group.shown_files,
                 collapsed: group.collapsed,
@@ -442,7 +484,7 @@ impl Results {
         let file = group.files.get(at.file as usize)?;
         if at.is_file() {
             return Some(Shown::File {
-                path: &file.shown,
+                path: Cow::Borrowed(&file.shown),
                 matches: file.visible.len(),
                 collapsed: file.collapsed,
             });
@@ -452,7 +494,11 @@ impl Results {
             number: line.number,
             matched: line.is_match(),
             gap: line.gap,
-            parts: line.parts(),
+            parts: line
+                .parts()
+                .into_iter()
+                .map(|(text, mark)| (Cow::Borrowed(text), mark))
+                .collect(),
         })
     }
 
@@ -710,7 +756,7 @@ mod tests {
         );
         assert!(line(rows[3]).1 && !line(rows[2]).1);
         let parts = line(rows[3]).2;
-        let marked: Vec<&str> = parts.iter().filter(|p| p.1).map(|p| p.0).collect();
+        let marked: Vec<&str> = parts.iter().filter(|p| p.1).map(|p| p.0.as_ref()).collect();
         assert_eq!(marked, ["Steel", "Steel"]);
         let located = results.locate(rows[1]).unwrap();
         assert_eq!(

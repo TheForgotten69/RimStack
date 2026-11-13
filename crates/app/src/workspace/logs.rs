@@ -1,5 +1,6 @@
 use super::App;
 use rimstack_core::base::error::Error;
+use rimstack_core::base::locks::Held;
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::kept::launches::{self, LastStart, LogRead, Shown, SinceClean};
 use rimstack_core::mods::blame::{Blamed, Pointed};
@@ -325,7 +326,7 @@ impl App {
 
     pub fn last_start(&self) -> Option<LastStart> {
         let recorded = launches::read(&self.launches_file()).pop();
-        let read = *self.log_read.lock().unwrap_or_else(|e| e.into_inner());
+        let read = *self.log_read.held();
         launches::last_start(recorded.as_ref(), read, self.log_written() / 1000)
     }
 
@@ -391,7 +392,7 @@ impl App {
                 previous: false,
                 errors: groups.len(),
             });
-            let mut last = self.log_read.lock().unwrap_or_else(|e| e.into_inner());
+            let mut last = self.log_read.held();
             changed |= *last != read;
             *last = read;
         }

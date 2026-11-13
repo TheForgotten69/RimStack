@@ -292,20 +292,26 @@ impl Find {
             move |range, _, window, cx| {
                 let theme = &owned;
                 let app = crate::ui::app(cx);
-                app.find_results(|results| {
+                let shown: Vec<(usize, Shown<'static>)> = app.find_results(|results| {
                     range
                         .filter_map(|at| {
                             let shown = results.shown(*shown_rows.get(at)?)?;
-                            let row = Row {
-                                at,
-                                current: current == Some(at),
-                                width: row_width,
-                                digits: layout.digits,
-                            };
-                            Some(row.draw(shown, theme, &me, &focus, window))
+                            Some((at, shown.into_owned()))
                         })
                         .collect()
-                })
+                });
+                shown
+                    .into_iter()
+                    .map(|(at, shown)| {
+                        let row = Row {
+                            at,
+                            current: current == Some(at),
+                            width: row_width,
+                            digits: layout.digits,
+                        };
+                        row.draw(shown, theme, &me, &focus, window)
+                    })
+                    .collect()
             },
         );
         let c = &theme.colours;
@@ -424,7 +430,7 @@ impl Row {
                 files,
                 collapsed,
             } => {
-                let name = put(name);
+                let name = put(&name);
                 let counted = format!(
                     "{}, {}",
                     put(&say_n!(matches, "{} match", "{} matches")),
@@ -493,8 +499,14 @@ impl Row {
                     - fold
                     - theme::GAP_SMALL * 2.
                     - measure(window, theme, &counted, theme.small(), FontWeight::NORMAL);
-                let shown_path =
-                    elide_start_in(window, theme, theme.mono.clone(), path, theme.small(), room);
+                let shown_path = elide_start_in(
+                    window,
+                    theme,
+                    theme.mono.clone(),
+                    &path,
+                    theme.small(),
+                    room,
+                );
                 let row = div()
                     .id(("find-file", at))
                     .role(Role::ListItem)
@@ -608,7 +620,7 @@ impl Row {
 
 /// A line's text with its tabs as four spaces, and the matches in it marked.
 fn marked(
-    parts: &[(&str, bool)],
+    parts: &[(std::borrow::Cow<'_, str>, bool)],
     theme: &Theme,
 ) -> (String, Vec<(std::ops::Range<usize>, HighlightStyle)>) {
     let mark = HighlightStyle {
