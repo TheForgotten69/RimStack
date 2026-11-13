@@ -65,6 +65,8 @@ const READS: Changes = Changes::SETTINGS
 
 pub struct Downloads {
     demo: bool,
+    /// The load order's mods its rules ask for that are not installed, as the Mods tab last told.
+    needed: Rc<Vec<crate::workspace::load_order::ProblemSaid>>,
     report: Rc<SettingsReport>,
     updates: Updates,
     updates_busy: bool,
@@ -126,10 +128,18 @@ impl Downloads {
             |downloads, _, _: &super::text_field::Entered, cx| downloads.look_up(cx),
         )
         .detach();
-        cx.observe(&mods, |_, _, cx| cx.notify()).detach();
+        cx.observe(&mods, |downloads, mods, cx| {
+            let needed = mods.read(cx).to_get();
+            if *downloads.needed != needed {
+                downloads.needed = Rc::new(needed);
+                cx.notify();
+            }
+        })
+        .detach();
         let reduce = theme.appearance.reduce_motion;
         let mut downloads = Self {
             demo,
+            needed: Rc::new(mods.read(cx).to_get()),
             report: Rc::default(),
             updates: Updates::default(),
             updates_busy: false,
@@ -376,8 +386,7 @@ impl Downloads {
         self.folded.contains(key) != starts_folded
     }
 
-    /// The load order's mods its rules ask for that are not installed.
-    fn needed(&self, cx: &Context<Self>) -> Vec<crate::workspace::load_order::ProblemSaid> {
-        self.mods.read(cx).to_get()
+    fn needed(&self) -> Rc<Vec<crate::workspace::load_order::ProblemSaid>> {
+        self.needed.clone()
     }
 }

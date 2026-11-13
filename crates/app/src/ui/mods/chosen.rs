@@ -13,7 +13,7 @@ use rimstack_core::say;
 use std::rc::Rc;
 
 /// What the details show, handed over by the Mods screen when it changes.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq)]
 pub struct DetailsShown {
     pub demo: bool,
     pub active: usize,
@@ -254,8 +254,15 @@ impl DetailsView {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    pub(super) static RENDERS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl gpui::Render for DetailsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(test)]
+        RENDERS.with(|renders| renders.set(renders.get() + 1));
         let theme = cx.global::<Theme>().clone();
         let (_, _, width) =
             super::pane_widths(&theme, window.viewport_size().width, self.shown.panes);

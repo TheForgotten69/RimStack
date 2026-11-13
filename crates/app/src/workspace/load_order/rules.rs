@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 
 type Kept = (Vec<Option<ModId>>, Vec<ModId>, Vec<infer::Inferred>);
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq)]
 pub struct Detected {
     kept: Option<Kept>,
 }

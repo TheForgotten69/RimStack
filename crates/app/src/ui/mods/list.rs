@@ -21,7 +21,7 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 /// What a list shows, handed over by the Mods screen.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Shown {
     pub rows: Rc<Vec<RowView>>,
     pub orders: Rc<Orders>,
@@ -149,6 +149,12 @@ impl ModList {
     }
 
     /// New rows: the list stays where it was, as far down as it can.
+    /// What the list shows now: compared before `show`, since an update that changes nothing
+    /// still draws the list again when the Mods tab around it is drawn.
+    pub fn shown(&self) -> &Shown {
+        &self.shown
+    }
+
     pub fn show(&mut self, shown: Shown, cx: &mut Context<Self>) {
         if !Rc::ptr_eq(&shown.rows, &self.shown.rows) {
             let theme = cx.global::<Theme>().clone();
@@ -312,8 +318,15 @@ impl ModList {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    pub(super) static RENDERS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl Render for ModList {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(test)]
+        RENDERS.with(|renders| renders.set(renders.get() + 1));
         let theme = cx.global::<Theme>().clone();
         self.bench_frame(window, cx);
         let (side, shown, thumbs, mods) = (

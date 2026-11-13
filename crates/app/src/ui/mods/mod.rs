@@ -430,8 +430,10 @@ impl Mods {
             selected: self.selection.len(),
             selection: self.selection_summary(),
         };
-        self.details_view
-            .update(cx, |view, cx| view.show(shown, cx));
+        if self.details_view.read(cx).shown != shown {
+            self.details_view
+                .update(cx, |view, cx| view.show(shown, cx));
+        }
     }
 
     /// `anew`: the mods were read again, so every id held before means nothing.
@@ -494,7 +496,9 @@ impl Mods {
         };
         for side in [Side::Active, Side::Inactive] {
             let rows = self.order.rows(&app, side);
-            self.shown_mut(side).rows = Rc::new(rows);
+            if *self.shown(side).rows != rows {
+                self.shown_mut(side).rows = Rc::new(rows);
+            }
         }
         self.orders = self.order.orders();
         self.sync_lists(cx);
@@ -632,7 +636,9 @@ impl Mods {
                 picking: self.chosen_reads.picking.is_some(),
                 count: self.order.list(side).mods().len(),
             };
-            self.list(side).update(cx, |list, cx| list.show(shown, cx));
+            if *self.list(side).read(cx).shown() != shown {
+                self.list(side).update(cx, |list, cx| list.show(shown, cx));
+            }
         }
     }
 

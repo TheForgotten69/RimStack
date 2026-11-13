@@ -225,7 +225,7 @@ impl Mods {
                     .flex_1()
                     .min_h_0()
                     .w_full()
-                    .child(self.list(Side::Active).clone()),
+                    .child(crate::ui::cached(self.list(Side::Active).clone())),
             )
     }
 

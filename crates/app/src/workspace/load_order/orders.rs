@@ -7,7 +7,7 @@ use rimstack_core::say;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Orders {
     pub active: Vec<OrderEntry>,
@@ -20,7 +20,7 @@ pub struct Orders {
     pub widest: BTreeMap<&'static str, String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct OrderEntry {
     /// A `SortKey::key`; "" for the list's own order.
     pub key: &'static str,

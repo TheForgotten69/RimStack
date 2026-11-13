@@ -93,7 +93,7 @@ impl Render for Mods {
                                 .w(details_width)
                                 .flex_none()
                                 .h_full()
-                                .child(self.details_view.clone()),
+                                .child(crate::ui::cached(self.details_view.clone())),
                         ),
                 )
             })

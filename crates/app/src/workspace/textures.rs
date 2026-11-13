@@ -124,13 +124,13 @@ pub struct Refused {
     pub why: Sentence,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, PartialEq)]
 pub struct Side {
     pub id: ModId,
     pub name: String,
 }
 
-#[derive(Serialize, Clone, Default)]
+#[derive(Serialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Shared {
     pub name: String,
@@ -150,7 +150,7 @@ pub struct Shared {
     pub used: Sentence,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Comparison {
     pub earlier: Side,

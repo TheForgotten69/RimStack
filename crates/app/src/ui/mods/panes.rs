@@ -413,7 +413,7 @@ impl Mods {
                     .w(details_width)
                     .flex_none()
                     .h_full()
-                    .child(self.details_view.clone()),
+                    .child(crate::ui::cached(self.details_view.clone())),
             )
             .on_drag_move::<Grip>(cx.listener(|mods, event: &DragMoveEvent<Grip>, _, cx| {
                 let grip = *event.drag(cx);

@@ -6,6 +6,7 @@ use rimstack_core::mods::list::{Category, Row};
 use rimstack_core::say;
 use std::collections::{HashMap, HashSet};
 
+#[derive(PartialEq)]
 pub struct Chosen {
     pub name: String,
     pub category: Category,
@@ -13,7 +14,7 @@ pub struct Chosen {
     pub trouble: Level,
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct SelectionSummary {
     pub place: Sentence,
     /// Those with a row in view, in the order of their list.

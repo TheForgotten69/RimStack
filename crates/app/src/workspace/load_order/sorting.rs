@@ -26,13 +26,13 @@ impl SortCount {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 pub struct SortGroup {
     pub name: &'static str,
     pub moves: Vec<SortMove>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SortMove {
     pub name: String,

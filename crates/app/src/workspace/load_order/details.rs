@@ -16,7 +16,7 @@ const MOST_PATCHES: usize = 200;
 
 const FIRST_ERRORS: usize = 4;
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, PartialEq)]
 pub struct FixSaid {
     pub action: &'static str,
     pub target: String,
@@ -35,7 +35,7 @@ impl FixSaid {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProblemSaid {
     pub mod_id: Option<ModId>,
@@ -69,32 +69,32 @@ impl ProblemSaid {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 pub struct Detected {
     pub name: String,
     pub why: Sentence,
     pub code: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 pub struct Branch {
     pub folder: String,
     pub files: usize,
 }
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Default, PartialEq)]
 pub struct Files {
     pub tree: Vec<Branch>,
     pub assemblies: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 pub struct Patched {
     pub method: Sentence,
     pub note: Sentence,
 }
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Details {
     pub name: String,
@@ -154,7 +154,7 @@ pub struct Details {
     pub steam_page: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalCopy {
     pub mod_id: ModId,
@@ -172,14 +172,14 @@ pub struct NotInstalled {
     pub(super) resubscribe: Vec<String>,
 }
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Textures {
     pub count: usize,
     pub dds_made: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq)]
 pub struct ProblemGroup {
     pub name: &'static str,
     pub error: bool,
@@ -188,7 +188,7 @@ pub struct ProblemGroup {
     pub lines: Vec<ProblemSaid>,
 }
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Overview {
     pub game_version: String,

@@ -254,6 +254,14 @@ pub fn redraw_after(view: gpui::EntityId, cx: &mut Cx) {
     cx.defer(move |cx| cx.notify(view));
 }
 
+/// `view` filling its place, drawn again only when it or what it read is notified: a view the
+/// one around it hands what to show. Placed as a plain child, it is drawn again with the view
+/// around it whenever an entity it read was merely updated, as an `observe` updates its observer.
+pub fn cached<V: gpui::Render>(view: gpui::Entity<V>) -> impl gpui::IntoElement {
+    use gpui::Styled;
+    view.cached(gpui::StyleRefinement::default().size_full())
+}
+
 /// `f` on the view, as a control's callback that is given a value.
 pub fn act<V: 'static, T: 'static>(
     cx: &gpui::Context<V>,

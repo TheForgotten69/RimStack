@@ -327,7 +327,7 @@ impl Downloads {
     ) -> gpui::Div {
         let c = &theme.colours;
         let shown = updates_shown(&self.updates, &self.asked_of_steam);
-        let needed = self.needed(cx);
+        let needed = self.needed();
         let mut cards: Vec<AnyElement> = Vec::new();
         cards.extend(self.banner(theme, cx).map(IntoElement::into_any_element));
         cards.push(self.status(theme, cx).into_any_element());

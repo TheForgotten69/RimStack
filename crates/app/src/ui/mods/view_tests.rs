@@ -452,6 +452,44 @@ fn a_mod_moved_slides_from_where_it_was() {
 }
 
 #[test]
+fn a_change_that_leaves_the_rows_and_details_as_they_were_draws_neither_again() {
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    let window = cx.update(|cx| cx.windows()[0]);
+    let draw = |cx: &mut gpui::HeadlessAppContext| {
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+    };
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            let chosen = mods.order.list(Side::Active).mods()[4].installed.unwrap();
+            mods.choose(Side::Active, chosen, cx);
+        })
+    });
+    for _ in 0..3 {
+        draw(&mut cx);
+        std::thread::sleep(std::time::Duration::from_millis(400));
+    }
+    draw(&mut cx);
+    let counted = || {
+        (
+            super::list::RENDERS.with(|renders| renders.replace(0)),
+            super::chosen::RENDERS.with(|renders| renders.replace(0)),
+        )
+    };
+    counted();
+    for _ in 0..3 {
+        cx.update(|cx| mods.update(cx, |mods, cx| mods.show(cx)));
+        draw(&mut cx);
+    }
+    assert_eq!(
+        counted(),
+        (0, 0),
+        "lists and details drawn again for nothing"
+    );
+}
+
+#[test]
 fn scrolling_the_load_order_draws_the_list_alone_again() {
     use super::frame::RENDERS;
     let (_tmp, mut cx, mods) = opened_with(|_| {});
