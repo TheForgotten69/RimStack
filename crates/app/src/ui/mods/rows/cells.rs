@@ -16,7 +16,6 @@ use rimstack_core::mods::list::Category;
 use rimstack_core::say;
 use std::sync::Arc;
 
-/// The tags a row shows: each, when they fit beside the name, else one chip for them all.
 pub(super) enum Tags {
     None,
     All(Vec<String>),
@@ -25,7 +24,6 @@ pub(super) enum Tags {
 
 pub(super) struct Fitted {
     pub name: String,
-    /// Whether the name was cut, so it is told whole while pointed at.
     pub cut: bool,
     pub tags: Tags,
     pub ordered_by: Option<String>,
@@ -36,9 +34,7 @@ pub(super) struct Fitted {
 pub(super) struct Shown<'a> {
     pub columns: Option<&'a Columns>,
     pub chosen: bool,
-    /// Chosen, and the only mod chosen: its menu button stays.
     pub alone: bool,
-    /// The pointer is on it: its category and a cut name or load time explain themselves.
     pub pointed: bool,
     pub colour: Hsla,
     pub picture: Option<Arc<RenderImage>>,

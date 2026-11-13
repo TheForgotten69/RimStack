@@ -79,7 +79,6 @@ impl Mods {
         self.set_hidden(hidden, cx);
     }
 
-    /// Whether the inactive mods are shown by category, their own order.
     pub fn inactive_by_category(&self) -> bool {
         self.view.inactive_order.is_empty()
     }

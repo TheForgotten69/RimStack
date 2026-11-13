@@ -37,7 +37,6 @@ pub struct FirstRun {
     databases: Rc<Vec<Database>>,
     languages: Rc<Vec<String>>,
     with_rimsort: bool,
-    /// The load order as it was read: its active and inactive mods, or why it was not.
     mods: (usize, usize, String),
     reading: crate::jobs::Lane,
     /// The official mods' previews in the glance at the list, let go with the first run.

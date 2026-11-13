@@ -74,7 +74,6 @@ impl Workshop {
         })
     }
 
-    /// `dlc` for an expansion, a tag otherwise.
     fn facet(&self, theme: &Theme, facet: &Facet, dlc: bool, cx: &Context<Self>) -> AnyElement {
         let c = &theme.colours;
         let name = put(&facet.label);

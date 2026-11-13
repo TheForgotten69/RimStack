@@ -1,6 +1,3 @@
-//! Ctrl + K, a field that finds commands, settings and mods, and runs the one
-//! chosen.
-
 use super::field::Field;
 use super::shell::Shell;
 use super::text_field::{Edited, Entered, Escape, TextField};

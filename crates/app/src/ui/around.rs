@@ -10,10 +10,8 @@ use gpui::{App as Cx, AppContext, Entity, Global};
 pub struct Around {
     /// What stands in Play's way, worded, in the order the popup lists it.
     pub in_the_way: Vec<String>,
-    /// Whether a mod has a problem that causes errors in the game.
     pub errors: bool,
     pub sort_pending: bool,
-    /// The list has changes not saved, and these in words.
     pub dirty: bool,
     pub unsaved: Option<String>,
     /// The kept list the load order came from, empty when none: read at the start, then told

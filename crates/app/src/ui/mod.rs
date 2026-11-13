@@ -71,15 +71,10 @@ pub struct Options {
     pub section: section::Section,
     pub theme: Option<ThemeName>,
     pub text_scale: Option<f32>,
-    /// Four mods of the load order chosen, as `--several` asks.
     pub several: bool,
-    /// The first two active mods that share textures compared, as `--comparing` asks.
     pub comparing: bool,
-    /// The inactive mods' drawer open, when they are folded into the rail.
     pub drawer: bool,
-    /// Sort's preview shown once the files are read, as `--sorting` asks.
     pub sorting: bool,
-    /// One first-run hint shown, as `--hints=N` asks.
     pub hints: Option<u8>,
     /// Typed into the Mods filter, which has the keys, as `--typing=` asks.
     pub typing: Option<String>,
@@ -89,15 +84,11 @@ pub struct Options {
     pub tab: usize,
     /// The scripted scroll of `--selftest`.
     pub bench: bool,
-    /// Two toasts shown at the start, as `--notices` asks, for pictures.
     pub notices: bool,
     /// What is open at the start, as `--open=` names it, for pictures.
     pub open: Option<String>,
-    /// The part of Settings shown, as `--part=` gives it.
     pub part: usize,
-    /// The view of Logs shown, as `--view=` gives it.
     pub view: usize,
-    /// A search made at the start, as `--find=` gives its text, for pictures.
     pub find: Option<String>,
     /// What the Workshop shows at the start, as `--browse=` names it: `list`, `details` or
     /// `filters`, for pictures.
@@ -183,12 +174,10 @@ fn weights_of(_family: &str) -> Vec<f32> {
     Vec::new()
 }
 
-/// The family Qt takes for its texts: the system's sans-serif.
 fn system_family() -> String {
     system_family_for("sans-serif").unwrap_or_else(|| ".SystemUIFont".to_string())
 }
 
-/// The family fontconfig gives for a generic name, as Qt asks it.
 fn system_family_for(generic: &str) -> Option<String> {
     #[cfg(target_os = "linux")]
     {
@@ -207,12 +196,10 @@ fn system_family_for(generic: &str) -> Option<String> {
     None
 }
 
-/// An item's page on the Workshop, as `Theme.openWorkshop` opened it.
 pub fn workshop_page(id: &str) -> String {
     format!("https://steamcommunity.com/sharedfiles/filedetails/?id={id}")
 }
 
-/// An item's change notes on the Workshop, as `Theme.openChangeNotes` opened them.
 pub fn change_notes(id: &str) -> String {
     format!("https://steamcommunity.com/sharedfiles/filedetails/changelog/{id}")
 }
@@ -272,7 +259,6 @@ pub fn act<V: 'static, T: 'static>(
     }
 }
 
-/// The appearance kept in `RimStack.conf`, with the theme's own colours when they are used.
 fn kept_appearance(app: &App) -> Appearance {
     Appearance::of(&app.prefs(), |theme| {
         let own = app.own_colours(theme);

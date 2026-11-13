@@ -52,7 +52,6 @@ pub fn defined(title: &str) -> bool {
     meaning(title).is_some()
 }
 
-/// `Theme.meaning`: what a term means, in the language in use, the term given in it or in English.
 pub fn meaning(title: &str) -> Option<String> {
     let (_, meaning) = theme::TERMS
         .iter()
@@ -105,7 +104,6 @@ impl Card {
         self
     }
 
-    /// What sits at the head's right, and how wide it is, to know whether it fits beside the title.
     pub fn actions(mut self, actions: Vec<AnyElement>, width: Pixels) -> Self {
         self.actions = actions;
         self.actions_width = width;
@@ -144,7 +142,6 @@ impl Card {
         self
     }
 
-    /// `fit`: the width it has and the window, for a card whose actions may need a line of their own.
     pub fn render(
         self,
         theme: &Theme,

@@ -189,8 +189,6 @@ impl Mods {
         order.filter_offers(&partial, &self.filter_text(cx), &counted)
     }
 
-    /// The filter as `ModsFilter` drew it, `room` wide: chips, what is typed, what it found, and
-    /// the terms offered under it while it has the keys.
     pub(super) fn filter_field(
         &self,
         field: &Entity<TextField>,

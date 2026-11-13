@@ -10,22 +10,18 @@ use rimstack_core::mods::library::ModId;
 pub enum Go {
     Section(Section),
     ShowMod(ModId),
-    /// The load order becomes these mods, unsaved, shown on the Mods tab.
     UseList(Vec<String>),
     /// The load order becomes these mods, unsaved, with the window left where it is.
     TakeList(Vec<String>),
     StartHints,
-    /// The mark that a mod works on this game version taken off.
     Distrust(ModId),
     SearchedInMods,
     FindBroken,
-    /// The Workshop searched for this, as a fix that names a page asks.
     Browse(String),
     Subscribe(String),
     Redownload(ModId),
     Unsubscribe(ModId),
     UpdateFromGit(ModId),
-    /// A problem's line pressed outside the Mods tab, done there.
     Problem(
         super::problem::Act,
         Box<crate::workspace::load_order::ProblemSaid>,

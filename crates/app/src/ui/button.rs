@@ -28,7 +28,6 @@ pub struct Btn {
     spoken: Option<SharedString>,
     on_click: Option<Click>,
     placed: Option<Rc<Cell<Bounds<Pixels>>>>,
-    /// As wide as what holds it, as `width: parent.width` made it.
     fill: bool,
 }
 
@@ -59,7 +58,6 @@ impl Btn {
         self
     }
 
-    /// What a screen reader says of it, when its words alone do not say what it does.
     pub fn spoken(mut self, spoken: impl Into<SharedString>) -> Self {
         self.spoken = Some(spoken.into());
         self
@@ -272,7 +270,6 @@ pub struct Chip {
     on_accent: bool,
     pressable: bool,
     max_width: Option<Pixels>,
-    /// Ringed in its tone, as a count chip whose term is in the filter.
     held: bool,
 }
 

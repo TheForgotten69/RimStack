@@ -60,7 +60,6 @@ pub fn pane_widths(theme: &Theme, window: Pixels, panes: Panes) -> (Pixels, Pixe
     (inactive, (room - inactive - details).max(px(0.)), details)
 }
 
-/// `text` turned to read upwards, as Qt's `rotation: -90` drew it.
 fn upwards(theme: &Theme, window: &Window, text: String, colour: Hsla) -> AnyElement {
     let size = theme.small();
     let long = measure(window, theme, &text, size, FontWeight::NORMAL).ceil();
@@ -300,7 +299,6 @@ impl Mods {
             }))
     }
 
-    /// The inactive mods over the load order, from the rail, until a click outside them.
     fn drawer(
         &mut self,
         theme: &Theme,

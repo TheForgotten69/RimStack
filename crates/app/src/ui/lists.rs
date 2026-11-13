@@ -35,7 +35,6 @@ pub struct Lists {
     problem: String,
     clipboard_problem: String,
     name: Entity<TextField>,
-    /// The popup open, and the button it opened from.
     open: Option<(Which, Bounds<Pixels>)>,
     turn: usize,
     /// Closed, and drawn only while it fades out.

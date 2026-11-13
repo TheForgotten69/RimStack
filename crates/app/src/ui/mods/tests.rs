@@ -64,8 +64,6 @@ fn typing_in_the_filter_narrows_both_lists_and_clearing_it_shows_all(
     assert_eq!(back, all);
 }
 
-/// The middle of the load order's first heading, from the Theme: the inactive pane and its edge,
-/// then the title row, the filter, the headings and the room above the rows.
 fn first_heading(cx: &mut gpui::VisualTestContext) -> gpui::Point<gpui::Pixels> {
     use crate::ui::theme::{self, Theme};
     let theme = cx.update(|_, cx| cx.global::<Theme>().clone());
@@ -209,7 +207,6 @@ fn the_thumb_drags_the_load_order(cx: &mut gpui::TestAppContext) {
     cx.run_until_parked();
     let (theme, window) =
         cx.update(|window, cx| (cx.global::<Theme>().clone(), window.viewport_size()));
-    // The load order's bar runs down its right edge, left of its edge with the details.
     let x = window.width - theme.sized(360.) - theme::HANDLE - super::list::bar_room(&theme) / 2.;
     let top = first_heading(cx).y;
     let press = |y: Pixels| MouseDownEvent {
@@ -239,8 +236,6 @@ fn the_thumb_drags_the_load_order(cx: &mut gpui::TestAppContext) {
     );
 }
 
-/// As `scroll_cost`, the whole window this time, scrolled by the wheel with the pointer resting
-/// on the load order, so what follows the pointer is drawn too.
 #[gpui::test]
 #[ignore]
 fn scroll_cost_in_the_window(cx: &mut gpui::TestAppContext) {

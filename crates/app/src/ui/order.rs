@@ -32,7 +32,6 @@ pub fn read(cx: &Cx) -> Order {
     order(cx).read(cx).clone()
 }
 
-/// What the load order shows the other sections, read again after it changed.
 pub fn from_list(list: &Entity<ListState>, cx: &mut Cx) {
     let list = list.read(cx);
     let fresh = Order {

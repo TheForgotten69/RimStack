@@ -12,7 +12,6 @@ use rimstack_core::base::sentence::Sentence;
 use rimstack_core::{say, say_n};
 
 impl DetailsView {
-    /// Each kind of reason, largest first, with the mods it moves; one pressed is chosen and shown.
     pub(super) fn sort_moves(
         &self,
         theme: &Theme,
@@ -132,7 +131,6 @@ impl DetailsView {
         shown
     }
 
-    /// The mods slowest to load, each bar its share of the slowest one's time.
     pub(super) fn slowest(
         &self,
         theme: &Theme,

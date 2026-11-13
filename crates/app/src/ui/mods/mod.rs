@@ -87,14 +87,12 @@ impl gpui::EventEmitter<Progress> for Mods {}
 #[derive(Default, Clone, PartialEq)]
 pub struct Standing {
     pub dirty: bool,
-    /// The changes not saved, in words.
     pub unsaved: String,
     pub can_undo: bool,
     pub can_redo: bool,
 }
 
 pub struct Mods {
-    /// The load order and what is chosen in it: what the other sections follow.
     pub(crate) list: Entity<ListState>,
     active: Shown,
     inactive: Shown,
@@ -115,7 +113,6 @@ pub struct Mods {
     /// Asked to be done once the view is drawn; each answers whether it was done.
     when_drawn: Vec<AfterDrawn>,
     thumbs: super::thumbs::Shared,
-    /// What `LoadOrder::settings_read` gave last.
     settings_read: Vec<String>,
     facts_quiet: Lane,
     focus: gpui::FocusHandle,
@@ -128,17 +125,11 @@ pub struct Mods {
     /// Whether no mod folder was found, and what is wrong with the game folder chosen, while the
     /// mods could not be read.
     why_unread: Option<(bool, Option<rimstack_core::base::sentence::Sentence>)>,
-    /// Told by the window while the search for the broken mod runs.
     hunting: bool,
-    /// The shared textures of two mods, shown in place of the lists.
     comparing: Option<Entity<compare::CompareView>>,
-    /// What the comparison shows, as it last told.
     compared: Option<Rc<crate::workspace::textures::Comparison>>,
-    /// How the tab is shown, as `[Mods]` keeps it.
     view: Rc<crate::workspace::ModsView>,
-    /// The drawer's own filter, as `ModsFilter` mirrored the load order's.
     mirror: Entity<TextField>,
-    /// The view kept once dragging rests.
     view_kept: Lane,
     left_off: left_off::LeftOff,
 }
@@ -256,7 +247,6 @@ impl Mods {
         mods
     }
 
-    /// The `App`'s news, handed to the window's thread as it comes.
     fn hear(&self, cx: &mut Context<Self>) {
         super::hear(cx, READS, Self::heard);
     }
@@ -602,7 +592,6 @@ impl Mods {
         self.keep_left_mod(cx);
     }
 
-    /// Chooses a row of a list by its place, headings counted, as `--pick` does.
     pub fn pick_row(&mut self, side: Side, row: usize, tab: usize, cx: &mut Context<Self>) {
         let rows = match side {
             Side::Active => self.active.rows.clone(),

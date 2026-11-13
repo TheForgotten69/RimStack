@@ -69,7 +69,6 @@ pub struct Workshop {
     collections: bool,
     notice: Option<Sentence>,
     asked: Option<Asked>,
-    /// The related list shown in place of the search, and the title of its subject once known.
     related: Option<(Related, String, String)>,
     search_loaded: usize,
     reached: usize,
@@ -85,7 +84,6 @@ pub struct Workshop {
     /// The opened item's pictures, let go once another is opened; the one enlarged, once closed.
     pictures: crate::ui::pictures::Pictures,
     enlarged_pictures: crate::ui::pictures::Pictures,
-    /// The cards' previews, decoded at the size shown.
     thumbs: crate::ui::thumbs::Shared,
     community_busy: bool,
     seeking: Lane,
@@ -437,7 +435,6 @@ impl Workshop {
         self.ask(|asked| asked.text = text, cx);
     }
 
-    /// Searches `text` with no item chosen, as a link from elsewhere asks.
     pub fn browse(&mut self, text: String, cx: &mut Context<Self>) {
         self.select(String::new(), cx);
         self.search(text, cx);
@@ -554,7 +551,6 @@ impl Workshop {
         }
     }
 
-    /// What `--browse=` asks to be shown, as the layout checks of Qt set it up for pictures.
     pub fn show_asked(&mut self, asked: &str, cx: &mut Context<Self>) {
         match asked {
             "list" => self.list = true,
@@ -585,7 +581,6 @@ fn tell(note: Option<(Sentence, bool)>, cx: &mut gpui::App) {
     }
 }
 
-/// The words of the banner over a related list.
 fn related_said(which: Related, id: &str, title: &str) -> Sentence {
     let name = if title.is_empty() { id } else { title };
     match which {

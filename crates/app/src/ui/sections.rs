@@ -15,9 +15,7 @@ use gpui::{AnyView, App as Cx, AppContext, Context, Entity};
 
 pub struct Start {
     pub demo: bool,
-    /// The part Settings opens on.
     pub part: usize,
-    /// The view Logs opens on.
     pub view: usize,
 }
 
@@ -62,7 +60,6 @@ impl Sections {
         self.shown
     }
 
-    /// The view of the section shown, once it is made.
     pub fn view_shown(&self) -> Option<AnyView> {
         let made = self.made[self.shown.index()].as_ref()?;
         Some(made.view.clone())

@@ -5,9 +5,7 @@ use gpui::{App as Cx, AppContext, Context, Entity, Global};
 
 #[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Counts {
-    /// Active mods with a newer Workshop version.
     pub behind: usize,
-    /// Mods changed since the game last started.
     pub changed_since: usize,
 }
 

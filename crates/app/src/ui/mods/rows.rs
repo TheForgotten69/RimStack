@@ -18,16 +18,13 @@ use rimstack_core::say;
 
 pub struct Columns {
     pub number: Pixels,
-    /// The room a mod's name has before it is cut in the middle.
     pub name_room: Pixels,
-    /// A column's key and width, in order.
     pub fitting: Vec<(&'static str, Pixels)>,
     pub quick: Pixels,
     pub wide: bool,
     pub tile: bool,
 }
 
-/// How tall a row is drawn; `columns` for the load order.
 pub fn height(theme: &Theme, row: &RowView, columns: bool) -> Pixels {
     if row.is_sub {
         theme.sized(24.)
@@ -53,7 +50,6 @@ fn category_icon(category: Category) -> &'static str {
         .unwrap_or("package")
 }
 
-/// A mod held in a drag: its list, its place there, and the mods it takes along.
 #[derive(Clone)]
 pub struct Held {
     pub side: Side,
@@ -61,8 +57,6 @@ pub struct Held {
     pub ids: Vec<rimstack_core::mods::library::ModId>,
 }
 
-/// What follows the pointer while a divider or a heading is dragged: nothing; the drag shows
-/// in what it moves.
 pub struct Ghost;
 
 impl gpui::Render for Ghost {
@@ -110,15 +104,11 @@ impl gpui::Render for HeldGhost {
 pub struct Around<'a> {
     pub movable: bool,
     pub chosen_ids: &'a [ModId],
-    /// The mods sharing textures with the one chosen: whether each loses them to it.
     pub marks: &'a Marks,
     pub single: bool,
-    /// Whether a row's own buttons show: not while Sort is shown nor while a mod is picked.
     pub buttons: bool,
     pub previewing: bool,
-    /// Whether the load order's tags head groups, so a row tells only how many tags it has.
     pub headed: bool,
-    /// Whether the column the load order is ordered by is shown, which then says the value.
     pub order_shown: bool,
     /// The row the pointer is on: only it has its buttons and its tips made.
     pub pointed: Option<usize>,
@@ -129,8 +119,6 @@ pub type Marks = std::collections::BTreeMap<
     rimstack_core::mods::details::Mark,
 >;
 
-/// The buttons a mod's row shows while pointed at, across and its folder, and its menu, which
-/// stays while it is the only mod chosen.
 fn hover_buttons(
     theme: &Theme,
     side: Side,
@@ -219,7 +207,6 @@ fn hover_buttons(
         .into_any_element()
 }
 
-/// A preview tile's size in device pixels.
 pub fn tile_size(window: &Window, theme: &Theme) -> (u32, u32) {
     let scale = window.scale_factor();
     let device = |logical: f32| f32::from(theme.sized(logical) - theme::GAP_LINE * 2.) * scale;
@@ -248,7 +235,6 @@ pub fn ahead(
     }
 }
 
-/// Every preview of `rows`, decoded while the window is idle, so a jump finds them ready.
 pub fn while_idle(
     window: &Window,
     theme: &Theme,

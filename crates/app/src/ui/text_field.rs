@@ -1,6 +1,3 @@
-//! The text a field holds, as `TextInput` kept it: one line, a selection, and the text an
-//! input method is still composing; or several lines, as `TextArea` kept them.
-
 mod area;
 mod input;
 
@@ -90,7 +87,6 @@ pub struct TextField {
     size: Pixels,
     /// Shown as bullets, as `TextInput.Password`: a key, which is not copied either.
     masked: bool,
-    /// Whether it held the keys when last drawn.
     focused: std::cell::Cell<bool>,
     /// The rows a field of several lines shows at least; 0 for one line.
     area: usize,
@@ -143,7 +139,6 @@ impl TextField {
         }
     }
 
-    /// Text to select and copy only, wrapped to its width as `CopyText` was.
     pub fn read_only(mut self) -> Self {
         self.read_only = true;
         self.several_lines(1)
@@ -159,7 +154,6 @@ impl TextField {
         self
     }
 
-    /// The place of the text under `at`, a point in the window.
     fn index_at(&self, at: Point<Pixels>) -> Option<usize> {
         if let Some((wrapped, bounds)) = &*self.wrapped.borrow() {
             return Some(wrapped.index_at(at - bounds.origin));
@@ -233,7 +227,6 @@ impl TextField {
         self.masked = masked;
     }
 
-    /// Where `at`, a place in the text, is in what is shown.
     fn shown_at(&self, at: usize) -> usize {
         match self.masked {
             true => self.text[..at].chars().count() * BULLET.len_utf8(),
@@ -241,7 +234,6 @@ impl TextField {
         }
     }
 
-    /// The place in the text of `shown`, a place in what is shown.
     fn text_at(&self, shown: usize) -> usize {
         match self.masked {
             true => {

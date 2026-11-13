@@ -1,6 +1,5 @@
 use crate::changes::Changes;
 
-/// The window's sections, in the order of their tabs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Section {
     #[default]

@@ -245,7 +245,6 @@ impl Logs {
         )
     }
 
-    /// `WrapSwitch`: a silent switch and its words, kept as `key` in `[Appearance]`.
     pub(in crate::ui::logs) fn wrap_switch(
         &self,
         id: &'static str,

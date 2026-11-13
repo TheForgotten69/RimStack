@@ -188,7 +188,6 @@ fn key(cx: &mut HeadlessAppContext, shell: WindowHandle<Shell>, k: &'static str)
     .unwrap();
 }
 
-/// After a close: `drawn` holds while the popup fades, and not once it has.
 fn fades_then_goes(
     cx: &mut HeadlessAppContext,
     shell: WindowHandle<Shell>,

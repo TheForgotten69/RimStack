@@ -7,14 +7,10 @@ use std::rc::Rc;
 #[derive(Default)]
 pub struct Status {
     pub save_problem: String,
-    /// Why a mod was not binned or copied to the game's folder.
     pub upkeep_problem: String,
-    /// ModsConfig.xml was written outside RimStack since it was read: Save refused to overwrite it.
     pub file_changed: bool,
-    /// Why the game folder chosen was not taken.
     pub folder_problem: String,
     pub unhide_problem: String,
-    /// The Sort note closed, by its words; and the one whose closing is on its way.
     pub closed_note: String,
     pub note_timer: String,
 }
@@ -23,11 +19,8 @@ pub struct Layout {
     pub inactive_width: Pixels,
     pub details_width: Pixels,
     pub drawer_open: bool,
-    /// The turn of the drawer's last opening, which slides it in.
     pub drawer_turn: usize,
-    /// Where a heading or a column's edge was pressed, and the column's width then.
     pub column_drag: Option<(Pixels, Pixels)>,
-    /// Where the View and the inactive order buttons were drawn.
     pub menu_buttons: columns::Placed,
 }
 
@@ -51,7 +44,6 @@ pub struct Hinting {
     pub anchors: hints::Anchors,
 }
 
-/// What is read of the chosen mod off the window's thread, and its notes being written.
 #[derive(Default)]
 pub struct ChosenReads {
     pub read: Lane,
@@ -61,20 +53,17 @@ pub struct ChosenReads {
     pub commits_read: Lane,
     pub picking: Option<notes::Picking>,
     pub drafts: notes::Drafts,
-    /// "Saved" shows beside the notes for a while after they are kept.
     pub notes_saved: bool,
 }
 
 #[derive(Default)]
 pub struct Reads {
     pub conflicts: usize,
-    /// Inactive mods installed since the game was last started from RimStack.
     pub fresh: usize,
 }
 
 #[derive(Default)]
 pub struct ProblemNav {
-    /// The row of the problem last shown.
     pub row: Option<usize>,
     pub open: bool,
 }

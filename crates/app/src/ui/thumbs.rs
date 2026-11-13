@@ -13,7 +13,6 @@ use std::sync::Arc;
 /// `CEILING_BYTES`.
 const MOST_BYTES: usize = 48 << 20;
 const DECODING: usize = 4;
-/// Room past the list's own pictures, for those of another size or list.
 const ROOM_BYTES: usize = MOST_BYTES / 4;
 /// Bytes kept at most, however long the list: a list of 2,000 at 2x and text size 1 is kept
 /// whole (about 86 MB); past it, rows a jump of the scroll bar reaches are decoded as they show.
@@ -26,7 +25,6 @@ type Size = (u32, u32);
 type Key = (Size, String);
 type Viewers = smallvec::SmallVec<[EntityId; 2]>;
 
-/// A decoded picture, when it was last shown, and the views that drew it.
 struct Kept {
     image: Arc<RenderImage>,
     at: u64,
@@ -254,7 +252,6 @@ pub fn thumb(
     None
 }
 
-/// The picture at `path` decoded before its row is in view, so it shows with the row.
 pub fn ahead(thumbs: &Shared, path: &str, size: Size, cx: &mut Cx) {
     let asked = thumbs.borrow_mut().ask_ahead((size, path.to_string()));
     if asked {

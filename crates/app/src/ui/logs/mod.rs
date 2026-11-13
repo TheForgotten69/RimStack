@@ -47,7 +47,6 @@ pub struct Logs {
     open_runs: HashSet<usize>,
     filter: Entity<TextField>,
     filter_text: String,
-    /// The log's lines the filter keeps, by their place.
     lines: Rc<Vec<usize>>,
     errors_scroll: Scrolling,
     culprits_scroll: Scrolling,
@@ -58,7 +57,6 @@ pub struct Logs {
     /// `wrapLog` and `wrapTrace` of `[Appearance]`: long lines wrapped in the log and the trace.
     wrap_log: bool,
     wrap_trace: bool,
-    /// Whether the search for the broken mod runs: its button hides then.
     hunting: bool,
     /// The log's row tops, for the width and the wrapping they were measured at.
     log_tops: Option<(gpui::Pixels, Rc<[gpui::Pixels]>)>,

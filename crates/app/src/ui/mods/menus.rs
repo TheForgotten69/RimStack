@@ -156,7 +156,6 @@ impl Mods {
         menu::open_at(at, shown, window, cx);
     }
 
-    /// What an entry of the load order's menus does.
     fn run(&mut self, action: &Action, window: &mut Window, cx: &mut Context<Self>) {
         match action {
             Action::MoveSelected => self.move_selected(cx),

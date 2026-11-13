@@ -63,7 +63,6 @@ fn pick_section(
 /// The section whose tab counts the active mods with a newer Workshop version.
 const DOWNLOADS: usize = Section::Downloads as usize;
 
-/// What the top bar shows of the window's state.
 pub struct TopState {
     pub section: super::section::Section,
     pub demo: bool,
@@ -74,7 +73,6 @@ pub struct TopState {
     pub behind: usize,
     pub running: bool,
     pub lists_view: gpui::Entity<super::lists::Lists>,
-    /// The keys' handles of the sections and of the search box.
     pub keys: [gpui::FocusHandle; 2],
 }
 

@@ -18,7 +18,6 @@ pub enum Picking {
     Before,
 }
 
-/// Edits of the About tab not yet kept, each with the mod it was made for.
 #[derive(Default)]
 pub struct Drafts {
     pause: crate::jobs::Lane,
@@ -189,7 +188,6 @@ impl Mods {
         self.show(cx);
     }
 
-    /// What the Files tab and the facts read of the chosen mod, off the window's thread.
     pub(super) fn read_chosen(&mut self, cx: &mut Context<Self>) {
         let Some(id) = self.details.as_ref().and(self.selected_id(cx)) else {
             self.chosen_reads.read.cancel();

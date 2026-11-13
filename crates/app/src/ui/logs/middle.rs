@@ -200,7 +200,6 @@ impl Logs {
     }
 }
 
-/// Where the arrows, Home and End take a list's current row, as `RowKeys` did.
 pub(super) fn step(event: &KeyDownEvent, current: usize, count: usize) -> Option<usize> {
     if count == 0 {
         return None;

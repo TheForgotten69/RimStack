@@ -10,7 +10,6 @@ use std::rc::Rc;
 #[derive(Default, Clone, PartialEq)]
 pub struct Listed {
     pub list: Rc<ListShown>,
-    /// The game's own Mods folder, where the list is downloaded to.
     pub local_mods: String,
     pub steamcmd: bool,
     /// By Workshop id.

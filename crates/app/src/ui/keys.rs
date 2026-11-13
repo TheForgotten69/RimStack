@@ -144,7 +144,6 @@ fn cap(theme: &Theme, text: String, width: Pixels) -> gpui::Div {
         .child(label(theme, theme.caption(), c.ink, text).font_weight(theme.medium))
 }
 
-/// The caps of keys written `Ctrl + K, Ctrl + J`, and how wide they are together.
 fn caps(window: &Window, theme: &Theme, keys: &str) -> (gpui::Div, Pixels) {
     let c = &theme.colours;
     let comma = measure(window, theme, ",", theme.small(), FontWeight::NORMAL);

@@ -61,12 +61,9 @@ impl Line {
 }
 
 pub(super) enum Row {
-    /// A group's title, hidden while a search runs.
     Group(usize, String),
-    /// Words under a group's title, hidden while a search runs.
     Note(usize, String),
     Line(Line),
-    /// Something under the lines, shown with its part.
     Under(usize, AnyElement),
 }
 
@@ -74,7 +71,6 @@ pub(super) fn named(theme: &Theme) -> Pixels {
     theme.sized(190.)
 }
 
-/// `GroupTitle`: a defined term is underlined with dots, with an info mark, and means its tip.
 pub(super) fn group(theme: &Theme, title: String) -> AnyElement {
     crate::ui::card::group_title(theme, title)
 }

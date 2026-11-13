@@ -29,7 +29,6 @@ pub struct Shown {
     pub chosen: Rc<HashSet<ModId>>,
     /// Whether its mods may be dragged: not while Sort is shown, nor in an order of a column.
     pub movable: bool,
-    /// Whether the filter leaves it out and it is dimmed rather than hidden.
     pub dimmed: bool,
     pub single: bool,
     pub previewing: bool,
@@ -38,7 +37,6 @@ pub struct Shown {
     pub count: usize,
 }
 
-/// The columns fitted to the width the list was last drawn at.
 #[derive(Default)]
 struct Made {
     width: Pixels,
@@ -57,7 +55,6 @@ pub struct ModList {
     made: Rc<RefCell<Made>>,
     pub(super) bench: Option<super::bench::Bench>,
     focus: gpui::FocusHandle,
-    /// Where the pointer is while mods are dragged over the list, and the list's bounds then.
     dragged_at: Option<(gpui::Point<Pixels>, gpui::Bounds<Pixels>)>,
     pulling: Option<gpui::Task<()>>,
     /// How far down the window the pointer is while over the list, and where the list's top was
@@ -80,7 +77,6 @@ const PULL_EVERY: std::time::Duration = std::time::Duration::from_millis(16);
 
 pub use crate::ui::rows::bar_room;
 
-/// The room above the rows (the load order's) and the footer below them.
 fn spacer(theme: &Theme, side: Side) -> (Pixels, Pixels) {
     let footer = theme.sized(30.);
     match side {
@@ -188,7 +184,6 @@ impl ModList {
         self.focus.clone()
     }
 
-    /// The category whose mods are at the list's top, while its heading has scrolled away.
     fn top_category(&self) -> Option<(Category, Pixels)> {
         let rows = &self.shown.rows;
         if !rows.first().is_some_and(|r| r.is_header) {
@@ -248,7 +243,6 @@ impl ModList {
         }
     }
 
-    /// A drag held near the list's top or bottom scrolls it, faster the nearer the edge.
     fn dragged_over(
         &mut self,
         at: gpui::Point<Pixels>,
@@ -495,7 +489,6 @@ impl Render for ModList {
 }
 
 impl ModList {
-    /// The list's footer: below the last row, where a drop puts the mods at the list's end.
     fn footer(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
         let (_, below) = spacer(theme, self.side);
         let end = *self.tops.last()? - below;
@@ -537,8 +530,6 @@ impl ModList {
         )
     }
 
-    /// The heading of the category at the list's top, kept there while its mods scroll under it
-    /// and pushed up by the next category's heading.
     fn top_heading(
         &self,
         theme: &Theme,

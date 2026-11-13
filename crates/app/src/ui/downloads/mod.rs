@@ -38,7 +38,6 @@ struct Tasks {
     running: bool,
     note: String,
     updating: Option<ModId>,
-    /// The repository being cloned, by its place in what was looked up.
     cloning: Option<usize>,
     waiting: VecDeque<Waiting>,
 }

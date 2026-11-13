@@ -106,6 +106,5 @@ impl Render for Mods {
 
 #[cfg(test)]
 thread_local! {
-    /// How often the Mods tab was rendered, as a test of what scrolling a list draws again.
     pub(super) static RENDERS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }

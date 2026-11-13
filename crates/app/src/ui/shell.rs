@@ -1,5 +1,3 @@
-//! The top bar, the section shown, the status bar.
-
 use super::Options;
 use super::downloads::Downloads;
 use super::navigate::Go;
@@ -26,12 +24,10 @@ pub struct Shell {
     /// The turning arrows beside the work under way, a view of its own so that only it is drawn
     /// again while it turns.
     pub(crate) spinner: Entity<super::status_bar::Spinner>,
-    /// A newer RimStack found: its version and its page.
     pub(crate) release: Option<(String, String)>,
     pub(crate) game: Entity<super::game::Game>,
     /// The search for the broken mod, as `bisect.json` keeps it between starts.
     pub(crate) hunt: crate::workspace::search::Hunt,
-    /// A step of the search is being kept off the window's thread.
     pub(crate) hunt_busy: bool,
     pub(crate) lists: Entity<super::lists::Lists>,
     pub(crate) first_run: Option<Entity<super::first_run::FirstRun>>,

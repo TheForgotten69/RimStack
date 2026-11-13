@@ -4,12 +4,9 @@ use gpui::{Context, px};
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub enum LeftOff {
-    /// Brought back once the mods are first read.
     #[default]
     Waiting,
-    /// Brought back; each change is kept from now on.
     Restored,
-    /// Neither, as for a picture or the demo.
     Off,
 }
 
@@ -94,7 +91,6 @@ impl Mods {
         }
     }
 
-    /// How far the load order is scrolled, kept as the window closes.
     pub fn keep_left_scroll(&mut self, cx: &mut Context<Self>) {
         if self.left_off != LeftOff::Restored {
             return;

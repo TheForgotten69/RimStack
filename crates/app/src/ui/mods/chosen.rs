@@ -10,7 +10,6 @@ use gpui::{
 use rimstack_core::say;
 use std::rc::Rc;
 
-/// What the details show, handed over by the Mods screen when it changes.
 #[derive(Clone, Default, PartialEq)]
 pub struct DetailsShown {
     pub demo: bool,
@@ -26,7 +25,6 @@ pub struct DetailsShown {
     pub conflicts: usize,
     pub selected_active: bool,
     pub panes: super::panes::Panes,
-    /// The problems panel shown in place of the rest.
     pub problems_open: bool,
     pub picking: Option<super::notes::Picking>,
     /// The chosen mod's place in the load order, from 1; 0 off it.
@@ -34,37 +32,28 @@ pub struct DetailsShown {
     pub notes_saved: bool,
     pub files: Option<Rc<FilesRead>>,
     pub unhide_problem: String,
-    /// What Sort's preview moves, while it is shown.
     pub sort_moves: Option<Rc<Vec<crate::workspace::load_order::SortGroup>>>,
-    /// Why the community data last failed to download, put in words.
     pub community_problem: String,
-    /// The inactive mods installed since the game was last started from RimStack.
     pub fresh: usize,
-    /// A Git checkout's last commits, read off the window's thread.
     pub commits: Option<Rc<Vec<rimstack_core::sources::changes::Note>>>,
     pub chosen_id: Option<rimstack_core::mods::library::ModId>,
-    /// Two mods' shared textures being compared: the details tell what was kept.
     pub comparison: Option<Rc<crate::workspace::textures::Comparison>>,
     /// The search for the broken mod runs: it is not offered again.
     pub hunting: bool,
     pub previewing: bool,
-    /// With several mods chosen, how many and what they are.
     pub selected: usize,
     pub selection: Option<Rc<crate::workspace::load_order::SelectionSummary>>,
 }
 
-/// What the Files tab shows: the textures, the files by folder, and the textures set aside.
 pub type FilesRead = (
     crate::workspace::load_order::Textures,
     crate::workspace::load_order::Files,
     usize,
 );
 
-/// What the details ask of the Mods tab.
 pub enum Asked {
     Section(crate::ui::section::Section),
     Filter(&'static str),
-    /// The tab shown changed.
     Tab(usize),
 }
 
@@ -81,18 +70,14 @@ pub struct DetailsView {
     pub(super) description: crate::ui::rich::Selection,
     pub shown: DetailsShown,
     pub tab: usize,
-    /// The cards folded against how they start, by their key, as `Theme.folded` kept them.
     pub folded: std::collections::HashSet<&'static str>,
-    /// The names of the mods chosen all shown, not the first ones only.
     pub summary_open: bool,
     pub mods: gpui::WeakEntity<super::Mods>,
     pub(super) tags: gpui::Entity<crate::ui::text_field::TextField>,
     pub(super) group: gpui::Entity<crate::ui::text_field::TextField>,
     pub(super) note: gpui::Entity<crate::ui::text_field::TextField>,
-    /// The picture shown small, as a click on it asks.
     pub(super) small_picture: bool,
     paging: crate::ui::page::Paging,
-    /// `CopyText`s: words of the details that can be selected and copied, by what they show.
     copyable: std::cell::RefCell<
         std::collections::HashMap<&'static str, gpui::Entity<crate::ui::text_field::TextField>>,
     >,
@@ -286,8 +271,6 @@ fn tabs() -> [String; 3] {
     ]
 }
 
-/// A term of the details, underlined with dots and its meaning shown when
-/// pointed at, when it has one.
 pub(super) fn defined(theme: &Theme, term: String) -> gpui::Stateful<gpui::Div> {
     let meaning = crate::ui::card::meaning(&term).unwrap_or_default();
     let has = !meaning.is_empty();
@@ -313,7 +296,6 @@ pub(super) fn defined(theme: &Theme, term: String) -> gpui::Stateful<gpui::Div> 
 }
 
 impl DetailsView {
-    /// Which of its views `details_pane` draws.
     fn view_of(&self) -> u8 {
         let shown = &self.shown;
         match () {

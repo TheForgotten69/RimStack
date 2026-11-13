@@ -1,9 +1,5 @@
-//! The text of a field of several lines, as `TextArea` showed it: wrapped to the field's width,
-//! a line of its own after each line break.
-
 use gpui::{Bounds, Pixels, Point, SharedString, TextRun, Window, WrappedLine, point, px};
 
-/// Each line of the text, from its start in the text, wrapped to a width.
 pub struct Wrapped {
     lines: Vec<(usize, WrappedLine)>,
     line: Pixels,
@@ -51,7 +47,6 @@ impl Wrapped {
         self.lines.iter().map(|(_, line)| Self::rows_of(line)).sum()
     }
 
-    /// Where the place `at` of the text is drawn, from the top left of the text.
     pub fn position(&self, at: usize) -> Point<Pixels> {
         let mut top = px(0.);
         for (start, line) in &self.lines {
@@ -66,7 +61,6 @@ impl Wrapped {
         point(px(0.), top)
     }
 
-    /// The place of the text nearest `at`, from the top left of the text.
     pub fn index_at(&self, at: Point<Pixels>) -> usize {
         let mut top = px(0.);
         for (start, line) in &self.lines {

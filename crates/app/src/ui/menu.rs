@@ -24,7 +24,6 @@ pub enum Entry {
 pub struct Item {
     text: SharedString,
     note: Option<SharedString>,
-    /// Shown while pointed at, as a `Btn`'s tip in Qt's popups.
     tip: SharedString,
     icon: Option<&'static str>,
     colour: Option<Hsla>,
@@ -72,7 +71,6 @@ impl Item {
         self
     }
 
-    /// Shown but not chosen: nothing to do now.
     pub fn off(mut self, off: bool) -> Self {
         self.off = off;
         self
@@ -109,7 +107,6 @@ struct Shown(Entity<Menu>);
 
 impl Global for Shown {}
 
-/// The menu the shell draws; made once, with the window.
 pub fn install(cx: &mut App) -> Entity<Menu> {
     let menu = cx.new(|cx| Menu {
         turn: 0,
@@ -358,7 +355,6 @@ impl Menu {
 }
 
 impl Menu {
-    /// `Btn` as Qt's popups held it: the width of the popup, its words centred.
     fn button(
         &self,
         at: usize,
@@ -500,14 +496,12 @@ impl Render for Menu {
     }
 }
 
-/// Whether the menu is drawn, open or fading out.
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) fn drawn(cx: &App) -> bool {
     cx.try_global::<Shown>()
         .is_some_and(|shown| !shown.0.read(cx).entries.is_empty())
 }
 
-/// The menu drawn again, as a check that reads every text drawn asks.
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) fn redraw(cx: &mut App) {
     if let Some(menu) = cx.try_global::<Shown>().map(|shown| shown.0.clone()) {

@@ -22,7 +22,6 @@ pub struct Scroll {
     from: Pixels,
     goal: Pixels,
     started: Option<Instant>,
-    /// The rows' whole height and the height shown, as last drawn.
     total: Pixels,
     shown: Pixels,
     /// While the bar's thumb is held: how far below the thumb's top it was taken.
@@ -53,7 +52,6 @@ impl Scroll {
         self.top
     }
 
-    /// Goes straight to `top`, as the bar's thumb and a kept place do.
     pub fn set_top(&mut self, top: Pixels) {
         self.top = top.clamp(px(0.), self.most());
         self.goal = self.top;
@@ -112,12 +110,10 @@ impl Scroll {
         }
     }
 
-    /// The row from `top` to `bottom` in the middle of the list, as `ListView.Center` put it.
     pub fn centre(&mut self, top: Pixels, bottom: Pixels) {
         self.asked = Some((top, bottom, true));
     }
 
-    /// The row from `top` to `bottom` brought just inside the list, as `ListView.Contain` did.
     pub fn contain(&mut self, top: Pixels, bottom: Pixels) {
         self.asked = Some((top, bottom, false));
     }
@@ -264,7 +260,6 @@ impl Element for Rows {
     }
 }
 
-/// The room the bar takes at a scrolled area's right: its thumb, and the padding Qt gives it.
 pub fn bar_room(theme: &Theme) -> Pixels {
     theme::GAP_HAIR + theme.sized(9.) + theme::GAP_LINE + px(2.) + theme::GAP_HAIR
 }

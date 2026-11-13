@@ -1,7 +1,3 @@
-//! The layout checks: at every text size, and in the window Qt let be its smallest, no
-//! text runs past its box unless the box cuts it on purpose, and no two texts are drawn over
-//! each other. The pictures go through the platform's own fonts, as the app draws them.
-
 use super::widgets::watch::{self, Seen};
 use super::{Options, install, shell::Shell, theme::Theme};
 use crate::App;

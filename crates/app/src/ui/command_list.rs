@@ -8,7 +8,6 @@ use rimstack_core::base::sentence::Sentence;
 use rimstack_core::say;
 use std::rc::Rc;
 
-/// Qt's `Theme.issues`.
 const ISSUES: &str = "https://github.com/TheForgotten69/RimStack/issues";
 
 fn command(name: String, group: &Sentence, keys: String, run: Run) -> Command {
@@ -679,7 +678,6 @@ impl Shell {
         all
     }
 
-    /// The Lists or History popup opened from where its button is.
     pub(crate) fn open_popup(&mut self, which: Which, window: &mut Window, cx: &mut Context<Self>) {
         let theme = cx.global::<Theme>().clone();
         let viewport = window.viewport_size();

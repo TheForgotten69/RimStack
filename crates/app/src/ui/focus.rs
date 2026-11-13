@@ -18,7 +18,6 @@ pub fn bind_keys(cx: &mut App) {
     ]);
 }
 
-/// The keys' handle of the control `id`, kept while it is drawn frame after frame.
 pub fn handle(id: impl Into<ElementId>, window: &mut Window, cx: &mut App) -> FocusHandle {
     let kept = window.use_keyed_state(id, cx, |_, cx| cx.focus_handle().tab_stop(true));
     kept.read(cx).clone()

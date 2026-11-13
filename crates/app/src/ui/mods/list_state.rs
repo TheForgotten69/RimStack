@@ -77,7 +77,6 @@ impl ListState {
         self.files_read
     }
 
-    /// The mods the load order's rules ask for that are not installed.
     pub fn to_get(&self) -> Vec<ProblemSaid> {
         self.overview
             .as_ref()
@@ -105,7 +104,6 @@ impl ListState {
         !self.files_read && self.count(Side::Active) > 0 && !self.demo
     }
 
-    /// The load order as read, for the first run: its active and inactive mods, or why it was not.
     pub fn read_as(&self) -> (usize, usize, String) {
         (
             self.count(Side::Active),
@@ -126,7 +124,6 @@ impl ListState {
         self.order.previewing() || self.saving
     }
 
-    /// The sentences Play shows of what stands in its way, given `standing`'s answers.
     pub fn in_the_way_said(&self, errors: bool, sort_pending: bool, dirty: bool) -> Vec<String> {
         let errors_count = self.order.errors_and_warnings().0;
         let mut said = Vec::new();
@@ -152,8 +149,6 @@ impl ListState {
         said
     }
 
-    /// Whether a mod has errors, Sort would move mods, and the list is not saved, with its
-    /// changes in words, as last shown.
     pub fn standing(&self) -> (bool, bool, bool, Option<String>) {
         let unsaved = (self.standing.dirty && self.order.is_installed())
             .then(|| self.standing.unsaved.clone());
@@ -165,7 +160,6 @@ impl ListState {
         )
     }
 
-    /// The work under way the window lists for the Mods tab.
     pub fn work_said(&self) -> Vec<String> {
         let mut said = Vec::new();
         if self.rescanning && !self.demo {
@@ -177,7 +171,6 @@ impl ListState {
         said
     }
 
-    /// The mods `text` names, at most `most`, as Ctrl + K finds them.
     pub fn found(
         &self,
         text: &str,

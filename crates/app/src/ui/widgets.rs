@@ -5,7 +5,6 @@ use gpui::{
 };
 
 pub trait TextSized: Styled + Sized {
-    /// A text at this size, as tall as Qt makes its line.
     fn sized_text(self, theme: &Theme, size: Pixels) -> Self {
         self.text_size(size).line_height(theme.line(size))
     }
@@ -95,7 +94,6 @@ pub fn notice(tone: Hsla) -> gpui::Div {
         )
 }
 
-/// A text's width as drawn in the Theme's family, as `TextMetrics.advanceWidth` gives it.
 pub fn measure(
     window: &Window,
     theme: &Theme,
@@ -188,7 +186,6 @@ pub fn weighted(
     gpui::StyledText::new(text).with_highlights(upright.into_iter().map(|r| (r, normal)))
 }
 
-/// `Text.ElideMiddle`: as many characters kept at each end as fit, with "…" between.
 pub fn elide_middle(
     window: &Window,
     theme: &Theme,
@@ -238,7 +235,6 @@ pub fn elide_middle_in(
     shown(low)
 }
 
-/// `text` cut at its start to fit `room`, as `Text.ElideLeft` cuts a path.
 pub fn elide_start_in(
     window: &Window,
     theme: &Theme,
@@ -347,7 +343,6 @@ pub fn btn_width(window: &Window, theme: &Theme, text: &str, icon: bool, menu: b
     btn_width_of(window, theme, text, icon, menu, false)
 }
 
-/// As `btn_width`, for a large button too (`Btn.large`, as Play is).
 pub fn btn_width_of(
     window: &Window,
     theme: &Theme,

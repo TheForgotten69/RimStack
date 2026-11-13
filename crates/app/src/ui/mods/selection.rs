@@ -13,7 +13,6 @@ use gpui::{
 use rimstack_core::mods::library::ModId;
 use rimstack_core::{say, say_n};
 
-/// The names shown before "more".
 const MOST: usize = 12;
 
 impl Mods {
@@ -21,9 +20,6 @@ impl Mods {
         self.list.read(cx).selection.clone()
     }
 
-    /// The bar under the panes while several mods are chosen.
-    /// The actions on the mods selected, growing in as a second one is selected
-    /// and shrinking away as the selection goes below two.
     pub(super) fn bulk_bar(&self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
         use gpui::AnimationExt;
         let actions = self.bulk_actions(theme, cx);

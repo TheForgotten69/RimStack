@@ -9,7 +9,6 @@ use rimstack_core::mods::library::ModId;
 use rimstack_core::rimworld::modsconfig;
 use rimstack_core::{say, say_n};
 
-/// What is done once a save asked for ends well.
 pub type AfterSave = Box<dyn FnOnce(&mut Mods, &mut Context<Mods>)>;
 
 impl Mods {
@@ -40,7 +39,6 @@ impl Mods {
         self.list.read(cx).selection.clone()
     }
 
-    /// The mod at `from` moved to `to`, sliding there as `Mods.slide` made it.
     pub(super) fn move_mod(&mut self, side: Side, from: usize, to: usize, cx: &mut Context<Self>) {
         let app = super::super::app(cx);
         let moved = self
@@ -60,7 +58,6 @@ impl Mods {
         }
     }
 
-    /// The mod at `index` of `from` moved to the other list, at `to` or where it belongs.
     pub(super) fn take(
         &mut self,
         from: Side,
@@ -301,7 +298,6 @@ impl Mods {
 }
 
 impl Mods {
-    /// One mod chosen, or none.
     pub fn select(&mut self, mod_id: Option<ModId>, in_active: bool, cx: &mut Context<Self>) {
         self.keep_selection(mod_id.into_iter().collect(), in_active, cx);
     }

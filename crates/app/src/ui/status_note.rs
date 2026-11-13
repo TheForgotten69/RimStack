@@ -1,6 +1,3 @@
-//! The status bar's note: demo data, what is not saved, and the hint of the control pointed at
-//! or else the game's last start. A view of its own, so that a hint draws it alone again.
-
 use super::navigate::{self, Go};
 use super::section::Section;
 use super::theme::{self, Theme};

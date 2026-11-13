@@ -13,7 +13,6 @@ fn opened() -> (tempfile::TempDir, HeadlessAppContext, Entity<Mods>) {
     opened_with(|_| {})
 }
 
-/// As `opened`, with the made-up install's folder changed by `prepare` before it is read.
 pub(super) fn opened_with(
     prepare: impl FnOnce(&std::path::Path),
 ) -> (tempfile::TempDir, HeadlessAppContext, Entity<Mods>) {
@@ -186,7 +185,6 @@ fn sort_is_shown_before_it_is_kept_and_save_writes_the_list() {
     );
 }
 
-/// The expansions ModsConfig.xml lists apart from the mods.
 fn known_expansions(written: &str) -> usize {
     written
         .split("<knownExpansions>")

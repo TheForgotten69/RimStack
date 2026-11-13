@@ -145,8 +145,6 @@ pub fn layer(over: gpui::Div, on: bool) -> impl IntoElement {
     )
 }
 
-/// The colour that, laid over `ground`, shows `wanted`: itself when opaque, else the same hue
-/// at the alpha that composes to `wanted`'s.
 pub fn over(ground: gpui::Hsla, wanted: gpui::Hsla) -> gpui::Hsla {
     match wanted.a >= 1. || ground.a >= 1. {
         true => wanted,

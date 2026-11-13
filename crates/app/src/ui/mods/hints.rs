@@ -17,7 +17,6 @@ pub struct Anchors {
     pub problems: Rc<Cell<Option<Bounds<Pixels>>>>,
     pub sort: Rc<Cell<Option<Bounds<Pixels>>>>,
     pub save: Rc<Cell<Option<Bounds<Pixels>>>>,
-    /// Which buttons the title row holds in this render: problems, Sort, Save.
     pub drawn: Rc<Cell<[bool; 3]>>,
 }
 

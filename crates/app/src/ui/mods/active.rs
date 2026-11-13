@@ -578,7 +578,6 @@ impl Mods {
 }
 
 impl Mods {
-    /// `moreEntries`: what the title row holds when it is too narrow to show it.
     fn more_menu(&self, below: gpui::Bounds<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         use crate::ui::menu::{self, Entry};
         let me = cx.entity().downgrade();

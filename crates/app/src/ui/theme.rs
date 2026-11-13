@@ -347,7 +347,6 @@ pub struct Appearance {
     pub theme: ThemeName,
     pub text_scale: f32,
     pub large_rows: bool,
-    /// The load order's rows with the mods' pictures, as Qt's `comfortable`.
     pub comfortable: bool,
     pub high_contrast: bool,
     pub reduce_motion: bool,
@@ -495,7 +494,6 @@ pub struct Theme {
 
 impl Global for Theme {}
 
-/// The window as it first opens, as Qt's first start opened it.
 pub const WINDOW: (Pixels, Pixels) = (px(1440.), px(860.));
 pub const HANDLE: Pixels = px(7.);
 /// The size a font's ascent and descent are read at, to be kept as parts of its size.

@@ -1,6 +1,3 @@
-//! A page taller than its place: its wheel glides
-//! as the lists' does and its bar's thumb is held to scroll.
-
 use super::rows::{Scrolling, bar};
 use super::theme::Theme;
 use gpui::{
@@ -8,7 +5,6 @@ use gpui::{
     ScrollEvent, ScrollHandle, StatefulInteractiveElement, Styled, canvas, div, point, px,
 };
 
-/// A page's place: where it is scrolled to, and GPUI's handle on the area that shows it.
 #[derive(Clone, Default)]
 pub struct Paging {
     pub scroll: Scrolling,
@@ -22,7 +18,6 @@ impl Paging {
         paging
     }
 
-    /// What was drawn from `top` to `bottom` of the window brought inside the page.
     pub fn contain_drawn(&self, top: gpui::Pixels, bottom: gpui::Pixels) {
         let shift = self.scroll.borrow().top() - self.handle.bounds().top();
         self.scroll
@@ -31,7 +26,6 @@ impl Paging {
     }
 }
 
-/// The bar's width kept free at the right of what it holds.
 pub fn room(theme: &Theme) -> gpui::Pixels {
     theme.sized(9.) + super::theme::GAP_HAIR * 2.
 }

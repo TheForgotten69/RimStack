@@ -23,7 +23,6 @@ fn views(dir: &Path, into: &mut Vec<std::path::PathBuf>) {
     }
 }
 
-/// The whole numbers written inside each `px(…)` of `line`, as `px(x + 100.)` holds `100`.
 fn pixels(line: &str) -> Vec<String> {
     let mut found = Vec::new();
     for (at, _) in line.match_indices("px(") {
@@ -238,8 +237,6 @@ fn each_change_is_published_and_read_by_name() {
     assert!(unread.is_empty(), "read by no view: {unread:?}");
 }
 
-/// The changes a `const NAME: Changes = …;` of `text` names, by const, with the consts it builds
-/// on resolved.
 fn change_consts(text: &str) -> std::collections::HashMap<String, Vec<String>> {
     let mut raw = std::collections::HashMap::new();
     let mut rest = text;

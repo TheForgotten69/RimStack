@@ -19,7 +19,6 @@ use rimstack_core::{say, say_n};
 use std::cell::Cell;
 use std::rc::Rc;
 
-/// Where the View and the inactive order buttons were last drawn.
 #[derive(Default, Clone)]
 pub struct Placed {
     pub view: Rc<Cell<Bounds<Pixels>>>,
@@ -42,7 +41,6 @@ pub(super) type Reachable =
 #[derive(Clone, Copy)]
 pub struct ColumnEdge(pub &'static str);
 
-/// A column's heading dragged to move it: its key and its place among those shown.
 #[derive(Clone, Copy)]
 pub struct ColumnHeld(pub &'static str, pub usize);
 
@@ -253,7 +251,6 @@ impl Mods {
         true
     }
 
-    /// The view changed by `change` and kept, as `ModsPrefs` kept each change.
     pub(super) fn keep_view(&mut self, change: impl FnOnce(&mut ModsView), cx: &mut Context<Self>) {
         let before = (*self.view).clone();
         change(Rc::make_mut(&mut self.view));
@@ -352,7 +349,6 @@ impl Mods {
         cx.notify();
     }
 
-    /// A heading pressed: the list by its column, turned round, then back to the load order.
     pub(super) fn heading_pressed(&mut self, column: &str, cx: &mut Context<Self>) {
         let then = self
             .orders
@@ -478,7 +474,6 @@ impl Mods {
         menu::open_buttons_under_end(below, None, entries, window, cx);
     }
 
-    /// Every mod installed since the game last started from RimStack, activated, as one change.
     pub(super) fn activate_fresh(&mut self, cx: &mut Context<Self>) {
         let app = super::super::app(cx);
         let list = self.list.read(cx);

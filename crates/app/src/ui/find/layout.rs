@@ -8,10 +8,8 @@ pub(super) struct Layout {
     /// Five digits of the monospace family at the small size: a line number's column.
     pub digits: Pixels,
     pub preview_width: Pixels,
-    /// The filters stay beside the matches, with no button to show them.
     pub wide: bool,
     pub side_shown: bool,
-    /// The filters alone, over the window's width: there is no room for the matches beside them.
     pub side_fills: bool,
     pub side_width: Pixels,
     pub preview_shown: bool,

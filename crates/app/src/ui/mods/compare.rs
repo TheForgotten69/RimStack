@@ -69,7 +69,6 @@ pub struct CompareView {
     sides: (ModId, ModId),
     places: (usize, usize),
     comparison: Option<Rc<Comparison>>,
-    /// The shared textures the filter lets through.
     listed: Rc<Vec<Shared>>,
     /// Each picture's pixels, read once until the textures are read again.
     sizes: RefCell<HashMap<String, Option<(u32, u32)>>>,
@@ -82,14 +81,11 @@ pub struct CompareView {
     zoom: f32,
     /// Where both pictures are scrolled to when zoomed, as a share of the way: 0 to 1.
     pan: Point<f32>,
-    /// Where the slider cuts, as a share of the width.
     cut: f32,
     problem: String,
     difference: Option<(usize, Result<Difference, String>)>,
     differing: crate::jobs::Lane,
-    /// Where a drag that pans began, and the pan then.
     dragged: Option<(Point<Pixels>, Point<f32>)>,
-    /// Each picture's box as last laid out, for placing a zoomed picture.
     boxes: Rc<RefCell<HashMap<&'static str, Size<Pixels>>>>,
     /// Each box's texture, let go once the box shows another.
     pictures: RefCell<HashMap<&'static str, crate::ui::pictures::Pictures>>,

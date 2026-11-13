@@ -76,7 +76,6 @@ pub struct Find {
     /// The preview's line to bring to the middle once its rows are measured.
     centred: Option<usize>,
     wrap: bool,
-    /// In a narrow window, the options shown in place of the matches.
     filters: bool,
     mods_shown: Option<Instant>,
     /// The row chosen once the search ends, with the file searched for its text, for pictures.
@@ -465,7 +464,6 @@ impl Find {
         cx.notify();
     }
 
-    /// Searches `text` and, once done, chooses the row `then`, as the layout checks of Qt did.
     pub fn search_for(&mut self, text: &str, then: Option<usize>, cx: &mut Context<Self>) {
         self.pick_after = then;
         self.search.update(cx, |field, cx| field.set_text(text, cx));

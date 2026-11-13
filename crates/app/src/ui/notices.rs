@@ -44,7 +44,6 @@ pub struct Earlier {
 
 pub struct Notices {
     shown: Vec<Toast>,
-    /// This run's notices, newest first.
     pub earlier: Vec<Earlier>,
     counted: usize,
     ticking: bool,

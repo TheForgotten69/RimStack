@@ -11,7 +11,6 @@ use rimstack_core::{say, say_n};
 
 type Pressed = Box<dyn Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App)>;
 
-/// `ListSummary.Line`: words, and a button beside them that does `pressed`.
 fn line(
     theme: &Theme,
     id: &'static str,
@@ -270,7 +269,6 @@ impl DetailsView {
         )
     }
 
-    /// `ListSummary`'s "To review": not problems, things to look at when there is time.
     fn review(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<gpui::Stateful<gpui::Div>> {
         use super::chosen::Asked;
         let summary = crate::ui::outside::outside(cx).read(cx).summary.clone();

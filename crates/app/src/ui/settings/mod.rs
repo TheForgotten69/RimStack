@@ -78,9 +78,7 @@ pub struct Settings {
     unread: Changes,
     paging: Paging,
     font_scroll: super::rows::Scrolling,
-    /// `RimStack.conf`, read again after each appearance kept.
     prefs: rimstack_core::kept::prefs::Prefs,
-    /// The part chosen holds the keys when Tab reaches the parts.
     part_keys: gpui::FocusHandle,
 }
 
@@ -164,7 +162,6 @@ impl Settings {
         super::hear(cx, READS, Self::heard);
     }
 
-    /// What Settings shows, read off the window's thread; the demo reads it in place.
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
         let Some(changes) = self.unseen.pass(changes) else {
             return;

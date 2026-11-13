@@ -1,6 +1,3 @@
-//! The game's saves, newest first, each against the load order now; the chosen
-//! one's colony, what it lacks, and its list to use or keep.
-
 mod screen;
 
 use super::rows::Scrolling;
@@ -36,7 +33,6 @@ pub struct Saves {
     scroll: Scrolling,
     side_paging: super::page::Paging,
     thumbs: super::thumbs::Shared,
-    /// The chosen save's picture, let go once another is chosen.
     pictures: super::pictures::Pictures,
     focus: FocusHandle,
 }
