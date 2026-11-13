@@ -388,6 +388,7 @@ impl RenderOnce for Chip {
             self.text.clone()
         };
         let pressed = self.on_click.is_some();
+        let changed = super::motion::colour_change(&id, ground, window);
         let control = div()
             .id(id)
             .role(if pressed { Role::Button } else { Role::Label })
@@ -401,6 +402,12 @@ impl RenderOnce for Chip {
             .px(theme::GAP_CARD / 2.)
             .rounded(height / 2.)
             .bg(ground)
+            .when_some(changed, |d, (before, turn)| {
+                d.child(super::motion::colour_fading(
+                    div().absolute().inset_0().rounded(height / 2.).bg(before),
+                    turn,
+                ))
+            })
             .when_some(pointed, |d, (pointed, keep_pointed)| {
                 d.cursor_pointer()
                     .on_hover(keep_pointed)

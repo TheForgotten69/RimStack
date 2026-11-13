@@ -346,19 +346,22 @@ impl DetailsView {
         )
     }
 
+    /// `SavedMark`: "Saved", fading in as the notes are saved and out as they change again.
     fn saved_mark(&self, theme: &Theme) -> Vec<AnyElement> {
-        match self.shown.notes_saved {
-            true => vec![
-                label(theme, theme.small(), theme.colours.ok, put(&say!("Saved")))
-                    .with_animation(
-                        "saved-fade",
-                        gpui::Animation::new(crate::ui::motion::QUICK),
-                        |label, shown| label.opacity(shown),
-                    )
-                    .into_any_element(),
-            ],
-            false => Vec::new(),
-        }
+        let saved = self.shown.notes_saved;
+        vec![
+            label(theme, theme.small(), theme.colours.ok, put(&say!("Saved")))
+                .with_spring(
+                    "saved-fade",
+                    crate::ui::motion::towards(
+                        gpui::AnimationPhase(f32::from(u8::from(saved))),
+                        0.01,
+                        crate::ui::motion::QUICK,
+                    ),
+                    |label, shown| label.opacity(shown.0.clamp(0., 1.)),
+                )
+                .into_any_element(),
+        ]
     }
 
     fn facts(

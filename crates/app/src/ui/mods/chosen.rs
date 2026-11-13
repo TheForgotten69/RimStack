@@ -81,6 +81,10 @@ impl gpui::EventEmitter<Asked> for DetailsView {}
 
 /// The details pane, a view of its own: choosing a mod or a tab draws nothing else.
 pub struct DetailsView {
+    /// What the pane showed last (a comparison, the problems, Sort's moves, a selection, a mod or
+    /// the list), and the turn of its last change, which fades the pane in as `Appear.qml` did.
+    view_shown: Option<u8>,
+    view_turn: usize,
     /// The description's words selected.
     pub(super) description: crate::ui::rich::Selection,
     pub shown: DetailsShown,
@@ -142,6 +146,8 @@ impl DetailsView {
             downloads: None,
             copyable: Default::default(),
             paging: crate::ui::page::Paging::new(cx.global::<Theme>().appearance.reduce_motion),
+            view_shown: None,
+            view_turn: 0,
         }
     }
 
@@ -255,7 +261,16 @@ impl gpui::Render for DetailsView {
         let theme = cx.global::<Theme>().clone();
         let (_, _, width) =
             super::pane_widths(&theme, window.viewport_size().width, self.shown.panes);
+        let view = self.view_of();
+        if self.view_shown.is_some_and(|shown| shown != view) {
+            self.view_turn = crate::ui::motion::opening();
+        }
+        self.view_shown = Some(view);
         let pane = self.details_pane(&theme, width, window, cx);
+        let pane = match self.view_turn {
+            0 => pane.into_any_element(),
+            turn => crate::ui::motion::appear(pane, ("details-appear", turn)).into_any_element(),
+        };
         div()
             .size_full()
             .bg(theme.colours.panel)
@@ -304,6 +319,19 @@ pub(super) fn defined(theme: &Theme, term: String) -> gpui::Stateful<gpui::Div> 
 }
 
 impl DetailsView {
+    /// Which of its views `details_pane` draws.
+    fn view_of(&self) -> u8 {
+        let shown = &self.shown;
+        match () {
+            _ if shown.comparison.is_some() => 0,
+            _ if shown.problems_open && !shown.previewing => 1,
+            _ if shown.sort_moves.is_some() && shown.selection.is_none() => 2,
+            _ if shown.selection.is_some() => 3,
+            _ if shown.details.is_some() => 10 + self.tab.min(9) as u8,
+            _ => 5,
+        }
+    }
+
     pub(super) fn chosen_pane(
         &self,
         theme: &Theme,

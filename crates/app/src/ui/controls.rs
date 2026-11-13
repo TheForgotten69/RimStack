@@ -444,7 +444,7 @@ impl RenderOnce for Choice {
             .map(|(at, option)| {
                 let on = at == current;
                 let width = widths[at];
-                let ink = if on { c.ink } else { c.ink2 };
+                let (dim, lit) = (gpui::Rgba::from(c.ink2), gpui::Rgba::from(c.ink));
                 let weight = if on {
                     theme.semibold
                 } else {
@@ -457,8 +457,7 @@ impl RenderOnce for Choice {
                         .whitespace_nowrap()
                         .text_ellipsis()
                         .sized_text(theme, theme.small())
-                        .font_weight(weight)
-                        .text_color(ink),
+                        .font_weight(weight),
                     option.clone(),
                     option.clone(),
                     true,
@@ -484,6 +483,19 @@ impl RenderOnce for Choice {
                             picked(at, window, cx)
                         })
                     })
+                    .with_spring(
+                        ("ink", at),
+                        motion::towards(
+                            AnimationPhase(f32::from(u8::from(on))),
+                            0.01,
+                            motion::QUICK,
+                        )
+                        .playback(moving),
+                        move |d, phase| {
+                            let phase = phase.clamp(0. ..=1.);
+                            d.text_color(gpui::Hsla::from(phase.interpolate(dim, lit)))
+                        },
+                    )
                     .into_any_element()
             })
             .collect();

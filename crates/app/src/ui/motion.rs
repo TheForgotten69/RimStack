@@ -170,3 +170,44 @@ pub fn slid_in<E: Styled + IntoElement + 'static>(
         move |e, t| e.left(-width * (1. - t)),
     )
 }
+
+struct Coloured {
+    now: gpui::Hsla,
+    before: gpui::Hsla,
+    turn: usize,
+    when: std::time::Instant,
+}
+
+/// `Behavior on color` for a colour that changes from outside (a chip's tone): the colour shown
+/// before the last change, and the turn of that change, while it is under `QUICK` or so old.
+pub fn colour_change(
+    id: &ElementId,
+    now: gpui::Hsla,
+    window: &mut gpui::Window,
+) -> Option<(gpui::Hsla, usize)> {
+    window.with_global_id(ElementId::from((id.clone(), "colour")), |id, window| {
+        window.with_element_state(id, |kept: Option<Coloured>, _| {
+            let mut kept = kept.unwrap_or(Coloured {
+                now,
+                before: now,
+                turn: 0,
+                when: std::time::Instant::now() - QUICK * 3,
+            });
+            if kept.now != now {
+                kept.before = kept.now;
+                kept.now = now;
+                kept.turn = opening();
+                kept.when = std::time::Instant::now();
+            }
+            let recent = kept.when.elapsed() < QUICK * 3;
+            (recent.then_some((kept.before, kept.turn)), kept)
+        })
+    })
+}
+
+/// The colour that was, laid over the one that is and fading away.
+pub fn colour_fading(was: gpui::Div, turn: usize) -> impl IntoElement {
+    was.with_animation(("colour-fading", turn), Animation::new(QUICK), |d, t| {
+        d.opacity(1. - t)
+    })
+}
