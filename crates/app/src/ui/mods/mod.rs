@@ -279,6 +279,7 @@ impl Mods {
                 self.describe(cx);
             }
             self.sync_details(cx);
+            cx.notify();
             return;
         }
         if changes.contains(Changes::LIBRARY | Changes::LANGUAGE) {
@@ -377,6 +378,7 @@ impl Mods {
                 |mods, summary, cx| {
                     mods.reads.summary = Some(Rc::new(summary));
                     mods.sync_details(cx);
+                    cx.notify();
                 },
             );
         }
@@ -391,6 +393,7 @@ impl Mods {
                 |mods, said, cx| {
                     mods.reads.last_start = said.map(Rc::new);
                     mods.sync_details(cx);
+                    cx.notify();
                 },
             );
         }

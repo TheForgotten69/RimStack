@@ -17,7 +17,7 @@ impl App {
     }
 
     /// The pack of `set`'s pictures at `size`, holding `wanted`; the packs of `set` at other
-    /// sizes go.
+    /// sizes go, and what a fill stopped midway left.
     pub fn fill_pictures(
         &self,
         set: &str,
@@ -37,7 +37,8 @@ fn remove_other_sizes(dir: &Path, set: &str, kept: &Path) {
     for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        if name.starts_with(&prefix) && name.ends_with(".pack") && entry.path() != kept {
+        let leftover = name.ends_with(".part") || name.ends_with(".pack") && entry.path() != kept;
+        if name.starts_with(&prefix) && leftover {
             let _ = std::fs::remove_file(entry.path());
         }
     }

@@ -104,3 +104,35 @@ fn every_view_of_logs_fits_at_every_text_size() {
         );
     }
 }
+
+#[test]
+fn logs_hidden_read_nothing_until_they_are_shown_again() {
+    use crate::changes::Changes;
+    use crate::ui::section::Section;
+    let (_tmp, mut cx, shell, logs) = opened(0, 1.0, &|_| size(WINDOW_W, WINDOW_H));
+    let read = |cx: &mut HeadlessAppContext| cx.update(|cx| logs.read(cx).report.clone().unwrap());
+    let go = |cx: &mut HeadlessAppContext, section| {
+        cx.update(|cx| {
+            shell
+                .update(cx, |shell, _, cx| shell.go(section, cx))
+                .unwrap()
+        });
+        cx.run_until_parked();
+    };
+    let first = read(&mut cx);
+    go(&mut cx, Section::Mods);
+    cx.update(|cx| crate::ui::app(cx).publish(Changes::LOAD_ORDER));
+    cx.run_until_parked();
+    assert!(
+        std::rc::Rc::ptr_eq(&first, &read(&mut cx)),
+        "a hidden Logs read the log"
+    );
+    go(&mut cx, Section::Logs);
+    assert!(
+        !std::rc::Rc::ptr_eq(&first, &read(&mut cx)),
+        "Logs shown again read what it missed"
+    );
+}
+
+const WINDOW_W: Pixels = gpui::px(1440.);
+const WINDOW_H: Pixels = gpui::px(860.);
