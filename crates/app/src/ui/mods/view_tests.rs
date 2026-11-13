@@ -452,6 +452,29 @@ fn a_mod_moved_slides_from_where_it_was() {
 }
 
 #[test]
+fn the_other_sections_read_the_chosen_mod_and_the_active_list_from_the_order_store() {
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    cx.run_until_parked();
+    let chosen = cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            let chosen = mods.order.list(Side::Active).mods()[2].installed.unwrap();
+            mods.choose(Side::Active, chosen, cx);
+            chosen
+        })
+    });
+    cx.run_until_parked();
+    let (order, active) = cx.update(|cx| {
+        let active = mods.read(cx).active_installed();
+        (crate::ui::order::read(cx), active)
+    });
+    assert_eq!(order.selected, Some(chosen));
+    assert_eq!(*order.active, active);
+    let listing = cx.update(|cx| crate::ui::app(cx).listing(&order.active));
+    let total = format!("Total # of mods: {}", active.len());
+    assert!(listing.contains(&total), "{listing}");
+}
+
+#[test]
 fn a_change_that_leaves_the_rows_and_details_as_they_were_draws_neither_again() {
     let (_tmp, mut cx, mods) = opened_with(|_| {});
     let window = cx.update(|cx| cx.windows()[0]);

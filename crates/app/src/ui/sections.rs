@@ -37,9 +37,13 @@ pub struct Sections {
 impl Sections {
     pub fn new(demo: bool, part: usize, view: usize, cx: &mut Cx) -> Self {
         let mods = cx.new(|cx| Mods::new(demo, cx));
-        cx.observe(&mods, |mods, cx| super::around::from_mods(&mods, cx))
-            .detach();
+        cx.observe(&mods, |mods, cx| {
+            super::around::from_mods(&mods, cx);
+            super::order::from_mods(&mods, cx);
+        })
+        .detach();
         super::around::from_mods(&mods, cx);
+        super::order::from_mods(&mods, cx);
         let mut sections = Self {
             demo,
             shown: Section::Mods,
@@ -118,8 +122,8 @@ impl Sections {
                 self.logs = Some(cx.new(|cx| Logs::new(demo, view, cx)));
             }
             Section::Settings if self.settings.is_none() => {
-                let (part, mods) = (self.part, self.mods.clone());
-                let settings = cx.new(|cx| Settings::new(demo, part, mods, cx));
+                let part = self.part;
+                let settings = cx.new(|cx| Settings::new(demo, part, cx));
                 cx.observe(&settings, |settings, cx| {
                     let busy = settings.read(cx).community_busy();
                     super::around::change(cx, |around| around.community_busy = busy);
@@ -167,8 +171,8 @@ impl Sections {
         if let Some(find) = &self.find {
             return find.clone();
         }
-        let (demo, mods) = (self.demo, self.mods.clone());
-        let find = cx.new(|cx| Find::new(demo, mods, cx));
+        let demo = self.demo;
+        let find = cx.new(|cx| Find::new(demo, cx));
         self.find = Some(find.clone());
         if self.shown != Section::Find {
             self.tell_shown(Section::Find, false, cx);

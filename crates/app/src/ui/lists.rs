@@ -4,7 +4,6 @@
 use super::button::Btn;
 use super::field::Field;
 use super::menu::{self, Entry};
-use super::mods::Mods;
 use super::notices;
 use super::prompt::{self, Line, Question};
 use super::text_field::{Entered, TextField};
@@ -32,7 +31,6 @@ pub enum Which {
 const READS: Changes = Changes::LISTS.or(Changes::LANGUAGE);
 
 pub struct Lists {
-    mods: Entity<Mods>,
     saved: Vec<Saved>,
     snapshots: Vec<Snapshot>,
     history: Vec<HistoryLine>,
@@ -51,14 +49,13 @@ pub struct Lists {
 }
 
 impl Lists {
-    pub fn new(demo: bool, mods: Entity<Mods>, cx: &mut Context<Self>) -> Self {
+    pub fn new(demo: bool, cx: &mut Context<Self>) -> Self {
         let theme = cx.global::<Theme>().clone();
         let name = cx.new(|cx| TextField::new(theme.body(), cx));
         cx.subscribe(&name, |lists, _, _: &Entered, cx| lists.keep_typed(cx))
             .detach();
         cx.observe(&name, |_, _, cx| cx.notify()).detach();
         let mut lists = Self {
-            mods,
             saved: Vec::new(),
             snapshots: Vec::new(),
             history: Vec::new(),
@@ -166,7 +163,7 @@ impl Lists {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
+        super::navigate::go(super::navigate::Go::TakeList(ids), cx);
         self.go_by(name, cx);
         self.close(window, cx);
     }
@@ -215,7 +212,7 @@ impl Lists {
                         lists.clipboard_problem = put(&say!("No mod found on the clipboard"))
                     }
                     Ok(ids) => {
-                        lists.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
+                        super::navigate::go(super::navigate::Go::TakeList(ids), cx);
                         lists.go_by("", cx);
                         lists.open = None;
                     }
@@ -228,7 +225,7 @@ impl Lists {
     }
 
     fn share(&mut self, cx: &mut Context<Self>) {
-        let listing = self.mods.read(cx).listing(cx);
+        let listing = super::app(cx).listing(&super::order::read(cx).active);
         if self.busy {
             return;
         }
@@ -286,7 +283,7 @@ impl Lists {
         let app = super::app(cx);
         if !line.restore.is_empty() {
             if let Some(ids) = app.snapshot_named(&line.restore) {
-                self.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
+                super::navigate::go(super::navigate::Go::TakeList(ids), cx);
             }
         } else if !line.bring_back.is_empty() {
             let done = app.unhide_folder(std::path::Path::new(&line.bring_back));
@@ -499,7 +496,8 @@ impl Lists {
                         .icon("copy")
                         .tip(put(&say!("The active mods as text, one a line")))
                         .on_click(cx.listener(|lists, _, window, cx| {
-                            let listing = lists.mods.read(cx).listing(cx);
+                            let listing =
+                                super::app(cx).listing(&super::order::read(cx).active);
                             cx.write_to_clipboard(gpui::ClipboardItem::new_string(listing));
                             lists.close(window, cx);
                         })),

@@ -106,25 +106,10 @@ impl Mods {
         !self.files_read && self.count(Side::Active) > 0 && !self.demo
     }
 
-    /// The active mods as text, one a line, as `Copy the load order` gives them.
-    pub fn listing(&self, cx: &gpui::App) -> String {
-        use rimstack_core::mods::share::{Entry, listing};
-        let app = crate::ui::app(cx);
-        let loaded = app.library();
-        let Ok((library, _)) = &*loaded else {
-            return String::new();
-        };
+    /// The active mods installed, in their order.
+    pub fn active_installed(&self) -> Vec<ModId> {
         let mods = self.order.list(Side::Active).mods().iter();
-        let entries: Vec<Entry> = mods
-            .filter_map(|m| library.get(m.installed?))
-            .map(Entry::of)
-            .collect();
-        let paths = app.paths();
-        let version = paths
-            .full_game_version
-            .as_deref()
-            .unwrap_or(&library.game_version);
-        listing(version, &entries)
+        mods.filter_map(|m| m.installed).collect()
     }
 
     /// Whether the search for the broken mod runs, as the window tells it.

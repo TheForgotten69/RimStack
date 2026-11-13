@@ -350,8 +350,8 @@ impl Shell {
             say!("Copy the load order as text"),
             &order,
             none.clone(),
-            Rc::new(|shell, _, cx| {
-                let listing = shell.sections.mods.read(cx).listing(cx);
+            Rc::new(|_, _, cx| {
+                let listing = super::app(cx).listing(&super::order::read(cx).active);
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(listing));
             }),
         );

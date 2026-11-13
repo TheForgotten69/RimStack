@@ -23,6 +23,7 @@ pub mod mods;
 pub mod motion;
 pub mod navigate;
 pub mod notices;
+pub mod order;
 pub mod outside;
 pub mod page;
 pub mod pictures;
@@ -424,6 +425,7 @@ fn install_with(app: Arc<App>, options: &Options, fonts: Fonts, cx: &mut Cx) {
     counts::install(cx);
     navigate::install(cx);
     around::install(cx);
+    order::install(cx);
     tip::install(cx);
     outside::install(options.demo, cx);
     text_field::bind_keys(cx);

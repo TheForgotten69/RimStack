@@ -3,6 +3,7 @@ use crate::changes::Changes;
 use rimstack_core::base::error::Error;
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::kept::{journal, lists};
+use rimstack_core::mods::library::ModId;
 use rimstack_core::mods::share;
 use rimstack_core::rimworld::modsconfig;
 use rimstack_core::say;
@@ -120,6 +121,26 @@ pub struct HistoryLine {
 }
 
 impl App {
+    /// `active` as text, one a line, as `Copy the load order` gives them.
+    pub fn listing(&self, active: &[ModId]) -> String {
+        use rimstack_core::mods::share::{Entry, listing};
+        let loaded = self.library();
+        let Ok((library, _)) = &*loaded else {
+            return String::new();
+        };
+        let entries: Vec<Entry> = active
+            .iter()
+            .filter_map(|&id| library.get(id))
+            .map(Entry::of)
+            .collect();
+        let paths = self.paths();
+        let version = paths
+            .full_game_version
+            .as_deref()
+            .unwrap_or(&library.game_version);
+        listing(version, &entries)
+    }
+
     pub fn saved_lists(&self) -> Vec<lists::Saved> {
         lists::all(&self.lists_dir())
     }

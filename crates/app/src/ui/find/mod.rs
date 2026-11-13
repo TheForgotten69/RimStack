@@ -6,7 +6,6 @@ mod preview;
 mod screen;
 mod side;
 
-use super::mods::Mods;
 use super::rows::Scrolling;
 use super::text_field::{Edited, Entered, TextField};
 use super::theme::Theme;
@@ -102,7 +101,7 @@ pub struct Find {
 }
 
 impl Find {
-    pub fn new(demo: bool, mods: Entity<Mods>, cx: &mut Context<Self>) -> Self {
+    pub fn new(demo: bool, cx: &mut Context<Self>) -> Self {
         let theme = cx.global::<Theme>().clone();
         let field = |cx: &mut Context<Self>| cx.new(|cx| TextField::new(theme.body(), cx));
         let (search, types, filter, inside) = (field(cx), field(cx), field(cx), field(cx));
@@ -124,8 +123,8 @@ impl Find {
             .detach();
         cx.subscribe(&inside, |find, _, _: &Entered, cx| find.inside_step(1, cx))
             .detach();
-        cx.observe(&mods, |find, mods, cx| {
-            let selected = mods.read(cx).selected_id();
+        cx.observe(&super::order::order(cx), |find, order, cx| {
+            let selected = order.read(cx).selected;
             if selected != find.selected {
                 find.selected = selected;
                 find.count_extensions(cx);
@@ -140,7 +139,7 @@ impl Find {
                 .set_reduce_motion(theme.appearance.reduce_motion);
             scroll
         };
-        let selected = mods.read(cx).selected_id();
+        let selected = super::order::read(cx).selected;
         let mut find = Self {
             unseen: Default::default(),
             selected,

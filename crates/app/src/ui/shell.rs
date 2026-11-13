@@ -78,10 +78,7 @@ impl Shell {
         cx.subscribe(&game, |shell, _, told, cx| shell.heard_game(told, cx))
             .detach();
         let section = options.section;
-        let lists = {
-            let mods = mods.clone();
-            cx.new(|cx| super::lists::Lists::new(demo, mods, cx))
-        };
+        let lists = cx.new(|cx| super::lists::Lists::new(demo, cx));
         let mut shell = Self {
             demo,
             sections,
@@ -171,6 +168,22 @@ impl Shell {
                     .update(cx, |mods, cx| mods.use_list(ids, cx));
                 self.go(Section::Mods, cx);
             }
+            Go::TakeList(ids) => {
+                let ids = ids.clone();
+                self.sections
+                    .mods
+                    .update(cx, |mods, cx| mods.use_list(ids, cx));
+            }
+            Go::Distrust(id) => {
+                let id = *id;
+                self.sections
+                    .mods
+                    .update(cx, |mods, cx| mods.trust(vec![id], false, cx));
+            }
+            Go::StartHints => self
+                .sections
+                .mods
+                .update(cx, |mods, cx| mods.start_hints(cx)),
             Go::SearchedInMods => {
                 self.sections
                     .mods

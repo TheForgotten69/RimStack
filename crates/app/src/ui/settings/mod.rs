@@ -87,18 +87,12 @@ pub struct Settings {
     font_scroll: super::rows::Scrolling,
     /// `RimStack.conf`, read again after each appearance kept.
     prefs: rimstack_core::kept::prefs::Prefs,
-    mods: Entity<super::mods::Mods>,
     /// The part chosen holds the keys when Tab reaches the parts.
     part_keys: gpui::FocusHandle,
 }
 
 impl Settings {
-    pub fn new(
-        demo: bool,
-        part: usize,
-        mods: Entity<super::mods::Mods>,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(demo: bool, part: usize, cx: &mut Context<Self>) -> Self {
         let theme = cx.global::<Theme>().clone();
         let field = |cx: &mut Context<Self>| cx.new(|cx| TextField::new(theme.body(), cx));
         let fields = Fields {
@@ -131,7 +125,6 @@ impl Settings {
         })
         .detach();
         cx.observe(&fields.fonts, |_, _, cx| cx.notify()).detach();
-        cx.observe(&mods, |_, _, cx| cx.notify()).detach();
         let reduce = theme.appearance.reduce_motion;
         let mut settings = Self {
             unseen: Default::default(),
@@ -162,7 +155,6 @@ impl Settings {
             paging: Paging::new(reduce),
             font_scroll: super::rows::Scrolling::default(),
             prefs: super::app(cx).prefs(),
-            mods,
             part_keys: cx.focus_handle().tab_stop(true),
         };
         if !demo {
@@ -523,7 +515,7 @@ impl Settings {
 
     fn say_hints(&mut self, cx: &mut Context<Self>) {
         super::keep_appearance("hintsSeen", "false", cx);
-        self.mods.update(cx, |mods, cx| mods.start_hints(cx));
+        super::navigate::go(super::navigate::Go::StartHints, cx);
         super::notices::say(
             put(&say!("The hints show on the Mods screen")),
             super::notices::Tone::Plain,

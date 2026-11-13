@@ -61,7 +61,7 @@ impl Settings {
         ));
 
         rows.push(Row::Group(2, put(&say!("Community databases"))));
-        let overview = self.mods.read(cx).overview();
+        let overview = crate::ui::order::read(cx).overview;
         let (mods, time) = overview
             .as_ref()
             .map_or((None, None), |o| (o.community_mods, o.community_time));
@@ -201,12 +201,14 @@ impl Settings {
                         )
                         .child(label(theme, theme.small(), tone, note))
                         .child(Btn::new(("untrust", at), put(&say!("Remove"))).on_click(
-                            cx.listener(move |s, _, _, cx| {
+                            move |_, _, cx| {
                                 if let Some(id) = id {
-                                    s.mods
-                                        .update(cx, |mods, cx| mods.trust(vec![id], false, cx));
+                                    crate::ui::navigate::go(
+                                        crate::ui::navigate::Go::Distrust(id),
+                                        cx,
+                                    );
                                 }
-                            }),
+                            },
                         ))
                         .into_any_element(),
                 ));
