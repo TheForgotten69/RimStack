@@ -100,3 +100,50 @@ fn the_check_sees_a_fixed_size() {
     assert!(pixels("px(size_16)").is_empty());
     assert!(pixels(".px(theme.sized(40.)).mx_px(12)").is_empty());
 }
+
+fn sources(dir: &Path, into: &mut Vec<std::path::PathBuf>) {
+    for entry in std::fs::read_dir(dir).unwrap().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            sources(&path, into);
+        } else if path.extension().is_some_and(|e| e == "rs")
+            && !path.to_string_lossy().ends_with("tests.rs")
+        {
+            into.push(path);
+        }
+    }
+}
+
+/// Each kind of change the `App` tells is published somewhere and named by a view that reads it:
+/// one no view names is either not shown or shown stale.
+#[test]
+fn each_change_is_published_and_read_by_name() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let declared = std::fs::read_to_string(root.join("changes.rs")).unwrap();
+    let names: Vec<&str> = declared
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("pub const "))
+        .filter(|rest| rest.contains("Self(1 <<"))
+        .filter_map(|rest| rest.split(':').next())
+        .collect();
+    assert!(names.len() > 20);
+    let mut files = Vec::new();
+    sources(&root, &mut files);
+    let (mut published, mut read) = (Vec::new(), Vec::new());
+    for file in files.iter().filter(|f| !f.ends_with("changes.rs")) {
+        let text = std::fs::read_to_string(file).unwrap();
+        let publishes = text.contains("publish(") || !file.starts_with(root.join("ui"));
+        for name in &names {
+            if text.contains(&format!("Changes::{name}")) {
+                match publishes {
+                    true => published.push(*name),
+                    false => read.push(*name),
+                }
+            }
+        }
+    }
+    let unpublished: Vec<_> = names.iter().filter(|n| !published.contains(n)).collect();
+    let unread: Vec<_> = names.iter().filter(|n| !read.contains(n)).collect();
+    assert!(unpublished.is_empty(), "never published: {unpublished:?}");
+    assert!(unread.is_empty(), "read by no view: {unread:?}");
+}
