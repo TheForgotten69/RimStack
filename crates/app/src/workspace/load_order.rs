@@ -394,6 +394,25 @@ impl LoadOrder {
         self.settle(app);
     }
 
+    /// The settings the lists and Sort read: a change to any other draws them as they were.
+    pub fn settings_read(app: &App) -> Vec<String> {
+        let settings = app.settings();
+        let switches = [
+            Switch::DimLeftOut,
+            Switch::CommunityRules,
+            Switch::FileHints,
+            Switch::VersionWarnings,
+        ];
+        let mut read: Vec<String> = switches
+            .into_iter()
+            .map(|switch| settings.switch(switch).to_string())
+            .collect();
+        for folder in ["game", "config", "workshop"] {
+            read.push(settings.get(folder).unwrap_or_default().to_string());
+        }
+        read
+    }
+
     pub fn follow_left_out(&mut self, app: &App) {
         let left_out = match app.settings().switch(Switch::DimLeftOut) {
             true => LeftOut::Dimmed,

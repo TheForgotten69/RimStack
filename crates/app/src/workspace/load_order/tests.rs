@@ -762,3 +762,21 @@ fn times_the_mods_tab_on_this_machines_install() {
     time("set_filter ''", &mut || order.set_filter(""));
     time("sync", &mut || order.sync(&app));
 }
+
+#[test]
+fn only_the_settings_the_lists_read_count_as_read() {
+    let tmp = tempfile::tempdir().unwrap();
+    let app = App::new(
+        tmp.path().into(),
+        &tmp.path().join("s"),
+        &tmp.path().join("d"),
+        Default::default(),
+    );
+    let before = LoadOrder::settings_read(&app);
+    app.keep_setting("autoUpdates", "on").unwrap();
+    assert_eq!(LoadOrder::settings_read(&app), before);
+    let dimmed = app.settings().switch(Switch::DimLeftOut);
+    app.keep_setting("dimLeftOut", if dimmed { "off" } else { "on" })
+        .unwrap();
+    assert_ne!(LoadOrder::settings_read(&app), before);
+}

@@ -61,6 +61,9 @@ fn give_back_freed() {
 }
 
 /// What changes nothing of the lists' rows, only the details.
+/// Facts arrive in batches while the mods' files are read: the lists follow once they pause.
+const FACTS_QUIET: std::time::Duration = std::time::Duration::from_millis(150);
+
 const ROWS_UNTOUCHED: Changes = Changes::LOGS
     .or(Changes::SAVES)
     .or(Changes::LISTS)
@@ -107,6 +110,9 @@ pub struct Mods {
     /// Asked to be done once the view is drawn; each answers whether it was done.
     when_drawn: Vec<AfterDrawn>,
     thumbs: super::thumbs::Shared,
+    /// What `LoadOrder::settings_read` gave last.
+    settings_read: Vec<String>,
+    facts_quiet: Lane,
     focus: gpui::FocusHandle,
     overview: Option<Rc<Overview>>,
     details: Option<Rc<Details>>,
@@ -210,6 +216,8 @@ impl Mods {
             reads: Default::default(),
             problem_nav: Default::default(),
             when_drawn: Vec::new(),
+            settings_read: LoadOrder::settings_read(&super::app(cx)),
+            facts_quiet: Lane::default(),
             focus: cx.focus_handle(),
             filter,
             active_list,
@@ -260,7 +268,25 @@ impl Mods {
 
     fn heard(&mut self, changes: Changes, cx: &mut Context<Self>) {
         let app = super::app(cx);
-        if changes.within(ROWS_UNTOUCHED) {
+        let mut untouched = ROWS_UNTOUCHED;
+        if changes.contains(Changes::SETTINGS) {
+            let read = LoadOrder::settings_read(&app);
+            if read == self.settings_read {
+                untouched |= Changes::SETTINGS;
+            }
+            self.settings_read = read;
+        }
+        if changes == Changes::FACTS {
+            self.facts_quiet.after(FACTS_QUIET, cx, |mods, cx| {
+                let app = super::app(cx);
+                mods.order.facts_read(&app);
+                if mods.order.needs_facts() {
+                    mods.show(cx);
+                }
+            });
+            return;
+        }
+        if changes.within(untouched) {
             if self.details.is_some() {
                 self.describe(cx);
             }
