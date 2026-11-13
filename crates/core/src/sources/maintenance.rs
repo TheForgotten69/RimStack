@@ -1,5 +1,6 @@
 use super::redownload::{not_an_id, note_workshop_id};
 use crate::base::error::{Error, Result};
+use crate::base::sandbox;
 use crate::rimworld::workshop::is_id;
 use crate::said;
 
@@ -156,7 +157,11 @@ pub fn game_among(processes: &[Process], game_dir: &Path) -> bool {
 }
 
 pub fn game_running(game_dir: &Path) -> bool {
-    game_among(&processes(), game_dir)
+    game_running_on(game_dir, sandbox::sandboxed())
+}
+
+pub fn game_running_on(game_dir: &Path, sandboxed: bool) -> bool {
+    !sandboxed && game_among(&processes(), game_dir)
 }
 
 /// Splits at spaces outside quotes, and takes the quotes off. A quote left open runs to
@@ -280,9 +285,11 @@ mod tests {
             })
             .unwrap();
         let seen = game_running(&game);
+        let in_a_sandbox = game_running_on(&game, true);
         running.kill().unwrap();
         running.wait().unwrap();
         assert!(seen);
+        assert!(!in_a_sandbox);
         assert!(!game_running(&game));
     }
 

@@ -8,6 +8,7 @@
  "? Keys": "? Klawisze",
  "@locale": "pl",
  "A .dds file is written beside each .png and the game loads it instead: quicker, and less memory. The .png is not changed. Steam may delete the .dds files when it updates a mod; they then show as not converted.": "Plik .dds jest zapisywany obok każdego .png, a gra wczytuje go zamiast niego: szybciej i z mniejszym zużyciem pamięci. Plik .png nie jest zmieniany. Steam może usunąć pliki .dds przy aktualizacji moda; wtedy są wyświetlane jako nieprzekonwertowane.",
+ "A Flatpak runs the game in a sandbox of its own, so Play asks Steam to start it outside.": "Flatpak uruchamia grę we własnej piaskownicy, więc Graj prosi Steam o uruchomienie jej na zewnątrz.",
  "A Git checkout": "Kopia robocza Git",
  "Choosing against the load order sets the losing file aside: it is renamed inside its mod, with .rimstack-hidden added, so the game skips it. Nothing is deleted; choosing the other version renames it back. Steam restores renamed files when it updates a mod.": "Wybór sprzeczny z kolejnością ładowania odkłada przegrany plik na bok: zostaje przemianowany wewnątrz moda z dopiskiem .rimstack-hidden, dzięki czemu gra go pomija. Nic nie jest usuwane; wybór drugiej wersji przywraca nazwę. Steam przywraca przemianowane pliki przy aktualizacji moda.",
  "A copy of this mod is also in the game's own Mods folder, and the game uses that one instead of this one.": "Kopia tego moda jest też w folderze Mods gry, a gra używa tamtej zamiast tej.",

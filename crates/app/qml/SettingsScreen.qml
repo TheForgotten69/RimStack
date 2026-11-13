@@ -228,6 +228,13 @@ Item {
 
                 GroupTitle { visible: screen.finding === ""; text: Theme.say("Play") }
                 Line {
+                    visible: screen.info.sandboxed
+                    title: Theme.say("Play starts the game")
+                    tip: Theme.say("A Flatpak runs the game in a sandbox of its own, so Play asks Steam to start it outside.")
+                    Text { Layout.fillWidth: true; color: Theme.ink; font.pixelSize: Theme.body; text: Theme.say("Through Steam") }
+                }
+                Line {
+                    visible: !screen.info.sandboxed
                     title: Theme.say("Play starts the game")
                     changed: !!screen.info.launchDirectly
                     onReset: screen.keep("launch", "steam")
