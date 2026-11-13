@@ -1,4 +1,4 @@
-//! Renaming a field here renames what QML must read; each type's test lists its fields.
+//! Renaming a field here renames what the views read; each type's test lists its fields.
 
 use crate::workspace::KeyState;
 use rimstack_core::base::sentence::Sentence;
