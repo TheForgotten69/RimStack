@@ -45,7 +45,7 @@ fn settled(cx: &mut HeadlessAppContext, shell: WindowHandle<Shell>, most: usize)
 fn the_arrows_turn_without_drawing_the_window_again() {
     let (_tmp, mut cx, shell) = opened();
     cx.update(|cx| {
-        let mods = shell.read(cx).unwrap().mods.clone();
+        let mods = shell.read(cx).unwrap().sections.mods.clone();
         mods.update(cx, |mods, cx| {
             mods.rescanning = true;
             cx.notify();

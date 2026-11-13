@@ -35,6 +35,7 @@ pub mod rows;
 pub mod saves;
 pub mod scenes;
 pub mod section;
+pub mod sections;
 pub mod settings;
 pub mod shell;
 pub mod status_bar;

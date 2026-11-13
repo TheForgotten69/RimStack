@@ -39,7 +39,11 @@ fn opened(
         })
         .unwrap();
     let textures = cx
-        .update(|cx| shell.read(cx).map(|shell| shell.textures.clone().unwrap()))
+        .update(|cx| {
+            shell
+                .read(cx)
+                .map(|shell| shell.sections.textures.clone().unwrap())
+        })
         .unwrap();
     let started = Instant::now();
     while cx.update(|cx| textures.read(cx).rows.is_empty()) {

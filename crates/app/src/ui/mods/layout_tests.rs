@@ -39,7 +39,7 @@ fn drawn(
             cx.new(|cx| Shell::new(&options, window, cx))
         })
         .unwrap();
-    let mods = cx.update(|cx| shell.read(cx).unwrap().mods.clone());
+    let mods = cx.update(|cx| shell.read(cx).unwrap().sections.mods.clone());
     let started = Instant::now();
     while cx.update(|cx| {
         let mods = mods.read(cx);

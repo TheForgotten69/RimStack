@@ -38,7 +38,11 @@ fn opened(
         })
         .unwrap();
     let saves = cx
-        .update(|cx| shell.read(cx).map(|shell| shell.saves.clone().unwrap()))
+        .update(|cx| {
+            shell
+                .read(cx)
+                .map(|shell| shell.sections.saves.clone().unwrap())
+        })
         .unwrap();
     let started = Instant::now();
     while cx.update(|cx| saves.read(cx).report.rows.is_empty()) {

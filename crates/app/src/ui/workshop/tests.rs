@@ -40,7 +40,11 @@ fn opened(text_scale: f32, window: Shape<'_>, browse: Option<&str>) -> Opened {
         })
         .unwrap();
     let workshop = cx
-        .update(|cx| shell.read(cx).map(|shell| shell.workshop.clone().unwrap()))
+        .update(|cx| {
+            shell
+                .read(cx)
+                .map(|shell| shell.sections.workshop.clone().unwrap())
+        })
         .unwrap();
     wait(&mut cx, &workshop, "the first results", |w| {
         !w.searching && !w.rows.is_empty()

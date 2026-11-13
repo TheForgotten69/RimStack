@@ -28,7 +28,7 @@ impl Shell {
             tasks.push((put(&say!("Downloading community data…")), None));
         }
         if let Some(said) = &around.textures_work
-            && let Some(stop) = self.textures_stop.clone()
+            && let Some(stop) = self.sections.textures_stop.clone()
         {
             let stop: Stop =
                 std::rc::Rc::new(move || stop.store(true, std::sync::atomic::Ordering::Relaxed));

@@ -2,7 +2,6 @@
 
 use super::Options;
 use super::downloads::Downloads;
-use super::mods::Mods;
 use super::navigate::Go;
 use super::section::Section;
 use super::theme::Theme;
@@ -13,21 +12,10 @@ use gpui::{
 };
 
 pub struct Shell {
-    section: Section,
     /// The keys' handles of the sections and of the search box.
     bar_keys: [gpui::FocusHandle; 2],
     pub(crate) demo: bool,
-    pub(crate) mods: Entity<Mods>,
-    /// Made with the window, as Qt's `DownloadsData` was: it counts the updates the top bar and
-    /// the Mods tab show. What it reads of the `App` it reads off the window's thread.
-    pub(crate) downloads: Option<Entity<Downloads>>,
-    /// Made the first time Settings is shown; `part` is the one it opens on.
-    pub(crate) settings: Option<Entity<super::settings::Settings>>,
-    pub(crate) part: usize,
-    /// Made the first time Logs is shown; `view` is the one it opens on.
-    pub(crate) logs: Option<Entity<super::logs::Logs>>,
-    /// Made the first time Saves is shown.
-    pub(crate) saves: Option<Entity<super::saves::Saves>>,
+    pub(crate) sections: super::sections::Sections,
     /// The Background work popup open over the status bar.
     pub(crate) tray_open: bool,
     pub(crate) tray_turn: usize,
@@ -40,13 +28,6 @@ pub struct Shell {
     pub(crate) spinner: Entity<super::status_bar::Spinner>,
     /// A newer RimStack found: its version and its page.
     pub(crate) release: Option<(String, String)>,
-    /// Made the first time Workshop is shown.
-    pub(crate) workshop: Option<Entity<super::workshop::Workshop>>,
-    /// Made the first time Search is shown.
-    pub(crate) find: Option<Entity<super::find::Find>>,
-    /// Made the first time Textures is shown.
-    pub(crate) textures: Option<Entity<super::textures::Textures>>,
-    pub(crate) view: usize,
     pub(crate) game: Entity<super::game::Game>,
     /// The search for the broken mod, as `bisect.json` keeps it between starts.
     pub(crate) hunt: crate::workspace::search::Hunt,
@@ -65,8 +46,6 @@ pub struct Shell {
     pub(crate) before_play: bool,
     /// The status bar's note, drawn again alone as the hint changes.
     pub(crate) note: Entity<super::status_note::StatusNote>,
-    /// How the textures' work under way is stopped.
-    pub(crate) textures_stop: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     prompt: Entity<super::prompt::Prompt>,
     menu: Entity<super::menu::Menu>,
     notices: Entity<super::notices::Notices>,
@@ -76,10 +55,8 @@ pub struct Shell {
 impl Shell {
     pub fn new(options: &Options, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let demo = options.demo;
-        let mods = cx.new(|cx| Mods::new(demo, cx));
-        cx.observe(&mods, |_, mods, cx| super::around::from_mods(&mods, cx))
-            .detach();
-        super::around::from_mods(&mods, cx);
+        let sections = super::sections::Sections::new(demo, options.part, options.view, cx);
+        let mods = sections.mods.clone();
         let focus = mods.read(cx).focus_handle(cx);
         window.focus(&focus, cx);
         cx.subscribe(&super::navigate::router(cx), |shell, _, to: &Go, cx| {
@@ -103,24 +80,14 @@ impl Shell {
             cx.new(|cx| super::lists::Lists::new(demo, mods, cx))
         };
         let mut shell = Self {
-            section: Section::Mods,
             demo,
-            mods,
-            downloads: None,
-            settings: None,
-            part: options.part,
-            logs: None,
-            textures: None,
-            saves: None,
+            sections,
             tray_open: false,
             tray_turn: 0,
             tray_fading: false,
             shown_turn: 0,
             spinner: cx.new(|_| super::status_bar::Spinner),
             release: None,
-            find: None,
-            workshop: None,
-            view: options.view,
             game,
             lists,
             commands: None,
@@ -134,7 +101,6 @@ impl Shell {
             },
             before_play: false,
             note: cx.new(|_| super::status_note::StatusNote { demo }),
-            textures_stop: None,
             prompt: super::prompt::install(cx),
             menu: super::menu::install(cx),
             notices: super::notices::install(cx),
@@ -144,7 +110,6 @@ impl Shell {
                 cx.focus_handle().tab_stop(true),
             ],
         };
-        shell.downloads(cx);
         if !demo {
             keep_logs(cx);
         }
@@ -156,7 +121,7 @@ impl Shell {
             shell.start_first_run(options.step, cx);
         }
         if !demo && !options.still {
-            let left = shell.mods.downgrade();
+            let left = shell.sections.mods.downgrade();
             window.on_window_should_close(cx, move |window, cx| {
                 super::keep_window(window, cx);
                 let _ = left.update(cx, |mods, cx| mods.keep_left_scroll(cx));
@@ -168,47 +133,21 @@ impl Shell {
         shell
     }
 
+    #[cfg(test)]
+    pub(crate) fn section(&self) -> Section {
+        self.sections.shown()
+    }
+
     pub(crate) fn downloads(&mut self, cx: &mut Context<Self>) -> Entity<Downloads> {
-        if let Some(downloads) = &self.downloads {
-            return downloads.clone();
-        }
-        let (demo, mods) = (self.demo, self.mods.clone());
-        let downloads = cx.new(|cx| Downloads::new(demo, mods, cx));
-        cx.observe(&downloads, |_, downloads, cx| {
-            let work = downloads.read(cx).tasks_said();
-            super::around::change(cx, |around| around.downloads_work = work);
-        })
-        .detach();
-        self.mods
-            .update(cx, |mods, cx| mods.set_downloads(&downloads, cx));
-        self.downloads = Some(downloads.clone());
-        downloads
+        self.sections.downloads(cx)
     }
 
     pub(crate) fn workshop(&mut self, cx: &mut Context<Self>) -> Entity<super::workshop::Workshop> {
-        if let Some(workshop) = &self.workshop {
-            return workshop.clone();
-        }
-        let (demo, downloads) = (self.demo, self.downloads(cx));
-        let workshop = cx.new(|cx| super::workshop::Workshop::new(demo, downloads, cx));
-        self.workshop = Some(workshop.clone());
-        if self.section != Section::Workshop {
-            self.tell_shown(Section::Workshop, false, cx);
-        }
-        workshop
+        self.sections.workshop(cx)
     }
 
     pub(crate) fn find(&mut self, cx: &mut Context<Self>) -> Entity<super::find::Find> {
-        if let Some(find) = &self.find {
-            return find.clone();
-        }
-        let (demo, mods) = (self.demo, self.mods.clone());
-        let find = cx.new(|cx| super::find::Find::new(demo, mods, cx));
-        self.find = Some(find.clone());
-        if self.section != Section::Find {
-            self.tell_shown(Section::Find, false, cx);
-        }
-        find
+        self.sections.find(cx)
     }
 
     /// Where a view asked the window to go.
@@ -218,15 +157,20 @@ impl Shell {
             Go::ShowMod(mod_id) => {
                 let mod_id = *mod_id;
                 self.go(Section::Mods, cx);
-                self.mods.update(cx, |mods, cx| mods.show_mod(mod_id, cx));
+                self.sections
+                    .mods
+                    .update(cx, |mods, cx| mods.show_mod(mod_id, cx));
             }
             Go::UseList(ids) => {
                 let ids = ids.clone();
-                self.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
+                self.sections
+                    .mods
+                    .update(cx, |mods, cx| mods.use_list(ids, cx));
                 self.go(Section::Mods, cx);
             }
             Go::SearchedInMods => {
-                self.mods
+                self.sections
+                    .mods
                     .update(cx, |mods, cx| mods.filter_by("in:search", cx));
                 self.go(Section::Mods, cx);
             }
@@ -249,70 +193,11 @@ impl Shell {
     }
 
     pub fn go(&mut self, section: Section, cx: &mut Context<Self>) {
-        if section != self.section {
+        if section != self.sections.shown() {
             self.shown_turn = super::motion::opening();
-            self.tell_shown(self.section, false, cx);
         }
-        self.section = section;
-        if section == Section::Workshop {
-            self.workshop(cx);
-        }
-        if section == Section::Find {
-            self.find(cx);
-        }
-        if section == Section::Downloads {
-            self.downloads(cx);
-        }
-        if section == Section::Saves && self.saves.is_none() {
-            let demo = self.demo;
-            self.saves = Some(cx.new(|cx| super::saves::Saves::new(demo, cx)));
-        }
-        if section == Section::Textures && self.textures.is_none() {
-            let demo = self.demo;
-            let textures = cx.new(|cx| super::textures::Textures::new(demo, cx));
-            cx.observe(&textures, |_, textures, cx| {
-                let work = textures.read(cx).task_said();
-                super::around::change(cx, |around| around.textures_work = work);
-            })
-            .detach();
-            self.textures_stop = Some(textures.read(cx).stop.clone());
-            self.textures = Some(textures);
-        }
-        if section == Section::Logs && self.logs.is_none() {
-            let (demo, view) = (self.demo, self.view);
-            let logs = cx.new(|cx| super::logs::Logs::new(demo, view, cx));
-            self.logs = Some(logs);
-        }
-        if section == Section::Settings && self.settings.is_none() {
-            let (demo, part, mods) = (self.demo, self.part, self.mods.clone());
-            let settings = cx.new(|cx| super::settings::Settings::new(demo, part, mods, cx));
-            cx.observe(&settings, |_, settings, cx| {
-                let busy = settings.read(cx).community_busy();
-                super::around::change(cx, |around| around.community_busy = busy);
-            })
-            .detach();
-            self.settings = Some(settings);
-        }
-        self.tell_shown(section, true, cx);
+        self.sections.show(section, cx);
         cx.notify();
-    }
-
-    fn tell_shown(&self, section: Section, shown: bool, cx: &mut Context<Self>) {
-        use super::section::Shown;
-        fn tell<V: Shown + 'static>(view: &Option<Entity<V>>, shown: bool, cx: &mut gpui::App) {
-            if let Some(view) = view {
-                view.update(cx, |view, cx| view.set_shown(shown, cx));
-            }
-        }
-        match section {
-            Section::Mods | Section::Downloads => {}
-            Section::Textures => tell(&self.textures, shown, cx),
-            Section::Workshop => tell(&self.workshop, shown, cx),
-            Section::Saves => tell(&self.saves, shown, cx),
-            Section::Logs => tell(&self.logs, shown, cx),
-            Section::Find => tell(&self.find, shown, cx),
-            Section::Settings => tell(&self.settings, shown, cx),
-        }
     }
 }
 
@@ -422,7 +307,7 @@ impl Render for Shell {
             .text_size(body)
             .child(top_bar(
                 super::top_bar::TopState {
-                    section: self.section,
+                    section: self.sections.shown(),
                     demo: self.demo,
                     in_the_way,
                     list_name,
@@ -451,24 +336,13 @@ impl Render for Shell {
 
 impl Shell {
     fn shown_faded(&self) -> gpui::AnyElement {
-        let shown = div().flex_1().min_h_0().children(self.shown());
+        let shown = div()
+            .flex_1()
+            .min_h_0()
+            .children(self.sections.view_shown());
         match self.shown_turn {
             0 => shown.into_any_element(),
             turn => super::motion::appear(shown, ("appear", turn)).into_any_element(),
-        }
-    }
-
-    /// The view of the section shown, once it is made.
-    fn shown(&self) -> Option<gpui::AnyView> {
-        match self.section {
-            Section::Mods => Some(self.mods.clone().into()),
-            Section::Downloads => self.downloads.clone().map(Into::into),
-            Section::Textures => self.textures.clone().map(Into::into),
-            Section::Saves => self.saves.clone().map(Into::into),
-            Section::Logs => self.logs.clone().map(Into::into),
-            Section::Find => self.find.clone().map(Into::into),
-            Section::Workshop => self.workshop.clone().map(Into::into),
-            Section::Settings => self.settings.clone().map(Into::into),
         }
     }
 }
@@ -481,10 +355,6 @@ thread_local! {
 
 #[cfg(test)]
 impl Shell {
-    pub(crate) fn section(&self) -> Section {
-        self.section
-    }
-
     pub(crate) fn behind(&self, cx: &gpui::App) -> usize {
         super::counts::read(cx).behind
     }
@@ -549,7 +419,7 @@ impl Shell {
             },
         )
         .detach();
-        cx.observe(&self.mods, |shell, mods, cx| {
+        cx.observe(&self.sections.mods, |shell, mods, cx| {
             let Some(first) = shell.first_run.clone() else {
                 return;
             };
@@ -571,7 +441,7 @@ impl Shell {
         if let Err(problem) = app.keep_setting("setupDone", "yes") {
             notices::say(crate::words::said_of(&problem), notices::Tone::Err, cx);
         }
-        let overview = self.mods.read(cx).overview();
+        let overview = self.sections.mods.read(cx).overview();
         let missing = overview.is_none_or(|o| o.community_mods.is_none() || o.works_on == 0);
         if with_data && missing {
             let fetching = app.clone();
@@ -591,7 +461,9 @@ impl Shell {
             notices::say(put(&said), notices::Tone::Ok, cx);
         }
         self.first_run = None;
-        self.mods.update(cx, |mods, cx| mods.start_hints(cx));
+        self.sections
+            .mods
+            .update(cx, |mods, cx| mods.start_hints(cx));
         cx.notify();
     }
 }

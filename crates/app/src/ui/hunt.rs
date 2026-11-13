@@ -18,7 +18,8 @@ impl Shell {
         self.tell_hunting(cx);
         if self.hunt.asking {
             let ids = self.hunt.list.clone();
-            self.mods
+            self.sections
+                .mods
                 .update(cx, |mods, cx| mods.use_list_quietly(ids, cx));
         }
         cx.notify();
@@ -43,7 +44,8 @@ impl Shell {
         let ids = super::app(cx).end_hunt(without_found);
         self.hunt = Default::default();
         self.tell_hunting(cx);
-        self.mods
+        self.sections
+            .mods
             .update(cx, |mods, cx| mods.use_list_quietly(ids, cx));
         cx.notify();
     }
@@ -51,16 +53,17 @@ impl Shell {
     /// The screens that offer the search hear whether it runs.
     pub(crate) fn tell_hunting(&mut self, cx: &mut Context<Self>) {
         let active = self.hunt.active;
-        self.mods
+        self.sections
+            .mods
             .update(cx, |mods, cx| mods.set_hunting(active, cx));
-        if let Some(logs) = &self.logs {
+        if let Some(logs) = &self.sections.logs {
             logs.update(cx, |logs, cx| logs.set_hunting(active, cx));
         }
     }
 
     fn save_and_play_round(&mut self, cx: &mut Context<Self>) {
         let game = self.game.downgrade();
-        self.mods.update(cx, |mods, cx| {
+        self.sections.mods.update(cx, |mods, cx| {
             mods.save(
                 Some(Box::new(move |_, cx| {
                     let _ = game.update(cx, |game, cx| game.play(true, cx));

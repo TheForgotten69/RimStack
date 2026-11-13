@@ -4,7 +4,7 @@
 //! when what they show changed.
 
 use super::mods::Mods;
-use gpui::{App as Cx, AppContext, Context, Entity, Global};
+use gpui::{App as Cx, AppContext, Entity, Global};
 
 #[derive(Default, Clone, PartialEq, Debug)]
 pub struct Around {
@@ -51,7 +51,7 @@ pub fn read(cx: &Cx) -> Around {
 }
 
 /// Told only when it changes, so nothing is drawn again for the same.
-pub fn change<V>(cx: &mut Context<V>, change: impl FnOnce(&mut Around)) {
+pub fn change(cx: &mut Cx, change: impl FnOnce(&mut Around)) {
     around(cx).update(cx, |around, cx| {
         let was = around.clone();
         change(around);
@@ -62,7 +62,7 @@ pub fn change<V>(cx: &mut Context<V>, change: impl FnOnce(&mut Around)) {
 }
 
 /// What the Mods tab shows the window, read again after it changed.
-pub fn from_mods<V>(mods: &Entity<Mods>, cx: &mut Context<V>) {
+pub fn from_mods(mods: &Entity<Mods>, cx: &mut Cx) {
     let mods = mods.read(cx);
     let (errors, sort_pending, dirty, unsaved) = mods.standing();
     let in_the_way = mods.in_the_way_said(errors, sort_pending, dirty);

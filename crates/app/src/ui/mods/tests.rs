@@ -259,7 +259,7 @@ fn scroll_cost_in_the_window(cx: &mut gpui::TestAppContext) {
     let (shell, cx) =
         cx.add_window_view(|window, cx| crate::ui::shell::Shell::new(&options, window, cx));
     cx.run_until_parked();
-    let mods = shell.read_with(cx, |shell, _| shell.mods.clone());
+    let mods = shell.read_with(cx, |shell, _| shell.sections.mods.clone());
     let list = mods.read_with(cx, |mods, _| mods.list(Side::Active).clone());
     let over = list.read_with(cx, |list, _| list.drawn_at(8)) + gpui::px(4.);
     let over = point(gpui::px(700.), over);

@@ -30,7 +30,7 @@ fn settings(
     };
     cx.update(|cx| install(Arc::new(app), &options, cx));
     let (shell, cx) = cx.add_window_view(|window, cx| Shell::new(&options, window, cx));
-    let settings = shell.read_with(cx, |shell, _| shell.settings.clone().unwrap());
+    let settings = shell.read_with(cx, |shell, _| shell.sections.settings.clone().unwrap());
     cx.run_until_parked();
     (root, settings, cx)
 }
@@ -124,7 +124,11 @@ fn drawn_with(
             .open_window(shape, |window, cx| {
                 cx.new(|cx| {
                     let shell = Shell::new(&options, window, cx);
-                    if let Some(settings) = shell.settings.as_ref().filter(|_| !finding.is_empty())
+                    if let Some(settings) = shell
+                        .sections
+                        .settings
+                        .as_ref()
+                        .filter(|_| !finding.is_empty())
                     {
                         settings.update(cx, |s, _| s.finding = finding.into());
                     }

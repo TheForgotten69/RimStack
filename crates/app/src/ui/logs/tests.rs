@@ -40,7 +40,11 @@ fn opened(
         })
         .unwrap();
     let logs = cx
-        .update(|cx| shell.read(cx).map(|shell| shell.logs.clone().unwrap()))
+        .update(|cx| {
+            shell
+                .read(cx)
+                .map(|shell| shell.sections.logs.clone().unwrap())
+        })
         .unwrap();
     let started = Instant::now();
     while cx.update(|cx| logs.read(cx).report.is_none()) {

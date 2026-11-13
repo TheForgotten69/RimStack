@@ -40,7 +40,11 @@ fn opened(text_scale: f32, window: Shape<'_>, text: Option<&str>) -> Opened {
         })
         .unwrap();
     let find = cx
-        .update(|cx| shell.read(cx).map(|shell| shell.find.clone().unwrap()))
+        .update(|cx| {
+            shell
+                .read(cx)
+                .map(|shell| shell.sections.find.clone().unwrap())
+        })
         .unwrap();
     if text.is_some() {
         wait(&mut cx, &find, "the search to end with a preview", |find| {
@@ -130,7 +134,7 @@ fn showing_the_mods_with_matches_goes_to_mods_filtered_by_the_search() {
     let (section, filter) = cx
         .update(|cx| {
             shell.read(cx).map(|shell| {
-                let mods = shell.mods.read(cx);
+                let mods = shell.sections.mods.read(cx);
                 (shell.section(), mods.filter_text(cx))
             })
         })

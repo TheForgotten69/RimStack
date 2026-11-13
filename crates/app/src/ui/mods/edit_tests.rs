@@ -34,7 +34,7 @@ pub(super) fn opened_with(
         })
         .unwrap();
     let mods = cx
-        .update(|cx| shell.read(cx).map(|shell| shell.mods.clone()))
+        .update(|cx| shell.read(cx).map(|shell| shell.sections.mods.clone()))
         .unwrap();
     let started = Instant::now();
     while cx.update(|cx| {

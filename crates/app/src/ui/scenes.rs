@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub fn stage(shell: &mut Shell, options: &Options, window: &mut Window, cx: &mut Context<Shell>) {
-    let mods = shell.mods.clone();
+    let mods = shell.sections.mods.clone();
     if let Some(text) = &options.filter {
         mods.update(cx, |mods, cx| mods.filter_by(text, cx));
     }
@@ -117,14 +117,17 @@ fn show_notices(cx: &mut Context<Shell>) {
 fn open(shell: &mut Shell, open: Option<&str>, window: &mut Window, cx: &mut Context<Shell>) {
     match open {
         Some("play") => shell.before_play = true,
-        Some("problems") => shell.mods.update(cx, |mods, cx| mods.open_problems(cx)),
+        Some("problems") => shell
+            .sections
+            .mods
+            .update(cx, |mods, cx| mods.open_problems(cx)),
         Some("keys") => shell.open_keys(window, cx),
         Some("commands") => shell.open_commands(window, cx),
         Some("lists") => shell.open_popup(super::lists::Which::Lists, window, cx),
         Some("history") => shell.open_popup(super::lists::Which::History, window, cx),
         Some("tray") => shell.tray_open = true,
-        Some("view") => open_menu(&shell.mods, Menu::View, cx),
-        Some("order") => open_menu(&shell.mods, Menu::InactiveOrder, cx),
+        Some("view") => open_menu(&shell.sections.mods, Menu::View, cx),
+        Some("order") => open_menu(&shell.sections.mods, Menu::InactiveOrder, cx),
         Some("ask") => ask(window, cx),
         _ => {}
     }

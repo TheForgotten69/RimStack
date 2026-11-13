@@ -44,7 +44,7 @@ impl Shell {
                     "The game emptied its list of mods, as it does on a new version. The last launch from RimStack had {} mod.",
                     "The game emptied its list of mods, as it does on a new version. The last launch from RimStack had {} mods."
                 );
-                let (ids, mods) = (ids.clone(), self.mods.downgrade());
+                let (ids, mods) = (ids.clone(), self.sections.mods.downgrade());
                 notices::offer(
                     put(&said),
                     put(&say!("Use that list")),
@@ -57,6 +57,7 @@ impl Shell {
             }
             Told::WrittenOutside(ids) => {
                 let here = self
+                    .sections
                     .mods
                     .read(cx)
                     .count(crate::workspace::load_order::Side::Active);
@@ -66,7 +67,7 @@ impl Shell {
                     "ModsConfig.xml was written outside RimStack and now lists {} mods; the list here has {}.",
                     here
                 );
-                let mods = self.mods.downgrade();
+                let mods = self.sections.mods.downgrade();
                 notices::offer(
                     put(&said),
                     put(&say!("Use the file's")),
@@ -142,7 +143,7 @@ impl Shell {
                         .on_click(cx.listener(|shell, _, _, cx| {
                             shell.before_play = false;
                             let game = shell.game.downgrade();
-                            shell.mods.update(cx, |mods, cx| {
+                            shell.sections.mods.update(cx, |mods, cx| {
                                 mods.save(
                                     Some(Box::new(move |_, cx| {
                                         let _ = game.update(cx, |game, cx| game.play(false, cx));
@@ -163,7 +164,7 @@ impl Shell {
                         .on_click(cx.listener(|shell, _, _, cx| {
                             shell.before_play = false;
                             shell.go(crate::ui::section::Section::Mods, cx);
-                            shell.mods.update(cx, |mods, cx| mods.preview_sort(cx));
+                            shell.sections.mods.update(cx, |mods, cx| mods.preview_sort(cx));
                         })),
                 )
             })
@@ -174,7 +175,7 @@ impl Shell {
                         .on_click(cx.listener(|shell, _, _, cx| {
                             shell.before_play = false;
                             shell.go(crate::ui::section::Section::Mods, cx);
-                            shell.mods.update(cx, |mods, cx| mods.open_problems(cx));
+                            shell.sections.mods.update(cx, |mods, cx| mods.open_problems(cx));
                         })),
                 )
             })
