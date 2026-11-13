@@ -72,7 +72,7 @@ impl Saves {
             list_problem: String::new(),
             scroll,
             side_paging: super::page::Paging::new(theme.appearance.reduce_motion),
-            thumbs: super::thumbs::Shared::default(),
+            thumbs: super::thumbs::shared("saves", std::sync::Arc::new(Vec::new)),
             focus: cx.focus_handle(),
         };
         if !demo {
@@ -113,6 +113,15 @@ impl Saves {
             cx,
             move |_| app.saves_report(),
             |saves, report, cx| {
+                let previews: Vec<std::path::PathBuf> = report
+                    .rows
+                    .iter()
+                    .filter_map(|row| row.preview.as_ref().map(std::path::PathBuf::from))
+                    .collect();
+                saves
+                    .thumbs
+                    .borrow_mut()
+                    .want(std::sync::Arc::new(move || previews.clone()));
                 saves.report = Rc::new(report);
                 saves.busy = false;
                 cx.notify();

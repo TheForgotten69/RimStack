@@ -74,6 +74,7 @@ pub struct Mods {
     focus_wanted: bool,
     keys: columns::Reachable,
     inactive_list: Entity<list::ModList>,
+    thumbs: super::thumbs::Shared,
     focus: gpui::FocusHandle,
     overview: Option<Rc<Overview>>,
     details: Option<Rc<Details>>,
@@ -201,7 +202,14 @@ impl Mods {
             mods.filter_edited(&field, cx)
         })
         .detach();
-        let thumbs = super::thumbs::Shared::default();
+        let wanted: super::thumbs::Wanted = match demo {
+            true => std::sync::Arc::new(Vec::new),
+            false => {
+                let app = super::app(cx);
+                std::sync::Arc::new(move || app.mod_previews())
+            }
+        };
+        let thumbs = super::thumbs::shared("mods", wanted);
         let orders = Rc::new(order.orders());
         let lists = [Side::Active, Side::Inactive].map(|side| {
             let shown = list::Shown {
@@ -233,6 +241,7 @@ impl Mods {
         )
         .detach();
         let mut mods = Self {
+            thumbs,
             focus: cx.focus_handle(),
             filter,
             active_list,
@@ -542,6 +551,9 @@ impl Mods {
                     mods.selected_active = kept.active;
                 }
                 mods.order = order;
+                if anew {
+                    mods.thumbs.borrow_mut().renew();
+                }
                 mods.judge_unread(cx);
                 mods.show(cx);
                 mods.describe(cx);

@@ -1,81 +1,136 @@
-//! Previews as small as their tiles, decoded off the window's thread. GPUI's `img` keeps a
-//! picture whole; a list of 2,000 mods' previews held that way took 150 MB.
+//! Previews read from a pack of copies at the size they are shown (`base::picture_pack`), in
+//! the frame their row appears. The pack is filled off the window's thread with every picture
+//! the view may show, so a scroll asks for nothing.
 
 use gpui::{App as Cx, EntityId, RenderImage};
-use image::imageops::FilterType;
+use rimstack_core::base::picture_pack::{Found, Pack};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
-/// Pictures kept; a list scrolled through the rest decodes them again.
+/// Pictures kept decoded; the rest are read from the pack again.
 const KEPT: usize = 300;
 
-#[derive(Default)]
+type Size = (u32, u32);
+
+/// Every picture a view may show, read off the window's thread.
+pub type Wanted = Arc<dyn Fn() -> Vec<PathBuf> + Send + Sync>;
+
 pub struct Thumbs {
-    shown: HashMap<(String, u32, u32), Arc<RenderImage>>,
-    order: VecDeque<(String, u32, u32)>,
-    asked: HashSet<(String, u32, u32)>,
+    set: &'static str,
+    wanted: Wanted,
+    packs: HashMap<Size, Arc<Pack>>,
+    /// Sizes whose pack was filled, or is being filled, for what is wanted now.
+    asked: HashSet<Size>,
+    shown: HashMap<Size, HashMap<String, Arc<RenderImage>>>,
+    order: VecDeque<(Size, String)>,
 }
 
 pub type Shared = Rc<RefCell<Thumbs>>;
 
-/// The picture at `path` cut to fill `width` by `height` device pixels, once it is decoded;
-/// `shown_by` is drawn again when it is.
+pub fn shared(set: &'static str, wanted: Wanted) -> Shared {
+    Rc::new(RefCell::new(Thumbs {
+        set,
+        wanted,
+        packs: HashMap::new(),
+        asked: HashSet::new(),
+        shown: HashMap::new(),
+        order: VecDeque::new(),
+    }))
+}
+
+impl Thumbs {
+    /// The pictures may have changed: each size's pack is filled again at its next use, and
+    /// shown from the one there meanwhile.
+    pub fn renew(&mut self) {
+        self.asked.clear();
+        self.shown.clear();
+        self.order.clear();
+    }
+
+    pub fn want(&mut self, wanted: Wanted) {
+        self.wanted = wanted;
+        self.renew();
+    }
+
+    fn keep(&mut self, size: Size, path: &str, shown: Arc<RenderImage>) {
+        self.shown
+            .entry(size)
+            .or_default()
+            .insert(path.to_string(), shown);
+        self.order.push_back((size, path.to_string()));
+        while self.order.len() > KEPT {
+            if let Some((size, old)) = self.order.pop_front()
+                && let Some(of_size) = self.shown.get_mut(&size)
+            {
+                of_size.remove(&old);
+            }
+        }
+    }
+}
+
+/// The picture at `path` cut to fill `size` device pixels, once the pack holds it; `shown_by`
+/// is drawn again when the pack is filled.
 pub fn thumb(
     thumbs: &Shared,
     path: &str,
-    (width, height): (u32, u32),
+    size: Size,
     shown_by: EntityId,
     cx: &mut Cx,
 ) -> Option<Arc<RenderImage>> {
-    let key = (path.to_string(), width, height);
-    if let Some(shown) = thumbs.borrow().shown.get(&key) {
-        return Some(shown.clone());
+    let (kept, pack, asked) = {
+        let held = thumbs.borrow();
+        let kept = held.shown.get(&size).and_then(|of| of.get(path)).cloned();
+        (
+            kept,
+            held.packs.get(&size).cloned(),
+            held.asked.contains(&size),
+        )
+    };
+    if !asked {
+        fill(thumbs, size, shown_by, cx);
     }
-    if !thumbs.borrow_mut().asked.insert(key.clone()) {
+    if kept.is_some() {
+        return kept;
+    }
+    let Found::Pixels(pixels) = pack?.found(path) else {
         return None;
-    }
-    let (from, size) = (path.to_string(), (width, height));
-    let decoding = cx
-        .background_executor()
-        .spawn(async move { decode(&from, size) });
+    };
+    let shown = Arc::new(picture(pixels, size)?);
+    thumbs.borrow_mut().keep(size, path, shown.clone());
+    Some(shown)
+}
+
+fn fill(thumbs: &Shared, size: Size, shown_by: EntityId, cx: &mut Cx) {
+    let (set, wanted) = {
+        let mut held = thumbs.borrow_mut();
+        held.asked.insert(size);
+        (held.set, held.wanted.clone())
+    };
+    let app = crate::ui::app(cx);
+    let waiting =
+        crate::jobs::off_thread("previews", move || app.fill_pictures(set, size, &wanted()));
     let thumbs = thumbs.clone();
     cx.spawn(async move |cx| {
-        let made = decoding.await;
-        let mut held = thumbs.borrow_mut();
-        held.asked.remove(&key);
-        if let Some(made) = made {
-            held.shown.insert(key.clone(), Arc::new(made));
-            held.order.push_back(key);
-            while held.order.len() > KEPT {
-                if let Some(old) = held.order.pop_front() {
-                    held.shown.remove(&old);
-                }
+        match waiting.await {
+            Ok(Ok(pack)) => {
+                let mut held = thumbs.borrow_mut();
+                held.packs.insert(size, Arc::new(pack));
+                held.shown.remove(&size);
             }
+            Ok(Err(problem)) => rimstack_core::problem!("{problem}"),
+            Err(_) => return,
         }
-        drop(held);
         cx.update(|cx| cx.notify(shown_by));
     })
     .detach();
-    None
 }
 
-fn decode(path: &str, (width, height): (u32, u32)) -> Option<RenderImage> {
-    let read = image::ImageReader::open(path)
-        .ok()?
-        .with_guessed_format()
-        .ok()?;
-    let mut shown = read
-        .decode()
-        .ok()?
-        .resize_to_fill(width, height, FilterType::Triangle)
-        .to_rgba8();
-    // GPUI draws BGRA.
-    for pixel in shown.pixels_mut() {
-        pixel.0.swap(0, 2);
-    }
+fn picture(pixels: Vec<u8>, (width, height): Size) -> Option<RenderImage> {
+    let frame = image::RgbaImage::from_raw(width, height, pixels)?;
     Some(RenderImage::new(smallvec::smallvec![image::Frame::new(
-        shown
+        frame
     )]))
 }

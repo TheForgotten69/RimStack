@@ -50,14 +50,26 @@ pub(crate) fn through_links(path: &Path) -> PathBuf {
 /// The sync before the rename is needed: without it a power cut can leave an empty file.
 pub(crate) fn put(partial: &Path, path: &Path, contents: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
-    let before = std::fs::metadata(path).ok().map(|m| m.permissions());
-    let written = (|| {
-        let mut file = std::fs::File::create(partial)?;
+    let written = std::fs::File::create(partial).and_then(|mut file| {
         file.write_all(contents)?;
-        file.sync_all()?;
+        Ok(file)
+    });
+    match written {
+        Ok(file) => settle(file, partial, path),
+        Err(problem) => {
+            let _ = std::fs::remove_file(partial);
+            Err(problem)
+        }
+    }
+}
+
+/// `file`, written in full at `partial`, takes the place of `path`.
+pub(crate) fn settle(file: std::fs::File, partial: &Path, path: &Path) -> std::io::Result<()> {
+    let before = std::fs::metadata(path).ok().map(|m| m.permissions());
+    let written = file.sync_all().and_then(|()| {
         drop(file);
         replace(partial, path, before.as_ref())
-    })();
+    });
     if written.is_err() && partial.is_file() {
         let _ = std::fs::remove_file(partial);
     }

@@ -10,6 +10,7 @@ pub mod locks;
 pub mod markup;
 pub mod path_text;
 pub mod pattern;
+pub mod picture_pack;
 pub mod program;
 pub mod reread;
 pub mod sentence;
