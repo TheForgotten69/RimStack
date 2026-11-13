@@ -637,6 +637,7 @@ mod tests {
         let again = app.compare_textures(a, b).unwrap();
         assert_eq!((again.kept_earlier, again.yours), (1, 1));
         assert_eq!(again.textures[0].used.to_string(), "Ann.A, chosen");
+        app.settle_writes();
         let history = app.history();
         assert_eq!(history[0].said, said);
         assert_eq!(Path::new(&history[0].bring_back), mods.join("b"));
