@@ -1,8 +1,9 @@
 //! The top bar, the section shown, the status bar.
 
 use super::Options;
-use super::downloads::{Downloads, ShowMod};
-use super::mods::{Mods, ShowSection};
+use super::downloads::Downloads;
+use super::mods::Mods;
+use super::navigate::Go;
 use super::section::Section;
 use super::theme::Theme;
 use super::top_bar::top_bar;
@@ -62,6 +63,10 @@ pub struct Shell {
     pub(crate) keys_focus: gpui::FocusHandle,
     /// `beforePlay`: what stands in Play's way, open under it.
     pub(crate) before_play: bool,
+    /// The status bar's note, drawn again alone as the hint changes.
+    pub(crate) note: Entity<super::status_note::StatusNote>,
+    /// How the textures' work under way is stopped.
+    pub(crate) textures_stop: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     prompt: Entity<super::prompt::Prompt>,
     menu: Entity<super::menu::Menu>,
     notices: Entity<super::notices::Notices>,
@@ -71,34 +76,14 @@ pub struct Shell {
 impl Shell {
     pub fn new(options: &Options, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let demo = options.demo;
-        cx.observe_global::<super::tip::Hint>(|_, cx| cx.notify())
-            .detach();
         let mods = cx.new(|cx| Mods::new(demo, cx));
+        cx.observe(&mods, |_, mods, cx| super::around::from_mods(&mods, cx))
+            .detach();
+        super::around::from_mods(&mods, cx);
         let focus = mods.read(cx).focus_handle(cx);
         window.focus(&focus, cx);
-        cx.subscribe(&mods, |shell, _, ShowSection(section), cx| {
-            shell.go(*section, cx)
-        })
-        .detach();
-        cx.subscribe(&mods, |shell, _, wanted: &super::mods::Wanted, cx| {
-            use super::mods::Wanted;
-            match wanted {
-                Wanted::FindBroken => shell.start_hunt(cx),
-                Wanted::Browse(text) => {
-                    let (text, workshop) = (text.clone(), shell.workshop(cx));
-                    workshop.update(cx, |workshop, cx| workshop.browse(text, cx));
-                }
-                wanted => {
-                    let downloads = shell.downloads(cx);
-                    downloads.update(cx, |downloads, cx| match wanted {
-                        Wanted::Subscribe(id) => downloads.subscribe(id.clone(), cx),
-                        Wanted::Redownload(id) => downloads.redownload(*id, cx),
-                        Wanted::Unsubscribe(id) => downloads.unsubscribe(*id, cx),
-                        Wanted::UpdateFromGit(id) => downloads.update_from_git(*id, cx),
-                        Wanted::Browse(_) | Wanted::FindBroken => {}
-                    });
-                }
-            }
+        cx.subscribe(&super::navigate::router(cx), |shell, _, to: &Go, cx| {
+            shell.follow(to, cx)
         })
         .detach();
         let held_by = mods.downgrade();
@@ -112,7 +97,6 @@ impl Shell {
         });
         cx.subscribe(&game, |shell, _, told, cx| shell.heard_game(told, cx))
             .detach();
-        cx.observe(&game, |_, _, cx| cx.notify()).detach();
         let section = options.section;
         let lists = {
             let mods = mods.clone();
@@ -149,6 +133,8 @@ impl Shell {
                 false => super::app(cx).hunt(),
             },
             before_play: false,
+            note: cx.new(|_| super::status_note::StatusNote { demo }),
+            textures_stop: None,
             prompt: super::prompt::install(cx),
             menu: super::menu::install(cx),
             notices: super::notices::install(cx),
@@ -188,10 +174,9 @@ impl Shell {
         }
         let (demo, mods) = (self.demo, self.mods.clone());
         let downloads = cx.new(|cx| Downloads::new(demo, mods, cx));
-        cx.subscribe(&downloads, |shell, _, ShowMod(mod_id), cx| {
-            shell.go(Section::Mods, cx);
-            let mod_id = *mod_id;
-            shell.mods.update(cx, |mods, cx| mods.show_mod(mod_id, cx));
+        cx.observe(&downloads, |_, downloads, cx| {
+            let work = downloads.read(cx).tasks_said();
+            super::around::change(cx, |around| around.downloads_work = work);
         })
         .detach();
         self.mods
@@ -219,18 +204,48 @@ impl Shell {
         }
         let (demo, mods) = (self.demo, self.mods.clone());
         let find = cx.new(|cx| super::find::Find::new(demo, mods, cx));
-        cx.subscribe(&find, |shell, _, super::find::ShowInMods, cx| {
-            shell
-                .mods
-                .update(cx, |mods, cx| mods.filter_by("in:search", cx));
-            shell.go(Section::Mods, cx);
-        })
-        .detach();
         self.find = Some(find.clone());
         if self.section != Section::Find {
             self.tell_shown(Section::Find, false, cx);
         }
         find
+    }
+
+    /// Where a view asked the window to go.
+    fn follow(&mut self, to: &Go, cx: &mut Context<Self>) {
+        match to {
+            Go::Section(section) => self.go(*section, cx),
+            Go::ShowMod(mod_id) => {
+                let mod_id = *mod_id;
+                self.go(Section::Mods, cx);
+                self.mods.update(cx, |mods, cx| mods.show_mod(mod_id, cx));
+            }
+            Go::UseList(ids) => {
+                let ids = ids.clone();
+                self.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
+                self.go(Section::Mods, cx);
+            }
+            Go::SearchedInMods => {
+                self.mods
+                    .update(cx, |mods, cx| mods.filter_by("in:search", cx));
+                self.go(Section::Mods, cx);
+            }
+            Go::FindBroken => self.start_hunt(cx),
+            Go::Browse(text) => {
+                let (text, workshop) = (text.clone(), self.workshop(cx));
+                workshop.update(cx, |workshop, cx| workshop.browse(text, cx));
+            }
+            Go::Subscribe(_) | Go::Redownload(_) | Go::Unsubscribe(_) | Go::UpdateFromGit(_) => {
+                let downloads = self.downloads(cx);
+                downloads.update(cx, |downloads, cx| match to {
+                    Go::Subscribe(id) => downloads.subscribe(id.clone(), cx),
+                    Go::Redownload(id) => downloads.redownload(*id, cx),
+                    Go::Unsubscribe(id) => downloads.unsubscribe(*id, cx),
+                    Go::UpdateFromGit(id) => downloads.update_from_git(*id, cx),
+                    _ => {}
+                });
+            }
+        }
     }
 
     pub fn go(&mut self, section: Section, cx: &mut Context<Self>) {
@@ -250,47 +265,30 @@ impl Shell {
         }
         if section == Section::Saves && self.saves.is_none() {
             let demo = self.demo;
-            let saves = cx.new(|cx| super::saves::Saves::new(demo, cx));
-            cx.subscribe(&saves, |shell, _, super::saves::UseList(ids), cx| {
-                let ids = ids.clone();
-                shell.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
-                shell.go(Section::Mods, cx);
-            })
-            .detach();
-            self.saves = Some(saves);
+            self.saves = Some(cx.new(|cx| super::saves::Saves::new(demo, cx)));
         }
         if section == Section::Textures && self.textures.is_none() {
             let demo = self.demo;
-            self.textures = Some(cx.new(|cx| super::textures::Textures::new(demo, cx)));
+            let textures = cx.new(|cx| super::textures::Textures::new(demo, cx));
+            cx.observe(&textures, |_, textures, cx| {
+                let work = textures.read(cx).task_said();
+                super::around::change(cx, |around| around.textures_work = work);
+            })
+            .detach();
+            self.textures_stop = Some(textures.read(cx).stop.clone());
+            self.textures = Some(textures);
         }
         if section == Section::Logs && self.logs.is_none() {
             let (demo, view) = (self.demo, self.view);
             let logs = cx.new(|cx| super::logs::Logs::new(demo, view, cx));
-            cx.subscribe(&logs, |shell, _, super::logs::ShowMod(mod_id), cx| {
-                let mod_id = *mod_id;
-                shell.go(Section::Mods, cx);
-                shell.mods.update(cx, |mods, cx| mods.show_mod(mod_id, cx));
-            })
-            .detach();
-            cx.subscribe(&logs, |shell, _, _: &super::logs::FindBroken, cx| {
-                shell.start_hunt(cx)
-            })
-            .detach();
-            cx.subscribe(&logs, |shell, _, super::logs::UseList(ids), cx| {
-                let ids = ids.clone();
-                shell.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
-                shell.go(Section::Mods, cx);
-            })
-            .detach();
             self.logs = Some(logs);
         }
         if section == Section::Settings && self.settings.is_none() {
             let (demo, part, mods) = (self.demo, self.part, self.mods.clone());
             let settings = cx.new(|cx| super::settings::Settings::new(demo, part, mods, cx));
-            cx.subscribe(&settings, |shell, _, super::settings::UseList(ids), cx| {
-                let ids = ids.clone();
-                shell.mods.update(cx, |mods, cx| mods.use_list(ids, cx));
-                shell.go(Section::Mods, cx);
+            cx.observe(&settings, |_, settings, cx| {
+                let busy = settings.read(cx).community_busy();
+                super::around::change(cx, |around| around.community_busy = busy);
             })
             .detach();
             self.settings = Some(settings);
@@ -330,7 +328,9 @@ impl Render for Shell {
                 }
             });
         }
-        let in_the_way = self.mods.read(cx).in_the_way(cx);
+        let around = super::around::around(cx).read(cx);
+        let in_the_way = (around.in_the_way.len(), around.errors);
+        let (list_name, dirty) = (around.list_name.clone(), around.dirty);
         let theme = cx.global::<Theme>();
         let (win, ink, family, body) = (
             theme.colours.win,
@@ -425,6 +425,8 @@ impl Render for Shell {
                     section: self.section,
                     demo: self.demo,
                     in_the_way,
+                    list_name,
+                    dirty,
                     behind: super::counts::read(cx).behind,
                     running: self.game.read(cx).running(),
                     lists_view: self.lists.clone(),

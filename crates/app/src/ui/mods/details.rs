@@ -225,7 +225,12 @@ impl DetailsView {
                     .when(logged, |d| {
                         d.child(Btn::new("open-log", put(&say!("Open log"))).on_click(
                             self.on_mods(|_, cx| {
-                                cx.emit(super::ShowSection(crate::ui::section::Section::Logs))
+                                crate::ui::navigate::go(
+                                    crate::ui::navigate::Go::Section(
+                                        crate::ui::section::Section::Logs,
+                                    ),
+                                    cx,
+                                )
                             }),
                         ))
                     })

@@ -111,7 +111,7 @@ impl Shell {
             let range = 0..head.len();
             (format!("{head} {rest} {then}"), vec![(range, bold)])
         };
-        let dirty = super::app(cx).session().is_dirty();
+        let dirty = super::around::around(cx).read(cx).dirty;
         let asking = hunt.asking;
         let found = !hunt.found.is_empty();
         Some(

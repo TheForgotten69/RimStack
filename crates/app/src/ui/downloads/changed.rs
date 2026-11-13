@@ -1,7 +1,7 @@
 //! The mods changed since the game last started, by day, with their notes.
 
+use super::Downloads;
 use super::screen::text_fill;
-use super::{Downloads, ShowMod};
 use crate::ui::card::Card;
 use crate::ui::controls::Choice;
 use crate::ui::theme::{self, Theme};
@@ -73,7 +73,9 @@ impl Downloads {
                 Btn::new(("changed-show", at), put(&say!("Show")))
                     .spoken(put(&say!("Show {}", row.name.clone())))
                     .tip(put(&say!("Enter")))
-                    .on_click(cx.listener(move |_, _, _, cx| cx.emit(ShowMod(mod_id)))),
+                    .on_click(cx.listener(move |_, _, _, cx| {
+                        crate::ui::navigate::go(crate::ui::navigate::Go::ShowMod(mod_id), cx)
+                    })),
             )
             .when(!row.git, |d| {
                 d.child(
@@ -308,7 +310,7 @@ impl Downloads {
                 }
                 cx.notify();
             }
-            "enter" => cx.emit(ShowMod(shown[at].0)),
+            "enter" => crate::ui::navigate::go(crate::ui::navigate::Go::ShowMod(shown[at].0), cx),
             "n" => {
                 if let Some(id) = &shown[at].1 {
                     cx.open_url(&crate::ui::change_notes(id));

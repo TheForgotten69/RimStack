@@ -9,11 +9,8 @@ use super::theme::Theme;
 use crate::changes::Changes;
 use crate::jobs::Lane;
 use crate::workspace::saves::SavesReport;
-use gpui::{AppContext, Context, Entity, EventEmitter, FocusHandle};
+use gpui::{AppContext, Context, Entity, FocusHandle};
 use std::rc::Rc;
-
-/// Asked of the window: the load order becomes these mods, unsaved.
-pub struct UseList(pub Vec<String>);
 
 pub struct Saves {
     unseen: crate::ui::section::Unseen,
@@ -36,8 +33,6 @@ pub struct Saves {
     thumbs: super::thumbs::Shared,
     focus: FocusHandle,
 }
-
-impl EventEmitter<UseList> for Saves {}
 
 impl Saves {
     pub fn new(demo: bool, cx: &mut Context<Self>) -> Self {

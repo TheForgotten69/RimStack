@@ -24,20 +24,6 @@ pub enum Naming {
     Group,
 }
 
-/// Asked of the window: what the Downloads tab or the Workshop does for a mod.
-pub enum Wanted {
-    Subscribe(String),
-    Redownload(ModId),
-    Unsubscribe(ModId),
-    UpdateFromGit(ModId),
-    /// The Workshop searched for this, as a fix that names a page asks.
-    Browse(String),
-    /// The search for the mod that breaks the game started.
-    FindBroken,
-}
-
-impl gpui::EventEmitter<Wanted> for Mods {}
-
 impl Mods {
     pub(super) fn open_folder(&mut self, id: ModId, cx: &mut Context<Self>) {
         let app = crate::ui::app(cx);
@@ -183,7 +169,9 @@ impl Mods {
             Action::ApplyFix { mod_id, fix } => {
                 self.apply_fix(*mod_id, fix.action, &fix.target, fix.page.is_some(), cx)
             }
-            Action::Subscribe { workshop_id } => cx.emit(Wanted::Subscribe(workshop_id.clone())),
+            Action::Subscribe { workshop_id } => {
+                crate::ui::navigate::go(crate::ui::navigate::Go::Subscribe(workshop_id.clone()), cx)
+            }
             Action::CopyToLocal { ids, ask } => {
                 let ids = ids.clone();
                 let me = cx.entity().downgrade();
@@ -192,14 +180,15 @@ impl Mods {
                 });
             }
             Action::Redownload { mod_id, ask } => {
-                let me = cx.entity().downgrade();
                 let id = *mod_id;
                 ask_with(ask, false, window, cx, move |cx| {
-                    let _ = me.update(cx, |_, cx| cx.emit(Wanted::Redownload(id)));
+                    crate::ui::navigate::go(crate::ui::navigate::Go::Redownload(id), cx);
                 });
             }
             Action::Unsubscribe { mod_id } => self.ask_unsubscribe(*mod_id, window, cx),
-            Action::UpdateFromGit { mod_id } => cx.emit(Wanted::UpdateFromGit(*mod_id)),
+            Action::UpdateFromGit { mod_id } => {
+                crate::ui::navigate::go(crate::ui::navigate::Go::UpdateFromGit(*mod_id), cx)
+            }
             Action::PutInSub { mod_id, tag } => self.group(vec![*mod_id], tag, cx),
             Action::NewSub { mod_id } => self.ask_name(vec![*mod_id], Naming::NewSub, window, cx),
             Action::Trust { ids, yes } => self.trust(ids.clone(), *yes, cx),
@@ -269,8 +258,11 @@ impl Mods {
                 );
             }
             _ if page => {
-                cx.emit(Wanted::Browse(target.to_string()));
-                cx.emit(super::ShowSection(crate::ui::section::Section::Workshop));
+                crate::ui::navigate::go(crate::ui::navigate::Go::Browse(target.to_string()), cx);
+                crate::ui::navigate::go(
+                    crate::ui::navigate::Go::Section(crate::ui::section::Section::Workshop),
+                    cx,
+                );
             }
             _ => cx.open_url(&crate::ui::workshop_page(target)),
         }
@@ -420,7 +412,6 @@ impl Mods {
     ) {
         let app = crate::ui::app(cx);
         let about = self.order.details(&app, id);
-        let me = cx.entity().downgrade();
         prompt::ask(
             Question {
                 title: put(&say!("Unsubscribe from {}", about.name.clone())),
@@ -433,7 +424,7 @@ impl Mods {
                 label: put(&say!("Unsubscribe")),
                 danger: true,
                 run: Box::new(move |_, cx| {
-                    let _ = me.update(cx, |_, cx| cx.emit(Wanted::Unsubscribe(id)));
+                    crate::ui::navigate::go(crate::ui::navigate::Go::Unsubscribe(id), cx);
                 }),
             },
             window,

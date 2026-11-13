@@ -10,17 +10,10 @@ use super::text_field::{Edited, TextField};
 use super::theme::Theme;
 use crate::changes::Changes;
 use crate::workspace::logs::{self, LogsReport};
-use gpui::{AppContext, Context, Entity, EventEmitter, FocusHandle, Window};
+use gpui::{AppContext, Context, Entity, FocusHandle, Window};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::rc::Rc;
-
-/// Asked of the window: show this mod in the Mods tab.
-pub struct ShowMod(pub rimstack_core::mods::library::ModId);
-/// Asked of the window: the load order becomes these mods, unsaved.
-pub struct UseList(pub Vec<String>);
-/// Asked of the window: start the search for the broken mod.
-pub struct FindBroken;
 
 /// The three views of a log.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -76,10 +69,6 @@ struct Lists {
     culprits: FocusHandle,
     log: FocusHandle,
 }
-
-impl EventEmitter<ShowMod> for Logs {}
-impl EventEmitter<UseList> for Logs {}
-impl EventEmitter<FindBroken> for Logs {}
 
 impl Logs {
     pub fn new(demo: bool, view: usize, cx: &mut Context<Self>) -> Self {

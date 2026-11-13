@@ -1,6 +1,6 @@
 //! The downloads page: the paste row, the update status, the cards.
 
-use super::{Downloads, ShowMod};
+use super::Downloads;
 use crate::ui::card::Card;
 use crate::ui::field::Field;
 use crate::ui::page::{page, room};
@@ -250,7 +250,9 @@ impl Downloads {
             .child(
                 Btn::new((key.0, key.1 * 2), put(&say!("Show")))
                     .spoken(put(&say!("Show {}", row.name.clone())))
-                    .on_click(cx.listener(move |_, _, _, cx| cx.emit(ShowMod(mod_id)))),
+                    .on_click(cx.listener(move |_, _, _, cx| {
+                        crate::ui::navigate::go(crate::ui::navigate::Go::ShowMod(mod_id), cx)
+                    })),
             )
             .child(
                 Btn::new((key.0, key.1 * 2 + 1), "")
@@ -308,7 +310,9 @@ impl Downloads {
             .child(
                 Btn::new((key.0, key.1 * 2 + 1), put(&say!("Show")))
                     .spoken(put(&say!("Show {}", shown.row.name.clone())))
-                    .on_click(cx.listener(move |_, _, _, cx| cx.emit(ShowMod(mod_id)))),
+                    .on_click(cx.listener(move |_, _, _, cx| {
+                        crate::ui::navigate::go(crate::ui::navigate::Go::ShowMod(mod_id), cx)
+                    })),
             )
             .into_any_element()
     }
@@ -554,7 +558,7 @@ impl Downloads {
                     Btn::new(("show-old", at), put(&say!("Show old mod")))
                         .spoken(put(&say!("Show {}", old.name.clone())))
                         .tip(put(&say!("The installed mod the list would replace")))
-                        .on_click(cx.listener(move |_, _, _, cx| cx.emit(ShowMod(mod_id)))),
+                        .on_click(cx.listener(move |_, _, _, cx| crate::ui::navigate::go(crate::ui::navigate::Go::ShowMod(mod_id), cx))),
                 )
                 .child(
                     Btn::new(("ignore-replacement", at), put(&say!("Ignore")))

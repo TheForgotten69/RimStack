@@ -1,5 +1,6 @@
 //! The window: views that show what the `App` hands them and forward what is done.
 
+pub mod around;
 pub mod assets;
 pub mod button;
 pub mod card;
@@ -20,6 +21,7 @@ pub mod logs;
 pub mod menu;
 pub mod mods;
 pub mod motion;
+pub mod navigate;
 pub mod notices;
 pub mod outside;
 pub mod page;
@@ -36,6 +38,7 @@ pub mod section;
 pub mod settings;
 pub mod shell;
 pub mod status_bar;
+pub mod status_note;
 pub mod text_field;
 pub mod textures;
 pub mod theme;
@@ -363,6 +366,9 @@ pub fn install(app: Arc<App>, options: &Options, cx: &mut Cx) {
     cx.set_global(theme);
     cx.set_global(Shared(app));
     counts::install(cx);
+    navigate::install(cx);
+    around::install(cx);
+    tip::install(cx);
     outside::install(options.demo, cx);
     text_field::bind_keys(cx);
     focus::bind_keys(cx);

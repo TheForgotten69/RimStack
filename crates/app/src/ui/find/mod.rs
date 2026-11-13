@@ -16,7 +16,7 @@ use crate::words::why_not;
 use crate::workspace::find::{
     FoundMods, Op, Options, Prepared, PreviewShown, Recent, Request, RowRef, TypeOffer, type_offers,
 };
-use gpui::{AppContext, Context, Entity, EventEmitter, FocusHandle, Pixels, Window};
+use gpui::{AppContext, Context, Entity, FocusHandle, Pixels, Window};
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::mods::find::{Batch, Summary};
 use rimstack_core::mods::library::ModId;
@@ -26,11 +26,6 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 gpui::actions!(find, [FocusSearch]);
-
-/// Asked of the window: the Mods tab keeps only the mods with matches.
-pub struct ShowInMods;
-
-impl EventEmitter<ShowInMods> for Find {}
 
 /// The pause after typing the file types before the search runs again.
 const TYPES_PAUSE: Duration = Duration::from_millis(400);
@@ -659,7 +654,7 @@ impl Find {
 
     fn show_in_mods(&mut self, cx: &mut Context<Self>) {
         self.count = super::app(cx).find_show_in_mods();
-        cx.emit(ShowInMods);
+        crate::ui::navigate::go(crate::ui::navigate::Go::SearchedInMods, cx);
     }
 
     fn use_recent(&mut self, at: usize, cx: &mut Context<Self>) {

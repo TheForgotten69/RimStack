@@ -157,7 +157,7 @@ impl DetailsView {
                             Btn::new("find-broken-panel", put(&say!("Find the broken mod")))
                                 .icon("search")
                                 .tip(put(&say!("Deactivates half of the mods; you play and say whether it still breaks. This repeats until one mod is left. Your list is kept and comes back at the end.")))
-                                .on_click(run(|_, cx| cx.emit(super::Wanted::FindBroken))),
+                                .on_click(run(|_, cx| crate::ui::navigate::go(crate::ui::navigate::Go::FindBroken, cx))),
                         ),
                     )
                 })

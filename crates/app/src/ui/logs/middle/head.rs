@@ -4,7 +4,7 @@
 use crate::ui::button::Btn;
 use crate::ui::controls::{Choice, Toggle};
 use crate::ui::field::Field;
-use crate::ui::logs::{FindBroken, Logs, UseList, View};
+use crate::ui::logs::{Logs, View};
 
 use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{TextSized, btn_width, label, measure};
@@ -84,7 +84,7 @@ impl Logs {
             .child(button("copy-log-path", copy, "copy").enabled(!path.is_empty()).on_click(move |_, _, cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string(copied.clone()))))
             .when(finds, |d| {
                 let tip = format!("{}. {}", find, put(&say!("Deactivates half of the mods; you play and say whether it still breaks. This repeats until one mod is left. Your list is kept and comes back at the end.")));
-                d.child(button("find-broken", find.clone(), "search").tip(tip).on_click(cx.listener(|_, _, _, cx| cx.emit(FindBroken))))
+                d.child(button("find-broken", find.clone(), "search").tip(tip).on_click(cx.listener(|_, _, _, cx| crate::ui::navigate::go(crate::ui::navigate::Go::FindBroken, cx))))
             })
             .child(Choice::new("log-view", views, self.view as usize).title(put(&say!("View"))).on_pick(crate::ui::act(cx, |logs, at: usize, _, cx| {
                 logs.view = [View::Errors, View::Mods, View::Log][at];
@@ -193,7 +193,7 @@ impl Logs {
                     d.child(
                         Btn::new("use-clean-list", put(&say!("Use")))
                             .tip(put(&say!("Uses the load order of the last clean launch as the list on the Mods screen. Save writes it.")))
-                            .on_click(cx.listener(move |_, _, _, cx| cx.emit(UseList(ids.clone())))),
+                            .on_click(cx.listener(move |_, _, _, cx| crate::ui::navigate::go(crate::ui::navigate::Go::UseList(ids.clone()), cx))),
                     )
                 })
                 .into_any_element(),

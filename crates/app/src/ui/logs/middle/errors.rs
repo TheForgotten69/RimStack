@@ -3,7 +3,7 @@
 use super::step;
 use crate::ui::button::Chip;
 
-use crate::ui::logs::{Logs, ShowMod};
+use crate::ui::logs::Logs;
 
 use crate::ui::rows::{bar, rows};
 use crate::ui::theme::{self, Theme};
@@ -180,7 +180,7 @@ fn error_row(
     let hover = with_alpha(c.hover, 0.05);
     let run = error.run;
     let mod_id = error.mod_id;
-    let (pick, more_me, show_me) = (me.clone(), me.clone(), me);
+    let (pick, more_me) = (me.clone(), me);
     let times = format!("×{}", count(error.count));
     let mod_room = theme.sized(300.).min(width * 0.36);
     div()
@@ -306,7 +306,7 @@ fn error_row(
                 .tip(tip);
             d.child(match mod_id {
                 Some(mod_id) => chip.on_click(("error-mod", at), move |_, _, cx| {
-                    let _ = show_me.update(cx, |_, cx| cx.emit(ShowMod(mod_id)));
+                    crate::ui::navigate::go(crate::ui::navigate::Go::ShowMod(mod_id), cx);
                 }),
                 None => chip,
             })

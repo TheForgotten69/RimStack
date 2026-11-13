@@ -14,7 +14,7 @@ use crate::jobs::Lane;
 use crate::reports::{Database, FolderVerdict, KeyShown, ReleaseSaid, SettingsReport};
 use crate::words::put;
 use crate::workspace::KeyState;
-use gpui::{AppContext, Context, Entity, EventEmitter, SharedString, Window};
+use gpui::{AppContext, Context, Entity, SharedString, Window};
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::kept::settings::UPDATE_EVERY;
 use rimstack_core::say;
@@ -25,9 +25,6 @@ use std::time::Duration;
 /// How long the typing rests before a folder is checked, or a typed setting kept.
 const FOLDER_PAUSE: Duration = Duration::from_millis(400);
 const SETTING_PAUSE: Duration = Duration::from_millis(600);
-
-/// Asked of the window: the load order becomes these mods, unsaved, on the Mods screen.
-pub struct UseList(pub Vec<String>);
 
 /// The folders typed by hand, by their setting's name.
 const FOLDERS: [&str; 3] = ["game", "config", "workshop"];
@@ -85,8 +82,6 @@ pub struct Settings {
     /// The part chosen holds the keys when Tab reaches the parts.
     part_keys: gpui::FocusHandle,
 }
-
-impl EventEmitter<UseList> for Settings {}
 
 impl Settings {
     pub fn new(

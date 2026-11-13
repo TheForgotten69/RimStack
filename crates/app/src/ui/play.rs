@@ -20,8 +20,7 @@ impl Shell {
         if self.game.read(cx).running() {
             return;
         }
-        let ways = self.mods.read(cx).in_the_way_said(cx);
-        match ways.is_empty() {
+        match super::around::around(cx).read(cx).in_the_way.is_empty() {
             true => self.play(cx),
             false => {
                 self.before_play = !self.before_play;
@@ -88,9 +87,9 @@ impl Shell {
         }
         let theme = cx.global::<Theme>().clone();
         let c = theme.colours;
-        let mods = self.mods.read(cx);
-        let ways = mods.in_the_way_said(cx);
-        let (errors, sort_pending, dirty) = mods.what_is_in_the_way(cx);
+        let around = super::around::read(cx);
+        let (errors, sort_pending, dirty) = (around.errors, around.sort_pending, around.dirty);
+        let ways = around.in_the_way;
         let demo = self.demo;
         let lines = ways.into_iter().map(|way| {
             div()

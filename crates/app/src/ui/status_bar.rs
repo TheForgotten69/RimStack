@@ -8,68 +8,39 @@ use super::theme::{self, Theme};
 use super::widgets::{icon, label};
 use crate::ui::widgets::TextSized;
 use crate::words::put;
-use crate::workspace::logs::moment;
 use gpui::{
     AnyElement, Context, InteractiveElement, IntoElement, ParentElement,
     StatefulInteractiveElement, Styled, div, prelude::FluentBuilder, px,
 };
-use rimstack_core::{say, say_n};
+use rimstack_core::say;
 
 impl Shell {
-    /// The work under way across the window, each with how it is
-    /// stopped when it can be.
+    /// The work under way across the window, each with how it is stopped when it can be.
     fn tasks(&self, cx: &gpui::App) -> Vec<(String, Option<Stop>)> {
-        let mut tasks: Vec<(String, Option<Stop>)> = self
-            .task_texts(cx)
-            .into_iter()
-            .map(|said| (said, None))
+        let around = super::around::around(cx).read(cx);
+        let mut tasks: Vec<(String, Option<Stop>)> = around
+            .mods_work
+            .iter()
+            .chain(&around.downloads_work)
+            .map(|said| (said.clone(), None))
             .collect();
-        if let Some(textures) = &self.textures
-            && let Some(said) = textures.read(cx).task_said()
+        if around.community_busy {
+            tasks.push((put(&say!("Downloading community data…")), None));
+        }
+        if let Some(said) = &around.textures_work
+            && let Some(stop) = self.textures_stop.clone()
         {
-            let stop = textures.read(cx).stop.clone();
             let stop: Stop =
                 std::rc::Rc::new(move || stop.store(true, std::sync::atomic::Ordering::Relaxed));
-            tasks.push((said, Some(stop)));
-        }
-        tasks
-    }
-
-    fn task_texts(&self, cx: &gpui::App) -> Vec<String> {
-        let mut tasks = Vec::new();
-        if self.mods.read(cx).rescanning && !self.demo {
-            tasks.push(put(&say!("Reading the mod folders…")));
-        }
-        if self.mods.read(cx).reading_files() {
-            tasks.push(put(&say!("Reading the active mods' files…")));
-        }
-        if let Some(downloads) = &self.downloads {
-            tasks.extend(downloads.read(cx).tasks_said());
-        }
-        if self
-            .settings
-            .as_ref()
-            .is_some_and(|s| s.read(cx).community_busy())
-        {
-            tasks.push(put(&say!("Downloading community data…")));
+            tasks.push((said.clone(), Some(stop)));
         }
         tasks
     }
 
     pub(crate) fn status_bar(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.global::<Theme>().clone();
-        let hint = super::tip::hint(cx);
-        let hinted = !hint.is_empty() && hint != put(&say!("Opens Logs on this launch")).as_str();
-        let pointed = hinted.then(|| hint.lines().next().unwrap_or_default().to_string());
         let c = theme.colours;
         let height = theme.strip() - px(2.);
-        let demo = self.demo;
-        let unsaved = self.mods.read(cx).unsaved(cx);
-        let last = super::outside::outside(cx)
-            .read(cx)
-            .last_start
-            .as_ref()
-            .map(|said| (said.start.time, said.start.errors));
         let tasks = self.tasks(cx);
         let lists = self.lists.clone();
         let tray = (!tasks.is_empty() || self.tray_open || self.tray_fading).then(|| {
@@ -120,77 +91,7 @@ impl Shell {
             .bg(c.bar)
             .border_t_1()
             .border_color(c.edge)
-            .child(
-                div()
-                    .flex()
-                    .flex_1()
-                    .min_w_0()
-                    .items_center()
-                    .gap(theme::GAP_WIDE)
-                    .when(demo, |d| {
-                        d.child(label(
-                            &theme,
-                            theme.small(),
-                            c.ink2,
-                            put(&say!("Demo data")),
-                        ))
-                    })
-                    .when_some(unsaved, |d, unsaved| {
-                        d.child(label(
-                            &theme,
-                            theme.small(),
-                            c.warn,
-                            put(&say!("Not saved: {}", unsaved)),
-                        ))
-                    })
-                    .when_some(pointed, |d, said| {
-                        let said: gpui::SharedString = said.into();
-                        d.child(super::widgets::watched(
-                            div()
-                                .min_w_0()
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .text_ellipsis()
-                                .sized_text(&theme, theme.small())
-                                .text_color(c.ink),
-                            said.clone(),
-                            said,
-                            true,
-                        ))
-                    })
-                    .when_some(last.filter(|_| !hinted), |d, (time, errors)| {
-                        let started = put(&say!("Last start of the game {}", moment(time)));
-                        let said = errors.map(|n| match n {
-                            0 => (put(&say!("no errors")), c.ink2),
-                            n => (
-                                put(&say_n!(n, "{} different error", "{} different errors")),
-                                c.err,
-                            ),
-                        });
-                        let tip = put(&say!("Opens Logs on this launch"));
-                        let last = div()
-                            .id("last-start")
-                            .flex()
-                            .items_center()
-                            .gap(theme::GAP_SMALL)
-                            .h(theme.control())
-                            .cursor_pointer()
-                            .role(gpui::Role::Button)
-                            .aria_label(started.clone())
-                            .tab_index(0)
-                            .capture_any_mouse_down(|_, window, _| window.prevent_default())
-                            .focus_visible(|s| s.underline())
-                            .child(label(&theme, theme.small(), c.ink2, started))
-                            .when_some(said, |d, (said, tone)| {
-                                d.child(label(&theme, theme.small(), tone, said))
-                            })
-                            .child(icon("chevron-right", theme.sized(11.), c.ink3))
-                            .on_click(cx.listener(|shell, _, _, cx| {
-                                shell.go(crate::ui::section::Section::Logs, cx)
-                            }));
-                        d.child(super::tip::tipped(last, tip.into()))
-                    }),
-            )
+            .child(self.note.clone())
             .child(
                 div()
                     .flex()
@@ -208,7 +109,7 @@ impl Shell {
                                 cx.listener(|shell, _, window, cx| shell.open_keys(window, cx)),
                             ),
                     )
-                    .when(!demo, |d| {
+                    .when(!self.demo, |d| {
                         d.child(
                             Btn::new("history", put(&say!("History")))
                                 .icon("history")

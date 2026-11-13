@@ -7,20 +7,6 @@ use rimstack_core::mods::library::ModId;
 use std::rc::Rc;
 
 impl Mods {
-    /// What Play warns of: how many things are in the way, and whether a mod has errors.
-    pub fn in_the_way(&self, cx: &gpui::App) -> (usize, bool) {
-        if self.demo {
-            return (0, false);
-        }
-        let (errors, _) = self.order.errors_and_warnings();
-        let dirty = crate::ui::app(cx)
-            .session_if_read()
-            .is_some_and(|session| session.is_dirty());
-        let ways =
-            usize::from(errors > 0) + usize::from(self.sort_pending > 0) + usize::from(dirty);
-        (ways, errors > 0)
-    }
-
     /// The mods the load order's rules ask for that are not installed.
     pub fn to_get(&self) -> Vec<crate::workspace::load_order::ProblemSaid> {
         self.overview
@@ -118,17 +104,6 @@ impl Mods {
     /// Whether the active mods' files are still being read.
     pub fn reading_files(&self) -> bool {
         !self.files_read && self.count(Side::Active) > 0 && !self.demo
-    }
-
-    /// The changes not saved, in words; empty when the list is saved.
-    pub fn unsaved(&self, cx: &gpui::App) -> Option<String> {
-        if self.demo {
-            return None;
-        }
-        let app = crate::ui::app(cx);
-        let session = app.session();
-        (session.is_dirty() && self.order.is_installed())
-            .then(|| crate::words::put(&session.changes().said()))
     }
 
     /// The active mods as text, one a line, as `Copy the load order` gives them.

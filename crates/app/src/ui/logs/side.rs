@@ -97,7 +97,12 @@ impl Logs {
                         )
                         .when_some(mod_id, |d, mod_id| {
                             d.child(Btn::new("go-to-culprit", put(&say!("Go to mod"))).on_click(
-                                cx.listener(move |_, _, _, cx| cx.emit(super::ShowMod(mod_id))),
+                                cx.listener(move |_, _, _, cx| {
+                                    crate::ui::navigate::go(
+                                        crate::ui::navigate::Go::ShowMod(mod_id),
+                                        cx,
+                                    )
+                                }),
                             ))
                         }),
                 )
@@ -138,9 +143,14 @@ impl Logs {
                             .child(named.name.clone()),
                     )
                     .child(
-                        Btn::new(("go-to-mod", at), put(&say!("Go to mod"))).on_click(
-                            cx.listener(move |_, _, _, cx| cx.emit(super::ShowMod(mod_id))),
-                        ),
+                        Btn::new(("go-to-mod", at), put(&say!("Go to mod"))).on_click(cx.listener(
+                            move |_, _, _, cx| {
+                                crate::ui::navigate::go(
+                                    crate::ui::navigate::Go::ShowMod(mod_id),
+                                    cx,
+                                )
+                            },
+                        )),
                     )
                     .into_any_element()
             })

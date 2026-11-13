@@ -397,7 +397,7 @@ impl Logs {
                                     Btn::new("use-its-list", put(&say!("Use its list")))
                                         .tip(put(&say!("Uses this launch's load order as the list on the Mods screen. Save writes it.")))
                                         .enabled(changed)
-                                        .on_click(cx.listener(move |_, _, _, cx| cx.emit(super::UseList(ids.clone())))),
+                                        .on_click(cx.listener(move |_, _, _, cx| crate::ui::navigate::go(crate::ui::navigate::Go::UseList(ids.clone()), cx))),
                                 )
                                 .child(Btn::new("back-to-log", put(&say!("Back to the log"))).on_click(cx.listener(|logs, _, _, cx| {
                                     logs.recorded = None;

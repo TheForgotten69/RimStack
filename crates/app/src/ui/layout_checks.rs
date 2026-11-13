@@ -163,9 +163,10 @@ fn the_status_bar_tells_the_first_line_of_the_tip_pointed_at() {
     };
     cx.update(|cx| install(Arc::new(app), &options, cx));
     cx.update(|cx| {
-        cx.set_global(super::tip::Hint(
+        super::tip::point_at(
             "Click to order the list by this column; click again to reverse it. Right-click to choose the columns.\nand more".into(),
-        ));
+            cx,
+        );
     });
     watch::start();
     let opened = cx
@@ -228,7 +229,7 @@ fn the_hint_is_let_go_on_a_press_a_key_or_the_wheel() {
         }),
     ];
     for input in inputs {
-        cx.update(|cx| cx.set_global(super::tip::Hint("Pointed at".into())));
+        cx.update(|cx| super::tip::point_at("Pointed at".into(), cx));
         cx.update_window(opened.into(), |_, window, cx| {
             window.dispatch_event(input, cx);
         })

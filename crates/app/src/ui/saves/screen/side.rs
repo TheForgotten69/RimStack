@@ -5,7 +5,7 @@ use crate::ui::button::Btn;
 use crate::ui::field::Field;
 use crate::ui::page::{page, room};
 
-use crate::ui::saves::{Saves, UseList};
+use crate::ui::saves::Saves;
 use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{TextSized, breakable, icon, label};
 use crate::words::put;
@@ -125,7 +125,10 @@ impl Saves {
                                     .icon("list")
                                     .primary_if(breaks)
                                     .on_click(cx.listener(move |_, _, _, cx| {
-                                        cx.emit(UseList(ids.clone()))
+                                        crate::ui::navigate::go(
+                                            crate::ui::navigate::Go::UseList(ids.clone()),
+                                            cx,
+                                        )
                                     })),
                             )
                         })

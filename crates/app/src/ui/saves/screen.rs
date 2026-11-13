@@ -223,7 +223,10 @@ impl Saves {
                     "end" => count - 1,
                     "enter" => {
                         if let Some(Some(ids)) = usable.get(saves.selected) {
-                            cx.emit(super::UseList(ids.clone()));
+                            crate::ui::navigate::go(
+                                crate::ui::navigate::Go::UseList(ids.clone()),
+                                cx,
+                            );
                         }
                         return;
                     }

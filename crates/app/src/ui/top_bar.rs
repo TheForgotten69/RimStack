@@ -72,6 +72,9 @@ pub struct TopState {
     pub section: super::section::Section,
     pub demo: bool,
     pub in_the_way: (usize, bool),
+    /// The kept list the load order came from, empty when none, and whether it changed since.
+    pub list_name: String,
+    pub dirty: bool,
     pub behind: usize,
     pub running: bool,
     pub lists_view: gpui::Entity<super::lists::Lists>,
@@ -84,6 +87,8 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
         section,
         demo,
         in_the_way,
+        list_name,
+        dirty,
         behind,
         running,
         lists_view,
@@ -120,18 +125,10 @@ pub fn top_bar(state: TopState, window: &Window, cx: &mut Context<Shell>) -> imp
         })
         .collect();
     let brand = put(&say!("RimStack"));
-    let list_name = super::app(cx)
-        .prefs()
-        .get("Mods", "listName")
-        .unwrap_or_default();
     let lists = match list_name.is_empty() {
         true => put(&say!("Lists")),
         false => put(&say!("List: {}", list_name)),
     };
-    let dirty = !demo
-        && super::app(cx)
-            .session_if_read()
-            .is_some_and(|session| session.is_dirty());
     let play = match running {
         true => put(&say!("Running")),
         false => put(&say!("Play")),

@@ -48,7 +48,6 @@ gpui::actions!(mods, [FocusFilter, Undo, Redo, Save]);
 
 pub use columns::Menu;
 pub use edit::acting;
-pub use menus::Wanted;
 
 /// glibc keeps what a thread freed in that thread's heap; after the scan's threads that was
 /// 100 MB (measured 2026-11-12). Capping the heaps instead made the scan wait on their locks.
@@ -83,11 +82,6 @@ pub enum Progress {
 }
 
 impl gpui::EventEmitter<Progress> for Mods {}
-
-/// Asked of the window: show this section.
-pub struct ShowSection(pub crate::ui::section::Section);
-
-impl gpui::EventEmitter<ShowSection> for Mods {}
 
 pub struct Mods {
     order: LoadOrder,
@@ -201,7 +195,9 @@ impl Mods {
         cx.subscribe(
             &details_view,
             |mods, _, asked: &chosen::Asked, cx| match asked {
-                chosen::Asked::Section(section) => cx.emit(ShowSection(*section)),
+                chosen::Asked::Section(section) => {
+                    crate::ui::navigate::go(crate::ui::navigate::Go::Section(*section), cx)
+                }
                 chosen::Asked::Filter(text) => mods.filter_by(text, cx),
                 chosen::Asked::Tab(tab) => mods.keep_left_tab(*tab, cx),
             },

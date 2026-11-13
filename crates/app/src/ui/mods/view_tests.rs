@@ -30,8 +30,7 @@ fn the_view_chosen_is_kept_and_read_again_with_the_mods() {
             started.elapsed() < Duration::from_secs(20),
             "the mods were not read again"
         );
-        cx.run_until_parked();
-        std::thread::sleep(Duration::from_millis(10));
+        crate::ui::made_up::step(&cx);
     }
     cx.update(|cx| {
         let mods = mods.read(cx);
@@ -219,8 +218,7 @@ fn a_term_toggled_and_a_reread_keep_the_chips() {
     let started = Instant::now();
     while cx.update(|cx| mods.read(cx).count(Side::Active) == 0) {
         assert!(started.elapsed() < Duration::from_secs(20));
-        cx.run_until_parked();
-        std::thread::sleep(Duration::from_millis(10));
+        crate::ui::made_up::step(&cx);
     }
     let shown = cx.update(|cx| mods.read(cx).order.filter_summary());
     let whole = cx.update(|cx| {
@@ -488,5 +486,78 @@ fn scrolling_the_load_order_draws_the_list_alone_again() {
     assert!(
         renders < 5,
         "the Mods tab was drawn again {renders} times in 30 frames of its list scrolling"
+    );
+}
+
+#[test]
+fn the_window_around_the_mods_tab_is_not_drawn_again_for_what_it_does_not_show() {
+    use crate::ui::shell::RENDERS;
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    let window = cx.update(|cx| cx.windows()[0]);
+    let draw = |cx: &mut gpui::HeadlessAppContext| {
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+    };
+    for _ in 0..3 {
+        draw(&mut cx);
+    }
+    RENDERS.with(|renders| renders.set(0));
+    for at in 0..5 {
+        cx.update(|cx| {
+            mods.update(cx, |mods, cx| {
+                let chosen = mods.order.list(Side::Active).mods()[at].installed.unwrap();
+                mods.choose(Side::Active, chosen, cx);
+            })
+        });
+        draw(&mut cx);
+    }
+    let chosen = RENDERS.with(|renders| renders.replace(0));
+    for at in 0..5 {
+        cx.update(|cx| crate::ui::tip::point_at(format!("tip {at}").into(), cx));
+        draw(&mut cx);
+    }
+    let hinted = RENDERS.with(|renders| renders.get());
+    assert_eq!(
+        (chosen, hinted),
+        (0, 0),
+        "the window was drawn again for mods chosen and for hints"
+    );
+}
+
+#[test]
+fn what_the_window_shows_of_the_list_follows_an_edit_its_save_and_its_undo() {
+    let (_tmp, mut cx, mods) = opened_with(|_| {});
+    let around = |cx: &mut gpui::HeadlessAppContext| {
+        cx.run_until_parked();
+        cx.update(|cx| crate::ui::around::read(cx))
+    };
+    assert!(!around(&mut cx).dirty);
+    cx.update(|cx| {
+        mods.update(cx, |mods, cx| {
+            let last = mods.count(Side::Active) - 1;
+            mods.take(Side::Active, last, None, cx);
+        })
+    });
+    let edited = around(&mut cx);
+    assert!(edited.dirty && edited.unsaved.is_some());
+    assert!(
+        edited.in_the_way.len() > usize::from(edited.errors) + usize::from(edited.sort_pending)
+    );
+    cx.update(|cx| mods.update(cx, |mods, cx| mods.save(None, cx)));
+    let started = Instant::now();
+    while cx.update(|cx| mods.read(cx).status.saving) {
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "the save did not end"
+        );
+        crate::ui::made_up::step(&cx);
+    }
+    let saved = around(&mut cx);
+    assert!(!saved.dirty && saved.unsaved.is_none());
+    cx.update(|cx| mods.update(cx, |mods, cx| mods.undo(cx)));
+    assert!(
+        around(&mut cx).dirty,
+        "an undo after a save leaves the list unsaved"
     );
 }

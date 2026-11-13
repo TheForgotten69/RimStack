@@ -343,7 +343,7 @@ impl Settings {
                 .tip(put(&say!("The load order the game had before RimStack first saved, kept in ModsConfig.xml.rimstack-original. Using it changes the list here; Save writes it.")))
                 .held(Btn::new("use-original", put(&say!("Use"))).enabled(backup).on_click(cx.listener(|_, _, _, cx| {
                     if let Some(ids) = crate::ui::app(cx).original_list() {
-                        cx.emit(super::UseList(ids));
+                        crate::ui::navigate::go(crate::ui::navigate::Go::UseList(ids), cx);
                     }
                 })))
                 .when_held(!backup, label(theme, theme.body(), c.ink3, put(&say!("None yet"))))

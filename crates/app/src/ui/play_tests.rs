@@ -77,7 +77,7 @@ fn play_shows_what_is_in_its_way_before_starting() {
         .unwrap();
     let (open, ways) = cx.update(|cx| {
         let shell = shell.read(cx).unwrap();
-        (shell.before_play, shell.mods.read(cx).in_the_way_said(cx))
+        (shell.before_play, crate::ui::around::read(cx).in_the_way)
     });
     assert!(!ways.is_empty(), "the made-up load order has an error");
     assert!(open);

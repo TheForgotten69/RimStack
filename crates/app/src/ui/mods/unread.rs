@@ -100,9 +100,12 @@ impl Mods {
                                     .child(
                                         Btn::new("unread-settings", put(&say!("Settings")))
                                             .on_click(cx.listener(|_, _, _, cx| {
-                                                cx.emit(super::ShowSection(
-                                                    crate::ui::section::Section::Settings,
-                                                ))
+                                                crate::ui::navigate::go(
+                                                    crate::ui::navigate::Go::Section(
+                                                        crate::ui::section::Section::Settings,
+                                                    ),
+                                                    cx,
+                                                )
                                             })),
                                     ),
                             )

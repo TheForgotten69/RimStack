@@ -548,7 +548,10 @@ pub fn acting(
             Act::Fix => mods.apply_fix(mod_id, fix.action, &fix.target, fix.page.is_some(), cx),
             Act::Ignore => mods.ignore_problem(package_id, key, cx),
             Act::Show => {
-                cx.emit(super::ShowSection(crate::ui::section::Section::Mods));
+                crate::ui::navigate::go(
+                    crate::ui::navigate::Go::Section(crate::ui::section::Section::Mods),
+                    cx,
+                );
                 if let Some(id) = mod_id {
                     mods.show_mod(id, cx)
                 }
@@ -581,9 +584,8 @@ impl Mods {
         self.show(cx);
     }
 
-    /// The sentences Play shows of what stands in its way.
-    pub fn in_the_way_said(&self, cx: &gpui::App) -> Vec<String> {
-        let (errors, sort_pending, dirty) = self.what_is_in_the_way(cx);
+    /// The sentences Play shows of what stands in its way, given `standing`'s answers.
+    pub fn in_the_way_said(&self, errors: bool, sort_pending: bool, dirty: bool) -> Vec<String> {
         let errors_count = self.order.errors_and_warnings().0;
         let mut said = Vec::new();
         if errors {
@@ -608,17 +610,35 @@ impl Mods {
         said
     }
 
-    /// Whether a mod has errors, Sort would move mods, and the list is not saved.
-    pub fn what_is_in_the_way(&self, cx: &gpui::App) -> (bool, bool, bool) {
+    /// Whether a mod has errors, Sort would move mods, and the list is not saved, with its
+    /// changes in words. A session not read yet has no changes, and is not read for this.
+    pub fn standing(&self, cx: &gpui::App) -> (bool, bool, bool, Option<String>) {
         if self.demo {
-            return (false, false, false);
+            return (false, false, false, None);
         }
-        let dirty = super::super::app(cx).session().is_dirty() && self.order.is_installed();
+        let app = super::super::app(cx);
+        let unsaved = app
+            .session_if_read()
+            .filter(|session| session.is_dirty() && self.order.is_installed())
+            .map(|session| put(&session.changes().said()));
         (
             self.order.errors_and_warnings().0 > 0,
             self.sort_pending > 0,
-            dirty,
+            unsaved.is_some(),
+            unsaved,
         )
+    }
+
+    /// The work under way the window lists for the Mods tab.
+    pub fn work_said(&self) -> Vec<String> {
+        let mut said = Vec::new();
+        if self.rescanning && !self.demo {
+            said.push(put(&say!("Reading the mod folders…")));
+        }
+        if self.reading_files() {
+            said.push(put(&say!("Reading the active mods' files…")));
+        }
+        said
     }
 
     /// Every needed mod that is installed activated, each where its rules put it.

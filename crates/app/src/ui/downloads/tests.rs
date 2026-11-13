@@ -1,4 +1,4 @@
-use super::{Downloads, ShowMod};
+use super::Downloads;
 use crate::App;
 use crate::ui::layout_checks::check_scene;
 use crate::ui::shell::Shell;
@@ -124,7 +124,9 @@ fn showing_a_mod_from_downloads_goes_to_the_mods_tab(cx: &mut gpui::TestAppConte
         crate::ui::section::Section::Downloads
     );
     let downloads = shell.update(cx, |shell, cx| shell.downloads(cx));
-    downloads.update(cx, |_, cx| cx.emit(ShowMod(ModId::new(0, 3))));
+    downloads.update(cx, |_, cx| {
+        crate::ui::navigate::go(crate::ui::navigate::Go::ShowMod(ModId::new(0, 3)), cx)
+    });
     assert_eq!(
         shell.read_with(cx, |shell, _| shell.section()),
         crate::ui::section::Section::Mods

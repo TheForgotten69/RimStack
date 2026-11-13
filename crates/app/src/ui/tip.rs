@@ -34,25 +34,44 @@ impl Render for Tip {
     }
 }
 
-/// The tip of what the pointer is on, as `Notices.hint`: the status bar shows its first line.
+/// The tip of what the pointer is on, as `Notices.hint`: the status bar shows its first line. An
+/// entity, so that only what shows it is drawn again as the pointer moves.
 #[derive(Default)]
 pub struct Hint(pub SharedString);
 
-impl gpui::Global for Hint {}
+struct Held(gpui::Entity<Hint>);
+
+impl gpui::Global for Held {}
+
+pub fn install(cx: &mut App) {
+    let hint = cx.new(|_| Hint::default());
+    cx.set_global(Held(hint));
+}
 
 /// What the status bar says of the control pointed at, empty when none.
 pub fn hint(cx: &App) -> SharedString {
-    cx.try_global::<Hint>()
-        .map(|hint| hint.0.clone())
+    cx.try_global::<Held>()
+        .map(|held| held.0.read(cx).0.clone())
         .unwrap_or_default()
+}
+
+/// The status bar's hint is `text`'s first line.
+pub fn point_at(text: SharedString, cx: &mut App) {
+    let Some(held) = cx.try_global::<Held>().map(|held| held.0.clone()) else {
+        return;
+    };
+    held.update(cx, |hint, cx| {
+        if hint.0 != text {
+            hint.0 = text;
+            cx.notify();
+        }
+    });
 }
 
 /// The hint let go of, as a press, a key or the wheel may take the control away under a pointer
 /// that does not move, which would then never tell it left.
 pub fn forget_hint(cx: &mut App) {
-    if !hint(cx).is_empty() {
-        cx.set_global(Hint::default());
-    }
+    point_at(SharedString::default(), cx);
 }
 
 /// `control` with its tip; an empty one shows none.
@@ -64,9 +83,9 @@ pub fn tipped(control: Stateful<gpui::Div>, text: SharedString) -> Stateful<gpui
     control
         .on_hover(move |over, _, cx| {
             if *over {
-                cx.set_global(Hint(pointed.clone()));
+                point_at(pointed.clone(), cx);
             } else if hint(cx) == pointed {
-                cx.set_global(Hint::default());
+                forget_hint(cx);
             }
         })
         .tooltip(move |_: &mut Window, cx: &mut App| -> AnyView {

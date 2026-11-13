@@ -17,7 +17,7 @@ use crate::reports::SettingsReport;
 use crate::workspace::changed::{ChangeNotes, NotesState, Only, SinceLaunch};
 use crate::workspace::download_list::ListShown;
 use crate::workspace::downloads::{Queue, Updates};
-use gpui::{AppContext, Context, Entity, EventEmitter};
+use gpui::{AppContext, Context, Entity};
 use rimstack_core::base::error::Error;
 use rimstack_core::kept::settings::Switch;
 use rimstack_core::mods::library::ModId;
@@ -28,9 +28,6 @@ use std::time::Duration;
 
 /// How often the time for an update check is looked at, when updates come by themselves.
 const TICK: Duration = Duration::from_secs(60);
-
-/// Asked of the window: show this mod in the Mods tab.
-pub struct ShowMod(pub ModId);
 
 /// A task waiting for the one before it: two would write the same SteamCMD folder.
 struct Waiting {
@@ -94,8 +91,6 @@ pub struct Downloads {
     changed_at: usize,
     changed_drawn: Rc<std::cell::RefCell<Vec<gpui::Bounds<gpui::Pixels>>>>,
 }
-
-impl EventEmitter<ShowMod> for Downloads {}
 
 impl Downloads {
     /// A Workshop mod's change notes, once fetched.
