@@ -3,13 +3,13 @@
 
 use super::Mods;
 use crate::ui::button::Chip;
-use crate::ui::text_field::{self, TextField};
+use crate::ui::text_field::{self, Edited, TextField};
 use crate::ui::theme::{self, Theme};
 use crate::ui::widgets::{TextSized, halo, icon, label, measure_in};
 use crate::words::put;
 use crate::workspace::load_order::Side;
 use gpui::{
-    Context, Entity, Focusable, FontWeight, InteractiveElement, ParentElement, Pixels,
+    AppContext, Context, Entity, Focusable, FontWeight, InteractiveElement, ParentElement, Pixels,
     StatefulInteractiveElement, Styled, Window, anchored, deferred, div, prelude::FluentBuilder,
     px,
 };
@@ -25,31 +25,75 @@ fn is_term(word: &str) -> bool {
         .any(|kind| word.len() > kind.len() && word.starts_with(kind))
 }
 
-impl Mods {
+/// The filter of the load order and its mirror in the drawer: the terms shown as chips, and
+/// what is typed after them. Mods hears `Changed` with the whole filter.
+pub struct Filter {
+    pub field: Entity<TextField>,
+    pub mirror: Entity<TextField>,
+    terms: Vec<String>,
+    /// The offers under the filter put away until it is typed in or clicked again.
+    offers_shut: bool,
+}
+
+pub struct Changed(pub String);
+
+impl gpui::EventEmitter<Changed> for Filter {}
+
+impl Filter {
+    pub fn new(size: Pixels, cx: &mut Context<Self>) -> Self {
+        let field = cx.new(|cx| TextField::new(size, cx));
+        let mirror = cx.new(|cx| TextField::new(size, cx));
+        for typed in [&field, &mirror] {
+            cx.subscribe(typed, |filter, field, _: &Edited, cx| {
+                filter.edited(&field, cx)
+            })
+            .detach();
+        }
+        Self {
+            field,
+            mirror,
+            terms: Vec::new(),
+            offers_shut: false,
+        }
+    }
+
+    pub fn terms(&self) -> &[String] {
+        &self.terms
+    }
+
+    pub fn offers_shut(&self) -> bool {
+        self.offers_shut
+    }
+
+    pub fn shut_offers(&mut self, shut: bool, cx: &mut Context<Self>) {
+        self.offers_shut = shut;
+        cx.notify();
+    }
+
     /// The whole filter: the terms, then what is typed.
-    pub fn filter_text(&self, cx: &gpui::App) -> String {
-        let typed = self.filter.read(cx).text().trim().to_string();
-        let mut words = self.filter_terms.clone();
+    pub fn text(&self, cx: &gpui::App) -> String {
+        let typed = self.field.read(cx).text().trim().to_string();
+        let mut words = self.terms.clone();
         if !typed.is_empty() {
             words.push(typed);
         }
         words.join(" ")
     }
 
-    pub fn filter_by(&mut self, text: &str, cx: &mut Context<Self>) {
+    pub fn set(&mut self, text: &str, cx: &mut Context<Self>) {
         let words: Vec<&str> = text.split(' ').filter(|w| !w.is_empty()).collect();
-        self.filter_terms = words
+        self.terms = words
             .iter()
             .filter(|w| is_term(w))
             .map(|w| w.to_string())
             .collect();
         let typed: Vec<&str> = words.into_iter().filter(|w| !is_term(w)).collect();
-        self.filter
+        self.field
             .update(cx, |field, cx| field.set_text(&typed.join(" "), cx));
     }
 
-    /// A field typed in: each finished term becomes a chip, and the list follows the filter.
-    pub(super) fn filter_edited(&mut self, field: &Entity<TextField>, cx: &mut Context<Self>) {
+    /// A field typed in: each finished term becomes a chip, and the other field follows.
+    fn edited(&mut self, field: &Entity<TextField>, cx: &mut Context<Self>) {
         let text = field.read(cx).text().to_string();
         let words: Vec<&str> = text.split(' ').collect();
         let last = words.len().saturating_sub(1);
@@ -70,25 +114,23 @@ impl Mods {
                 kept.join(" ")
             }
         };
-        self.filter_terms.extend(done);
-        for other in [self.filter.clone(), self.mirror.clone()] {
+        self.terms.extend(done);
+        for other in [self.field.clone(), self.mirror.clone()] {
             if other.read(cx).text() != rest {
                 other.update(cx, |field, cx| field.set_text_quietly(&rest, cx));
             }
         }
         self.offers_shut = false;
-        let composed = self.filter_text(cx);
-        self.order.set_filter(&composed);
-        self.show(cx);
-        self.keep_left_filter(composed, cx);
+        cx.emit(Changed(self.text(cx)));
+        cx.notify();
     }
 
-    pub(super) fn drop_term(&mut self, at: usize, cx: &mut Context<Self>) {
-        if at < self.filter_terms.len() {
-            self.filter_terms.remove(at);
+    pub fn drop_term(&mut self, at: usize, cx: &mut Context<Self>) {
+        if at < self.terms.len() {
+            self.terms.remove(at);
         }
-        let field = self.filter.clone();
-        self.filter_edited(&field, cx);
+        let field = self.field.clone();
+        self.edited(&field, cx);
     }
 
     /// An offer taken: a kind of term (`tag:`) goes on being typed, a whole term becomes a chip.
@@ -102,17 +144,38 @@ impl Mods {
             field.update(cx, |field, cx| field.set_text(&typed, cx));
             return;
         }
-        if !self.filter_terms.contains(&term) {
-            self.filter_terms.push(term.clone());
+        if !self.terms.contains(&term) {
+            self.terms.push(term.clone());
         }
         let typed = words.join(" ");
         field.update(cx, |field, cx| field.set_text(&typed, cx));
     }
 
-    pub(super) fn clear_filter(&mut self, cx: &mut Context<Self>) {
-        self.filter_terms.clear();
+    pub fn clear(&mut self, cx: &mut Context<Self>) {
+        self.terms.clear();
         self.offers_shut = true;
-        self.filter.update(cx, |field, cx| field.set_text("", cx));
+        self.field.update(cx, |field, cx| field.set_text("", cx));
+    }
+}
+
+impl Mods {
+    /// The whole filter: the terms, then what is typed.
+    pub fn filter_text(&self, cx: &gpui::App) -> String {
+        self.filtering.read(cx).text(cx)
+    }
+
+    pub fn filter_by(&mut self, text: &str, cx: &mut Context<Self>) {
+        self.filtering.update(cx, |filter, cx| filter.set(text, cx));
+    }
+
+    pub(super) fn filter_changed(&mut self, composed: String, cx: &mut Context<Self>) {
+        self.order.set_filter(&composed);
+        self.show(cx);
+        self.keep_left_filter(composed, cx);
+    }
+
+    pub(super) fn clear_filter(&mut self, cx: &mut Context<Self>) {
+        self.filtering.update(cx, |filter, cx| filter.clear(cx));
     }
 
     fn offers(
@@ -148,7 +211,9 @@ impl Mods {
         let typed = field.read(cx).text().to_string();
         let focused = field.read(cx).is_focused(window);
         let focus = field.focus_handle(cx);
-        let empty = typed.is_empty() && self.filter_terms.is_empty();
+        let filtering = self.filtering.read(cx);
+        let (terms, offers_shut) = (filtering.terms().to_vec(), filtering.offers_shut());
+        let empty = typed.is_empty() && terms.is_empty();
         let found = (!empty).then(|| put(&self.order.filter_summary()));
         let keys = put(&say!("Ctrl + F"));
         let placeholder = put(&say!("Filter active and inactive mods"));
@@ -173,7 +238,7 @@ impl Mods {
                     FontWeight::NORMAL,
                 )
                 + theme::GAP * 4.;
-        let chips = self.filter_terms.iter().enumerate().map(|(at, term)| {
+        let chips = terms.iter().enumerate().map(|(at, term)| {
             Chip::new(term.clone())
                 .tone(c.moved)
                 .icon("x")
@@ -181,13 +246,14 @@ impl Mods {
                 .on_click(
                     ("filter-term", at),
                     cx.listener(move |mods, _, window, cx| {
-                        mods.drop_term(at, cx);
+                        mods.filtering
+                            .update(cx, |filter, cx| filter.drop_term(at, cx));
                         let focus = mods.filter.focus_handle(cx);
                         window.focus(&focus, cx);
                     }),
                 )
         });
-        let offered = match focused && !self.offers_shut {
+        let offered = match focused && !offers_shut {
             true => self.offers(field, cx),
             false => Default::default(),
         };
@@ -243,7 +309,9 @@ impl Mods {
                             .child(about),
                     )
                     .on_click(cx.listener(move |mods, _, window, cx| {
-                        mods.take_offer(term.clone(), held.clone(), cx);
+                        let (term, field) = (term.clone(), held.clone());
+                        mods.filtering
+                            .update(cx, |filter, cx| filter.take_offer(term, field, cx));
                         let focus = held.focus_handle(cx);
                         window.focus(&focus, cx);
                     }))
@@ -261,8 +329,8 @@ impl Mods {
                         .border_color(c.line)
                         .occlude()
                         .on_mouse_down_out(cx.listener(|mods, _, _, cx| {
-                            mods.offers_shut = true;
-                            cx.notify();
+                            mods.filtering
+                                .update(cx, |filter, cx| filter.shut_offers(true, cx));
                         }))
                         .children(rows)
                         .child(
@@ -298,20 +366,23 @@ impl Mods {
                 cx.stop_propagation();
             }))
             .capture_action(cx.listener(move |mods, _: &text_field::Backspace, _, cx| {
-                match held.read(cx).text().is_empty() && !mods.filter_terms.is_empty() {
+                let terms = mods.filtering.read(cx).terms().len();
+                match held.read(cx).text().is_empty() && terms > 0 {
                     true => {
-                        mods.drop_term(mods.filter_terms.len() - 1, cx);
+                        mods.filtering
+                            .update(cx, |filter, cx| filter.drop_term(terms - 1, cx));
                         cx.stop_propagation();
                     }
                     false => cx.propagate(),
                 }
             }))
             .on_click(cx.listener(move |mods, _, window, cx| {
-                mods.offers_shut = false;
+                mods.filtering
+                    .update(cx, |filter, cx| filter.shut_offers(false, cx));
                 window.focus(&focus, cx);
             }))
             .child(icon("funnel", theme.icon() - px(1.), c.ink3))
-            .when(!self.filter_terms.is_empty(), |d| {
+            .when(!terms.is_empty(), |d| {
                 d.child(
                     div()
                         .flex()

@@ -374,7 +374,7 @@ impl Mods {
                 d.child(
                     Chip::new(warned)
                         .tone(c.warn)
-                        .held(self.filter_terms.iter().any(|t| t == "is:warning"))
+                        .held(self.filtering.read(cx).terms().iter().any(|t| t == "is:warning"))
                         .icon("triangle-alert")
                         .tip(put(&say!("Mods with a warning: the game runs, but parts of these mods may not work. Click to show only these.")))
                         .on_click("warnings-chip", cx.listener(|m, _, _, cx| m.toggle_term("is:warning", cx))),

@@ -178,7 +178,7 @@ fn filter_terms_become_chips_and_are_taken_off_one_by_one() {
     });
     cx.update(|cx| {
         let mods = mods.read(cx);
-        assert_eq!(mods.filter_terms, ["is:warning", "tag:x"]);
+        assert_eq!(mods.filtering.read(cx).terms(), ["is:warning", "tag:x"]);
         assert_eq!(mods.filter.read(cx).text(), "fixture");
         assert_eq!(mods.filter_text(cx), "is:warning tag:x fixture");
     });
@@ -187,13 +187,16 @@ fn filter_terms_become_chips_and_are_taken_off_one_by_one() {
     cx.update(|cx| {
         let mods = mods.read(cx);
         assert_eq!(
-            mods.filter_terms,
+            mods.filtering.read(cx).terms(),
             ["is:warning", "tag:x", "!is:error"],
             "a finished term becomes a chip"
         );
         assert_eq!(mods.filter.read(cx).text(), "fixture mod");
     });
-    cx.update(|cx| mods.update(cx, |mods, cx| mods.drop_term(0, cx)));
+    cx.update(|cx| {
+        let filtering = mods.read(cx).filtering.clone();
+        filtering.update(cx, |filter, cx| filter.drop_term(0, cx))
+    });
     cx.update(|cx| assert_eq!(mods.read(cx).filter_text(cx), "tag:x !is:error fixture mod"));
     cx.update(|cx| mods.update(cx, |mods, cx| mods.clear_filter(cx)));
     cx.update(|cx| assert_eq!(mods.read(cx).filter_text(cx), ""));

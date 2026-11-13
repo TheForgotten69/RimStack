@@ -28,7 +28,7 @@ mod state;
 mod tabs;
 mod unread;
 
-use super::text_field::{Edited, TextField};
+use super::text_field::TextField;
 use super::theme::Theme;
 use crate::changes::Changes;
 use crate::jobs::Lane;
@@ -92,6 +92,7 @@ pub struct Mods {
     inactive: Shown,
     orders: Orders,
     pub filter: Entity<TextField>,
+    filtering: Entity<filter::Filter>,
     active_list: Entity<list::ModList>,
     /// The load order takes the keys at the next frame, as it does once a comparison closes.
     focus_wanted: bool,
@@ -137,10 +138,6 @@ pub struct Mods {
     /// The view kept once dragging rests.
     view_kept: Lane,
     left_off: left_off::LeftOff,
-    /// The filter's terms shown as chips; the field holds what is typed after them.
-    filter_terms: Vec<String>,
-    /// The offers under the filter put away until it is typed in or clicked again.
-    offers_shut: bool,
 }
 
 impl Mods {
@@ -159,9 +156,13 @@ impl Mods {
             kept(view.inactive, first_inactive),
             kept(view.details, first_details),
         );
-        let mirror = cx.new(|cx| TextField::new(size, cx));
-        cx.subscribe(&mirror, |mods, field, _: &Edited, cx| {
-            mods.filter_edited(&field, cx)
+        let filtering = cx.new(|cx| filter::Filter::new(size, cx));
+        let (filter, mirror) = {
+            let filtering = filtering.read(cx);
+            (filtering.field.clone(), filtering.mirror.clone())
+        };
+        cx.subscribe(&filtering, |mods, _, filter::Changed(text), cx| {
+            mods.filter_changed(text.clone(), cx)
         })
         .detach();
         let order = if demo {
@@ -169,11 +170,6 @@ impl Mods {
         } else {
             LoadOrder::demo(0, 0)
         };
-        let filter = cx.new(|cx| TextField::new(size, cx));
-        cx.subscribe(&filter, |mods, field, _: &Edited, cx| {
-            mods.filter_edited(&field, cx)
-        })
-        .detach();
         let thumbs = super::thumbs::Shared::default();
         let orders = Rc::new(order.orders());
         let lists = [Side::Active, Side::Inactive].map(|side| {
@@ -243,8 +239,7 @@ impl Mods {
             view,
             mirror,
             view_kept: Lane::default(),
-            filter_terms: Vec::new(),
-            offers_shut: false,
+            filtering,
             left_off: match demo {
                 true => left_off::LeftOff::Off,
                 false => left_off::LeftOff::Waiting,
