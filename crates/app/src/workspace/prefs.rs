@@ -1,5 +1,4 @@
-//! The appearance and the screens' places, kept where Qt's `Settings` kept them: `RimStack.conf`
-//! in the settings folder, so a Qt build's choices carry over on Linux.
+//! The appearance and the screens' places, kept in `RimStack.conf` in the settings folder.
 
 use super::App;
 use crate::changes::Changes;
@@ -8,14 +7,14 @@ use rimstack_core::base::locks::Held;
 use rimstack_core::kept::prefs::Prefs;
 use std::path::PathBuf;
 
-/// How the Mods tab is shown, under `[Mods]`, as Qt's `ModsPrefs` kept it.
+/// How the Mods tab is shown, under `[Mods]`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModsView {
     /// As `columns::chosen` reads it.
     pub columns: String,
     /// As `columns::widths` reads it.
     pub column_sizes: String,
-    /// The load order under category headings; Qt kept 1, 0 or -1, and only 0 turns them off.
+    /// The load order under category headings: kept as 1, 0 or -1, and only 0 turns them off.
     pub headings: bool,
     /// As `columns::from_kept` reads it; "" by category.
     pub inactive_order: String,

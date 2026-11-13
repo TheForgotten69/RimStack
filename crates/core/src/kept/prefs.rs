@@ -1,6 +1,6 @@
-//! `RimStack.conf`, the file Qt's `Settings` kept the appearance and the Mods screen's places in:
-//! `[Group]` lines, then `key=value` lines. Qt quotes a value holding a comma or a quote, with
-//! `\"` and `\\` inside. Only the keys set are written back; every other line stays as it was.
+//! `RimStack.conf`, where the appearance and the Mods screen's places are kept: `[Group]` lines,
+//! then `key=value` lines. A value holding a comma or a quote is quoted, with `\"` and `\\`
+//! inside. Only the keys set are written back; every other line stays as it was.
 
 use crate::base::error::Error;
 use std::path::Path;

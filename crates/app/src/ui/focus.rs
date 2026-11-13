@@ -1,5 +1,5 @@
 //! A control Tab reaches, and the ring drawn around it
-//! while it holds the keys. A click does not give it the keys, as in Qt: the text being typed
+//! while it holds the keys. A click does not give it the keys: the text being typed
 //! keeps them.
 
 use super::theme::Theme;

@@ -92,7 +92,7 @@ fn get(url: &str, folder: &Path, largest: u64) -> Result<PathBuf, Error> {
 }
 
 /// For the fixture, which never reaches the network: a plain 16 by 9 picture in the colour the
-/// address gives, written as a binary PPM, which Qt reads.
+/// address gives, written as a binary PPM.
 pub fn made_up(url: &str, folder: &Path) -> Result<PathBuf, Error> {
     if !is_steam_image(url) {
         return Err(Error::refused(said!("previews are only loaded from Steam")));

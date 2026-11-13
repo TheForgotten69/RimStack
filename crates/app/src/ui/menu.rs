@@ -92,8 +92,8 @@ pub struct Menu {
     entries: Vec<Entry>,
     at: Point<Pixels>,
     corner: gpui::Anchor,
-    /// Drawn as a column of buttons, as Qt's popups of `Btn`s were, so many captions' letters
-    /// wide, or as wide as its widest button.
+    /// Drawn as a column of buttons, so many captions' letters wide, or as wide as its widest
+    /// button.
     buttons: Option<Option<usize>>,
     chosen: Option<usize>,
     focus: FocusHandle,

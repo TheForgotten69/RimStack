@@ -149,35 +149,6 @@ pub struct Database {
     pub waiting: bool,
 }
 
-/// Where the window opens. `visibility` is Qt's `QWindow::Visibility`.
-#[derive(Serialize, Debug, PartialEq)]
-pub struct WindowStart {
-    pub x: i32,
-    pub y: i32,
-    pub width: i32,
-    pub height: i32,
-    pub visibility: i32,
-}
-
-impl WindowStart {
-    pub const WINDOWED: i32 = 2;
-    pub const MAXIMIZED: i32 = 4;
-
-    pub fn of(area: rimstack_core::base::window::Area, maximized: bool) -> Self {
-        Self {
-            x: area.x,
-            y: area.y,
-            width: area.width,
-            height: area.height,
-            visibility: if maximized {
-                Self::MAXIMIZED
-            } else {
-                Self::WINDOWED
-            },
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

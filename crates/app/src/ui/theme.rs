@@ -26,7 +26,7 @@ palette! {
 
 type Table = &'static [(&'static str, &'static str)];
 
-/// As `Theme.qml` holds them: `#rrggbb`, or `#aarrggbb` as Qt reads a colour with its alpha first.
+/// `#rrggbb`, or `#aarrggbb` with the alpha first.
 const RIM: Table = &[
     ("win", "#1c1b19"),
     ("panel", "#161513"),
@@ -446,7 +446,7 @@ impl Appearance {
         raised.or(mine).or_else(|| find(own))
     }
 
-    /// What `AppPrefs.qml` kept in `[Appearance]`; `own` gives the theme's own colours when they
+    /// What `[Appearance]` keeps; `own` gives the theme's own colours when they
     /// are used.
     pub fn of(
         prefs: &rimstack_core::kept::prefs::Prefs,
@@ -482,10 +482,10 @@ pub struct Theme {
     pub light: bool,
     pub family: gpui::SharedString,
     pub mono: gpui::SharedString,
-    /// The font's ascent and descent over its size: Qt gives a line their two roundings.
+    /// The font's ascent and descent over its size: a line is their two roundings.
     pub ascent: f32,
     pub descent: f32,
-    /// What Qt's `Font.DemiBold` and `Font.Medium` give in this family: the nearest face it has.
+    /// What a demi-bold and a medium weight give in this family: the nearest face it has.
     pub semibold: gpui::FontWeight,
     pub medium: gpui::FontWeight,
     pub scale: f32,
@@ -633,7 +633,7 @@ impl Theme {
         self.sized(14.)
     }
 
-    /// The height Qt gives a line of text of this size.
+    /// The ascent and the descent at `size`, each rounded.
     pub fn line(&self, size: Pixels) -> Pixels {
         let size = f32::from(size);
         px((size * self.ascent).round() + (size * self.descent).round())
@@ -655,7 +655,7 @@ impl Theme {
     }
 }
 
-/// As Qt picks a face: the closest weight, the lighter of two as close.
+/// The closest weight, the lighter of two as close.
 fn nearest(wanted: f32, has: &[f32]) -> f32 {
     has.iter()
         .copied()
@@ -681,7 +681,7 @@ mod tests {
     }
 
     #[test]
-    fn sizes_round_as_theme_qml_does() {
+    fn sizes_follow_the_text_size_rounded_to_the_pixel() {
         assert_eq!(
             (at(1.).body(), at(1.).row(), at(1.).top_bar()),
             (px(13.), px(26.), px(52.))

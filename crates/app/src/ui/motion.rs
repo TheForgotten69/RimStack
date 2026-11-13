@@ -60,8 +60,8 @@ pub fn towards<T: gpui::SpringTarget>(
 }
 
 thread_local! {
-    /// The controls pressed, and when: only their springs run, as Qt's `settled` let a
-    /// `Behavior` run once a control was shown, so a value that arrives later shows at once.
+    /// The controls pressed, and when: only their springs run, so a value that arrives after a
+    /// control is shown shows at once.
     static PRESSED: std::cell::RefCell<std::collections::HashMap<ElementId, std::time::Instant>> =
         Default::default();
 }

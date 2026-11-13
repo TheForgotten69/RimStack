@@ -92,7 +92,7 @@ pub fn put(sentence: &Sentence) -> String {
     sentence.put(words.as_ref())
 }
 
-/// The locale numbers are written in, as Qt's `Qt.locale()` takes it: `LC_NUMERIC` before the language.
+/// The locale numbers are written in: `LC_NUMERIC` before the language.
 fn number_locale() -> String {
     let from_env = ["LC_ALL", "LC_NUMERIC", "LANG"]
         .iter()

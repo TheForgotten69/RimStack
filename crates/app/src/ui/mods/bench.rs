@@ -6,7 +6,7 @@ use gpui::{Context, Window};
 use std::time::{Duration, Instant};
 
 const LENGTH: Duration = Duration::from_secs(10);
-/// A frame slower than this counts as slow, as the Qt check counted it.
+/// A frame slower than this counts as slow.
 const SLOW: Duration = Duration::from_millis(20);
 
 pub struct Bench {

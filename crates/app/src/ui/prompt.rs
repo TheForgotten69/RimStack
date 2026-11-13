@@ -226,7 +226,6 @@ impl Render for Prompt {
             .flex()
             .items_center()
             .justify_center()
-            // Qt Basic's modal dimmer: the palette's shadow, black, at half.
             .bg(super::widgets::with_alpha(gpui::black(), 0.5));
         if fading {
             return super::motion::pop_out(

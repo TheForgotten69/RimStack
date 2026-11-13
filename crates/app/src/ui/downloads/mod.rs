@@ -192,7 +192,7 @@ impl Downloads {
 
     /// What Downloads shows of the `App` beside the updates and the changes, read off the
     /// window's thread: the library may still be being read. The demo shows no list and no
-    /// SteamCMD, as the Qt demo did not ask for them.
+    /// SteamCMD.
     fn read(&mut self, cx: &mut Context<Self>) {
         let app = super::app(cx);
         self.reading.run(

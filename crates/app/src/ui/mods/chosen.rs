@@ -422,7 +422,7 @@ impl DetailsView {
             put(&say!("Activate"))
         };
         let (open, page) = (put(&say!("Open folder")), put(&say!("Workshop page")));
-        // As Qt counts it: the Workshop button's room even when it is not shown.
+        // The Workshop button's room counts even when it is not shown.
         let full = |text: &str| {
             measure(window, theme, text, theme.small(), FontWeight::NORMAL)
                 + theme.icon()

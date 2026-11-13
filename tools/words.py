@@ -4,8 +4,7 @@
 Run after adding or changing a text:  tools/words.py
 It writes crates/app/assets/words.json, the list a translation starts from.
 A text already listed stays listed: some are put in words from a value
-(a category's or a colour's name), and the parts Qt had that are not drawn
-yet keep their translations.
+(a category's or a colour's name).
 """
 import glob, json, os, re
 

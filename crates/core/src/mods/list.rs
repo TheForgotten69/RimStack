@@ -230,14 +230,6 @@ pub enum Row {
     },
 }
 
-/// After `Inserted` or `Removed`, the header at `first - 1` also changed.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Change {
-    Reset,
-    Inserted { first: usize, count: usize },
-    Removed { first: usize, count: usize },
-}
-
 pub fn runs(mods: &[Mod]) -> usize {
     let changes = mods.windows(2).filter(|w| w[0].category != w[1].category);
     changes.count() + usize::from(!mods.is_empty())
@@ -498,36 +490,11 @@ impl GroupedList {
         self.rebuild();
     }
 
-    /// Qt must be told which rows go or come before the change.
-    pub fn toggling(&self, category: Category) -> Change {
-        if self.mods.iter().any(|m| !m.sub.is_empty()) {
-            return Change::Reset;
-        }
-        let mut headers = self.rows.iter().enumerate().filter_map(|(row, r)| match r {
-            Row::Header {
-                category: c, count, ..
-            } if *c == category => Some((row, *count)),
-            _ => None,
-        });
-        match (headers.next(), headers.next()) {
-            (Some((row, count)), None) if count > 0 => {
-                let first = row + 1;
-                match self.collapsed.contains(&category) {
-                    true => Change::Inserted { first, count },
-                    false => Change::Removed { first, count },
-                }
-            }
-            _ => Change::Reset,
-        }
-    }
-
-    pub fn toggle(&mut self, category: Category) -> Change {
-        let change = self.toggling(category);
+    pub fn toggle(&mut self, category: Category) {
         if !self.collapsed.remove(&category) {
             self.collapsed.insert(category);
         }
         self.rebuild();
-        change
     }
 
     pub fn move_mod(&mut self, from: usize, to: usize) {

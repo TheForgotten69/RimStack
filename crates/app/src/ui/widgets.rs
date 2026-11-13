@@ -9,8 +9,8 @@ pub trait TextSized: Styled + Sized {
         self.text_size(size).line_height(theme.line(size))
     }
 
-    /// A text whose lines are `factor` times as tall, as Qt's `lineHeight` makes them: Qt puts the
-    /// added room under each line, GPUI half above it, so the text is raised by that half.
+    /// A text whose lines are `factor` times as tall, the added room under each line: GPUI puts
+    /// half of it above, so the text is raised by that half.
     fn spaced_text(self, theme: &Theme, size: Pixels, factor: f32) -> Self {
         let half = theme.line(size) * (factor - 1.) / 2.;
         self.text_size(size)
@@ -65,7 +65,7 @@ pub fn halo(tone: Hsla, corner: Pixels) -> impl Iterator<Item = AnyElement> {
 
 pub use super::button::{Btn, Chip};
 
-/// `text` that may break between any two characters, as Qt's `Text.WrapAnywhere`: a path has
+/// `text` that may break between any two characters: a path has
 /// few places a line may break otherwise. The zero-width spaces between them draw nothing.
 pub fn breakable(text: &str) -> String {
     let mut out = String::with_capacity(text.len() * 4);
@@ -147,8 +147,8 @@ pub fn measure_in(
 /// Where `text` has a symbol (U+2100 to U+2BFF: arrows, operators, shapes) the family lacks at
 /// `weight`. cosmic-text takes a fallback face only at the very weight asked, and the fonts
 /// holding symbols (DejaVu Sans) have no medium or semibold face, so such a symbol would come
-/// from an unrelated font; drawn at the normal weight it comes from the face fontconfig, and Qt,
-/// take. Scripts keep their weight: their fallbacks (Noto Sans CJK) have one.
+/// from an unrelated font; drawn at the normal weight it comes from the face fontconfig
+/// takes. Scripts keep their weight: their fallbacks (Noto Sans CJK) have one.
 fn lacking(
     window: &Window,
     family: &SharedString,

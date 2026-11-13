@@ -23,7 +23,6 @@ impl Mods {
             true => put(&say!("Pin")),
             false => put(&say!("Hide")),
         };
-        // Qt's RowLayout gives its empty filler a gap too.
         let fresh = (self.reads.fresh > 0).then(|| put(&say!("{} new", count(self.reads.fresh))));
         let named = measure(window, theme, &title, theme.heading(), FontWeight::BOLD)
             + theme::GAP * 2.

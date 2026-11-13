@@ -4,7 +4,6 @@ use crate::App;
 use gpui::{AppContext, HeadlessAppContext, Pixels, Size, size};
 use std::sync::Arc;
 
-/// Qt's checks went from 0.85 to 1.6.
 pub(crate) const TEXT_SIZES: [f32; 4] = [0.85, 1.0, 1.25, 1.6];
 /// Less than this is rounding, not a fault.
 const SLACK: f32 = 1.0;
