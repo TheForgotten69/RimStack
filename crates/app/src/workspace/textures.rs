@@ -4,7 +4,7 @@ use rimstack_core::base::error::Error;
 use rimstack_core::base::sentence::Sentence;
 use rimstack_core::base::sizes;
 use rimstack_core::mods::hidden::{self, Hidden};
-use rimstack_core::mods::library::{Library, ModId};
+use rimstack_core::mods::library::{Installed, Library, ModId};
 use rimstack_core::mods::{conflicts, ddsaudit, texdiff, textures};
 use rimstack_core::rimworld::engine::Engine;
 use rimstack_core::{said, say, say_n};
@@ -220,7 +220,7 @@ impl App {
         let manifest = self.texture_manifest();
         let skipped = self.skipped_textures();
         let active = self.active_now(library);
-        let all: Vec<_> = library.ids().collect();
+        let all: Vec<_> = library.loadable().collect();
         let rows = all
             .par_iter()
             .filter_map(|&(i, m)| {
@@ -281,13 +281,16 @@ impl App {
             .collect();
         let file = self.texture_manifest_file();
         let mut manifest = textures::Manifest::read(&file);
-        let total: usize = roots
-            .iter()
-            .map(|root| {
-                let counted = textures::summarize(root, &manifest);
-                counted.not_converted() + counted.out_of_date
-            })
-            .sum();
+        let total: usize = match remove {
+            true => 0,
+            false => roots
+                .iter()
+                .map(|root| {
+                    let counted = textures::summarize(root, &manifest);
+                    counted.not_converted() + counted.out_of_date
+                })
+                .sum(),
+        };
         let done = AtomicUsize::new(0);
         let mut failed = 0;
         for root in roots {
@@ -296,7 +299,11 @@ impl App {
             }
             let mut parts = textures::Parts::default();
             if remove {
+                let listed = manifest.made_in(root);
                 textures::remove(root, &mut manifest);
+                if manifest.made_in(root) == listed {
+                    continue;
+                }
             } else {
                 let converted = textures::convert(root, &mut manifest, stop, &|| {
                     let n = done.fetch_add(1, Ordering::Relaxed) + 1;
@@ -355,9 +362,8 @@ impl App {
         };
         let engine = library.engine();
         let active = self.active_keys(library);
-        library
-            .installed
-            .par_iter()
+        let mods: Vec<&Installed> = library.loadable().map(|(_, m)| m).collect();
+        mods.into_par_iter()
             .flat_map_iter(|m| {
                 let loaded = match engine {
                     Engine::Unity => Vec::new(),

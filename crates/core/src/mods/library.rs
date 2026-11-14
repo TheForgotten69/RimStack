@@ -34,6 +34,9 @@ pub struct Installed {
     pub git: bool,
     /// When its folder was made, in seconds since 1970: where the system records it.
     pub created: Option<u64>,
+    /// A Workshop folder without an About.xml, as Steam can leave one it unsubscribed from.
+    /// The game skips it.
+    pub leftover: bool,
 }
 
 impl Installed {
@@ -131,7 +134,9 @@ fn created(path: &Path) -> Option<u64> {
 }
 
 fn read_mod(path: PathBuf, source: Source) -> Installed {
-    let about = match about::locate(&path) {
+    let located = about::locate(&path);
+    let leftover = located.is_none() && source == Source::Workshop;
+    let about = match located {
         None => Err(Error::format(said!("no About.xml"))),
         Some(file) => std::fs::read(&file)
             .map_err(|e| Error::file(&file, e))
@@ -148,6 +153,7 @@ fn read_mod(path: PathBuf, source: Source) -> Installed {
         preview: about::preview(&path),
         git: path.join(".git").exists(),
         created: created(&path),
+        leftover,
         about,
         source,
         path,
@@ -336,6 +342,7 @@ fn row(m: &Installed, id: String, category: Category, installed: ModId) -> Mod {
         local: m.source == Source::Local,
         workshop: m.source == Source::Workshop,
         git: m.git,
+        leftover: m.leftover,
         code: m.kinds.assemblies,
         patched: m.code.aims.iter().map(patched).collect(),
         sub: String::new(),
@@ -392,8 +399,13 @@ impl Library {
         found.into_iter().take(most).map(|f| f.3).collect()
     }
 
+    /// Every installed mod but the leftovers.
+    pub fn loadable(&self) -> impl Iterator<Item = (ModId, &Installed)> {
+        self.ids().filter(|(_, m)| !m.leftover)
+    }
+
     pub fn workshop_mods(&self) -> HashMap<&str, ModId> {
-        self.ids()
+        self.loadable()
             .filter(|(_, m)| m.source == Source::Workshop)
             .map(|(i, m)| (m.folder.as_str(), i))
             .collect()
@@ -433,6 +445,7 @@ impl Library {
                         local: false,
                         workshop: false,
                         git: false,
+                        leftover: false,
                         code: false,
                         patched: Default::default(),
                         sub: String::new(),

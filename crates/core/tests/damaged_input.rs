@@ -150,6 +150,7 @@ fn a_mod(name: &str, category: Category) -> Mod {
         local: false,
         workshop: false,
         git: false,
+        leftover: false,
         code: false,
         patched: std::sync::Arc::from(Vec::<String>::new()),
         sub: String::new(),

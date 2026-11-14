@@ -52,6 +52,7 @@ pub fn generate(count: usize) -> Vec<Mod> {
                 local: false,
                 workshop: false,
                 git: false,
+                leftover: false,
                 code: false,
                 patched: Default::default(),
                 sub: String::new(),

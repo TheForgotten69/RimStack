@@ -96,8 +96,8 @@ fn installed_in(library: &Library) -> impl Iterator<Item = String> + '_ {
         _ => false,
     };
     library
-        .installed
-        .iter()
+        .loadable()
+        .map(|(_, m)| m)
         .filter(move |m| ours(m.source, &m.folder))
         .map(|m| m.folder.clone())
 }

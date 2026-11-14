@@ -93,6 +93,8 @@ pub struct Mod {
     pub local: bool,
     pub workshop: bool,
     pub git: bool,
+    /// Left out of the list unless the filter asks for it with `is:leftover`.
+    pub leftover: bool,
     pub code: bool,
     /// Lower case `type.method`.
     pub patched: std::sync::Arc<[String]>,
@@ -544,7 +546,18 @@ impl GroupedList {
         Some(m)
     }
 
+    fn listed(&self, index: usize) -> bool {
+        !self.mods[index].leftover || self.filter.leftover
+    }
+
+    pub fn counted(&self) -> usize {
+        self.mods.iter().filter(|m| !m.leftover).count()
+    }
+
     fn matches(&self, index: usize) -> bool {
+        if !self.listed(index) {
+            return false;
+        }
         let flags = self.flags.get(index).copied().unwrap_or(0);
         let facts = self.mods[index]
             .installed
@@ -561,7 +574,7 @@ impl GroupedList {
 
     fn shows(&self, index: usize) -> bool {
         match self.unmatched {
-            true => self.left_out == LeftOut::Dimmed,
+            true => self.left_out == LeftOut::Dimmed && self.listed(index),
             false => self.matches(index),
         }
     }

@@ -83,6 +83,24 @@ impl App {
         })
     }
 
+    pub fn unsubscribe(&self, id: ModId) -> Done {
+        let Some(workshop) = self.workshop_id(id) else {
+            return Done::told(Err(Error::refused(said!("Not a Workshop mod"))));
+        };
+        self.take_back_own_files(id);
+        self.ask_steam(SteamAsk::Unsubscribe, &[workshop])
+    }
+
+    /// The DDS files RimStack made are deleted and the textures it set aside put back, so the
+    /// folder holds only what the mod shipped.
+    fn take_back_own_files(&self, id: ModId) {
+        let never = std::sync::atomic::AtomicBool::new(false);
+        self.convert_textures(&[id], true, &never, &|_| {});
+        if let Err(problem) = self.unhide_mod(id) {
+            rimstack_core::problem!("{problem}");
+        }
+    }
+
     pub fn update_checkout(&self, id: ModId) -> Done {
         let (folder, name) = match self.mod_folder(id) {
             Ok(found) => found,
@@ -244,8 +262,10 @@ impl App {
 mod tests {
     use crate::workspace::tests::installed;
     use rimstack_core::base::error::Kind;
+    use rimstack_core::mods::hidden::Hidden;
     use rimstack_core::mods::library::ModId;
     use std::fs;
+    use std::sync::atomic::AtomicBool;
 
     #[test]
     fn a_local_mod_is_not_downloaded_again_and_a_gone_one_is_not_updated() {
@@ -261,6 +281,34 @@ mod tests {
         assert_eq!(gone.note.unwrap_err().kind(), Kind::Refused);
         let not_git = app.update_checkout(roads);
         assert!(not_git.note.is_err() && !not_git.wrote);
+    }
+
+    #[test]
+    fn before_unsubscribing_only_what_rimstack_added_is_taken_back() {
+        let (tmp, app) = installed();
+        let textures = tmp.path().join("game/Mods/roads/Textures");
+        fs::create_dir_all(&textures).unwrap();
+        image::RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255]))
+            .save(textures.join("road.png"))
+            .unwrap();
+        fs::write(textures.join("own.dds"), "the author's own").unwrap();
+        fs::write(textures.join("rock.png"), "set aside").unwrap();
+        let mut hidden = Hidden::read(&app.hidden_file());
+        hidden.hide(&textures.join("rock.png")).unwrap();
+        hidden.write(&app.hidden_file()).unwrap();
+        let id = app.texture_rows().rows[0].id;
+        let stop = AtomicBool::new(false);
+        app.convert_textures(&[id], false, &stop, &|_| {});
+        assert!(textures.join("road.dds").exists());
+
+        app.take_back_own_files(id);
+
+        let mut left: Vec<String> = fs::read_dir(&textures)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        left.sort();
+        assert_eq!(left, ["own.dds", "road.png", "rock.png"]);
     }
 
     #[test]

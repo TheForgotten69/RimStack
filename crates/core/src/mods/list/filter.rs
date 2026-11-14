@@ -16,6 +16,7 @@ pub(super) struct Filter {
     local: bool,
     workshop: bool,
     git: bool,
+    pub(super) leftover: bool,
     code: bool,
     patches: Vec<String>,
     has: Vec<Has>,
@@ -53,6 +54,7 @@ impl Filter {
             Some(("is", "local")) => self.local = true,
             Some(("is", "workshop")) => self.workshop = true,
             Some(("is", "git")) => self.git = true,
+            Some(("is", "leftover")) => self.leftover = true,
             Some(("is", "active")) => self.ask(Side::Active),
             Some(("is", "inactive")) => self.ask(Side::Inactive),
             Some(("has", "code")) => self.code = true,
@@ -141,6 +143,7 @@ impl Filter {
             && (!self.local || m.local)
             && (!self.workshop || m.workshop)
             && (!self.git || m.git)
+            && (!self.leftover || m.leftover)
             && (!self.code || m.code)
             && self
                 .patches
@@ -209,6 +212,24 @@ mod tests {
         assert_eq!(names(&list), ["Harmony", "HugsLib", "Rimefeller"]);
         list.set_filter("version:1.6 dub");
         assert_eq!(names(&list), ["Rimefeller"]);
+    }
+
+    #[test]
+    fn a_leftover_is_listed_only_while_the_filter_asks_for_it() {
+        let mut mods = sample().mods().to_vec();
+        mods[2].leftover = true;
+        let mut list = GroupedList::flat(mods);
+        assert_eq!((shown(&list), list.counted()), (5, 5));
+        list.set_filter("is:leftover");
+        assert_eq!(
+            (names(&list), list.counted()),
+            (vec!["Royalty".to_string()], 5)
+        );
+        list.set_filter("!is:leftover");
+        assert_eq!(shown(&list), 5);
+        list.set_filter("nothing-matches");
+        list.set_left_out(LeftOut::Dimmed);
+        assert_eq!(shown(&list), 5);
     }
 
     #[test]

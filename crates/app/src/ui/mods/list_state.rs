@@ -44,7 +44,7 @@ impl ListState {
     }
 
     pub fn count(&self, side: Side) -> usize {
-        self.order.list(side).mods().len()
+        self.order.list(side).counted()
     }
 
     pub fn matching(&self, side: Side) -> usize {

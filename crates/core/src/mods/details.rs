@@ -211,6 +211,7 @@ mod tests {
             local: false,
             workshop: false,
             git: false,
+            leftover: false,
             code: false,
             patched: Default::default(),
             sub: String::new(),

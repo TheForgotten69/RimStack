@@ -294,8 +294,13 @@ impl Downloads {
     }
 
     pub fn unsubscribe(&mut self, mod_id: ModId, cx: &mut Context<Self>) {
-        let workshop = crate::ui::app(cx).workshop_id(mod_id);
-        self.ask_steam(SteamAsk::Unsubscribe, workshop.into_iter().collect(), cx);
+        let app = crate::ui::app(cx);
+        self.task(
+            say!("Asking Steam…"),
+            None,
+            move || app.unsubscribe(mod_id),
+            cx,
+        );
     }
 
     pub fn subscribe(&mut self, workshop_id: String, cx: &mut Context<Self>) {
