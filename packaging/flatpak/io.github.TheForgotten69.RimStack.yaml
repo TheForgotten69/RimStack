@@ -1,5 +1,5 @@
-# RimStack as a Flatpak: built from the source in this repository against the Qt
-# in the KDE runtime, so it runs on any distribution with Flatpak, on the
+# RimStack as a Flatpak: built from the source in this repository on the
+# freedesktop runtime, so it runs on any distribution with Flatpak, on the
 # runtime's own libraries.
 #
 #   flatpak-builder --user --install --force-clean build-dir \
@@ -11,9 +11,9 @@
 # network. It is not kept: packaging/flatpak/generated-sources.sh writes it from
 # Cargo.lock, and this file's build reads it from there.
 app-id: io.github.TheForgotten69.RimStack
-runtime: org.kde.Platform
-runtime-version: '6.11'
-sdk: org.kde.Sdk
+runtime: org.freedesktop.Platform
+runtime-version: '26.08'
+sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
 command: rimstack
@@ -23,7 +23,7 @@ command: rimstack
 add-extensions:
   org.freedesktop.Platform.Compat.i386:
     directory: lib/i386-linux-gnu
-    version: '25.08'
+    version: '26.08'
 
 finish-args:
   # A window of its own on the desktop's compositor, drawn by the GPU.

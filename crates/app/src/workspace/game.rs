@@ -39,7 +39,7 @@ impl App {
     pub fn game_running(&self) -> bool {
         let paths = self.paths();
         let game = paths.game.as_deref();
-        game.is_some_and(rimstack_core::sources::maintenance::game_running)
+        game.is_some_and(|game| rimstack_core::sources::maintenance::game_running(game, &self.home))
     }
 
     /// Slow: copies the newest save. Never run it on the window's thread.
