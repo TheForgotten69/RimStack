@@ -5,7 +5,7 @@ use crate::said;
 use std::path::{Path, PathBuf};
 
 use crate::rimworld::paths::APP_ID as GAME;
-use crate::rimworld::workshop::is_id;
+use crate::rimworld::workshop::{Version, installed_versions, is_id};
 
 /// None on macOS, where it is not run.
 pub fn steamcmd(data_dir: &Path) -> Option<PathBuf> {
@@ -139,6 +139,15 @@ impl Fetched {
             Some((_, outcome)) => outcome.as_deref().map_err(Clone::clone),
             None => Err(Error::refused(said!("nothing was asked"))),
         }
+    }
+
+    /// What SteamCMD recorded of each item it downloaded in this run.
+    pub fn versions(&self) -> std::collections::HashMap<String, Version> {
+        let record = self.attempt.as_ref().and_then(|attempt| {
+            let acf = attempt.join(format!("steamapps/workshop/appworkshop_{GAME}.acf"));
+            std::fs::read_to_string(acf).ok()
+        });
+        record.map_or_else(Default::default, |acf| installed_versions(&acf))
     }
 }
 
@@ -627,11 +636,20 @@ mod tests {
         let fake = fake_steamcmd(
             tmp.path(),
             "mkdir -p \"$content/123/About\"\n\
+             printf '\"WorkshopItemsInstalled\" { \"123\" { \"timeupdated\" \"44\" \"manifest\" \"55\" } }' \
+             > \"$dir/steamapps/workshop/appworkshop_294100.acf\"\n\
              printf '\\x1b[0mSuccess. Downloaded item 123 to \"%s/123\" (8296511 bytes) Downloading item 4 ...\\n' \"$content\"",
         );
         let all = fetch_all(&fake, &["123".to_string()], &scratch);
         let fresh = all.items[0].1.as_ref().unwrap().clone();
         assert!(fresh.join("About").is_dir());
+        assert_eq!(
+            all.versions()["123"],
+            Version {
+                manifest: 55,
+                updated: 44
+            }
+        );
         assert!(!fresh.starts_with(scratch.join("steamapps")));
         assert!(fresh.starts_with(&scratch));
         assert!(!stale.exists());

@@ -6,11 +6,14 @@ use rimstack_core::base::sentence::Sentence;
 use rimstack_core::kept::settings::Switch;
 use rimstack_core::kept::updates::{self, LastCheck, Remote};
 use rimstack_core::mods::library::{Installed, Library, ModId};
-use rimstack_core::rimworld::{paths::Source, workshop};
-use rimstack_core::sources::downloads::{self, Asked, Behind, Replaceable, Repository};
+use rimstack_core::rimworld::paths::Source;
+use rimstack_core::rimworld::workshop::{self, Version};
+use rimstack_core::sources::downloads::{
+    self, Asked, Behind, Named, OnDisk, Origin, Replaceable, Repository,
+};
 use rimstack_core::{say, say_n};
 use serde::Serialize;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 #[derive(Serialize, Clone)]
@@ -80,8 +83,31 @@ pub struct Updates {
     pub asked: Option<u64>,
     pub answered: usize,
     pub items: Vec<Behind>,
+    /// The copies RimStack downloaded whose last update failed, held back until Steam offers
+    /// another version.
+    pub refused: HashMap<String, Sentence>,
+    pub untracked: Vec<Named>,
+    pub unanswered: Vec<Named>,
     pub checkouts: Vec<Checkout>,
     pub problem: Option<Sentence>,
+}
+
+impl Updates {
+    pub fn by_steam(&self) -> impl Iterator<Item = &Behind> {
+        self.items.iter().filter(|row| row.origin == Origin::Steam)
+    }
+
+    pub fn by_steamcmd(&self) -> impl Iterator<Item = &Behind> {
+        self.items.iter().filter(|row| row.origin != Origin::Steam)
+    }
+
+    /// The copies RimStack downloaded that may be updated without asking: those that did not
+    /// just fail.
+    pub fn copies_by_itself(&self) -> impl Iterator<Item = &Behind> {
+        let ours = |row: &&Behind| row.origin == Origin::SteamCmd;
+        let held = |row: &&Behind| self.refused.contains_key(&row.id);
+        self.items.iter().filter(ours).filter(move |row| !held(row))
+    }
 }
 
 #[derive(Serialize)]
@@ -90,6 +116,7 @@ pub struct BehindShown<'a> {
     #[serde(flatten)]
     pub row: &'a Behind,
     pub asked: bool,
+    pub refused: Option<&'a Sentence>,
 }
 
 #[derive(Serialize)]
@@ -101,6 +128,8 @@ pub struct UpdatesShown<'a> {
     pub count: usize,
     pub active: Vec<BehindShown<'a>>,
     pub inactive: Vec<BehindShown<'a>>,
+    pub untracked: &'a [Named],
+    pub unanswered: &'a [Named],
     pub checkouts: Vec<CheckoutShown<'a>>,
     pub checkouts_failed: Vec<CheckoutShown<'a>>,
     pub checkouts_due: Vec<CheckoutShown<'a>>,
@@ -112,7 +141,8 @@ pub fn updates_shown<'a>(updates: &'a Updates, asked: &HashSet<String>) -> Updat
         let rows = updates.items.iter().filter(move |row| row.active == active);
         rows.map(|row| BehindShown {
             row,
-            asked: asked.contains(&row.id),
+            asked: row.origin == Origin::Steam && asked.contains(&row.id),
+            refused: updates.refused.get(&row.id),
         })
         .collect()
     };
@@ -133,6 +163,8 @@ pub fn updates_shown<'a>(updates: &'a Updates, asked: &HashSet<String>) -> Updat
         count: updates.items.len(),
         active: shown(true),
         inactive: shown(false),
+        untracked: &updates.untracked,
+        unanswered: &updates.unanswered,
         checkouts: updates.checkouts.iter().map(CheckoutShown::of).collect(),
         checkouts_failed: checkouts(&Checkout::failed),
         checkouts_due: checkouts(&Checkout::due),
@@ -175,17 +207,18 @@ impl App {
         let loaded = self.library();
         let (library, _) = loaded.as_ref().as_ref().map_err(Clone::clone)?;
         let mut kept = self.last_check();
-        let ids: Vec<String> = library
+        let in_steam = library
             .workshop_mods()
             .into_keys()
-            .filter(|folder| workshop::is_id(folder))
-            .map(str::to_string)
+            .filter(|f| workshop::is_id(f));
+        let copies = library.loadable().filter(|(_, m)| downloads::is_copy(m));
+        let ids: BTreeSet<&str> = in_steam
+            .chain(copies.map(|(_, m)| m.folder.as_str()))
             .collect();
+        let ids: Vec<String> = ids.into_iter().map(str::to_string).collect();
         let problem = match workshop::fetch_details(&ids) {
             Ok(now) => {
-                kept.checked = Some(super::now_secs());
-                kept.asked = Some(ids.len() as u64);
-                kept.now = now.iter().map(|d| (d.id.clone(), d.updated)).collect();
+                kept.answered(&ids, &now, super::now_secs());
                 None
             }
             Err(problem) => Some(problem.sentence().clone()),
@@ -228,20 +261,41 @@ impl App {
         self.keep_check(&kept);
     }
 
-    fn updates_of(&self, library: &Library, kept: &LastCheck) -> Updates {
-        let on_disk = &self.steam_record().0;
-        let now: HashMap<String, u64> = kept.now.clone().into_iter().collect();
+    pub(super) fn updates_of(&self, library: &Library, kept: &LastCheck) -> Updates {
+        let record = self.steam_record();
+        let in_steam = |(id, &updated): (&String, &u64)| {
+            let manifest = record.manifests.get(id).copied().unwrap_or(0);
+            (id.clone(), (Version { manifest, updated }, Origin::Steam))
+        };
+        let in_steam: OnDisk = record.times.iter().map(in_steam).collect();
+        let kept_copies = self.copies();
+        let known = self.copies_known(library, &kept_copies);
+        let now = kept.offered();
         let active = self.active_now(library);
-        let items = downloads::items(library, &active);
-        let behind = downloads::behind(&items, on_disk, &now);
+        let (items, copies) = (
+            downloads::items(library, &active),
+            downloads::copies(library, &active),
+        );
+        let behind = downloads::behind(&[(&items, &in_steam), (&copies, &known)], &now);
         if kept.checked.is_some() {
             *self.behind().writing() = Some(behind.iter().map(|row| row.id.clone()).collect());
         }
+        let refused = behind
+            .iter()
+            .filter(|row| row.origin == Origin::SteamCmd)
+            .filter_map(|row| {
+                let why = kept_copies.held_back(&row.id, row.offered)?;
+                Some((row.id.clone(), Sentence::from_kept(why)))
+            })
+            .collect();
         Updates {
             checked: kept.checked,
             asked: kept.asked,
             answered: now.len(),
             items: behind,
+            refused,
+            untracked: downloads::untracked(&copies, &known, &kept.unanswered),
+            unanswered: downloads::unanswered([&items, &copies], &kept.unanswered),
             checkouts: self.checkouts_of(library, &kept.checkouts),
             problem: None,
         }

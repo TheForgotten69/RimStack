@@ -131,7 +131,7 @@ impl Settings {
         let auto = report.auto_updates;
         rows.push(Row::Line(
             Line::new(0, "auto-updates", put(&say!("Update by themselves")))
-                .tip(put(&say!("Steam is asked about the installed Workshop mods (only their Workshop ids are sent) and Git about each checkout, as often as chosen. Steam then downloads the newer versions, and each checkout with no local changes is updated, except while the game runs.")))
+                .tip(put(&say!("Steam is asked about the installed Workshop mods and the mods SteamCMD put in the game's Mods folder (only their Workshop ids are sent) and Git about each checkout, as often as chosen. Steam then downloads the newer versions, SteamCMD downloads again the mods RimStack downloaded with it, and each checkout with no local changes is updated, except while the game runs.")))
                 .changed(auto, |s, _, cx| s.keep("autoUpdates", "off", cx))
                 .held(Toggle::new("auto-updates-toggle", auto, put(&say!("Update by themselves"))).on_flip(act(cx, |s, on: bool, _, cx| s.keep("autoUpdates", if on { "on" } else { "off" }, cx))))
                 .filled(),

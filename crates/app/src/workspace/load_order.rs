@@ -89,7 +89,7 @@ fn arranged(app: &App, library: &Library) -> rimstack_core::mods::library::Arran
     }
     let notes = app.notes().reading();
     let steam_record = app.steam_record();
-    let (times, sizes) = &*steam_record;
+    let (times, sizes) = (&steam_record.times, &steam_record.sizes);
     for m in now.active.iter_mut().chain(now.inactive.iter_mut()) {
         let installed = m.installed.and_then(|i| library.get(i));
         if let Some(i) = installed.filter(|i| i.source == Source::Workshop) {
@@ -490,7 +490,9 @@ impl LoadOrder {
                     flag::NOT_IN_SAVE,
                 ),
                 (
-                    folder.is_some_and(|f| steam_record.0.get(f).is_some_and(|at| *at >= week_ago)),
+                    folder.is_some_and(|f| {
+                        steam_record.times.get(f).is_some_and(|at| *at >= week_ago)
+                    }),
                     flag::RECENT,
                 ),
                 (copies.get(&key).is_some_and(|n| *n > 1), flag::DUPLICATE),

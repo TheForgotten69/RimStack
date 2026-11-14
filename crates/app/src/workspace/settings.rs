@@ -119,10 +119,7 @@ impl App {
     }
 
     fn rimsort_rules_file(&self) -> PathBuf {
-        self.data_dir()
-            .with_file_name("RimSort")
-            .join("dbs")
-            .join("userRules.json")
+        self.rimsort_dir().join("dbs").join("userRules.json")
     }
 
     pub fn keep_setting(&self, name: &str, value: &str) -> Result<(), Error> {

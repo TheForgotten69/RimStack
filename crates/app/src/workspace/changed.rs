@@ -127,7 +127,7 @@ impl App {
     pub fn record_versions(&self) {
         let record = AtLaunch {
             time: super::now_secs(),
-            workshop: self.steam_record().0.clone(),
+            workshop: self.steam_record().times.clone(),
         };
         if let Err(problem) = record.write(&self.at_launch_file()) {
             rimstack_core::problem!("{problem}");
@@ -139,7 +139,7 @@ impl App {
         let Ok((library, _)) = &*loaded else {
             return SinceLaunch::default();
         };
-        let now = &self.steam_record().0;
+        let now = &self.steam_record().times;
         let launched = launches::read(&self.launches_file()).pop().map(|l| l.time);
         let logged = Some(self.log_written() / 1000).filter(|&t| t > 0);
         let record = AtLaunch::read(&self.at_launch_file());

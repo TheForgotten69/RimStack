@@ -8,4 +8,5 @@ pub mod redownload;
 pub mod release;
 pub mod rentry;
 pub mod replacements;
+pub mod rimsort_steamcmd;
 pub mod sweep;

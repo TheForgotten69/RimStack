@@ -84,10 +84,12 @@ impl Install {
             let file = self.paths.steam_record();
             let record = file.and_then(|file| std::fs::read_to_string(file).ok());
             let record = record.unwrap_or_default();
-            Arc::new((
-                rimstack_core::rimworld::workshop::installed_times(&record),
-                rimstack_core::rimworld::workshop::installed_sizes(&record),
-            ))
+            use rimstack_core::rimworld::workshop;
+            Arc::new(SteamRecord {
+                times: workshop::installed_times(&record),
+                sizes: workshop::installed_sizes(&record),
+                manifests: workshop::installed_manifests(&record),
+            })
         };
         once(&self.steam_record, "Steam's record of the mods", read).clone()
     }

@@ -12,6 +12,7 @@ use gpui::{
     AnyElement, Context, FontWeight, IntoElement, ParentElement, Pixels, Render, Styled, Window,
     canvas, div, fill, point, prelude::FluentBuilder, size,
 };
+use rimstack_core::sources::downloads::Origin;
 use rimstack_core::{say, say_n};
 
 const FIRST_INACTIVE: usize = 3;
@@ -66,7 +67,7 @@ impl Downloads {
             return None;
         }
         let said = put(&say!(
-            "Steam is asked about the installed Workshop mods (only their Workshop ids are sent) and Git about each checkout, as often as chosen. Steam then downloads the newer versions, and each checkout with no local changes is updated, except while the game runs."
+            "Steam is asked about the installed Workshop mods and the mods SteamCMD put in the game's Mods folder (only their Workshop ids are sent) and Git about each checkout, as often as chosen. Steam then downloads the newer versions, SteamCMD downloads again the mods RimStack downloaded with it, and each checkout with no local changes is updated, except while the game runs."
         ));
         Some(
             div()
@@ -181,8 +182,8 @@ impl Downloads {
             .child(
                 Btn::new("check-now", put(&say!("Check now")))
                     .tip(match self.report.git_for_workshop {
-                        true => put(&say!("Asks Steam for the current version of each installed Workshop mod (only their Workshop ids are sent), and Git for new commits on each checkout in the game's Mods folder and in the Workshop folder.")),
-                        false => put(&say!("Asks Steam for the current version of each installed Workshop mod (only their Workshop ids are sent), and Git for new commits on each checkout in the game's Mods folder.")),
+                        true => put(&say!("Asks Steam for the current version of each installed Workshop mod and of each SteamCMD download in the game's Mods folder (only their Workshop ids are sent), and Git for new commits on each checkout in the game's Mods folder and in the Workshop folder.")),
+                        false => put(&say!("Asks Steam for the current version of each installed Workshop mod and of each SteamCMD download in the game's Mods folder (only their Workshop ids are sent), and Git for new commits on each checkout in the game's Mods folder.")),
                     })
                     .icon("refresh-cw")
                     .primary_if(shown.checked.is_none())
@@ -223,13 +224,24 @@ impl Downloads {
             .flex()
             .items_center()
             .gap(theme::GAP_LARGE)
-            .child(icon("cloud", theme.icon(), c.ink3))
+            .child(match row.origin {
+                Origin::Steam => icon("cloud", theme.icon(), c.ink3),
+                Origin::SteamCmd | Origin::Linked => icon("package", theme.icon(), c.ink3),
+            })
             .child(text_fill(theme, theme.body(), c.ink, row.name.clone()))
             .when(shown.asked, |d| {
                 d.child(
                     Chip::new(put(&say!("Sent to Steam")))
                         .tone(c.ok)
                         .icon("check"),
+                )
+            })
+            .when_some(shown.refused, |d, why| {
+                d.child(
+                    Chip::new(put(&say!("Not updated")))
+                        .tone(c.err)
+                        .icon("circle-alert")
+                        .tip(put(why)),
                 )
             })
             .child(
@@ -359,20 +371,33 @@ impl Downloads {
                 true => put(&say!("Asking Steam…")),
                 false => put(&say!("{} for active mods", shown.active.len())),
             };
-            let update = put(&say!("Update in Steam"));
-            let action = Btn::new("update-in-steam", update.clone())
-                .tip(put(&say!("Steam must be running. It downloads the newer version of each now; otherwise it does so the next time it starts.")))
-                .icon("download")
-                .primary_if(!shown.active.is_empty())
-                .enabled(!self.tasks.running)
-                .on_click(cx.listener(|downloads, _, _, cx| downloads.update_in_steam(cx)));
-            let actions = match shown.count > 0 {
-                true => (
-                    vec![action.into_any_element()],
-                    btn_width(window, theme, &update, true, false),
-                ),
-                false => (Vec::new(), Pixels::ZERO),
-            };
+            let mut actions: (Vec<AnyElement>, Pixels) = (Vec::new(), Pixels::ZERO);
+            let by_steam = self.updates.by_steam().next().is_some();
+            if by_steam {
+                let update = put(&say!("Update in Steam"));
+                actions.1 += btn_width(window, theme, &update, true, false);
+                let action = Btn::new("update-in-steam", update)
+                    .tip(put(&say!("Steam must be running. It downloads the newer version of each now; otherwise it does so the next time it starts.")))
+                    .icon("download")
+                    .primary_if(shown.active.iter().any(|row| row.row.origin == Origin::Steam))
+                    .enabled(!self.tasks.running)
+                    .on_click(cx.listener(|downloads, _, _, cx| downloads.update_in_steam(cx)));
+                actions.0.push(action.into_any_element());
+            }
+            if self.updates.by_steamcmd().next().is_some() {
+                let update = put(&say!("Update with SteamCMD"));
+                actions.1 += btn_width(window, theme, &update, true, false);
+                let action = Btn::new("update-with-steamcmd", update)
+                    .tip(put(&say!("For the mods SteamCMD put in the game's Mods folder: each is downloaded again and replaces its folder.")))
+                    .icon("download")
+                    .primary_if(!by_steam && !shown.active.is_empty())
+                    .enabled(self.steamcmd && !self.tasks.running)
+                    .on_click(cx.listener(|downloads, _, window, cx| downloads.ask_update_copies(window, cx)));
+                actions.0.push(action.into_any_element());
+            }
+            if actions.0.len() > 1 {
+                actions.1 += theme::GAP;
+            }
             let mut body: Vec<AnyElement> = shown
                 .active
                 .iter()
@@ -418,21 +443,18 @@ impl Downloads {
                         .map(|(at, row)| self.update_row(theme, ("inactive-update", at), row, cx)),
                 );
                 if shown.inactive.len() > FIRST_INACTIVE {
-                    let more = match self.inactive_open {
-                        true => put(&say!("Show {}", FIRST_INACTIVE)),
-                        false => put(&say!("{} more", shown.inactive.len() - FIRST_INACTIVE)),
-                    };
-                    body.push(
-                        div()
-                            .flex()
-                            .child(Btn::new("inactive-more", more).on_click(cx.listener(
-                                |d, _, _, cx| {
-                                    d.inactive_open = !d.inactive_open;
-                                    cx.notify();
-                                },
-                            )))
-                            .into_any_element(),
-                    );
+                    let (open, total) = (self.inactive_open, shown.inactive.len());
+                    body.push(super::more(
+                        "inactive-more",
+                        open,
+                        total,
+                        FIRST_INACTIVE,
+                        cx,
+                        |d, cx| {
+                            d.inactive_open = !d.inactive_open;
+                            cx.notify();
+                        },
+                    ));
                 }
             }
             let card = Card::new("newer", put(&say!("Newer versions")))
@@ -441,6 +463,7 @@ impl Downloads {
                 .body(body);
             cards.push(card.render(theme, Some((width, window))).into_any_element());
         }
+        cards.extend(self.copies_cards(theme, width, window, cx));
         cards.extend(self.changed_card(theme, width, window, cx));
         if !shown.checkouts.is_empty() {
             let rows: Vec<AnyElement> = shown

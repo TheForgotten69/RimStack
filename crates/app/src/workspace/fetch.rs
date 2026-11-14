@@ -12,7 +12,7 @@ pub struct Done {
 }
 
 impl Done {
-    fn told(note: Result<Sentence>) -> Self {
+    pub(super) fn told(note: Result<Sentence>) -> Self {
         Self { note, wrote: false }
     }
 
@@ -149,57 +149,26 @@ impl App {
     }
 
     pub fn download_listed(&self) -> Done {
-        let steamcmd = (*self.steamcmd()).clone();
-        let (steamcmd, local) = match (steamcmd, self.paths().local_mods()) {
-            _ if self.listed_ids().is_empty() => {
-                return Done::told(Err(Error::refused(said!("The download list is empty"))));
-            }
-            (Some(steamcmd), Some(local)) => (steamcmd, local),
-            (None, _) => {
-                return Done::told(Err(Error::refused(said!("SteamCMD is not installed"))));
-            }
-            (_, None) => {
-                return Done::told(Err(Error::refused(said!("The game's folder is not known"))));
-            }
-        };
+        if self.listed_ids().is_empty() {
+            return Done::told(Err(Error::refused(said!("The download list is empty"))));
+        }
+        if let Err(problem) = self.steamcmd_and_local() {
+            return Done::told(Err(problem));
+        }
         self.clear_list_failures();
         let ids = self.vet_list();
         if ids.is_empty() {
             return Done::told(Err(Self::nothing_to_ask()));
         }
-        let scratch = self.data_dir().join("steamcmd-downloads");
-        let fetched = redownload::fetch_all(&steamcmd, &ids, &scratch);
-        let outcomes: Vec<(String, Result<PathBuf>)> = fetched
-            .items
-            .iter()
-            .map(|(id, fresh)| {
-                let put = match fresh {
-                    Ok(fresh) => redownload::put_in_local(fresh, id, &local),
-                    Err(problem) => Err(problem.clone()),
-                };
-                (id.clone(), put)
-            })
-            .collect();
+        let outcomes = match self.fetch_into_local(&ids) {
+            Ok(outcomes) => outcomes,
+            Err(problem) => return Done::told(Err(problem)),
+        };
         self.apply_downloads(&outcomes);
-        let failed: Vec<&Error> = outcomes
-            .iter()
-            .filter_map(|(_, o)| o.as_ref().err())
-            .collect();
-        Done {
-            wrote: failed.len() < outcomes.len(),
-            note: match failed.first() {
-                None => Ok(say!("{} downloaded", outcomes.len())),
-                Some(first) => Err(Error::new(
-                    first.kind(),
-                    said!(
-                        "{} of {} not downloaded: {}",
-                        failed.len(),
-                        outcomes.len(),
-                        first.within()
-                    ),
-                )),
-            },
-        }
+        let n = outcomes.len();
+        super::copies::done_of(&outcomes, say!("{} downloaded", n), |failed, first| {
+            said!("{} of {} not downloaded: {}", failed, n, first.within())
+        })
     }
 
     fn nothing_to_ask() -> Error {
@@ -374,5 +343,10 @@ mod tests {
         let noted = fs::read_to_string(mod_folder.join("About/PublishedFileId.txt")).unwrap();
         assert_eq!(noted.trim(), TINY);
         assert!(app.listed_ids().is_empty());
+        let recorded = app.copies().get(TINY).unwrap().have;
+        assert!(
+            recorded.manifest != 0 && recorded.updated != 0,
+            "{recorded:?}"
+        );
     }
 }

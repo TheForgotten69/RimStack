@@ -16,6 +16,7 @@ use rimstack_core::base::waits::slow;
 
 pub mod browse;
 pub mod changed;
+mod copies;
 pub mod download_list;
 pub mod downloads;
 pub mod fetch;
@@ -62,7 +63,13 @@ pub struct Conflicts {
 
 pub type Loaded = Result<(library::Library, Duration), rimstack_core::base::error::Error>;
 
-pub type SteamRecord = (HashMap<String, u64>, HashMap<String, u64>);
+/// Steam's `appworkshop_294100.acf`, by Workshop id.
+#[derive(Default)]
+pub struct SteamRecord {
+    pub times: HashMap<String, u64>,
+    pub sizes: HashMap<String, u64>,
+    pub manifests: HashMap<String, u64>,
+}
 
 type Replacements = HashMap<String, rimstack_core::sources::replacements::Replacement>;
 
@@ -271,6 +278,10 @@ impl App {
     }
 
     /// `$XDG_DATA_HOME/RimStack` on Linux; the system's place elsewhere.
+    pub(crate) fn rimsort_dir(&self) -> PathBuf {
+        self.data_dir.with_file_name("RimSort")
+    }
+
     pub fn data_dir(&self) -> &Path {
         &self.data_dir
     }
@@ -623,8 +634,7 @@ impl App {
     pub fn replacements(&self) -> Arc<Replacements> {
         let own = rimstack_core::sources::replacements::file_in(&self.data_dir);
         let rimsort = self
-            .data_dir
-            .with_file_name("RimSort")
+            .rimsort_dir()
             .join("dbs/UseThisInstead/replacements.json.gz");
         let file = if own.is_file() { own } else { rimsort };
         self.replacements.get(written(file.clone()), || {

@@ -1,4 +1,5 @@
 mod changed;
+mod copies;
 pub mod list;
 mod screen;
 mod side;
@@ -96,6 +97,25 @@ pub struct Downloads {
     changed_keys: gpui::FocusHandle,
     changed_at: usize,
     changed_drawn: Rc<std::cell::RefCell<Vec<gpui::Bounds<gpui::Pixels>>>>,
+}
+
+/// The button under a list cut at `first`: the rest, or back to `first` once `open`.
+fn more(
+    id: impl Into<gpui::ElementId>,
+    open: bool,
+    total: usize,
+    first: usize,
+    cx: &mut Context<Downloads>,
+    toggle: impl Fn(&mut Downloads, &mut Context<Downloads>) + 'static,
+) -> gpui::AnyElement {
+    use gpui::{IntoElement, ParentElement, Styled};
+    let said = match open {
+        true => crate::words::put(&rimstack_core::say!("Show {}", first)),
+        false => crate::words::put(&rimstack_core::say!("{} more", total - first)),
+    };
+    let button =
+        super::widgets::Btn::new(id, said).on_click(cx.listener(move |d, _, _, cx| toggle(d, cx)));
+    gpui::div().flex().child(button).into_any_element()
 }
 
 fn to_get(

@@ -5,6 +5,7 @@ use crate::{said, say};
 
 use crate::base::vdf::{Token, tokens};
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -18,6 +19,40 @@ pub fn installed_times(acf: &str) -> HashMap<String, u64> {
 
 pub fn installed_sizes(acf: &str) -> HashMap<String, u64> {
     installed(acf, "size")
+}
+
+/// One upload of an item's files, as Steam numbers it: `manifest` is the `hcontent_file` its
+/// details give and the `manifest` an `appworkshop_294100.acf` records, 0 where neither says.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Version {
+    pub manifest: u64,
+    /// Seconds since 1970.
+    pub updated: u64,
+}
+
+impl Version {
+    /// By manifest where both are known, by time otherwise; a copy newer than the last answer
+    /// is not behind it.
+    pub fn behind(self, now: Version) -> bool {
+        match (self.manifest, now.manifest) {
+            (0, _) | (_, 0) => now.updated > self.updated,
+            (have, offered) => have != offered && now.updated >= self.updated,
+        }
+    }
+}
+
+pub fn installed_manifests(acf: &str) -> HashMap<String, u64> {
+    installed(acf, "manifest")
+}
+
+pub fn installed_versions(acf: &str) -> HashMap<String, Version> {
+    let manifests = installed_manifests(acf);
+    let version = |(id, updated): (String, u64)| {
+        let manifest = manifests.get(&id).copied().unwrap_or(0);
+        (id, Version { manifest, updated })
+    };
+    installed_times(acf).into_iter().map(version).collect()
 }
 
 fn installed(acf: &str, fact: &str) -> HashMap<String, u64> {
@@ -84,6 +119,8 @@ pub struct Details {
     pub title: String,
     /// Seconds since 1970.
     pub updated: u64,
+    /// Its `hcontent_file`; 0 when Steam does not say.
+    pub manifest: u64,
     /// Seconds since 1970; 0 when Steam does not say.
     pub created: u64,
     /// 0 when Steam does not say.
@@ -199,6 +236,7 @@ pub(crate) fn details_of(file: &Value) -> Option<Details> {
         id: id_text(file.get("publishedfileid")?)?,
         title: file.get("title")?.as_str()?.to_string(),
         updated: count("time_updated"),
+        manifest: count("hcontent_file"),
         created: count("time_created"),
         size: count("file_size"),
         preview_url: text("preview_url"),
@@ -363,6 +401,20 @@ mod tests {
     }
 
     #[test]
+    fn a_version_is_told_by_its_manifest_and_by_its_time_where_one_is_missing() {
+        let versions = installed_versions(ACF);
+        let (known, unknown) = (versions["705924057"], versions["712141500"]);
+        assert_eq!(known.manifest, 7900175110102980905);
+        assert_eq!((unknown.manifest, unknown.updated), (0, 1710519878));
+        let at = |manifest, updated| Version { manifest, updated };
+        assert!(at(1, 10).behind(at(2, 10)), "a new upload, the same time");
+        assert!(!at(1, 10).behind(at(1, 20)), "the same upload, a new time");
+        assert!(at(0, 10).behind(at(2, 20)));
+        assert!(!at(1, 20).behind(at(0, 10)));
+        assert!(!at(2, 20).behind(at(1, 10)), "updated since the last check");
+    }
+
+    #[test]
     fn ids_are_taken_from_links_and_bare_numbers_once_each() {
         let pasted = "https://steamcommunity.com/sharedfiles/filedetails/?id=2009463077&searchtext=x\n\
                       818773962, 2009463077 hello 12 steam://url/CommunityFilePage/1 ?id=abc";
@@ -402,7 +454,7 @@ mod tests {
     #[test]
     fn details_carry_what_the_browser_shows() {
         let json = r#"{"response":{"publishedfiledetails":[
-            {"publishedfileid":"7","result":1,"creator":"76561198000000000","file_size":"12","preview_url":"https://x/p.jpg","title":"T","description":"[b]hi[/b]","time_updated":5,"banned":1,"subscriptions":300,"favorited":4,"tags":[{"tag":"Mod"}]}]}}"#;
+            {"publishedfileid":"7","result":1,"creator":"76561198000000000","file_size":"12","preview_url":"https://x/p.jpg","title":"T","description":"[b]hi[/b]","time_updated":5,"hcontent_file":"88","banned":1,"subscriptions":300,"favorited":4,"tags":[{"tag":"Mod"}]}]}}"#;
         let d = &parse_details(json).unwrap()[0];
         assert_eq!(
             (
@@ -416,6 +468,7 @@ mod tests {
             (d.subscriptions, d.favorited, d.banned, d.size),
             (300, 4, true, 12)
         );
+        assert_eq!((d.manifest, d.updated), (88, 5));
     }
 
     #[test]

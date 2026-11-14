@@ -15,7 +15,7 @@ use rimstack_core::sources::changes::{self, Fetching};
 use rimstack_core::{say, say_n};
 
 impl Downloads {
-    fn task(
+    pub(super) fn task(
         &mut self,
         doing: Sentence,
         updating: Option<ModId>,
@@ -87,12 +87,7 @@ impl Downloads {
     }
 
     pub fn update_in_steam(&mut self, cx: &mut Context<Self>) {
-        let ids: Vec<String> = self
-            .updates
-            .items
-            .iter()
-            .map(|row| row.id.clone())
-            .collect();
+        let ids: Vec<String> = self.updates.by_steam().map(|row| row.id.clone()).collect();
         self.asked_of_steam.extend(ids.iter().cloned());
         self.ask_steam(SteamAsk::Download, ids, cx);
     }
@@ -100,11 +95,18 @@ impl Downloads {
     pub(super) fn apply(&mut self, cx: &mut Context<Self>) {
         let ids: Vec<String> = self
             .updates
-            .items
-            .iter()
+            .by_steam()
             .map(|row| row.id.clone())
             .filter(|id| !self.asked_of_steam.contains(id))
             .collect();
+        let copies: Vec<String> = match self.tasks.running {
+            true => Vec::new(),
+            false => self
+                .updates
+                .copies_by_itself()
+                .map(|row| row.id.clone())
+                .collect(),
+        };
         let checkouts: Vec<ModId> = self
             .updates
             .checkouts
@@ -112,11 +114,11 @@ impl Downloads {
             .filter(|c| c.due() && !c.workshop)
             .map(|c| c.mod_id)
             .collect();
-        if ids.is_empty() && checkouts.is_empty() {
+        if ids.is_empty() && checkouts.is_empty() && copies.is_empty() {
             return;
         }
         let app = crate::ui::app(cx);
-        let any_checkout = !checkouts.is_empty();
+        let any_checkout = !checkouts.is_empty() || !copies.is_empty();
         crate::jobs::run(
             "updates applied",
             cx,
@@ -135,13 +137,14 @@ impl Downloads {
                     for id in checkouts {
                         downloads.update_from_git(id, cx);
                     }
+                    downloads.update_copies(copies, cx);
                 }
                 cx.notify();
             },
         );
     }
 
-    fn answer(
+    pub(super) fn answer(
         &self,
         run: impl FnOnce(&mut Self, &mut Context<Self>) + 'static,
         cx: &mut Context<Self>,

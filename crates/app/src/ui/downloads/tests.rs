@@ -208,6 +208,26 @@ fn the_made_up_install_shows_its_updates_changes_and_list_and_the_tab_counts_the
         )
     });
     assert_eq!((active, changed, listed), (2, 3, 3));
+    let (by_steamcmd, untracked, unanswered) = cx.update(|cx| {
+        let updates = &downloads.read(cx).updates;
+        let names = |rows: &[rimstack_core::sources::downloads::Named]| {
+            rows.iter().map(|row| row.name.clone()).collect::<Vec<_>>()
+        };
+        let by_steamcmd: Vec<String> = updates.by_steamcmd().map(|row| row.name.clone()).collect();
+        (
+            by_steamcmd,
+            names(&updates.untracked),
+            names(&updates.unanswered),
+        )
+    });
+    assert_eq!(by_steamcmd, ["SteamCMD Fixture Epsilon"]);
+    assert_eq!(
+        (untracked.as_slice(), unanswered.as_slice()),
+        (
+            ["SteamCMD Fixture Zeta".to_string()].as_slice(),
+            ["SteamCMD Fixture Eta".to_string()].as_slice()
+        )
+    );
     let behind = cx
         .update(|cx| shell.read(cx).map(|shell| shell.behind(cx)))
         .unwrap();

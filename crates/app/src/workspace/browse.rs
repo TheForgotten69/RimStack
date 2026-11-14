@@ -165,7 +165,7 @@ impl App {
     }
 
     pub fn installed_workshop(&self) -> HashSet<String> {
-        let mut ids: HashSet<String> = self.steam_record().0.keys().cloned().collect();
+        let mut ids: HashSet<String> = self.steam_record().times.keys().cloned().collect();
         if let Ok((library, _)) = self.library().as_ref().as_ref() {
             ids.extend(installed_in(library));
         }

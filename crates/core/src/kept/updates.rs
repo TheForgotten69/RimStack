@@ -1,6 +1,7 @@
 use crate::rimworld::paths::Source;
+use crate::rimworld::workshop::{Details, Version};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 
 /// Kept in `updates.json`; all empty before the first check.
@@ -12,6 +13,10 @@ pub struct LastCheck {
     pub asked: Option<u64>,
     /// Seconds since 1970 when each Workshop item was last updated, by Workshop id.
     pub now: BTreeMap<String, u64>,
+    /// Each one's `hcontent_file`, where Steam gave it; a check before RimStack kept them has none.
+    pub manifests: BTreeMap<String, u64>,
+    /// Asked and not answered: removed from the Workshop, or made private.
+    pub unanswered: BTreeSet<String>,
     pub checkouts: BTreeMap<String, Remote>,
 }
 
@@ -28,6 +33,28 @@ pub struct Remote {
 }
 
 impl LastCheck {
+    pub fn answered(&mut self, asked: &[String], now: &[Details], at: u64) {
+        self.checked = Some(at);
+        self.asked = Some(asked.len() as u64);
+        self.now = now.iter().map(|d| (d.id.clone(), d.updated)).collect();
+        self.manifests = now
+            .iter()
+            .filter(|d| d.manifest != 0)
+            .map(|d| (d.id.clone(), d.manifest))
+            .collect();
+        let answered: BTreeSet<&String> = now.iter().map(|d| &d.id).collect();
+        let unanswered = asked.iter().filter(|id| !answered.contains(id));
+        self.unanswered = unanswered.cloned().collect();
+    }
+
+    pub fn offered(&self) -> HashMap<String, Version> {
+        let version = |(id, &updated): (&String, &u64)| {
+            let manifest = self.manifests.get(id).copied().unwrap_or(0);
+            (id.clone(), Version { manifest, updated })
+        };
+        self.now.iter().map(version).collect()
+    }
+
     /// A missing or damaged file is no check yet.
     pub fn read(file: &Path) -> Self {
         let kept = crate::base::atomic_file::read_json(file).map(serde_json::from_value);
@@ -48,9 +75,7 @@ impl LastCheck {
     }
 
     pub fn write(&self, file: &Path) -> Result<(), crate::base::error::Error> {
-        let text = serde_json::to_string(self)
-            .map_err(|e| crate::base::error::Error::format(format!("{}: {e}", file.display())))?;
-        crate::base::atomic_file::write(file, text)
+        crate::base::atomic_file::write_json(file, self)
     }
 }
 
@@ -77,6 +102,8 @@ mod tests {
             checked: Some(10),
             asked: Some(2),
             now: BTreeMap::from([("100".to_string(), 7)]),
+            manifests: BTreeMap::from([("100".to_string(), 70)]),
+            unanswered: BTreeSet::from(["200".to_string()]),
             checkouts: BTreeMap::from([
                 (
                     "/mods/a".to_string(),
@@ -108,6 +135,37 @@ mod tests {
             (older.checked, older.now["9"], older.checkouts["/m"].behind),
             (Some(5), 4, Some(0))
         );
+        assert_eq!(
+            older.offered()["9"],
+            Version {
+                manifest: 0,
+                updated: 4
+            }
+        );
+    }
+
+    #[test]
+    fn an_answer_keeps_each_version_and_what_steam_said_nothing_of() {
+        let details = |id: &str, manifest| Details {
+            id: id.to_string(),
+            updated: 5,
+            manifest,
+            ..Details::default()
+        };
+        let asked = ["1".to_string(), "2".to_string(), "3".to_string()];
+        let mut check = LastCheck::default();
+        check.answered(&asked, &[details("1", 11), details("2", 0)], 99);
+        assert_eq!((check.checked, check.asked), (Some(99), Some(3)));
+        let offered = check.offered();
+        assert_eq!(
+            offered["1"],
+            Version {
+                manifest: 11,
+                updated: 5
+            }
+        );
+        assert_eq!(offered["2"].manifest, 0);
+        assert_eq!(check.unanswered, BTreeSet::from(["3".to_string()]));
     }
 
     #[test]

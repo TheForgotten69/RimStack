@@ -249,7 +249,7 @@ impl LoadOrder {
         let replacements = app.replacements();
         let replaced = replacements.get(&m.folder).filter(|_| workshop);
         let steam_record = app.steam_record();
-        let (times, sizes) = &*steam_record;
+        let (times, sizes) = (&steam_record.times, &steam_record.sizes);
         let mut said = Details {
             workshop,
             official: m.source == Source::Official,

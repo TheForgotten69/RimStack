@@ -207,21 +207,18 @@ impl Downloads {
                 .into_any_element(),
         ];
         if since.rows.len() > FIRST {
-            let more = match self.since_open {
-                true => put(&say!("Show {}", FIRST)),
-                false => put(&say!("{} more", since.rows.len() - FIRST)),
-            };
-            body.push(
-                div()
-                    .flex()
-                    .child(
-                        Btn::new("changed-more", more).on_click(cx.listener(|d, _, _, cx| {
-                            d.since_open = !d.since_open;
-                            cx.notify();
-                        })),
-                    )
-                    .into_any_element(),
-            );
+            let (open, total) = (self.since_open, since.rows.len());
+            body.push(super::more(
+                "changed-more",
+                open,
+                total,
+                FIRST,
+                cx,
+                |d, cx| {
+                    d.since_open = !d.since_open;
+                    cx.notify();
+                },
+            ));
         }
         let mut actions: Vec<AnyElement> = Vec::new();
         let mut actions_width = Pixels::ZERO;
