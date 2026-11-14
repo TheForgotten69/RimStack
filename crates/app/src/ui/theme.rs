@@ -254,7 +254,7 @@ pub const TERMS: [(&str, &str); 13] = [
     ),
     (
         "DDS",
-        "A texture format the game loads faster than PNG. RimStack writes DDS copies beside the PNG files.",
+        "A compressed texture file the game loads instead of the PNG beside it. Up to 1.6 it loads faster, and RimStack can write one beside each PNG; from 1.7 the game compresses every texture itself.",
     ),
     (
         "To review",

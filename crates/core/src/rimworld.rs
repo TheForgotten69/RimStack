@@ -2,6 +2,7 @@ pub mod about;
 pub mod call_graph;
 pub mod code;
 pub mod dotnet;
+pub mod engine;
 pub mod game;
 pub mod id;
 pub mod loadfolders;

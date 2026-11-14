@@ -1,10 +1,10 @@
 use rimstack_core::mods::list::{Category, GroupedList, Mod, offers};
 use rimstack_core::mods::rules::{Kind, Rule};
 use rimstack_core::{
-    base::markup, base::vdf, kept::notes, kept::owntheme, mods::community, mods::ddsaudit,
-    mods::share, mods::sort, rimworld::about, rimworld::dotnet, rimworld::loadfolders,
-    rimworld::logs, rimworld::modsconfig, rimworld::rimsaves, rimworld::steamworks,
-    rimworld::workshop, sources::changes,
+    base::markup, base::vdf, base::zipnames, kept::notes, kept::owntheme, mods::community,
+    mods::ddsaudit, mods::share, mods::sort, rimworld::about, rimworld::dotnet,
+    rimworld::engine::Engine, rimworld::loadfolders, rimworld::logs, rimworld::modsconfig,
+    rimworld::rimsaves, rimworld::steamworks, rimworld::workshop, sources::changes,
 };
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::{Duration, Instant};
@@ -196,7 +196,10 @@ fn no_text_parser_panics_on_thirty_thousand_made_up_texts() {
         let _ = steamworks::parse(made);
         let _ = owntheme::contrast(made, "#000000");
         let _ = owntheme::contrast(&format!("#{made}"), "#000000");
-        let _ = ddsaudit::problem(made.as_bytes(), made.len() as u64);
+        for engine in [Engine::Unity, Engine::Waylith] {
+            let _ = ddsaudit::problem(made.as_bytes(), made.len() as u64, engine);
+        }
+        let _ = zipnames::names(&mut std::io::Cursor::new(made.as_bytes()));
     });
     assert!(failed.is_empty(), "panicked on {:?}", failed.first());
 }

@@ -24,3 +24,4 @@ pub mod walk;
 pub mod watch;
 pub(crate) mod web;
 pub mod window;
+pub mod zipnames;

@@ -7,6 +7,7 @@ use crate::said;
 
 use crate::mods::list::{Category, Mod};
 use crate::rimworld::about::{self, About};
+use crate::rimworld::engine::Engine;
 use crate::rimworld::id;
 use crate::rimworld::paths::{ModRoot, Paths, Source};
 use rayon::prelude::*;
@@ -265,6 +266,10 @@ pub struct Library {
 }
 
 impl Library {
+    pub fn engine(&self) -> Engine {
+        Engine::of(&self.game_version)
+    }
+
     pub fn get(&self, id: ModId) -> Option<&Installed> {
         let ours = id.reading() == self.reading;
         ours.then(|| self.installed.get(id.index())).flatten()

@@ -28,7 +28,7 @@ fn about_section(at: usize) -> String {
     put(&match at {
         0 => say!("The load order and every installed mod"),
         1 => say!("Workshop updates, looked-up mods and Git checkouts"),
-        2 => say!("Faster-loading DDS textures and the files the game would refuse"),
+        2 => say!("DDS textures, and the files the game would refuse"),
         3 => say!("Browse the Workshop's mods and subscribe in Steam"),
         4 => say!("Saves and how their mods differ from the load order"),
         5 => say!("The game's log: errors and the mods they point at"),

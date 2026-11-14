@@ -1,6 +1,7 @@
 use crate::base::links;
 use crate::base::sentence::Sentence;
 use crate::base::vdf;
+use crate::rimworld::engine::Engine;
 use crate::say;
 use std::path::{Path, PathBuf};
 
@@ -256,11 +257,7 @@ fn game_in(os: Os, place: &Path) -> Option<PathBuf> {
 }
 
 fn on_unity(game_version: Option<&str>) -> bool {
-    let parsed = game_version.and_then(|version| {
-        let (major, minor) = version.split_once('.')?;
-        Some((major.parse::<u32>().ok()?, minor.parse::<u32>().ok()?))
-    });
-    parsed.is_some_and(|version| version < (1, 7))
+    game_version.and_then(Engine::read) == Some(Engine::Unity)
 }
 
 fn native_settings(os: Os, home: &Path, seen: &Path, game_version: Option<&str>) -> Vec<PathBuf> {
