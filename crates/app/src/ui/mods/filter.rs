@@ -11,16 +11,8 @@ use gpui::{
     px,
 };
 use rimstack_core::mods::list::flag;
-use rimstack_core::mods::list::offers::Counted;
+use rimstack_core::mods::list::offers::{Counted, Offers, is_term};
 use rimstack_core::say;
-
-/// A word the filter shows as a chip: `is:new`, `!tag:hud`.
-fn is_term(word: &str) -> bool {
-    let word = word.strip_prefix('!').unwrap_or(word);
-    ["is:", "has:", "in:", "tag:", "author:", "patches:"]
-        .iter()
-        .any(|kind| word.len() > kind.len() && word.starts_with(kind))
-}
 
 /// The filter of the load order and its mirror in the drawer: the terms shown as chips, and
 /// what is typed after them. Mods hears `Changed` with the whole filter.
@@ -171,11 +163,7 @@ impl Mods {
         self.filtering.update(cx, |filter, cx| filter.clear(cx));
     }
 
-    fn offers(
-        &self,
-        field: &Entity<TextField>,
-        cx: &gpui::App,
-    ) -> rimstack_core::mods::list::offers::Offers {
+    fn offers(&self, field: &Entity<TextField>, cx: &gpui::App) -> Offers {
         let typed = field.read(cx).text().to_string();
         let partial = typed.rsplit(' ').next().unwrap_or_default().to_string();
         let order = &self.list.read(cx).order;
@@ -426,18 +414,5 @@ impl Mods {
                 ))
             })
             .children(suggestions)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn a_term_is_a_kind_and_something_after_it() {
-        for word in ["is:new", "!tag:hud", "author:someone", "patches:x"] {
-            assert!(super::is_term(word), "{word}");
-        }
-        for word in ["is:", "hud", "tag", "!is:"] {
-            assert!(!super::is_term(word), "{word}");
-        }
     }
 }

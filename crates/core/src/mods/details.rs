@@ -204,6 +204,7 @@ mod tests {
             name: name.to_string(),
             author: String::new(),
             version: String::new(),
+            latest_game: String::new(),
             category: Category::Content,
             installed: Some(ModId::new(0, at + 10)),
             tags: Vec::new(),

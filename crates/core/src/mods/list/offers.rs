@@ -1,5 +1,7 @@
+use super::Mod;
 use super::filter::tagged;
 use crate::base::sentence::Sentence;
+use crate::base::versions::numbers;
 use crate::{say, say_n};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashSet};
@@ -75,18 +77,20 @@ const TERMS: &[(&str, About)] = &[
     ("patchesdef:", |_| say!("patches this defName")),
     ("patches:", |_| say!("patches this method of the game")),
     ("tag:", |_| say!("has this tag")),
+    ("version:", |_| say!("the newest game version it lists")),
     ("author:", |_| say!("by this author")),
 ];
 
 const MOST_TAGS: usize = 12;
 
 /// What the filter offers for `typed`, the word being written, beside `text`, the whole filter;
-/// `tags` holds each mod's own. A term already in `text` is not offered again.
+/// `mods` gives the tags and game versions offered. A term already in `text` is not offered
+/// again.
 pub fn offers<'a>(
     typed: &str,
     text: &str,
     counted: &Counted,
-    tags: impl IntoIterator<Item = &'a [String]>,
+    mods: impl IntoIterator<Item = &'a Mod>,
 ) -> Offers {
     let typed = typed.to_lowercase();
     let taken: HashSet<String> = text.split_whitespace().map(str::to_lowercase).collect();
@@ -98,18 +102,11 @@ pub fn offers<'a>(
         Some(rest) => ("!", rest),
         None => ("", typed.as_str()),
     };
-    let offers: Vec<Offer> = match bare.starts_with("tag:") {
-        true => tag_offers(sign, tags, fits),
-        false => TERMS
-            .iter()
-            .filter(|(term, _)| sign.is_empty() || !matches!(*term, "is:active" | "is:inactive"))
-            .map(|(term, about)| (format!("{sign}{term}"), about))
-            .filter(|(term, _)| fits(term))
-            .map(|(term, about)| Offer {
-                term,
-                about: about(counted),
-            })
-            .collect(),
+    let mods = mods.into_iter();
+    let offers = match bare.split_once(':') {
+        Some(("tag", _)) => tag_offers(sign, mods.map(|m| m.tags.as_slice()), fits),
+        Some(("version", _)) => version_offers(sign, mods, fits),
+        _ => term_offers(sign, counted, fits),
     };
     let widest = offers
         .iter()
@@ -118,6 +115,56 @@ pub fn offers<'a>(
         .cloned()
         .unwrap_or_default();
     Offers { offers, widest }
+}
+
+/// A word the filter shows as a chip: a kind of term with something after it, `is:new` or
+/// `!tag:hud`.
+pub fn is_term(word: &str) -> bool {
+    let word = word.strip_prefix('!').unwrap_or(word);
+    let kind = |term: &'static str| term.split_inclusive(':').next().unwrap_or(term);
+    TERMS
+        .iter()
+        .map(|(term, _)| kind(term))
+        .any(|kind| word.len() > kind.len() && word.starts_with(kind))
+}
+
+fn term_offers(sign: &str, counted: &Counted, fits: impl Fn(&str) -> bool) -> Vec<Offer> {
+    TERMS
+        .iter()
+        .filter(|(term, _)| sign.is_empty() || !matches!(*term, "is:active" | "is:inactive"))
+        .map(|(term, about)| (format!("{sign}{term}"), about))
+        .filter(|(term, _)| fits(term))
+        .map(|(term, about)| Offer {
+            term,
+            about: about(counted),
+        })
+        .collect()
+}
+
+fn counted_offer(term: String, mods: usize) -> Offer {
+    Offer {
+        term,
+        about: say_n!(mods, "{} mod", "{} mods"),
+    }
+}
+
+fn version_offers<'a>(
+    sign: &str,
+    mods: impl Iterator<Item = &'a Mod>,
+    fits: impl Fn(&str) -> bool,
+) -> Vec<Offer> {
+    let mut mods_of: BTreeMap<&str, usize> = BTreeMap::new();
+    for m in mods.filter(|m| !m.latest_game.is_empty()) {
+        *mods_of.entry(&m.latest_game).or_default() += 1;
+    }
+    let mut versions: Vec<(&str, usize)> = mods_of.into_iter().collect();
+    versions.sort_by_key(|&(version, _)| std::cmp::Reverse(numbers(version)));
+    versions
+        .into_iter()
+        .map(|(version, mods)| (format!("{sign}version:{version}"), mods))
+        .filter(|(term, _)| fits(term))
+        .map(|(term, mods)| counted_offer(term, mods))
+        .collect()
 }
 
 /// A term holds one word, and `tag:` matches the start of a tag, so a tag is offered by its
@@ -148,30 +195,56 @@ fn tag_offers<'a>(
     counted
         .into_iter()
         .take(MOST_TAGS)
-        .map(|(mods, _, term)| Offer {
-            term,
-            about: say_n!(mods, "{} mod", "{} mods"),
-        })
+        .map(|(mods, _, term)| counted_offer(term, mods))
         .collect()
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::Category;
+    use super::super::tests::m;
     use super::*;
 
-    fn terms(typed: &str, text: &str, tags: &[Vec<String>]) -> Vec<String> {
-        let found = offers(
-            typed,
-            text,
-            &Counted::default(),
-            tags.iter().map(Vec::as_slice),
-        );
+    fn terms(typed: &str, text: &str, mods: &[Mod]) -> Vec<String> {
+        let found = offers(typed, text, &Counted::default(), mods);
         found.offers.into_iter().map(|offer| offer.term).collect()
     }
 
-    fn tagged(each: &[&[&str]]) -> Vec<Vec<String>> {
-        let own = |tags: &&[&str]| tags.iter().map(|t| t.to_string()).collect();
+    fn blank() -> Mod {
+        m("", "", Category::Content)
+    }
+
+    fn tagged(each: &[&[&str]]) -> Vec<Mod> {
+        let own = |tags: &&[&str]| Mod {
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+            ..blank()
+        };
         each.iter().map(own).collect()
+    }
+
+    fn made_for(each: &[&str]) -> Vec<Mod> {
+        let own = |game: &&str| Mod {
+            latest_game: game.to_string(),
+            ..blank()
+        };
+        each.iter().map(own).collect()
+    }
+
+    #[test]
+    fn a_term_is_a_kind_and_something_after_it() {
+        for word in [
+            "is:new",
+            "!tag:hud",
+            "author:someone",
+            "patches:x",
+            "!version:1.7",
+            "defines:Gold",
+        ] {
+            assert!(is_term(word), "{word}");
+        }
+        for word in ["is:", "hud", "tag", "!is:", "version:"] {
+            assert!(!is_term(word), "{word}");
+        }
     }
 
     #[test]
@@ -218,20 +291,10 @@ mod tests {
     #[test]
     fn a_tag_counts_every_mod_its_term_matches() {
         let tags = tagged(&[&["HUD"], &["hud", "HUDs"], &["Huds"]]);
-        let found = offers(
-            "tag:hud",
-            "",
-            &Counted::default(),
-            tags.iter().map(Vec::as_slice),
-        );
+        let found = offers("tag:hud", "", &Counted::default(), &tags);
         let about: Vec<String> = found.offers.iter().map(|o| o.about.to_string()).collect();
         assert_eq!(about, ["2 mods"]);
-        let found = offers(
-            "tag:",
-            "",
-            &Counted::default(),
-            tags.iter().map(Vec::as_slice),
-        );
+        let found = offers("tag:", "", &Counted::default(), &tags);
         let all: Vec<(String, String)> = found
             .offers
             .into_iter()
@@ -248,13 +311,13 @@ mod tests {
 
     #[test]
     fn tags_offered_are_few_and_the_widest_is_named() {
-        let many: Vec<Vec<String>> = (0..40).map(|n| vec![format!("tag{n:02}")]).collect();
-        let found = offers(
-            "tag:",
-            "",
-            &Counted::default(),
-            many.iter().map(Vec::as_slice),
-        );
+        let many: Vec<Mod> = (0..40)
+            .map(|n| Mod {
+                tags: vec![format!("tag{n:02}")],
+                ..blank()
+            })
+            .collect();
+        let found = offers("tag:", "", &Counted::default(), &many);
         assert_eq!(found.offers.len(), MOST_TAGS);
         let widest = offers("has:", "", &Counted::default(), std::iter::empty()).widest;
         assert_eq!(widest, "has:languages");
@@ -262,5 +325,34 @@ mod tests {
             offers("zzz", "", &Counted::default(), std::iter::empty()).widest,
             ""
         );
+    }
+
+    #[test]
+    fn versions_are_offered_newest_first_with_their_mods() {
+        let mods = made_for(&["1.6", "1.10", "1.6", "", "1.5"]);
+        let found = offers("version:", "", &Counted::default(), &mods);
+        let all: Vec<(String, String)> = found
+            .offers
+            .into_iter()
+            .map(|o| (o.term, o.about.to_string()))
+            .collect();
+        assert_eq!(
+            all,
+            [
+                ("version:1.10".into(), "1 mod".into()),
+                ("version:1.6".into(), "2 mods".into()),
+                ("version:1.5".into(), "1 mod".into()),
+            ]
+        );
+        assert_eq!(terms("!version:1.5", "", &mods), Vec::<String>::new());
+        assert_eq!(
+            terms("!version:1.", "version:1.6", &mods),
+            ["!version:1.10", "!version:1.6", "!version:1.5"]
+        );
+        assert_eq!(
+            terms("version:1.", "version:1.6", &mods),
+            ["version:1.10", "version:1.5"]
+        );
+        assert_eq!(terms("vers", "", &mods), ["version:"]);
     }
 }

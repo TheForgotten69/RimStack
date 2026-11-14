@@ -1354,6 +1354,7 @@
  "the new copy could not be put in place": "no se pudo colocar la copia nueva",
  "the new copy could not be put in place, and the old one is now {}": "no se pudo colocar la copia nueva, y la anterior está ahora en {}",
  "the new list would not read back the same": "la lista nueva no se leería igual después",
+ "the newest game version it lists": "la versión del juego más reciente que indica",
  "the old copy could not be deleted": "no se pudo eliminar la copia antigua",
  "the rest of it": "el resto",
  "there is nothing to search for": "no hay nada que buscar",

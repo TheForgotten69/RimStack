@@ -341,7 +341,7 @@ impl LoadOrder {
 
     pub fn filter_offers(&self, typed: &str, text: &str, counted: &Counted) -> Offers {
         let mods = self.active.mods().iter().chain(self.inactive.mods());
-        offers::offers(typed, text, counted, mods.map(|m| m.tags.as_slice()))
+        offers::offers(typed, text, counted, mods)
     }
 
     pub fn recheck(&mut self, app: &App) {

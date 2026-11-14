@@ -1,6 +1,6 @@
 use super::{Installed, Library, ModId};
 use crate::base::error::Error;
-use crate::base::versions::{newer, numbers};
+use crate::base::versions::{latest, newer};
 use crate::rimworld::paths::Source;
 use crate::said;
 use std::collections::HashMap;
@@ -78,12 +78,11 @@ fn workshop_newer(local: &Installed, workshop: &Installed) -> bool {
     {
         return newer(was, is);
     }
-    let latest = |versions: &[String]| versions.iter().max_by_key(|v| numbers(v)).cloned();
     match (
         latest(&local.supported_versions),
         latest(&workshop.supported_versions),
     ) {
-        (Some(was), Some(is)) => newer(&was, &is),
+        (Some(was), Some(is)) => newer(was, is),
         _ => false,
     }
 }

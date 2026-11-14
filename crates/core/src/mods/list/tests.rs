@@ -4,7 +4,7 @@ pub(super) fn id(n: usize) -> ModId {
     ModId::new(0, n)
 }
 
-fn m(name: &str, author: &str, category: Category) -> Mod {
+pub(super) fn m(name: &str, author: &str, category: Category) -> Mod {
     Mod {
         id: String::new(),
         tags: Vec::new(),
@@ -25,6 +25,7 @@ fn m(name: &str, author: &str, category: Category) -> Mod {
         name: name.into(),
         author: author.into(),
         version: "1.0".into(),
+        latest_game: String::new(),
         category,
         installed: None,
     }

@@ -103,6 +103,8 @@ const PIECES: &[&str] = &[
     "IfModActive",
     "tag:",
     "!tag:",
+    "version:",
+    "!version:1.",
     "!",
     "is:",
     "author:",
@@ -141,6 +143,7 @@ fn a_mod(name: &str, category: Category) -> Mod {
         name: name.to_string(),
         author: "someone".to_string(),
         version: "1.0".to_string(),
+        latest_game: "1.0".to_string(),
         category,
         installed: None,
         tags: Vec::new(),
@@ -210,13 +213,10 @@ fn the_filter_box_takes_any_text() {
         let _ = list.matching();
         let _ = list.rows().len();
         let typed = made.rsplit(' ').next().unwrap_or_default();
-        let tags = [made.split(',').map(String::from).collect::<Vec<_>>()];
-        let _ = offers::offers(
-            typed,
-            made,
-            &offers::Counted::default(),
-            tags.iter().map(Vec::as_slice),
-        );
+        let mut written = a_mod("Written", Category::Content);
+        written.tags = made.split(',').map(String::from).collect();
+        written.latest_game = made.to_string();
+        let _ = offers::offers(typed, made, &offers::Counted::default(), [&written]);
     });
     assert!(failed.is_empty(), "panicked on {:?}", failed.first());
 }

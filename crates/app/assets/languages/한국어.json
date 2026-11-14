@@ -1319,6 +1319,7 @@
  "the new copy could not be put in place": "새 복사본을 배치하지 못했습니다",
  "the new copy could not be put in place, and the old one is now {}": "새 복사본을 배치하지 못했습니다. 이전 복사본의 현재 위치는 {}입니다",
  "the new list would not read back the same": "새 목록을 다시 읽은 결과가 일치하지 않습니다",
+ "the newest game version it lists": "명시된 가장 최신 게임 버전",
  "the old copy could not be deleted": "이전 복사본을 삭제하지 못했습니다",
  "the rest of it": "나머지",
  "there is nothing to search for": "검색할 내용이 없습니다",

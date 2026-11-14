@@ -12,6 +12,7 @@ pub(super) struct Filter {
     words: Vec<String>,
     authors: Vec<String>,
     tags: Vec<String>,
+    versions: Vec<String>,
     local: bool,
     workshop: bool,
     git: bool,
@@ -48,6 +49,7 @@ impl Filter {
         match term.split_once(':') {
             Some(("author", name)) if !name.is_empty() => self.authors.push(name.to_string()),
             Some(("tag", label)) if !label.is_empty() => self.tags.push(label.to_string()),
+            Some(("version", game)) if !game.is_empty() => self.versions.push(game.to_string()),
             Some(("is", "local")) => self.local = true,
             Some(("is", "workshop")) => self.workshop = true,
             Some(("is", "git")) => self.git = true,
@@ -132,6 +134,10 @@ impl Filter {
         self.words.iter().all(|w| haystack.contains(w))
             && self.authors.iter().all(|a| author().contains(a))
             && self.tags.iter().all(|wanted| tagged(&m.tags, wanted))
+            && self
+                .versions
+                .iter()
+                .all(|v| m.latest_game.starts_with(v.as_str()))
             && (!self.local || m.local)
             && (!self.workshop || m.workshop)
             && (!self.git || m.git)
@@ -182,6 +188,26 @@ mod tests {
         list.set_filter("!tag:hud");
         assert_eq!(names(&list), ["Core", "Royalty", "HugsLib", "Rimefeller"]);
         list.set_filter("tag:big !tag:hud");
+        assert_eq!(names(&list), ["Rimefeller"]);
+    }
+
+    #[test]
+    fn a_version_matches_the_latest_game_version_listed() {
+        let mut mods = sample().mods().to_vec();
+        for (m, game) in mods.iter_mut().zip(["1.6", "1.7", "1.7", "1.5", "", "1.6"]) {
+            m.latest_game = game.into();
+        }
+        let mut list = GroupedList::flat(mods);
+        list.set_filter("version:1.7");
+        assert_eq!(names(&list), ["Core", "Royalty"]);
+        list.set_filter("!version:1.7");
+        assert_eq!(
+            names(&list),
+            ["Harmony", "HugsLib", "Dubs Bad Hygiene", "Rimefeller"]
+        );
+        list.set_filter("version:1. !version:1.7");
+        assert_eq!(names(&list), ["Harmony", "HugsLib", "Rimefeller"]);
+        list.set_filter("version:1.6 dub");
         assert_eq!(names(&list), ["Rimefeller"]);
     }
 

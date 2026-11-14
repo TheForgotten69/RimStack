@@ -2,6 +2,7 @@ use crate::base::aside;
 use crate::base::error::Error;
 use crate::base::sentence::Sentence;
 use crate::base::translate::named;
+use crate::base::versions::latest;
 use crate::said;
 
 use crate::mods::list::{Category, Mod};
@@ -350,6 +351,10 @@ fn row(m: &Installed, id: String, category: Category, installed: ModId) -> Mod {
                     .or(a.supported_versions.last().cloned())
             })
             .unwrap_or_default(),
+        latest_game: about
+            .and_then(|a| latest(&a.supported_versions))
+            .unwrap_or_default()
+            .to_string(),
         category,
         installed: Some(installed),
     }
@@ -437,6 +442,7 @@ impl Library {
                         name: written.to_string(),
                         author: String::new(),
                         version: String::new(),
+                        latest_game: String::new(),
                         category: Category::Content,
                         installed: None,
                     });

@@ -84,6 +84,8 @@ pub struct Mod {
     pub name: String,
     pub author: String,
     pub version: String,
+    /// The latest game version its About.xml lists; empty when it lists none.
+    pub latest_game: String,
     pub category: Category,
     /// `None` for a mod that is not installed and for demo data.
     pub installed: Option<ModId>,
