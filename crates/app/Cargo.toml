@@ -27,7 +27,7 @@ hot-reload = ["gpui/hot-reload"]
 rimstack-core = { path = "../core" }
 # Pinned exactly: gpui-fast changes its API from one weekly release to the next (Apache-2.0).
 gpui = { package = "gpui-fast", version = "=0.1.14" }
-gpui_platform = { package = "gpui-fast-platform", version = "=0.1.14", features = ["wayland", "x11"] }
+gpui_platform = { package = "gpui-fast-platform", version = "=0.1.14", features = ["wayland", "x11", "font-kit"] }
 futures = "0.3"
 # Previews decoded at the size they are shown, not whole; already built for gpui-fast.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
